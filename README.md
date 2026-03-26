@@ -43,6 +43,7 @@ The screenshots below show both radar styles during an expedition mission. They 
 | Option | What it controls |
 | --- | --- |
 | Enable radar | Master on or off switch for the HUD element. |
+| Toggle radar on or off | Assign a key to switch the radar HUD visibility without opening the options menu. |
 | Radar size | Adjustable from **100** to **350**. |
 | Radar range / filter distance | Adjustable from **25 m** to **100 m**. |
 | Max radar markers | Adjustable from **10** to **100**. |

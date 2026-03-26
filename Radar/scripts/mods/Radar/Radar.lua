@@ -1716,6 +1716,29 @@ function mod:nudge_radar(dx, dy)
     return self:set_radar_position(x + (tonumber(dx) or 0), y + (tonumber(dy) or 0))
 end
 
+function mod:set_radar_enabled(enabled)
+    local is_enabled = enabled == true
+
+    self:set("enable_radar", is_enabled)
+
+    if not is_enabled then
+        self._radar_targets = {}
+        self._radar_snapshot = nil
+    end
+
+    if mod:get("debug_mode") == true then
+        self:notify("Radar %s", is_enabled and "enabled" or "disabled")
+    end
+
+    return is_enabled
+end
+
+function mod.toggle_radar_keybind(_)
+    local current_value = mod:get("enable_radar") ~= false
+
+    return mod:set_radar_enabled(not current_value)
+end
+
 function mod.move_radar_left(_)
     return mod:nudge_radar(-mod:get_radar_move_step(), 0)
 end

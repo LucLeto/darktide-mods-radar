@@ -12,6 +12,9 @@ return {
     enable_radar = {
         en = "Enable radar",
     },
+    toggle_radar_key = {
+        en = "Toggle radar on or off",
+    },
     radar_size = {
         en = "Radar size",
     },

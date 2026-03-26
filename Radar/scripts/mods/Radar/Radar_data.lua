@@ -16,6 +16,14 @@ return {
                         default_value = true,
                     },
                     {
+                        setting_id = "toggle_radar_key",
+                        type = "keybind",
+                        default_value = {},
+                        keybind_trigger = "pressed",
+                        keybind_type = "function_call",
+                        function_name = "toggle_radar_keybind",
+                    },
+                    {
                         setting_id = "radar_size",
                         type = "numeric",
                         default_value = 180,
