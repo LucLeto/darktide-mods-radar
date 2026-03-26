@@ -10,6 +10,9 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 - Lets you adjust **radar size**, **scan range**, and **maximum marker count**.
 - Supports optional **icon scaling with radar size**.
 - Supports separate marker styles for **enemies** and **teammates**: **Icon only** or **Marked icon**.
+- Includes a **toggle radar on or off** keybind, so you can hide or restore the radar during a mission without opening the options menu.
+- Supports configurable **radar positioning** with **Radar position X**, **Radar position Y**, **Steps per input**, and dedicated movement keybinds for nudging the radar **left**, **right**, **up**, or **down**.
+- Keeps the radar position clamped to the visible UI space, so moving or resizing it does not push it off-screen.
 - Colors the radar center dot from the local player HUD slot color.
 - Uses class icons for teammate markers instead of generic dots.
 - Exposes category-based toggles for common pickups, materials, objectives, expeditions items, deployed items, enemies, teammates, and event items.
@@ -43,7 +46,7 @@ The screenshots below show both radar styles during an expedition mission. They 
 | Option | What it controls |
 | --- | --- |
 | Enable radar | Master on or off switch for the HUD element. |
-| Toggle radar on or off | Assign a key to switch the radar HUD visibility without opening the options menu. |
+| Toggle radar on or off | Assign a key to switch the radar HUD visibility during gameplay without opening the options menu. |
 | Radar size | Adjustable from **100** to **350**. |
 | Radar range / filter distance | Adjustable from **25 m** to **100 m**. |
 | Max radar markers | Adjustable from **10** to **100**. |
@@ -51,7 +54,22 @@ The screenshots below show both radar styles during an expedition mission. They 
 | Radar style | **Square** or **Circle**. |
 | Enemy marker style | **Icon only** or **Marked icon**. |
 | Player marker style | **Icon only** or **Marked icon**. |
+| Radar position X | Sets the radar's horizontal position. The value is clamped to the visible UI space. |
+| Radar position Y | Sets the radar's vertical position. The value is clamped to the visible UI space. |
+| Steps per input | Sets how far each radar movement key press nudges the radar. |
+| Move radar left | Assign a key to move the radar left by the configured step size. |
+| Move radar right | Assign a key to move the radar right by the configured step size. |
+| Move radar up | Assign a key to move the radar up by the configured step size. |
+| Move radar down | Assign a key to move the radar down by the configured step size. |
 | Highlight distance | Present in the options menu, but the highlighting feature is currently still under development. |
+
+### Positioning and Toggle Use
+
+- Use **Toggle radar on or off** to quickly hide or restore the radar while staying in the mission.
+- Use **Radar position X** and **Radar position Y** when you want to place the radar precisely in a fixed HUD location.
+- Use **Move radar left**, **right**, **up**, and **down** when you want to fine-tune the placement in live gameplay with key presses.
+- **Steps per input** controls how large each movement increment is, which makes it easier to do either quick repositioning or small adjustments.
+- Radar placement is automatically clamped against the current UI space, so the widget stays within the visible screen area even after changing size or resolution scale.
 
 ### Marker Rules
 
@@ -236,8 +254,9 @@ Not every radar marker uses a fixed readme tint:
 
 ## Requirements
 
-- **Darktide Mod Framework**
-- **Warhammer 40,000: Darktide**
+- **[Darktide Mod Framework](https://www.nexusmods.com/warhammer40kdarktide/mods/8)**
+- **[Darktide Mod Loader](https://www.nexusmods.com/warhammer40kdarktide/mods/19)**
+
 
 ## Notes
 
