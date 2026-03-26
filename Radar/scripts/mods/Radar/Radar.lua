@@ -68,6 +68,8 @@ local KIND_TO_SETTING = {
     pocketable_syringe_speed = "show_pocketable_syringe_speed",
     pocketable_valkyrie_hover = "show_pocketable_valkyrie_hover",
     pocketable_void_shield = "show_pocketable_void_shield",
+    pickup_ammo_cache_deployable = "show_ammo_crate_deployable",
+    medical_crate_deployable = "show_medical_crate_deployable",
 }
 
 function mod.on_all_mods_loaded()
@@ -203,22 +205,34 @@ local function _string_starts_with(value, prefix)
     return string.sub(value, 1, string.len(prefix)) == prefix
 end
 
-local function _safe_unit_pickup_name(unit)
-    if not unit or not Unit or not Unit.has_data or not Unit.get_data then
+local function _safe_unit_data_string(unit, field_name)
+    if not unit or not field_name or not Unit or not Unit.has_data or not Unit.get_data then
         return nil
     end
 
-    local ok_has_data, has_data = pcall(Unit.has_data, unit, "pickup_type")
+    local ok_has_data, has_data = pcall(Unit.has_data, unit, field_name)
     if not ok_has_data or not has_data then
         return nil
     end
 
-    local ok_pickup_name, pickup_name = pcall(Unit.get_data, unit, "pickup_type")
-    if ok_pickup_name and pickup_name then
-        return _safe_lower_string(pickup_name)
+    local ok_value, value = pcall(Unit.get_data, unit, field_name)
+    if ok_value and value ~= nil then
+        return _safe_lower_string(value)
     end
 
     return nil
+end
+
+local function _safe_unit_pickup_name(unit)
+    return _safe_unit_data_string(unit, "pickup_type")
+end
+
+local function _safe_unit_deployable_type(unit)
+    return _safe_unit_data_string(unit, "deployable_type")
+end
+
+local function _safe_unit_smart_tag_target_type(unit)
+    return _safe_unit_data_string(unit, "smart_tag_target_type")
 end
 
 local function _table_size(t)
@@ -927,7 +941,7 @@ local function _classify_pickup_like(interaction_type, icon, description, unit_n
     end
 
     if pickup_name == "medical_crate_deployable" then
-        return "pickup_medkit", meta
+        return "medical_crate_deployable", meta
     end
 
     -- Event items
@@ -1218,6 +1232,27 @@ local function _scan_minions()
                         breed_name = breed_name,
                     })
                 end
+            end
+        end
+    end
+end
+
+local function _scan_smart_tag_targets()
+    local smart_tag_map = _safe_unit_to_extension_map("smart_tag_system")
+    if not smart_tag_map then
+        return
+    end
+
+    for unit, extension in pairs(smart_tag_map) do
+        if _safe_unit_alive(unit) and extension then
+            local smart_tag_target_type = _safe_unit_smart_tag_target_type(unit)
+
+            if smart_tag_target_type == "medical_crate_deployable" then
+                _track_unit(unit, "medical_crate_deployable", "smart_tag_system", {
+                    smart_tag_target_type = smart_tag_target_type,
+                    deployable_type = _safe_unit_deployable_type(unit),
+                    unit_name = _safe_lower_string(_safe_unit_name(unit)),
+                })
             end
         end
     end
@@ -1518,6 +1553,7 @@ local function _update_internal(dt, t)
     _scan_interactees()
     _scan_chests()
     _scan_minions()
+    _scan_smart_tag_targets()
     _refresh_player_units()
     _prune_units()
 

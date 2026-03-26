@@ -133,6 +133,11 @@ local PRESENTATIONS = {
         color = _widget_color(255, 38, 205, 26),
         size = 14,
     },
+    medical_crate_deployable = {
+        icon = "content/ui/materials/hud/interactions/icons/pocketable_medkit",
+        color = _widget_color(255, 38, 205, 26),
+        size = 14,
+    },
     pickup_coordinates_paper = {
         icon = "content/ui/materials/icons/system/escape/credits",
         color = _widget_color(255, 255, 255, 255),
