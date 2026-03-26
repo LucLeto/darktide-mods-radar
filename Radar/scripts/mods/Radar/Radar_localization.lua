@@ -48,7 +48,30 @@ return {
     display_style_marked_icon = {
         en = "Marked icon",
     },
-
+    position_group = {
+        en = "Position",
+    },
+    radar_pos_x = {
+        en = "Radar position X",
+    },
+    radar_pos_y = {
+        en = "Radar position Y",
+    },
+    radar_move_step = {
+        en = "Steps per input",
+    },
+    move_radar_left_key = {
+        en = "Move radar left",
+    },
+    move_radar_right_key = {
+        en = "Move radar right",
+    },
+    move_radar_up_key = {
+        en = "Move radar up",
+    },
+    move_radar_down_key = {
+        en = "Move radar down",
+    },
     common_pickups_group = {
         en = "Common Pickups",
     },

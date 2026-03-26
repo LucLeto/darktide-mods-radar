@@ -20,6 +20,15 @@ return {
                         type = "numeric",
                         default_value = 180,
                         range = { 100, 350 },
+                        decimals_number = 0,
+                        step_size_value = 5,
+                        change = function(new_value)
+                            mod:set("radar_size", new_value)
+                            mod:set_radar_position(mod:get_radar_pos_x(new_value), mod:get_radar_pos_y(new_value), true)
+                        end,
+                        get = function()
+                            return mod:get_radar_size()
+                        end,
                     },
                     {
                         setting_id = "radar_range",
@@ -88,6 +97,94 @@ return {
                         type = "numeric",
                         default_value = 15,
                         range = { 5, 50 },
+                    },
+                },
+            },
+            {
+                setting_id = "position_group",
+                type = "group",
+                sub_widgets = {
+                    {
+                        setting_id = "radar_pos_x",
+                        type = "numeric",
+                        default_value = 40,
+                        range = { 0, 6000 },
+                        decimals_number = 0,
+                        step_size_value = 5,
+                        change = function(new_value)
+                            mod:set_radar_position(new_value, nil, true)
+                        end,
+                        get = function()
+                            return mod:get_radar_pos_x()
+                        end,
+                    },
+                    {
+                        setting_id = "radar_pos_y",
+                        type = "numeric",
+                        default_value = 220,
+                        range = { 0, 4000 },
+                        decimals_number = 0,
+                        step_size_value = 5,
+                        change = function(new_value)
+                            mod:set_radar_position(nil, new_value, true)
+                        end,
+                        get = function()
+                            return mod:get_radar_pos_y()
+                        end,
+                    },
+                    {
+                        setting_id = "radar_move_step",
+                        type = "numeric",
+                        default_value = 10,
+                        range = { 1, 200 },
+                        decimals_number = 0,
+                        step_size_value = 1,
+                        change = function(new_value)
+                            local value = math.floor(tonumber(new_value) or 10)
+
+                            if value < 1 then
+                                value = 1
+                            elseif value > 200 then
+                                value = 200
+                            end
+
+                            mod:set("radar_move_step", value)
+                        end,
+                        get = function()
+                            return mod:get_radar_move_step()
+                        end,
+                    },
+                    {
+                        setting_id = "move_radar_left_key",
+                        type = "keybind",
+                        default_value = {},
+                        keybind_trigger = "pressed",
+                        keybind_type = "function_call",
+                        function_name = "move_radar_left",
+                    },
+                    {
+                        setting_id = "move_radar_right_key",
+                        type = "keybind",
+                        default_value = {},
+                        keybind_trigger = "pressed",
+                        keybind_type = "function_call",
+                        function_name = "move_radar_right",
+                    },
+                    {
+                        setting_id = "move_radar_up_key",
+                        type = "keybind",
+                        default_value = {},
+                        keybind_trigger = "pressed",
+                        keybind_type = "function_call",
+                        function_name = "move_radar_up",
+                    },
+                    {
+                        setting_id = "move_radar_down_key",
+                        type = "keybind",
+                        default_value = {},
+                        keybind_trigger = "pressed",
+                        keybind_type = "function_call",
+                        function_name = "move_radar_down",
                     },
                 },
             },

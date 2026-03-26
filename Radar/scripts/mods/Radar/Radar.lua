@@ -229,6 +229,36 @@ local function _table_size(t)
     return n
 end
 
+local DEFAULT_RADAR_POS_X = 40
+local DEFAULT_RADAR_POS_Y = 220
+local DEFAULT_RADAR_MOVE_STEP = 10
+
+local function _clamp(value, min_value, max_value)
+    if value < min_value then
+        return min_value
+    end
+
+    if value > max_value then
+        return max_value
+    end
+
+    return value
+end
+
+local function _get_ui_space_size()
+    local width = 1920
+    local height = 1080
+
+    if RESOLUTION_LOOKUP and RESOLUTION_LOOKUP.width and RESOLUTION_LOOKUP.height then
+        local inverse_scale = RESOLUTION_LOOKUP.inverse_scale or 1
+
+        width = RESOLUTION_LOOKUP.width * inverse_scale
+        height = RESOLUTION_LOOKUP.height * inverse_scale
+    end
+
+    return width, height
+end
+
 local function _log_once(key, text)
     if mod:get("debug_mode") ~= true then
         return
@@ -1614,11 +1644,101 @@ function mod:get_radar_style()
     return value
 end
 
+function mod:get_radar_move_step()
+    local value = tonumber(self:get("radar_move_step")) or DEFAULT_RADAR_MOVE_STEP
+
+    if value < 1 then
+        value = 1
+    elseif value > 200 then
+        value = 200
+    end
+
+    return math.floor(value)
+end
+
+function mod:get_radar_pos_x(size)
+    local radar_size = tonumber(size) or self:get_radar_size()
+    local ui_width = _get_ui_space_size()
+    local max_x = math.max(0, ui_width - radar_size)
+    local value = tonumber(self:get("radar_pos_x"))
+
+    if value == nil then
+        value = DEFAULT_RADAR_POS_X
+    end
+
+    return math.floor(_clamp(value, 0, max_x) + 0.5)
+end
+
+function mod:get_radar_pos_y(size)
+    local radar_size = tonumber(size) or self:get_radar_size()
+    local _, ui_height = _get_ui_space_size()
+    local max_y = math.max(0, ui_height - radar_size)
+    local value = tonumber(self:get("radar_pos_y"))
+
+    if value == nil then
+        value = DEFAULT_RADAR_POS_Y
+    end
+
+    return math.floor(_clamp(value, 0, max_y) + 0.5)
+end
+
+function mod:set_radar_position(x, y)
+    local radar_size = self:get_radar_size()
+    local ui_width, ui_height = _get_ui_space_size()
+    local clamped_x = self:get_radar_pos_x(radar_size)
+    local clamped_y = self:get_radar_pos_y(radar_size)
+
+    if x ~= nil then
+        local max_x = math.max(0, ui_width - radar_size)
+
+        clamped_x = math.floor(_clamp(tonumber(x) or DEFAULT_RADAR_POS_X, 0, max_x) + 0.5)
+        self:set("radar_pos_x", clamped_x)
+    end
+
+    if y ~= nil then
+        local max_y = math.max(0, ui_height - radar_size)
+
+        clamped_y = math.floor(_clamp(tonumber(y) or DEFAULT_RADAR_POS_Y, 0, max_y) + 0.5)
+        self:set("radar_pos_y", clamped_y)
+    end
+
+    if mod:get("debug_mode") == true then
+        self:notify("Radar position: X %d | Y %d", clamped_x, clamped_y)
+    end
+
+    return clamped_x, clamped_y
+end
+
+function mod:nudge_radar(dx, dy)
+    local x = self:get_radar_pos_x()
+    local y = self:get_radar_pos_y()
+
+    return self:set_radar_position(x + (tonumber(dx) or 0), y + (tonumber(dy) or 0))
+end
+
+function mod.move_radar_left(_)
+    return mod:nudge_radar(-mod:get_radar_move_step(), 0)
+end
+
+function mod.move_radar_right(_)
+    return mod:nudge_radar(mod:get_radar_move_step(), 0)
+end
+
+function mod.move_radar_up(_)
+    return mod:nudge_radar(0, -mod:get_radar_move_step())
+end
+
+function mod.move_radar_down(_)
+    return mod:nudge_radar(0, mod:get_radar_move_step())
+end
+
 function mod:get_radar_origin(size)
-    local x = self:get("radar_pos_x") or 40
-    local y = self:get("radar_pos_y") or 220
+    local radar_size = tonumber(size) or self:get_radar_size()
+    local x = self:get_radar_pos_x(radar_size)
+    local y = self:get_radar_pos_y(radar_size)
     local z = 200
-    local radius = size / 2
+    local radius = radar_size / 2
+
     return x, y, z, radius
 end
 
