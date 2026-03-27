@@ -633,7 +633,7 @@ local function _expedition_objective_visual(target)
 
     local accent_color = nil
     local icon = meta.interaction_icon or meta.objective_icon or
-        "content/ui/materials/hud/interactions/icons/expeditions"
+        "content/ui/materials/hud/interactions/icons/default"
 
     if player_slot then
         accent_color = _with_alpha_widget(player_color or widget_color, 180)
