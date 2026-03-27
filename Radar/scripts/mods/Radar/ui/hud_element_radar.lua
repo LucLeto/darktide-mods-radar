@@ -410,6 +410,9 @@ local function _round(n)
 end
 
 local function _draw_dot(ui_renderer, x, y, z, size, color)
+    size = tonumber(size) or 1
+    size = math.max(1, size)
+
     local half = size / 2
     _draw_box(ui_renderer, _round(x - half), _round(y - half), z, size, size, color)
 end
@@ -417,7 +420,7 @@ end
 local function _draw_circle_outline(ui_renderer, center_x, center_y, z, radius, color)
     local circumference = math.max(24, 2 * math.pi * radius)
     local steps = math.max(96, math.floor(circumference * 1.25))
-    local dot_size = radius >= 100 and 1
+    local dot_size = 1
 
     for i = 0, steps - 1 do
         local angle = (math.pi * 2 * i) / steps
@@ -662,7 +665,7 @@ local function _draw_radar_guides(ui_renderer, x, y, z, size, is_circle)
 
     if guide_style == "view_guides" then
         local half_angle = _view_cone_half_angle()
-        local thickness = size >= 180 and 1
+        local thickness = 1
         local left_x, left_y
         local right_x, right_y
 
