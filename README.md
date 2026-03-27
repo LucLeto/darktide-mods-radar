@@ -6,18 +6,32 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 
 - Tracks nearby pickups, materials, mission items, event items, teammates, and priority enemies on a single radar.
 - Projects markers relative to your current facing, so the radar rotates with your view instead of acting like a fixed minimap.
-- Supports **square** and **circle** radar frames.
+- Supports **square** and **circle** radar frames, plus configurable **outline** and **guide** styles for both shapes.
 - Lets you adjust **radar size**, **scan range**, and **maximum marker count**.
 - Supports optional **icon scaling with radar size**.
 - Supports separate marker styles for **enemies** and **teammates**: **Icon only** or **Marked icon**.
 - Includes a **toggle radar on or off** keybind, so you can hide or restore the radar during a mission without opening the options menu.
 - Supports configurable **radar positioning** with **Radar position X**, **Radar position Y**, **Steps per input**, and dedicated movement keybinds for nudging the radar **left**, **right**, **up**, or **down**.
+- Adds dedicated **Expedition POI** support for **Sites of Interest**, **Deadsider Sanctuaries**, **Data Reliquary Harvesters**, **Main Objective**, **Valkyrie Extraction Zone**, and **Valkyrie Arrival Zone**, with an option to ignore the normal range limit for these markers.
 - Keeps the radar position clamped to the visible UI space, so moving or resizing it does not push it off-screen.
 - Colors the radar center dot from the local player HUD slot color.
 - Uses class icons for teammate markers instead of generic dots.
-- Exposes category-based toggles for common pickups, materials, objectives, expeditions items, deployed items, enemies, teammates, and event items.
+- Exposes category-based toggles for common pickups, materials, objectives, expeditions items, **Expedition POIs**, deployed items, enemies, teammates, and event items.
 - Includes optional **debug logs** and an **unknown pickups** toggle for discovery and troubleshooting.
 - Includes a groundwork **highlighting** option, but the actual highlighting behavior is currently still under development.
+
+## Version 1.2.0, compared with 1.1.0
+
+Version **1.2.0** expands Radar in two major directions: **Expedition POI support** and **deeper radar presentation control**. It also rolls in the recent usability work around runtime toggling and positioning, plus several expedition-specific tracking fixes and marker corrections.
+
+| Area | 1.1.0 | 1.2.0 |
+| --- | --- | --- |
+| Runtime controls | Static placement with no built-in toggle or movement keybinds. | Adds a **toggle radar** keybind, **Radar position X/Y**, **Steps per input**, movement keybinds, and screen-space clamping. |
+| Radar frame customization | Square or circle frame only. | Adds **Radar outline** with **Solid**, **Dotted**, or **Off**, plus **Radar guides** with **Crosshair**, **View guides**, **Range rings**, or **Off**. |
+| Frame rendering quality | Earlier frame and guide rendering. | Refines both shapes so crosshairs fit the active frame, view guides reach the border, circle rings render as thin solid rings, circle outlines look continuous, and square dotted outlines render as proper dots. |
+| Expedition map awareness | Expedition item pickups were supported, but dedicated POI locations were not. | Adds an **Expeditions POI** group with toggles for **Sites of Interest**, **Deadsider Sanctuaries**, **Data Reliquary Harvesters**, **Main Objective**, **Valkyrie Extraction Zone**, and **Valkyrie Arrival Zone**. |
+| Expedition POI behavior | No dedicated POI filtering or icon handling. | Tracks POIs by expedition navigation data, filters them to the active section, supports optional range-limit bypass, uses dedicated objective icons, and keeps **Data Reliquary Harvesters** limited to the sanctuary context where they are actually usable. |
+| Marker fixes | Deployable and expedition edge cases could resolve to the wrong or missing marker. | Fixes the **medical crate deployable** marker path, hardens expedition objective icon selection, and improves transition handling so outdated expedition location markers do not persist after moving between sections. |
 
 ## In-Game Radar Examples
 
@@ -68,6 +82,8 @@ The screenshots below show both radar styles during an expedition mission. They 
 | Max radar markers | Adjustable from **10** to **100**. |
 | Scale icons with radar size | Keeps marker size fixed or scales it with the radar. |
 | Radar style | **Square** or **Circle**. |
+| Radar outline | **Solid**, **Dotted**, or **Off**. |
+| Radar guides | **Crosshair**, **View guides**, **Range rings**, or **Off**. |
 | Enemy marker style | **Icon only** or **Marked icon**. |
 | Player marker style | **Icon only** or **Marked icon**. |
 | Radar position X | Sets the radar's horizontal position. The value is clamped to the visible UI space. |
@@ -78,6 +94,19 @@ The screenshots below show both radar styles during an expedition mission. They 
 | Move radar up | Assign a key to move the radar up by the configured step size. |
 | Move radar down | Assign a key to move the radar down by the configured step size. |
 | Highlight distance | Present in the options menu, but the highlighting feature is currently still under development. |
+
+### Expedition POI Controls
+
+| Option | What it controls |
+| --- | --- |
+| Expeditions POI | Group of toggles for expedition location markers. |
+| Ignore range limit for POI | Lets expedition POI markers bypass the normal radar range filter. |
+| Sites of Interest | Shows registered expedition opportunity locations. |
+| Deadsider Sanctuaries | Shows expedition transition or sanctuary locations. |
+| Data Reliquary Harvesters | Shows expedition loot converters while inside the sanctuary where they are usable. |
+| Main Objective | Shows expedition main objective locations. |
+| Valkyrie Extraction Zone | Shows extraction points. |
+| Valkyrie Arrival Zone | Shows arrival points. |
 
 ### Positioning and Toggle Use
 
@@ -93,6 +122,7 @@ The screenshots below show both radar styles during an expedition mission. They 
 - **Teammates** use archetype icons and their runtime HUD slot color.
 - **The center dot** uses the local player HUD color instead of a fixed green.
 - **Objective and event items** reuse a small number of template icons, recolored through ARGB values where needed.
+- **Expedition POIs** use dedicated scanner or objective icons, are always shown in a marked style, can optionally ignore the normal radar range limit, and are filtered to the active expedition section so outdated location markers do not linger.
 
 ## Target Markers
 
@@ -180,6 +210,19 @@ From left to right: **Veteran**, **Zealot**, **Psyker**, **Ogryn**, **Arbitrator
 | --- | --- | --- |
 | <img src="doc/img/pocketable_grimoire.png" width="40" alt="Grimoire marker" /> | Grimoire | Secondary objective pocketable. |
 | <img src="doc/img/pocketable_scripture.png" width="40" alt="Scripture marker" /> | Scripture | Secondary objective pocketable. |
+
+### Expedition POIs
+
+| Marker | Notes |
+| --- | --- |
+| Sites of Interest | Expedition opportunity markers, using scanner-map glyphs with location numbering. |
+| Deadsider Sanctuaries | Transition markers for sanctuary travel and section movement. |
+| Data Reliquary Harvesters | Uses the expedition harvester icon and is only shown while inside the sanctuary where the converter is relevant. |
+| Main Objective | Main expedition objective location marker. |
+| Valkyrie Extraction Zone | Extraction location marker. |
+| Valkyrie Arrival Zone | Arrival location marker. |
+
+These markers are driven by expedition navigation data rather than standard pickup scanning. They can optionally ignore the normal radar range limit and are filtered to the currently active expedition section.
 
 ### Expeditions-Specific Items
 
@@ -277,6 +320,8 @@ Not every radar marker uses a fixed readme tint:
 ## Notes
 
 - The radar is intended for active gameplay and suppresses itself outside valid runtime states such as hub and menu contexts.
+- Expedition POIs are filtered to the active expedition section, and **Data Reliquary Harvesters** are only shown inside the relevant **Deadsider Sanctuary** where they can actually be used.
 - The highlighting option is visible in the configuration, but the actual highlighting behavior is still work in progress.
 - Marker previews in this readme were generated from the included template assets so the legend matches the mod's configured presentations as closely as possible.
 - The gameplay screenshots in this readme were captured during an expedition mission and show both radar frame styles in live use.
+- Version **1.2.0** adds configurable outline and guide styles for both square and circle radar modes, plus dedicated Expedition POI tracking.
