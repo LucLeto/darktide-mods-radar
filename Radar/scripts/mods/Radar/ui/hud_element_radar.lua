@@ -28,6 +28,15 @@ local PLAYER_CLASS_ICONS = {
     broker = "content/ui/materials/icons/classes/broker",
 }
 
+local EXPEDITION_OBJECTIVE_KINDS = {
+    expedition_loot_converter = true,
+    expedition_objective_opportunity = true,
+    expedition_objective_transition = true,
+    expedition_objective_main_objective = true,
+    expedition_objective_extraction = true,
+    expedition_objective_arrival = true,
+}
+
 local function _log_once(bucket, key, message)
     if mod:get("debug_mode") ~= true then
         return
@@ -458,6 +467,21 @@ local function _marker_definition()
                 return content.icon ~= nil and content.icon ~= ""
             end,
         },
+        {
+            pass_type = "texture",
+            value_id = "title_icon",
+            style_id = "title_icon",
+            style = {
+                vertical_alignment = "top",
+                horizontal_alignment = "left",
+                offset = { 0, 0, 11 },
+                size = { 16, 16 },
+                color = { 255, 255, 255, 255 },
+            },
+            visibility_function = function(content, style)
+                return content.title_icon ~= nil and content.title_icon ~= ""
+            end,
+        },
     }, "screen")
 end
 
@@ -469,6 +493,7 @@ end
 
 local function _clear_marker_widget(widget)
     widget.content.icon = nil
+    widget.content.title_icon = nil
 end
 
 local function _ensure_marker_widgets(self)
@@ -517,6 +542,10 @@ local function _is_enemy_kind(kind)
     return kind ~= nil and string.sub(tostring(kind), 1, 6) == "enemy_"
 end
 
+local function _is_expedition_objective_kind(kind)
+    return kind ~= nil and EXPEDITION_OBJECTIVE_KINDS[kind] == true
+end
+
 local function _display_style_for_kind(kind)
     if kind == "player_teammate" then
         local value = tostring(mod:get("player_display_style") or "marked_icon")
@@ -526,6 +555,10 @@ local function _display_style_for_kind(kind)
     if _is_enemy_kind(kind) then
         local value = tostring(mod:get("enemy_display_style") or "marked_icon")
         return value == "icon_only" and "icon_only" or "marked_icon"
+    end
+
+    if _is_expedition_objective_kind(kind) then
+        return "marked_icon"
     end
 
     return "icon_only"
@@ -548,16 +581,71 @@ local function _center_dot_color(snapshot)
 end
 
 local function _apply_marker_widget(widget, visual, x, y, z)
-    local style = widget.style.icon
+    local icon_style = widget.style.icon
+    local title_icon_style = widget.style.title_icon
     local size = _scaled_icon_size(visual and visual.size or 14)
+    local color = _any_to_widget_color(visual and visual.color or nil)
 
     widget.content.icon = visual and visual.icon or nil
-    style.offset[1] = math.floor((x or 0) + 0.5)
-    style.offset[2] = math.floor((y or 0) + 0.5)
-    style.offset[3] = math.floor((z or 0) + 0.5)
-    style.size[1] = size
-    style.size[2] = size
-    style.color = _any_to_widget_color(visual and visual.color or nil)
+    widget.content.title_icon = visual and visual.title_icon or nil
+
+    icon_style.offset[1] = math.floor((x or 0) + 0.5)
+    icon_style.offset[2] = math.floor((y or 0) + 0.5)
+    icon_style.offset[3] = math.floor((z or 0) + 0.5)
+    icon_style.size[1] = size
+    icon_style.size[2] = size
+    icon_style.color = color
+
+    if title_icon_style then
+        title_icon_style.offset[1] = icon_style.offset[1]
+        title_icon_style.offset[2] = icon_style.offset[2]
+        title_icon_style.offset[3] = (icon_style.offset[3] or 0) + 1
+        title_icon_style.size[1] = size
+        title_icon_style.size[2] = size
+        title_icon_style.color = color
+    end
+end
+
+local DEFAULT_EXPEDITION_UNMARKED_COLOR = _widget_color(255, 54, 198, 49)
+
+local EXPEDITION_UNMARKED_COLORS = {
+    expedition_loot_converter = _widget_color(255, 192, 160, 0),
+    expedition_objective_opportunity = DEFAULT_EXPEDITION_UNMARKED_COLOR,
+    expedition_objective_transition = DEFAULT_EXPEDITION_UNMARKED_COLOR,
+    expedition_objective_main_objective = _widget_color(255, 255, 255, 255),
+    expedition_objective_extraction = DEFAULT_EXPEDITION_UNMARKED_COLOR,
+    expedition_objective_arrival = _widget_color(255, 255, 255, 255),
+}
+
+local function _expedition_unmarked_color(target)
+    local kind = target and target.kind
+
+    return EXPEDITION_UNMARKED_COLORS[kind] or DEFAULT_EXPEDITION_UNMARKED_COLOR
+end
+
+local function _expedition_objective_visual(target)
+    local meta = target and target.meta or {}
+    local player_slot = tonumber(meta.marked_by_player_slot)
+    local slot_colors = UISettings and UISettings.player_slot_colors
+    local player_color = player_slot and slot_colors and slot_colors[player_slot] or nil
+    local default_color = _expedition_unmarked_color(target)
+    local widget_color = _any_to_widget_color(player_color, default_color)
+
+    local accent_color = nil
+    local icon = meta.interaction_icon or meta.objective_icon or
+        "content/ui/materials/hud/interactions/icons/expeditions"
+
+    if player_slot then
+        accent_color = _with_alpha_widget(player_color or widget_color, 180)
+    end
+
+    return {
+        icon = icon,
+        title_icon = meta.objective_title_icon,
+        color = widget_color,
+        accent_color = accent_color,
+        size = 15,
+    }
 end
 
 local function _target_visual(target)
@@ -589,6 +677,26 @@ local function _target_visual(target)
             accent_color = _with_alpha_widget(widget_color, 180),
             size = 15,
         }
+    end
+
+    if _is_expedition_objective_kind(target.kind) then
+        if mod:get("debug_mode") then
+            _log_once(
+                _logged_visuals,
+                "expedition:" ..
+                tostring(target.kind) ..
+                ":" ..
+                tostring((target.meta or {}).interaction_icon or (target.meta or {}).objective_icon) ..
+                ":" .. tostring((target.meta or {}).objective_title_icon),
+                string.format("[Radar] visual expedition | kind=%s icon=%s title_icon=%s marked_by=%s",
+                    tostring(target.kind),
+                    tostring((target.meta or {}).interaction_icon or (target.meta or {}).objective_icon),
+                    tostring((target.meta or {}).objective_title_icon),
+                    tostring((target.meta or {}).marked_by_player_slot))
+            )
+        end
+
+        return _expedition_objective_visual(target)
     end
 
     local presentation = PRESENTATIONS[target.kind]
@@ -720,7 +828,7 @@ HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input
 
                 local target = targets[i]
                 local px, py = mod:project_target_to_radar(player_pos, projection_rotation, target.position, radius - 8,
-                    range)
+                    range, target.ignore_radar_range)
 
                 if px and py then
                     local visual = _target_visual(target)
@@ -738,8 +846,9 @@ HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input
                     _log_once(
                         _logged_draws,
                         "widget_material:" .. tostring(visual and visual.icon),
-                        string.format("[Radar] widget material scheduled | material=%s",
-                            tostring(visual and visual.icon))
+                        string.format("[Radar] widget material scheduled | material=%s title_material=%s",
+                            tostring(visual and visual.icon),
+                            tostring(visual and visual.title_icon))
                     )
 
                     local widget_ok, widget_err = pcall(function()

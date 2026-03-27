@@ -3,8 +3,11 @@ local Pickups = require("scripts/settings/pickup/pickups")
 
 local SCAN_INTERVAL = 0.25
 
+local _marked_by_player_slot_for_unit
+
 mod._next_scan_t = 0
 mod._tracked_units = {}
+mod._tracked_points = {}
 mod._logged_units = {}
 mod._radar_targets = {}
 mod._radar_snapshot = nil
@@ -49,6 +52,17 @@ local KIND_TO_SETTING = {
     material_plasteel = "show_plasteel",
     material_expeditions_currency = "show_expeditions_currency",
     material_expeditions_loot = "show_expeditions_loot",
+    material_expeditions_loot_player_drop = "show_expeditions_dropped_loot",
+    expedition_loot_converter = "show_expedition_loot_converter",
+    expedition_objective_opportunity = "show_expedition_objective_opportunity",
+    expedition_objective_transition = "show_expedition_objective_transition",
+    expedition_objective_main_objective = "show_expedition_objective_main_objective",
+    expedition_objective_extraction = "show_expedition_objective_extraction",
+    expedition_objective_arrival = "show_expedition_objective_arrival",
+    luggable_data_reliquary = "show_data_reliquaries",
+    pickup_large_ammunition_crate = "show_large_ammunition_crate",
+    luggable_promethium_barrel = "show_promethium_barrel",
+    pocketable_anti_rad_stimm = "show_anti_rad_stimm",
     pocketable_ammo_crate = "show_pocketable_ammo_crate",
     pocketable_breach_charge = "show_pocketable_breach_charge",
     pocketable_corrupted_auspex_scanner = "show_pocketable_corrupted_auspex_scanner",
@@ -70,6 +84,23 @@ local KIND_TO_SETTING = {
     pocketable_void_shield = "show_pocketable_void_shield",
     pickup_ammo_cache_deployable = "show_ammo_crate_deployable",
     medical_crate_deployable = "show_medical_crate_deployable",
+}
+
+local EXPEDITION_MARKER_KINDS = {
+    expedition_loot_converter = true,
+    expedition_objective_opportunity = true,
+    expedition_objective_transition = true,
+    expedition_objective_main_objective = true,
+    expedition_objective_extraction = true,
+    expedition_objective_arrival = true,
+}
+
+local EXPEDITION_OBJECTIVE_ICON_DEFAULTS = {
+    expedition_loot_converter = "content/ui/materials/hud/interactions/icons/expeditions",
+    expedition_objective_transition = "content/ui/materials/backgrounds/scanner/scanner_map_exit",
+    expedition_objective_main_objective = "content/ui/materials/hud/interactions/icons/objective_main",
+    expedition_objective_extraction = "content/ui/materials/backgrounds/scanner/scanner_map_extract",
+    expedition_objective_arrival = "content/ui/materials/icons/mission_types/mission_type_05",
 }
 
 function mod.on_all_mods_loaded()
@@ -111,6 +142,7 @@ function mod.on_all_mods_loaded()
     load_package("packages/ui/views/live_events_view/live_events_view")
     load_package("packages/ui/views/group_finder_view/group_finder_view")
     load_package("packages/ui/views/mission_board_view/mission_board_view")
+    load_package("packages/ui/views/scanner_display_view/scanner_display_view")
     load_package("packages/ui/material_sets/circumstances")
 
     if mod:get("debug_mode") then
@@ -702,6 +734,103 @@ local function _safe_unit_to_extension_map(system_name)
     return nil
 end
 
+local function _safe_game_mode_manager()
+    return Managers and Managers.state and Managers.state.game_mode or nil
+end
+
+local function _safe_game_mode()
+    local game_mode_manager = _safe_game_mode_manager()
+    if not game_mode_manager or not game_mode_manager.game_mode then
+        return nil
+    end
+
+    local ok, game_mode = pcall(function()
+        return game_mode_manager:game_mode()
+    end)
+
+    if ok then
+        return game_mode
+    end
+
+    return nil
+end
+
+local function _safe_game_mode_name()
+    local game_mode_manager = _safe_game_mode_manager()
+    if not game_mode_manager or not game_mode_manager.game_mode_name then
+        return nil
+    end
+
+    local ok, game_mode_name = pcall(function()
+        return game_mode_manager:game_mode_name()
+    end)
+
+    if ok then
+        return game_mode_name
+    end
+
+    return nil
+end
+
+local function _is_expedition_runtime()
+    return _safe_game_mode_name() == "expedition"
+end
+
+local function _safe_vector3_unbox(value)
+    if not value then
+        return nil
+    end
+
+    if type(value) == "table" and value.x ~= nil and value.y ~= nil and value.z ~= nil then
+        return _copy_vector3(value)
+    end
+
+    if value.unbox then
+        local ok, vector = pcall(function()
+            return value:unbox()
+        end)
+
+        if ok and vector then
+            return _copy_vector3(vector)
+        end
+    end
+
+    return _copy_vector3(value)
+end
+
+local function _safe_expedition_level_index(level)
+    if not level or not Managers or not Managers.state or not Managers.state.unit_spawner then
+        return nil
+    end
+
+    local unit_spawner = Managers.state.unit_spawner
+    if not unit_spawner.index_by_level then
+        return nil
+    end
+
+    local ok, level_index = pcall(function()
+        return unit_spawner:index_by_level(level)
+    end)
+
+    if ok then
+        return level_index
+    end
+
+    return nil
+end
+
+local function _expedition_opportunity_icon(level_index)
+    local numeric_index = tonumber(level_index) or 0
+    local icon_index = 1 + numeric_index % 24
+
+    return string.format("content/ui/materials/backgrounds/scanner/scanner_map_greek_%02d", icon_index)
+end
+
+local function _expedition_opportunity_title_icon(location_id)
+    local numeric_id = tonumber(location_id) or 0
+    return string.format("content/ui/materials/backgrounds/scanner/scanner_map_%d", numeric_id % 9)
+end
+
 local function _get_runtime_state()
     local gameplay_t = _safe_gameplay_time()
     local mission_name = _safe_mission_name()
@@ -751,6 +880,14 @@ local function _is_allowed_runtime()
     return allowed
 end
 
+local function _is_expedition_marker_kind(kind)
+    return EXPEDITION_MARKER_KINDS[kind] == true
+end
+
+local function _ignore_radar_range_for_kind(kind)
+    return _is_expedition_marker_kind(kind) and mod:get("ignore_radar_range_for_expedition_markers") == true
+end
+
 local function _kind_enabled(kind)
     local setting_id = KIND_TO_SETTING[kind]
     if not setting_id then
@@ -760,23 +897,33 @@ local function _kind_enabled(kind)
     return mod:get(setting_id) ~= false
 end
 
-local function _pickup_meta(pickup_name, pickup_data, interaction_type, interaction_icon, description, unit_name)
+local function _pickup_meta(pickup_name, pickup_data, interaction_type, ui_interaction_type, interaction_icon,
+                            description, unit_name, marked_by_player_slot)
     return {
         pickup_name = pickup_name,
         pickup_group = pickup_data and pickup_data.group or nil,
         interaction_type = interaction_type,
+        ui_interaction_type = ui_interaction_type,
         interaction_icon = interaction_icon,
         description = description,
         unit_name = unit_name,
+        marked_by_player_slot = marked_by_player_slot,
     }
 end
 
-local function _classify_pickup_like(interaction_type, icon, description, unit_name, pickup_name, pickup_data)
-    local meta = _pickup_meta(pickup_name, pickup_data, interaction_type, icon, description, unit_name)
+local function _classify_pickup_like(interaction_type, ui_interaction_type, icon, description, unit_name, pickup_name,
+                                     pickup_data, marked_by_player_slot)
+    local meta = _pickup_meta(pickup_name, pickup_data, interaction_type, ui_interaction_type, icon, description,
+        unit_name,
+        marked_by_player_slot)
 
     -- default items
     if interaction_type == "chest" then
         return "crate_unknown", meta
+    end
+
+    if interaction_type == "expedition_loot_converter" or (ui_interaction_type == "point_of_interest" and pickup_name == "expedition_loot_converter") then
+        return "expedition_loot_converter", meta
     end
 
     if pickup_name == "small_clip" then
@@ -994,6 +1141,7 @@ local function _classify_interactee(extension, unit)
     end
 
     local interaction_type = nil
+    local ui_interaction_type = nil
     local icon = nil
     local description = nil
 
@@ -1002,6 +1150,13 @@ local function _classify_interactee(extension, unit)
     end)
     if ok_interaction_type then
         interaction_type = _safe_lower_string(interaction_type_value)
+    end
+
+    local ok_ui_interaction_type, ui_interaction_type_value = pcall(function()
+        return extension:ui_interaction_type()
+    end)
+    if ok_ui_interaction_type then
+        ui_interaction_type = _safe_lower_string(ui_interaction_type_value)
     end
 
     local ok_icon, icon_value = pcall(function()
@@ -1021,8 +1176,10 @@ local function _classify_interactee(extension, unit)
     local unit_name = _safe_lower_string(_safe_unit_name(unit))
     local pickup_name = _safe_unit_pickup_name(unit)
     local pickup_data = pickup_name and Pickups and Pickups.by_name and Pickups.by_name[pickup_name] or nil
+    local marked_by_player_slot = _marked_by_player_slot_for_unit(unit)
 
-    return _classify_pickup_like(interaction_type, icon, description, unit_name, pickup_name, pickup_data)
+    return _classify_pickup_like(interaction_type, ui_interaction_type, icon, description, unit_name, pickup_name,
+        pickup_data, marked_by_player_slot)
 end
 
 local function _classify_enemy_from_breed(breed_name)
@@ -1093,6 +1250,320 @@ local function _safe_player_slot(player)
     end
 
     return nil
+end
+
+_marked_by_player_slot_for_unit = function(unit)
+    if not _safe_unit_alive(unit) then
+        return nil
+    end
+
+    local smart_tag_system = _safe_extension_system("smart_tag_system")
+    if not smart_tag_system or not smart_tag_system.unit_tag then
+        return nil
+    end
+
+    local ok_tag, tag = pcall(function()
+        return smart_tag_system:unit_tag(unit)
+    end)
+    if not ok_tag or not tag or not tag.tagger_player then
+        return nil
+    end
+
+    local ok_player, player = pcall(function()
+        return tag:tagger_player()
+    end)
+    if not ok_player or not player then
+        return nil
+    end
+
+    return _safe_player_slot(player)
+end
+
+local function _track_point(id, kind, position, source, meta)
+    if not id or not kind or not position then
+        return
+    end
+
+    mod._tracked_points[id] = {
+        kind = kind,
+        source = source,
+        position = position,
+        meta = meta,
+    }
+end
+
+local function _safe_navigation_handler_marked_by_slot(navigation_handler, level_index)
+    if not navigation_handler or not navigation_handler.player_slot_by_level_marked or level_index == nil then
+        return nil
+    end
+
+    local ok, player_slot = pcall(function()
+        return navigation_handler:player_slot_by_level_marked(level_index)
+    end)
+
+    if ok then
+        return player_slot
+    end
+
+    return nil
+end
+
+local function _safe_navigation_handler_level_completed(navigation_handler, level_index)
+    if not navigation_handler or not navigation_handler.is_level_completed or level_index == nil then
+        return false
+    end
+
+    local ok, completed = pcall(function()
+        return navigation_handler:is_level_completed(level_index)
+    end)
+
+    return ok and completed == true or false
+end
+
+local function _safe_expedition_parent_level_data(section, parent_level_reference_name)
+    if not section or not section.levels_data then
+        return nil
+    end
+
+    local wanted_reference_name = parent_level_reference_name or "level"
+
+    for i = 1, #section.levels_data do
+        local level_data = section.levels_data[i]
+        if level_data and level_data.reference_name == wanted_reference_name then
+            return level_data
+        end
+    end
+
+    return nil
+end
+
+local function _safe_expedition_level_slot_position(level_data)
+    if not level_data then
+        return nil
+    end
+
+    local section = level_data.section
+    local custom_data = level_data.custom_data
+    local level_slot_id = custom_data and custom_data.level_slot_id
+    local parent_level_reference_name = level_data.parent_level_reference_name or "level"
+    local parent_level_data = _safe_expedition_parent_level_data(section, parent_level_reference_name)
+    local parent_level = parent_level_data and parent_level_data.level or nil
+
+    if not parent_level or not level_slot_id or not Level or not Level.unit_by_id then
+        return nil
+    end
+
+    local ok_unit, level_slot_unit = pcall(function()
+        return Level.unit_by_id(parent_level, level_slot_id)
+    end)
+    if not ok_unit or not level_slot_unit or not Unit or not Unit.world_position then
+        return nil
+    end
+
+    local ok_position, world_position = pcall(function()
+        return Unit.world_position(level_slot_unit, 1)
+    end)
+    if ok_position and world_position then
+        return _copy_vector3(world_position)
+    end
+
+    return nil
+end
+
+local function _track_expedition_registered_points(navigation_handler, points, kind, objective_tag)
+    if type(points) ~= "table" then
+        return
+    end
+
+    if kind == "expedition_objective_opportunity" then
+        local location_id = 1
+
+        for level_index, boxed_position in pairs(points) do
+            local position = _safe_vector3_unbox(boxed_position)
+            local is_completed = _safe_navigation_handler_level_completed(navigation_handler, level_index)
+
+            if position and not is_completed then
+                _track_point(
+                    string.format("%s:%s", tostring(kind), tostring(level_index)),
+                    kind,
+                    position,
+                    "expedition_navigation",
+                    {
+                        objective_icon = _expedition_opportunity_icon(level_index),
+                        objective_title_icon = _expedition_opportunity_title_icon(location_id),
+                        marked_by_player_slot = _safe_navigation_handler_marked_by_slot(navigation_handler, level_index),
+                        expedition_level_index = level_index,
+                        objective_location_id = location_id,
+                        objective_tag = objective_tag,
+                    }
+                )
+            end
+
+            if position then
+                location_id = location_id + 1
+            end
+        end
+
+        return
+    end
+
+    local entries = {}
+
+    for level_index, boxed_position in pairs(points) do
+        local position = _safe_vector3_unbox(boxed_position)
+
+        if position then
+            entries[#entries + 1] = {
+                level_index = level_index,
+                position = position,
+            }
+        end
+    end
+
+    table.sort(entries, function(a, b)
+        local a_level_index = tonumber(a.level_index)
+        local b_level_index = tonumber(b.level_index)
+
+        if a_level_index ~= nil and b_level_index ~= nil and a_level_index ~= b_level_index then
+            return a_level_index < b_level_index
+        end
+
+        if a_level_index ~= nil and b_level_index == nil then
+            return true
+        end
+
+        if a_level_index == nil and b_level_index ~= nil then
+            return false
+        end
+
+        return tostring(a.level_index) < tostring(b.level_index)
+    end)
+
+    for index = 1, #entries do
+        local entry = entries[index]
+        local level_index = entry.level_index
+        local position = entry.position
+
+        _track_point(
+            string.format("%s:%s", tostring(kind), tostring(level_index)),
+            kind,
+            position,
+            "expedition_navigation",
+            {
+                objective_icon = EXPEDITION_OBJECTIVE_ICON_DEFAULTS[kind],
+                marked_by_player_slot = _safe_navigation_handler_marked_by_slot(navigation_handler, level_index),
+                expedition_level_index = level_index,
+                objective_location_id = index,
+                objective_tag = objective_tag,
+            }
+        )
+    end
+end
+
+local function _track_expedition_tagged_levels(game_mode, navigation_handler, current_location_index, level_tag, kind)
+    if not game_mode or not game_mode.get_all_levels_of_specified_tag or current_location_index == nil then
+        return
+    end
+
+    local ok_levels, levels = pcall(function()
+        return game_mode:get_all_levels_of_specified_tag(current_location_index, { [level_tag] = true })
+    end)
+    if not ok_levels or type(levels) ~= "table" then
+        return
+    end
+
+    for i = 1, #levels do
+        local level_data = levels[i]
+        local position = _safe_expedition_level_slot_position(level_data)
+
+        if position then
+            local level_index = _safe_expedition_level_index(level_data and level_data.level or nil)
+
+            _track_point(
+                string.format("%s:%s:%s", tostring(kind), tostring(level_index or i),
+                    tostring(level_data and level_data.reference_name or i)),
+                kind,
+                position,
+                "expedition_level_tag",
+                {
+                    objective_icon = EXPEDITION_OBJECTIVE_ICON_DEFAULTS[kind],
+                    marked_by_player_slot = _safe_navigation_handler_marked_by_slot(navigation_handler, level_index),
+                    expedition_level_index = level_index,
+                    objective_tag = level_tag,
+                    reference_name = level_data and level_data.reference_name or nil,
+                    level_name = level_data and level_data.level_name or nil,
+                }
+            )
+        end
+    end
+end
+
+local function _scan_expedition_objectives()
+    mod._tracked_points = {}
+
+    if not _is_expedition_runtime() then
+        return
+    end
+
+    local game_mode = _safe_game_mode()
+    if not game_mode then
+        return
+    end
+
+    local navigation_handler = nil
+    if game_mode.get_navigation_handler then
+        local ok_navigation, value = pcall(function()
+            return game_mode:get_navigation_handler()
+        end)
+        if ok_navigation then
+            navigation_handler = value
+        end
+    end
+
+    if navigation_handler and navigation_handler.get_registered_opportunities then
+        local ok, opportunities = pcall(function()
+            return navigation_handler:get_registered_opportunities()
+        end)
+        if ok then
+            _track_expedition_registered_points(navigation_handler, opportunities, "expedition_objective_opportunity",
+                "type_opportunity")
+        end
+    end
+
+    if navigation_handler and navigation_handler.get_registered_exits then
+        local ok, exits = pcall(function()
+            return navigation_handler:get_registered_exits()
+        end)
+        if ok then
+            _track_expedition_registered_points(navigation_handler, exits, "expedition_objective_transition",
+                "type_transition")
+        end
+    end
+
+    if navigation_handler and navigation_handler.get_registered_extractions then
+        local ok, extractions = pcall(function()
+            return navigation_handler:get_registered_extractions()
+        end)
+        if ok then
+            _track_expedition_registered_points(navigation_handler, extractions, "expedition_objective_extraction",
+                "type_extraction")
+        end
+    end
+
+    local current_location_index = nil
+    if game_mode.current_location_index then
+        local ok_location, value = pcall(function()
+            return game_mode:current_location_index()
+        end)
+        if ok_location then
+            current_location_index = value
+        end
+    end
+
+    _track_expedition_tagged_levels(game_mode, navigation_handler, current_location_index, "type_main_objective",
+        "expedition_objective_main_objective")
+    _track_expedition_tagged_levels(game_mode, navigation_handler, current_location_index, "type_arrival",
+        "expedition_objective_arrival")
 end
 
 local function _refresh_player_units()
@@ -1336,22 +1807,38 @@ local function _collect_radar_targets()
     local max_markers = mod:get_max_radar_markers()
     local targets = {}
 
-    for unit, data in pairs(mod._tracked_units) do
-        if _is_trackable_unit_alive(unit, data and data.kind) and data.position and data.kind and _kind_enabled(data.kind) then
-            local distance_sq_horizontal = _distance_squared_horizontal(player_pos, data.position)
-
-            if distance_sq_horizontal <= max_range_sq then
-                targets[#targets + 1] = {
-                    unit = unit,
-                    kind = data.kind,
-                    position = data.position,
-                    source = data.source,
-                    meta = data.meta,
-                    distance_sq = distance_sq_horizontal,
-                    distance_sq_3d = _distance_squared(player_pos, data.position),
-                }
-            end
+    local function append_target(unit, data)
+        if not data or not data.position or not data.kind or not _kind_enabled(data.kind) then
+            return
         end
+
+        local distance_sq_horizontal = _distance_squared_horizontal(player_pos, data.position)
+        local ignore_range = _ignore_radar_range_for_kind(data.kind)
+
+        if distance_sq_horizontal > max_range_sq and not ignore_range then
+            return
+        end
+
+        targets[#targets + 1] = {
+            unit = unit,
+            kind = data.kind,
+            position = data.position,
+            source = data.source,
+            meta = data.meta,
+            distance_sq = distance_sq_horizontal,
+            distance_sq_3d = _distance_squared(player_pos, data.position),
+            ignore_radar_range = ignore_range,
+        }
+    end
+
+    for unit, data in pairs(mod._tracked_units) do
+        if _is_trackable_unit_alive(unit, data and data.kind) then
+            append_target(unit, data)
+        end
+    end
+
+    for id, data in pairs(mod._tracked_points) do
+        append_target(id, data)
     end
 
     table.sort(targets, function(a, b)
@@ -1476,6 +1963,7 @@ end
 local function _reset_runtime_state()
     mod._next_scan_t = 0
     mod._tracked_units = {}
+    mod._tracked_points = {}
     mod._logged_units = {}
     mod._radar_targets = {}
     mod._radar_snapshot = nil
@@ -1515,6 +2003,7 @@ end
 
 local function _update_internal(dt, t)
     if mod:get("enable_radar") == false then
+        mod._tracked_points = {}
         mod._radar_targets = {}
         mod._radar_snapshot = nil
         return
@@ -1530,6 +2019,7 @@ local function _update_internal(dt, t)
     mod._last_update_t = scan_clock
 
     if not allowed then
+        mod._tracked_points = {}
         mod._radar_targets = {}
         mod._radar_snapshot = nil
         _debug_log_block(reason, gameplay_t, mission_name, activity, mechanism_name)
@@ -1555,6 +2045,7 @@ local function _update_internal(dt, t)
     _scan_minions()
     _scan_smart_tag_targets()
     _refresh_player_units()
+    _scan_expedition_objectives()
     _prune_units()
 
     mod._radar_targets = _collect_radar_targets()
@@ -1801,7 +2292,7 @@ function mod:get_radar_origin(size)
     return x, y, z, radius
 end
 
-function mod:project_target_to_radar(player_pos, player_rot, target_pos, max_radius, range)
+function mod:project_target_to_radar(player_pos, player_rot, target_pos, max_radius, range, ignore_radar_range)
     if not player_pos or not target_pos then
         return nil, nil
     end
@@ -1819,7 +2310,12 @@ function mod:project_target_to_radar(player_pos, player_rot, target_pos, max_rad
     end
 
     local distance_sq_horizontal = dx * dx + dy * dy
-    if not _is_finite_number(distance_sq_horizontal) or distance_sq_horizontal > range * range then
+    if not _is_finite_number(distance_sq_horizontal) then
+        return nil, nil
+    end
+
+    local outside_range = distance_sq_horizontal > range * range
+    if outside_range and not ignore_radar_range then
         return nil, nil
     end
 
@@ -1844,6 +2340,26 @@ function mod:project_target_to_radar(player_pos, player_rot, target_pos, max_rad
     local py = -local_y * radar_scale
     if not _is_finite_number(px) or not _is_finite_number(py) then
         return nil, nil
+    end
+
+    if outside_range then
+        local radar_style = self.get_radar_style and self:get_radar_style() or "square"
+
+        if radar_style == "circle" then
+            local projected_distance = math.sqrt(px * px + py * py)
+            if projected_distance > 0 then
+                local circle_scale = max_radius / projected_distance
+                px = px * circle_scale
+                py = py * circle_scale
+            end
+        else
+            local max_component = math.max(math.abs(px), math.abs(py))
+            if max_component > 0 then
+                local square_scale = max_radius / max_component
+                px = px * square_scale
+                py = py * square_scale
+            end
+        end
     end
 
     return px, py

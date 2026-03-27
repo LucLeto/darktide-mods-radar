@@ -224,6 +224,30 @@ return {
         en = "Dropped Tech-Remnants",
         ["zh-cn"] = "掉落科技遗物",
     },
+    expeditions_location_group = {
+        en = "Expeditions POI",
+    },
+    ignore_radar_range_for_expedition_markers = {
+        en = "Ignore range limit for POI",
+    },
+    show_expedition_objective_opportunity = {
+        en = "Sites of Interest",
+    },
+    show_expedition_objective_transition = {
+        en = "Deadsider Sanctuaries",
+    },
+    show_expedition_loot_converter = {
+        en = "Data Reliquary Harvesters",
+    },
+    show_expedition_objective_main_objective = {
+        en = "Main Objective",
+    },
+    show_expedition_objective_extraction = {
+        en = "Valkyrie Extraction Zone",
+    },
+    show_expedition_objective_arrival = {
+        en = "Valkyrie Arrival Zone",
+    },
     show_data_reliquaries = {
         en = "Data Reliquaries",
         ["zh-cn"] = "数据圣骨匣",

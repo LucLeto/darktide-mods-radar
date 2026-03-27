@@ -331,6 +331,47 @@ return {
                 },
             },
             {
+                setting_id = "expeditions_location_group",
+                type = "group",
+                sub_widgets = {
+                    {
+                        setting_id = "ignore_radar_range_for_expedition_markers",
+                        type = "checkbox",
+                        default_value = true,
+                    },
+                    {
+                        setting_id = "show_expedition_objective_opportunity",
+                        type = "checkbox",
+                        default_value = true,
+                    },
+                    {
+                        setting_id = "show_expedition_objective_transition",
+                        type = "checkbox",
+                        default_value = true,
+                    },
+                    {
+                        setting_id = "show_expedition_objective_main_objective",
+                        type = "checkbox",
+                        default_value = true,
+                    },
+                    {
+                        setting_id = "show_expedition_objective_extraction",
+                        type = "checkbox",
+                        default_value = true,
+                    },
+                    {
+                        setting_id = "show_expedition_objective_arrival",
+                        type = "checkbox",
+                        default_value = true,
+                    },
+                    {
+                        setting_id = "show_expedition_loot_converter",
+                        type = "checkbox",
+                        default_value = true,
+                    },
+                },
+            },
+            {
                 setting_id = "expeditions_specific_group",
                 type = "group",
                 sub_widgets = {
