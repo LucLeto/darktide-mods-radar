@@ -52,6 +52,33 @@ return {
         en = "Circle",
         ["zh-cn"] = "圆形",
     },
+    radar_outline = {
+        en = "Radar outline",
+    },
+    radar_outline_solid = {
+        en = "Solid",
+    },
+    radar_outline_dotted = {
+        en = "Dotted",
+    },
+    radar_outline_off = {
+        en = "Off",
+    },
+    radar_guides = {
+        en = "Radar guides",
+    },
+    radar_guides_crosshair = {
+        en = "Crosshair",
+    },
+    radar_guides_view_guides = {
+        en = "View guides",
+    },
+    radar_guides_range_rings = {
+        en = "Range rings",
+    },
+    radar_guides_off = {
+        en = "Off",
+    },
     enemy_display_style = {
         en = "Enemy marker style",
         ["zh-cn"] = "敌人标记样式",

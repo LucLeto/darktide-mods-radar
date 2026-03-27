@@ -71,6 +71,48 @@ return {
                         },
                     },
                     {
+                        setting_id = "radar_outline",
+                        type = "dropdown",
+                        default_value = "solid",
+                        options = {
+                            {
+                                text = "radar_outline_solid",
+                                value = "solid",
+                            },
+                            {
+                                text = "radar_outline_dotted",
+                                value = "dotted",
+                            },
+                            {
+                                text = "radar_outline_off",
+                                value = "off",
+                            },
+                        },
+                    },
+                    {
+                        setting_id = "radar_guides",
+                        type = "dropdown",
+                        default_value = "crosshair",
+                        options = {
+                            {
+                                text = "radar_guides_crosshair",
+                                value = "crosshair",
+                            },
+                            {
+                                text = "radar_guides_view_guides",
+                                value = "view_guides",
+                            },
+                            {
+                                text = "radar_guides_range_rings",
+                                value = "range_rings",
+                            },
+                            {
+                                text = "radar_guides_off",
+                                value = "off",
+                            },
+                        },
+                    },
+                    {
                         setting_id = "enemy_display_style",
                         type = "dropdown",
                         default_value = "marked_icon",
