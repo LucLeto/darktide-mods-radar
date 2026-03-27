@@ -776,6 +776,23 @@ local function _is_expedition_runtime()
     return _safe_game_mode_name() == "expedition"
 end
 
+local function _is_in_expedition_safe_zone()
+    if not _is_expedition_runtime() then
+        return false
+    end
+
+    local game_mode = _safe_game_mode()
+    if not game_mode or not game_mode.in_safe_zone then
+        return false
+    end
+
+    local ok, in_safe_zone = pcall(function()
+        return game_mode:in_safe_zone()
+    end)
+
+    return ok and in_safe_zone == true or false
+end
+
 local function _safe_vector3_unbox(value)
     if not value then
         return nil
@@ -1026,6 +1043,7 @@ local function _classify_pickup_like(interaction_type, ui_interaction_type, icon
     end
 
     if interaction_type == "expedition_loot_converter" or (ui_interaction_type == "point_of_interest" and pickup_name == "expedition_loot_converter") then
+        meta.objective_icon = EXPEDITION_OBJECTIVE_ICON_DEFAULTS.expedition_loot_converter
         return "expedition_loot_converter", meta
     end
 
@@ -1770,7 +1788,9 @@ local function _scan_interactees()
             if is_active and not is_used and show_marker then
                 local kind, meta = _classify_interactee(extension, unit)
                 if kind then
-                    _track_unit(unit, kind, "interactee_system", meta)
+                    if kind ~= "expedition_loot_converter" or _is_in_expedition_safe_zone() then
+                        _track_unit(unit, kind, "interactee_system", meta)
+                    end
                 end
             end
         end

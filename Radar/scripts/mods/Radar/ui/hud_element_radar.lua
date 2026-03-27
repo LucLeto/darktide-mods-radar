@@ -937,11 +937,17 @@ local function _expedition_objective_visual(target)
     local widget_color = _any_to_widget_color(player_color, default_color)
 
     local accent_color = nil
-    local interaction_icon = meta.interaction_icon
-    local icon = interaction_icon
+    local icon = nil
 
-    if icon == nil or icon == DEFAULT_INTERACTION_ICON then
+    if target and target.kind == "expedition_loot_converter" then
         icon = meta.objective_icon or DEFAULT_INTERACTION_ICON
+    else
+        local interaction_icon = meta.interaction_icon
+        icon = interaction_icon
+
+        if icon == nil or icon == DEFAULT_INTERACTION_ICON then
+            icon = meta.objective_icon or DEFAULT_INTERACTION_ICON
+        end
     end
 
     if player_slot then
