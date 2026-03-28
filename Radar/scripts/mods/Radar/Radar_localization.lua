@@ -8,6 +8,7 @@ return {
         pl = "Radar",
         ["pt-br"] = "Radar",
         ["ru"] = "Радар",
+        ja = "Radar",
         ["zh-cn"] = "雷达（小地图）",
     },
     mod_description = {
@@ -19,6 +20,7 @@ return {
         pl = "Wyświetla przedmioty, członków drużyny i wrogów o wysokim priorytecie na konfigurowalnym radarze.",
         ["pt-br"] = "Exibe itens, companheiros de equipe e inimigos de alta prioridade em um radar configurável.",
         ["ru"] = "Отображает предметы, союзников и приоритетных врагов на настраиваемом радаре.",
+        ja = "設定可能なレーダーにアイテム、味方、優先度の高い敵を表示します。",
         ["zh-cn"] = "在一个可配置的雷达上显示物品、队友和高优先级的敌人。  翻译 by Caimao",
     },
 
@@ -31,6 +33,7 @@ return {
         pl = "Ogólne",
         ["pt-br"] = "Geral",
         ["ru"] = "Общие",
+        ja = "一般",
         ["zh-cn"] = "常规",
     },
     enable_radar = {
@@ -42,6 +45,7 @@ return {
         pl = "Włącz radar",
         ["pt-br"] = "Ativar radar",
         ["ru"] = "Включить радар",
+        ja = "レーダーを有効化",
         ["zh-cn"] = "启用雷达",
     },
     toggle_radar_key = {
@@ -53,6 +57,7 @@ return {
         pl = "Przełącz radar",
         ["pt-br"] = "Alternar radar",
         ["ru"] = "Вкл./выкл. радар",
+        ja = "レーダーのオン/オフ切り替え",
         ["zh-cn"] = "切换雷达开关快捷键",
     },
     radar_size = {
@@ -64,6 +69,7 @@ return {
         pl = "Rozmiar radaru",
         ["pt-br"] = "Tamanho do radar",
         ["ru"] = "Размер радара",
+        ja = "レーダーサイズ",
         ["zh-cn"] = "雷达尺寸",
     },
     radar_range = {
@@ -75,6 +81,7 @@ return {
         pl = "Zasięg radaru / odległość filtrowania (m)",
         ["pt-br"] = "Alcance do radar / distância do filtro (m)",
         ["ru"] = "Дальность радара / дистанция фильтрации (м)",
+        ja = "レーダー範囲 / フィルター距離 (m)",
         ["zh-cn"] = "雷达范围 / 过滤距离 (米)",
     },
     highlight_distance = {
@@ -86,6 +93,7 @@ return {
         pl = "Odległość wyróżnienia",
         ["pt-br"] = "Distância de destaque",
         ["ru"] = "Дистанция подсветки",
+        ja = "ハイライト距離",
         ["zh-cn"] = "高亮显示距离",
     },
     max_radar_markers = {
@@ -97,6 +105,7 @@ return {
         pl = "Maks. liczba znaczników radaru",
         ["pt-br"] = "Máx. de marcadores no radar",
         ["ru"] = "Макс. меток на радаре",
+        ja = "レーダーマーカー最大数",
         ["zh-cn"] = "雷达最大标记数量",
     },
     scale_icons_with_radar_size = {
@@ -108,6 +117,7 @@ return {
         pl = "Skaluj ikony wraz z rozmiarem radaru",
         ["pt-br"] = "Dimensionar ícones com o tamanho do radar",
         ["ru"] = "Масштабировать значки по размеру радара",
+        ja = "レーダーサイズに合わせてアイコンを拡大縮小",
         ["zh-cn"] = "图标随雷达尺寸缩放",
     },
     radar_style = {
@@ -119,6 +129,7 @@ return {
         pl = "Styl radaru",
         ["pt-br"] = "Estilo do radar",
         ["ru"] = "Стиль радара",
+        ja = "レーダースタイル",
         ["zh-cn"] = "雷达样式",
     },
     radar_style_square = {
@@ -130,6 +141,7 @@ return {
         pl = "Kwadrat",
         ["pt-br"] = "Quadrado",
         ["ru"] = "Квадрат",
+        ja = "四角",
         ["zh-cn"] = "方形",
     },
     radar_style_circle = {
@@ -141,6 +153,7 @@ return {
         pl = "Okrąg",
         ["pt-br"] = "Círculo",
         ["ru"] = "Круг",
+        ja = "円形",
         ["zh-cn"] = "圆形",
     },
     radar_outline = {
@@ -152,6 +165,7 @@ return {
         pl = "Obrys radaru",
         ["pt-br"] = "Contorno do radar",
         ["ru"] = "Контур радара",
+        ja = "レーダー外枠",
         ["zh-cn"] = "雷达轮廓",
     },
     radar_outline_solid = {
@@ -163,6 +177,7 @@ return {
         pl = "Ciągły",
         ["pt-br"] = "Sólido",
         ["ru"] = "Сплошной",
+        ja = "実線",
         ["zh-cn"] = "实线",
     },
     radar_outline_dotted = {
@@ -174,6 +189,7 @@ return {
         pl = "Kropkowany",
         ["pt-br"] = "Pontilhado",
         ["ru"] = "Пунктир",
+        ja = "点線",
         ["zh-cn"] = "点状",
     },
     radar_outline_off = {
@@ -185,6 +201,7 @@ return {
         pl = "Wyłączone",
         ["pt-br"] = "Desativado",
         ["ru"] = "Выкл.",
+        ja = "オフ",
         ["zh-cn"] = "关闭",
     },
     radar_guides = {
@@ -196,6 +213,7 @@ return {
         pl = "Linie pomocnicze radaru",
         ["pt-br"] = "Guias do radar",
         ["ru"] = "Направляющие радара",
+        ja = "レーダーガイド",
         ["zh-cn"] = "雷达辅助线",
     },
     radar_guides_crosshair = {
@@ -207,6 +225,7 @@ return {
         pl = "Celownik",
         ["pt-br"] = "Mira",
         ["ru"] = "Перекрестие",
+        ja = "十字線",
         ["zh-cn"] = "十字准星",
     },
     radar_guides_view_guides = {
@@ -218,6 +237,7 @@ return {
         pl = "Linie widoku",
         ["pt-br"] = "Guias de visão",
         ["ru"] = "Линии обзора",
+        ja = "視界ガイド",
         ["zh-cn"] = "视野辅助线",
     },
     radar_guides_range_rings = {
@@ -229,6 +249,7 @@ return {
         pl = "Pierścienie zasięgu",
         ["pt-br"] = "Anéis de alcance",
         ["ru"] = "Кольца дальности",
+        ja = "距離リング",
         ["zh-cn"] = "距离环",
     },
     radar_guides_off = {
@@ -240,6 +261,7 @@ return {
         pl = "Wyłączone",
         ["pt-br"] = "Desativado",
         ["ru"] = "Выкл.",
+        ja = "オフ",
         ["zh-cn"] = "关闭",
     },
     enemy_display_style = {
@@ -251,6 +273,7 @@ return {
         pl = "Styl znaczników wrogów",
         ["pt-br"] = "Estilo dos marcadores de inimigos",
         ["ru"] = "Стиль меток врагов",
+        ja = "敵マーカーのスタイル",
         ["zh-cn"] = "敌人标记样式",
     },
     player_display_style = {
@@ -262,6 +285,7 @@ return {
         pl = "Styl znaczników graczy",
         ["pt-br"] = "Estilo dos marcadores de jogadores",
         ["ru"] = "Стиль меток игроков",
+        ja = "プレイヤーマーカーのスタイル",
         ["zh-cn"] = "玩家标记样式",
     },
     display_style_icon_only = {
@@ -273,6 +297,7 @@ return {
         pl = "Tylko ikona",
         ["pt-br"] = "Somente ícone",
         ["ru"] = "Только значок",
+        ja = "アイコンのみ",
         ["zh-cn"] = "仅图标",
     },
     display_style_marked_icon = {
@@ -284,6 +309,7 @@ return {
         pl = "Ikona z oznaczeniem",
         ["pt-br"] = "Ícone marcado",
         ["ru"] = "Значок с меткой",
+        ja = "マーク付きアイコン",
         ["zh-cn"] = "带标记的图标",
     },
     display_style_dot_only = {
@@ -295,6 +321,7 @@ return {
         pl = "Tylko kropka",
         ["pt-br"] = "Somente ponto",
         ["ru"] = "Только точка",
+        ja = "ドットのみ",
         ["zh-cn"] = "仅圆点",
     },
     display_style_marked_dot = {
@@ -306,6 +333,7 @@ return {
         pl = "Oznaczona kropka",
         ["pt-br"] = "Ponto marcado",
         ["ru"] = "Точка с меткой",
+        ja = "マーク付きドット",
         ["zh-cn"] = "带标记的圆点",
     },
     position_group = {
@@ -317,6 +345,7 @@ return {
         pl = "Pozycja",
         ["pt-br"] = "Posição",
         ["ru"] = "Положение",
+        ja = "位置",
         ["zh-cn"] = "位置",
     },
     radar_pos_x = {
@@ -328,6 +357,7 @@ return {
         pl = "Pozycja radaru X",
         ["pt-br"] = "Posição X do radar",
         ["ru"] = "Положение радара по X",
+        ja = "レーダー位置 X",
         ["zh-cn"] = "雷达位置 X 轴",
     },
     radar_pos_y = {
@@ -339,6 +369,7 @@ return {
         pl = "Pozycja radaru Y",
         ["pt-br"] = "Posição Y do radar",
         ["ru"] = "Положение радара по Y",
+        ja = "レーダー位置 Y",
         ["zh-cn"] = "雷达位置 Y 轴",
     },
     radar_move_step = {
@@ -350,6 +381,7 @@ return {
         pl = "Krok na naciśnięcie",
         ["pt-br"] = "Passos por comando",
         ["ru"] = "Шаг за нажатие",
+        ja = "1回の入力あたりの移動量",
         ["zh-cn"] = "每次按键的移动步长",
     },
     move_radar_left_key = {
@@ -361,6 +393,7 @@ return {
         pl = "Przesuń radar w lewo",
         ["pt-br"] = "Mover radar para a esquerda",
         ["ru"] = "Сдвинуть радар влево",
+        ja = "レーダーを左へ移動",
         ["zh-cn"] = "快捷键：雷达左移",
     },
     move_radar_right_key = {
@@ -372,6 +405,7 @@ return {
         pl = "Przesuń radar w prawo",
         ["pt-br"] = "Mover radar para a direita",
         ["ru"] = "Сдвинуть радар вправо",
+        ja = "レーダーを右へ移動",
         ["zh-cn"] = "快捷键：雷达右移",
     },
     move_radar_up_key = {
@@ -383,6 +417,7 @@ return {
         pl = "Przesuń radar w górę",
         ["pt-br"] = "Mover radar para cima",
         ["ru"] = "Сдвинуть радар вверх",
+        ja = "レーダーを上へ移動",
         ["zh-cn"] = "快捷键：雷达上移",
     },
     move_radar_down_key = {
@@ -394,6 +429,7 @@ return {
         pl = "Przesuń radar w dół",
         ["pt-br"] = "Mover radar para baixo",
         ["ru"] = "Сдвинуть радар вниз",
+        ja = "レーダーを下へ移動",
         ["zh-cn"] = "快捷键：雷达下移",
     },
     common_pickups_group = {
@@ -405,6 +441,7 @@ return {
         pl = "Popularne przedmioty",
         ["pt-br"] = "Itens comuns",
         ["ru"] = "Обычные предметы",
+        ja = "一般ピックアップ",
         ["zh-cn"] = "常见拾取物",
     },
     show_crates = {
@@ -416,6 +453,7 @@ return {
         pl = "Skrzynie",
         ["pt-br"] = "Caixas",
         ["ru"] = "Ящики",
+        ja = "箱",
         ["zh-cn"] = "箱子",
     },
     show_ammo_small = {
@@ -427,6 +465,7 @@ return {
         pl = "Puszka z amunicją",
         ["pt-br"] = "Lata de munição",
         ["ru"] = "Коробка с боеприпасами",
+        ja = "弾薬缶",
         ["zh-cn"] = "弹药罐 (小弹药)",
     },
     show_ammo_big = {
@@ -438,6 +477,7 @@ return {
         pl = "Zapas amunicji",
         ["pt-br"] = "Reserva de munição",
         ["ru"] = "Запас боеприпасов",
+        ja = "弾薬備蓄",
         ["zh-cn"] = "弹药储存包 (大弹药)",
     },
     show_grenades = {
@@ -449,6 +489,7 @@ return {
         pl = "Granat",
         ["pt-br"] = "Granada",
         ["ru"] = "Граната",
+        ja = "グレネード",
         ["zh-cn"] = "手雷",
     },
     show_pocketable_ammo_crate = {
@@ -460,6 +501,7 @@ return {
         pl = "Skrzynia z amunicją",
         ["pt-br"] = "Caixa de munição",
         ["ru"] = "Ящик с боеприпасами",
+        ja = "弾薬箱",
         ["zh-cn"] = "弹药箱",
     },
     show_pocketable_medical_crate = {
@@ -471,6 +513,7 @@ return {
         pl = "Skrzynia medyczna",
         ["pt-br"] = "Caixa médica",
         ["ru"] = "Медицинский ящик",
+        ja = "医療箱",
         ["zh-cn"] = "医疗箱",
     },
     show_pocketable_syringe_ability = {
@@ -482,6 +525,7 @@ return {
         pl = "Stym koncentracji",
         ["pt-br"] = "Estimulante de concentração",
         ["ru"] = "Стимм концентрации",
+        ja = "集中スティム",
         ["zh-cn"] = "专注针剂 (黄针)",
     },
     show_pocketable_syringe_corruption = {
@@ -493,6 +537,7 @@ return {
         pl = "Medi-stym",
         ["pt-br"] = "Estimulante médico",
         ["ru"] = "Мед-стимм",
+        ja = "医療スティム",
         ["zh-cn"] = "医疗针剂 (绿针)",
     },
     show_pocketable_syringe_power = {
@@ -504,6 +549,7 @@ return {
         pl = "Stym bojowy",
         ["pt-br"] = "Estimulante de combate",
         ["ru"] = "Боевой стимм",
+        ja = "戦闘スティム",
         ["zh-cn"] = "战斗针剂 (红针)",
     },
     show_pocketable_syringe_speed = {
@@ -515,6 +561,7 @@ return {
         pl = "Stym szybkości",
         ["pt-br"] = "Estimulante de celeridade",
         ["ru"] = "Стимм стремительности",
+        ja = "迅速スティム",
         ["zh-cn"] = "迅捷针剂 (蓝针)",
     },
 
@@ -527,6 +574,7 @@ return {
         pl = "Materiały do zebrania",
         ["pt-br"] = "Materiais coletáveis",
         ["ru"] = "Собираемые материалы",
+        ja = "収集素材",
         ["zh-cn"] = "可收集材料",
     },
     show_diamantine = {
@@ -538,6 +586,7 @@ return {
         pl = "Diamantyna",
         ["pt-br"] = "Diamantina",
         ["ru"] = "Диамантина",
+        ja = "ダイアマンティン",
         ["zh-cn"] = "金刚砂",
     },
     show_plasteel = {
@@ -549,6 +598,7 @@ return {
         pl = "Plasteel",
         ["pt-br"] = "Plasteel",
         ["ru"] = "Пласталь",
+        ja = "プラスチール",
         ["zh-cn"] = "塑钢",
     },
 
@@ -561,6 +611,7 @@ return {
         pl = "Przedmioty celu głównego",
         ["pt-br"] = "Itens do objetivo principal",
         ["ru"] = "Предметы основной задачи",
+        ja = "主要目標アイテム",
         ["zh-cn"] = "主要目标任务物品",
     },
     show_power_cell_teal = {
@@ -572,6 +623,7 @@ return {
         pl = "Ogniwo zasilające",
         ["pt-br"] = "Célula de energia",
         ["ru"] = "Энергоячейка",
+        ja = "パワーセル",
         ["zh-cn"] = "能量电池",
     },
     show_cryonic_rod = {
@@ -583,6 +635,7 @@ return {
         pl = "Pręt kriogeniczny",
         ["pt-br"] = "Haste criônica",
         ["ru"] = "Крионический стержень",
+        ja = "クライオニックロッド",
         ["zh-cn"] = "冷却棒",
     },
     show_moebian_pox_zetaphyte_13_sample = {
@@ -594,6 +647,7 @@ return {
         pl = "Próbka Moebian Pox Zetaphyte-13",
         ["pt-br"] = "Amostra de Moebian Pox Zetaphyte-13",
         ["ru"] = "Образец Моэбийской оспы «Зетафит-13»",
+        ja = "モエビアン痘ゼータファイト-13サンプル",
         ["zh-cn"] = "莫比亚PZ-13样本",
     },
     show_vacuum_capsule = {
@@ -605,6 +659,7 @@ return {
         pl = "Kapsuła próżniowa",
         ["pt-br"] = "Cápsula a vácuo",
         ["ru"] = "Вакуумная капсула",
+        ja = "真空カプセル",
         ["zh-cn"] = "真空舱",
     },
     show_special_issue_ammo = {
@@ -616,6 +671,7 @@ return {
         pl = "Specjalna amunicja",
         ["pt-br"] = "Munição especial",
         ["ru"] = "Спецбоеприпасы",
+        ja = "特別支給弾薬",
         ["zh-cn"] = "特制弹药",
     },
     show_prismata_crystal_repository = {
@@ -627,6 +683,7 @@ return {
         pl = "Pojemnik na kryształy Prismata",
         ["pt-br"] = "Repositório de cristais Prismata",
         ["ru"] = "Хранилище кристаллов Prismata",
+        ja = "プリズマタ結晶保管庫",
         ["zh-cn"] = "棱镜晶体仓库",
     },
     show_mortis_relic = {
@@ -638,6 +695,7 @@ return {
         pl = "Relikt Mortis",
         ["pt-br"] = "Relíquia Mortis",
         ["ru"] = "Реликвия Mortis",
+        ja = "モーティスの遺物",
         ["zh-cn"] = "死灵遗物",
     },
     show_coordinates_paper = {
@@ -649,6 +707,7 @@ return {
         pl = "Koordynaty",
         ["pt-br"] = "Coordenadas",
         ["ru"] = "Координаты",
+        ja = "座標",
         ["zh-cn"] = "坐标数据",
     },
 
@@ -661,6 +720,7 @@ return {
         pl = "Przedmioty celu pobocznego",
         ["pt-br"] = "Itens do objetivo secundário",
         ["ru"] = "Предметы второстепенной задачи",
+        ja = "副次目標アイテム",
         ["zh-cn"] = "次要目标任务物品",
     },
     show_pocketable_grimoire = {
@@ -672,6 +732,7 @@ return {
         pl = "Grimuar",
         ["pt-br"] = "Grimório",
         ["ru"] = "Гримуар",
+        ja = "グリモア",
         ["zh-cn"] = "魔法书",
     },
     show_pocketable_scripture = {
@@ -683,6 +744,7 @@ return {
         pl = "Pismo",
         ["pt-br"] = "Escritura",
         ["ru"] = "Писание",
+        ja = "聖典",
         ["zh-cn"] = "圣经",
     },
 
@@ -695,6 +757,7 @@ return {
         pl = "Przedmioty specyficzne dla ekspedycji",
         ["pt-br"] = "Itens específicos de Expedições",
         ["ru"] = "Предметы экспедиций",
+        ja = "遠征専用アイテム",
         ["zh-cn"] = "远征特定物品",
     },
     show_expeditions_currency = {
@@ -706,6 +769,7 @@ return {
         pl = "Złom",
         ["pt-br"] = "Sucata",
         ["ru"] = "Утиль",
+        ja = "サルベージ",
         ["zh-cn"] = "回收物",
     },
     show_expeditions_loot = {
@@ -717,6 +781,7 @@ return {
         pl = "Relikty technologii",
         ["pt-br"] = "Remanescentes tecnológicos",
         ["ru"] = "Технореликты",
+        ja = "技術遺物",
         ["zh-cn"] = "科技遗物",
     },
     show_expeditions_dropped_loot = {
@@ -728,6 +793,7 @@ return {
         pl = "Upuszczone relikty technologii",
         ["pt-br"] = "Remanescentes tecnológicos largados",
         ["ru"] = "Брошенные технореликты",
+        ja = "落ちた技術遺物",
         ["zh-cn"] = "掉落科技遗物",
     },
     expeditions_location_group = {
@@ -739,6 +805,7 @@ return {
         pl = "Punkty zainteresowania ekspedycji",
         ["pt-br"] = "Pontos de interesse de Expedições",
         ["ru"] = "Точки интереса экспедиций",
+        ja = "遠征の注目地点",
         ["zh-cn"] = "远征兴趣点",
     },
     ignore_radar_range_for_expedition_markers = {
@@ -750,6 +817,7 @@ return {
         pl = "Ignoruj limit zasięgu dla POI",
         ["pt-br"] = "Ignorar limite de alcance para pontos de interesse",
         ["ru"] = "Игнорировать ограничение дальности для точек интереса",
+        ja = "注目地点の距離制限を無視",
         ["zh-cn"] = "忽略兴趣点的距离限制",
     },
     show_expedition_objective_opportunity = {
@@ -761,6 +829,7 @@ return {
         pl = "Miejsca zainteresowania",
         ["pt-br"] = "Locais de interesse",
         ["ru"] = "Места интереса",
+        ja = "注目地点",
         ["zh-cn"] = "兴趣地点",
     },
     show_expedition_objective_transition = {
@@ -772,6 +841,7 @@ return {
         pl = "Sanktuaria Deadsiderów",
         ["pt-br"] = "Santuários Deadsider",
         ["ru"] = "Святилища Deadsider",
+        ja = "デッドサイダーの聖域",
         ["zh-cn"] = "亡行者圣所",
     },
     show_expedition_loot_converter = {
@@ -783,6 +853,7 @@ return {
         pl = "Żniwiarze relikwiarzy danych",
         ["pt-br"] = "Coletoras de relicários de dados",
         ["ru"] = "Сборщики реликвариев данных",
+        ja = "データ聖骨匣ハーベスター",
         ["zh-cn"] = "数据圣骨匣采集器",
     },
     show_expedition_objective_main_objective = {
@@ -794,6 +865,7 @@ return {
         pl = "Cel główny",
         ["pt-br"] = "Objetivo principal",
         ["ru"] = "Основная задача",
+        ja = "メイン目標",
         ["zh-cn"] = "主要目标",
     },
     show_expedition_objective_extraction = {
@@ -805,6 +877,7 @@ return {
         pl = "Strefa ewakuacji Valkyrii",
         ["pt-br"] = "Zona de extração da Valkyrie",
         ["ru"] = "Зона эвакуации Valkyrie",
+        ja = "ヴァルキリー脱出ゾーン",
         ["zh-cn"] = "瓦尔基里撤离区",
     },
     show_expedition_objective_arrival = {
@@ -816,6 +889,7 @@ return {
         pl = "Strefa lądowania Valkyrii",
         ["pt-br"] = "Zona de chegada da Valkyrie",
         ["ru"] = "Зона прибытия Valkyrie",
+        ja = "ヴァルキリー到着ゾーン",
         ["zh-cn"] = "瓦尔基里抵达区",
     },
     show_data_reliquaries = {
@@ -827,6 +901,7 @@ return {
         pl = "Relikwiarze danych",
         ["pt-br"] = "Relicários de dados",
         ["ru"] = "Реликварии данных",
+        ja = "データ聖骨匣",
         ["zh-cn"] = "数据圣骨匣",
     },
     show_pocketable_landmine_explosive = {
@@ -838,6 +913,7 @@ return {
         pl = "Mina aktywowana serwem",
         ["pt-br"] = "Mina acionada por servo",
         ["ru"] = "Мина с сервоактивацией",
+        ja = "サーボ起動地雷",
         ["zh-cn"] = "伺服地雷",
     },
     show_pocketable_landmine_fire = {
@@ -849,6 +925,7 @@ return {
         pl = "Sidła oczyszczenia",
         ["pt-br"] = "Armadilha de purgação",
         ["ru"] = "Ловушка очищения",
+        ja = "粛清トラップ",
         ["zh-cn"] = "涤罪陷阱",
     },
     show_pocketable_landmine_shock = {
@@ -860,6 +937,7 @@ return {
         pl = "Sidła woltaiczne",
         ["pt-br"] = "Armadilha voltaica",
         ["ru"] = "Вольтаическая ловушка",
+        ja = "電撃トラップ",
         ["zh-cn"] = "电能陷阱",
     },
     show_pocketable_void_shield = {
@@ -871,6 +949,7 @@ return {
         pl = "Tarcza pustki",
         ["pt-br"] = "Escudo do vazio",
         ["ru"] = "Щит Пустоты",
+        ja = "ヴォイドシールド",
         ["zh-cn"] = "虚空盾",
     },
     show_pocketable_airstrike = {
@@ -882,6 +961,7 @@ return {
         pl = "Znacznik nalotu bombowego",
         ["pt-br"] = "Marcador de sinal de bombardeio",
         ["ru"] = "Сигнальный маркер бомбардировки",
+        ja = "爆撃支援信号マーカー",
         ["zh-cn"] = "空袭信号标记",
     },
     show_pocketable_artillery_strike = {
@@ -893,6 +973,7 @@ return {
         pl = "Radiolatarnia artyleryjska",
         ["pt-br"] = "Baliza de localização de artilharia",
         ["ru"] = "Артиллерийский маяк наведения",
+        ja = "砲撃誘導ビーコン",
         ["zh-cn"] = "炮击定位信标",
     },
     show_pocketable_big_grenade = {
@@ -904,6 +985,7 @@ return {
         pl = "Zmodyfikowany granat",
         ["pt-br"] = "Granada modificada",
         ["ru"] = "Модифицированная граната",
+        ja = "改造グレネード",
         ["zh-cn"] = "改装手雷",
     },
     show_pocketable_valkyrie_hover = {
@@ -915,6 +997,7 @@ return {
         pl = "Znacznik wsparcia ogniowego",
         ["pt-br"] = "Marcador de sinal de apoio de fogo",
         ["ru"] = "Сигнальный маркер огневой поддержки",
+        ja = "火力支援信号マーカー",
         ["zh-cn"] = "火力支援信号标记",
     },
     show_promethium_barrel = {
@@ -926,6 +1009,7 @@ return {
         pl = "Beczka promethium",
         ["pt-br"] = "Barril de promethium",
         ["ru"] = "Бочка прометия",
+        ja = "プロメチウム樽",
         ["zh-cn"] = "钷桶",
     },
     show_large_ammunition_crate = {
@@ -937,6 +1021,7 @@ return {
         pl = "Duża skrzynia z amunicją",
         ["pt-br"] = "Caixa grande de munição",
         ["ru"] = "Большой ящик с боеприпасами",
+        ja = "大型弾薬箱",
         ["zh-cn"] = "大型弹药箱",
     },
     show_anti_rad_stimm = {
@@ -961,6 +1046,7 @@ return {
         pl = "Przedmioty Czaszki Męczennika",
         ["pt-br"] = "Itens da Caveira do Mártir",
         ["ru"] = "Предметы «Череп мученика»",
+        ja = "殉教者の頭蓋骨アイテム",
         ["zh-cn"] = "殉道者头骨物品",
     },
     show_martyr_skull = {
@@ -972,6 +1058,7 @@ return {
         pl = "Czaszka Męczennika",
         ["pt-br"] = "Caveira do Mártir",
         ["ru"] = "Череп мученика",
+        ja = "殉教者の頭蓋骨",
         ["zh-cn"] = "殉道者头骨",
     },
     show_power_cell_orange = {
@@ -983,6 +1070,7 @@ return {
         pl = "Ogniwo zasilające",
         ["pt-br"] = "Célula de energia",
         ["ru"] = "Энергоячейка",
+        ja = "パワーセル",
         ["zh-cn"] = "能量电池 (橙色)",
     },
 
@@ -995,6 +1083,7 @@ return {
         pl = "Rozstawione przedmioty",
         ["pt-br"] = "Itens posicionados",
         ["ru"] = "Развернутые предметы",
+        ja = "設置物",
         ["zh-cn"] = "已部署物品",
     },
     show_ammo_crate_deployable = {
@@ -1006,6 +1095,7 @@ return {
         pl = "Skrzynia z amunicją",
         ["pt-br"] = "Caixa de munição",
         ["ru"] = "Ящик с боеприпасами",
+        ja = "弾薬箱",
         ["zh-cn"] = "弹药箱 (已部署)",
     },
     show_medical_crate_deployable = {
@@ -1017,6 +1107,7 @@ return {
         pl = "Skrzynia medyczna",
         ["pt-br"] = "Caixa médica",
         ["ru"] = "Медицинский ящик",
+        ja = "医療箱",
         ["zh-cn"] = "医疗箱 (已部署)",
     },
 
@@ -1029,6 +1120,7 @@ return {
         pl = "Wrogowie",
         ["pt-br"] = "Inimigos",
         ["ru"] = "Враги",
+        ja = "敵",
         ["zh-cn"] = "敌人",
     },
     show_monstrosities = {
@@ -1040,6 +1132,7 @@ return {
         pl = "Potworności",
         ["pt-br"] = "Monstruosidades",
         ["ru"] = "Чудовища",
+        ja = "怪物",
         ["zh-cn"] = "怪物",
     },
     show_captains = {
@@ -1051,6 +1144,7 @@ return {
         pl = "Kapitanowie",
         ["pt-br"] = "Capitães",
         ["ru"] = "Капитаны",
+        ja = "隊長",
         ["zh-cn"] = "连长",
     },
     show_karnak_twins = {
@@ -1062,6 +1156,7 @@ return {
         pl = "Bliźnięta Karnak",
         ["pt-br"] = "Gêmeos Karnak",
         ["ru"] = "Близнецы Карнак",
+        ja = "カーナックの双子",
         ["zh-cn"] = "双子",
     },
 
@@ -1074,6 +1169,7 @@ return {
         pl = "Gracze",
         ["pt-br"] = "Jogadores",
         ["ru"] = "Игроки",
+        ja = "プレイヤー",
         ["zh-cn"] = "玩家",
     },
     show_teammates = {
@@ -1085,6 +1181,7 @@ return {
         pl = "Członkowie drużyny",
         ["pt-br"] = "Companheiros de equipe",
         ["ru"] = "Союзники",
+        ja = "チームメイト",
         ["zh-cn"] = "队友",
     },
 
@@ -1097,6 +1194,7 @@ return {
         pl = "Przedmioty związane z wydarzeniami",
         ["pt-br"] = "Itens relacionados a eventos",
         ["ru"] = "Предметы событий",
+        ja = "イベント関連アイテム",
         ["zh-cn"] = "事件相关物品",
     },
     show_tainted_skull = {
@@ -1108,6 +1206,7 @@ return {
         pl = "Skalane czaszki",
         ["pt-br"] = "Caveiras maculadas",
         ["ru"] = "Осквернённые черепа",
+        ja = "汚染された頭蓋骨",
         ["zh-cn"] = "受污染的头骨",
     },
     show_pocketable_corrupted_auspex_scanner = {
@@ -1119,6 +1218,7 @@ return {
         pl = "Skalane urządzenie komunikacyjne",
         ["pt-br"] = "Dispositivo de comunicação maculado",
         ["ru"] = "Осквернённое устройство связи",
+        ja = "汚染された通信装置",
         ["zh-cn"] = "受污染的通讯设备",
     },
     show_saints = {
@@ -1130,6 +1230,7 @@ return {
         pl = "Święte relikwie",
         ["pt-br"] = "Relíquias sagradas",
         ["ru"] = "Святые реликвии",
+        ja = "聖遺物",
         ["zh-cn"] = "圣物",
     },
     show_stolen_rations = {
@@ -1141,6 +1242,7 @@ return {
         pl = "Skradzione racje",
         ["pt-br"] = "Rações roubadas",
         ["ru"] = "Украденные пайки",
+        ja = "盗まれた配給品",
         ["zh-cn"] = "失窃口粮",
     },
 
@@ -1153,6 +1255,7 @@ return {
         pl = "Debugowanie",
         ["pt-br"] = "Depuração",
         ["ru"] = "Отладка",
+        ja = "デバッグ",
         ["zh-cn"] = "调试",
     },
     debug_mode = {
@@ -1164,6 +1267,7 @@ return {
         pl = "Logi debugowania",
         ["pt-br"] = "Logs de depuração",
         ["ru"] = "Журнал отладки",
+        ja = "デバッグログ",
         ["zh-cn"] = "调试日志",
     },
     show_unknown_pickups = {
@@ -1175,6 +1279,7 @@ return {
         pl = "Pokaż nieznane przedmioty",
         ["pt-br"] = "Mostrar itens desconhecidos",
         ["ru"] = "Показывать неизвестные предметы",
+        ja = "不明な拾得品を表示",
         ["zh-cn"] = "显示未知拾取物",
     },
 }
