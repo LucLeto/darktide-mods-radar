@@ -6,6 +6,7 @@ return {
         it = "Radar",
         es = "Radar",
         pl = "Radar",
+        ["pt-br"] = "Radar",
         ["zh-cn"] = "雷达（小地图）",
     },
     mod_description = {
@@ -15,6 +16,7 @@ return {
         it = "Mostra oggetti, compagni di squadra e nemici ad alta priorità su un radar configurabile.",
         es = "Muestra objetos, compañeros de equipo y enemigos prioritarios en un radar configurable.",
         pl = "Wyświetla przedmioty, członków drużyny i wrogów o wysokim priorytecie na konfigurowalnym radarze.",
+        ["pt-br"] = "Exibe itens, companheiros de equipe e inimigos de alta prioridade em um radar configurável.",
         ["zh-cn"] = "在一个可配置的雷达上显示物品、队友和高优先级的敌人。  翻译 by Caimao",
     },
 
@@ -25,6 +27,7 @@ return {
         it = "Generale",
         es = "General",
         pl = "Ogólne",
+        ["pt-br"] = "Geral",
         ["zh-cn"] = "常规",
     },
     enable_radar = {
@@ -34,6 +37,7 @@ return {
         it = "Attiva radar",
         es = "Activar radar",
         pl = "Włącz radar",
+        ["pt-br"] = "Ativar radar",
         ["zh-cn"] = "启用雷达",
     },
     toggle_radar_key = {
@@ -43,6 +47,7 @@ return {
         it = "Attiva o disattiva il radar",
         es = "Activar o desactivar radar",
         pl = "Przełącz radar",
+        ["pt-br"] = "Alternar radar",
         ["zh-cn"] = "切换雷达开关快捷键",
     },
     radar_size = {
@@ -52,6 +57,7 @@ return {
         it = "Dimensione radar",
         es = "Tamaño del radar",
         pl = "Rozmiar radaru",
+        ["pt-br"] = "Tamanho do radar",
         ["zh-cn"] = "雷达尺寸",
     },
     radar_range = {
@@ -61,6 +67,7 @@ return {
         it = "Portata radar / distanza filtro (m)",
         es = "Alcance del radar / distancia de filtrado (m)",
         pl = "Zasięg radaru / odległość filtrowania (m)",
+        ["pt-br"] = "Alcance do radar / distância do filtro (m)",
         ["zh-cn"] = "雷达范围 / 过滤距离 (米)",
     },
     highlight_distance = {
@@ -70,6 +77,7 @@ return {
         it = "Distanza evidenziazione",
         es = "Distancia de resaltado",
         pl = "Odległość wyróżnienia",
+        ["pt-br"] = "Distância de destaque",
         ["zh-cn"] = "高亮显示距离",
     },
     max_radar_markers = {
@@ -79,6 +87,7 @@ return {
         it = "Numero massimo indicatori radar",
         es = "Máx. de marcadores en el radar",
         pl = "Maks. liczba znaczników radaru",
+        ["pt-br"] = "Máx. de marcadores no radar",
         ["zh-cn"] = "雷达最大标记数量",
     },
     scale_icons_with_radar_size = {
@@ -88,6 +97,7 @@ return {
         it = "Scala le icone in base alla dimensione del radar",
         es = "Escalar iconos con el tamaño del radar",
         pl = "Skaluj ikony wraz z rozmiarem radaru",
+        ["pt-br"] = "Dimensionar ícones com o tamanho do radar",
         ["zh-cn"] = "图标随雷达尺寸缩放",
     },
     radar_style = {
@@ -97,6 +107,7 @@ return {
         it = "Stile radar",
         es = "Estilo del radar",
         pl = "Styl radaru",
+        ["pt-br"] = "Estilo do radar",
         ["zh-cn"] = "雷达样式",
     },
     radar_style_square = {
@@ -106,6 +117,7 @@ return {
         it = "Quadrato",
         es = "Cuadrado",
         pl = "Kwadrat",
+        ["pt-br"] = "Quadrado",
         ["zh-cn"] = "方形",
     },
     radar_style_circle = {
@@ -115,6 +127,7 @@ return {
         it = "Cerchio",
         es = "Círculo",
         pl = "Okrąg",
+        ["pt-br"] = "Círculo",
         ["zh-cn"] = "圆形",
     },
     radar_outline = {
@@ -124,6 +137,7 @@ return {
         it = "Contorno radar",
         es = "Contorno del radar",
         pl = "Obrys radaru",
+        ["pt-br"] = "Contorno do radar",
     },
     radar_outline_solid = {
         en = "Solid",
@@ -132,6 +146,7 @@ return {
         it = "Continuo",
         es = "Sólido",
         pl = "Ciągły",
+        ["pt-br"] = "Sólido",
     },
     radar_outline_dotted = {
         en = "Dotted",
@@ -140,6 +155,7 @@ return {
         it = "Punteggiato",
         es = "Punteado",
         pl = "Kropkowany",
+        ["pt-br"] = "Pontilhado",
     },
     radar_outline_off = {
         en = "Off",
@@ -148,6 +164,7 @@ return {
         it = "Disattivato",
         es = "Desactivado",
         pl = "Wyłączone",
+        ["pt-br"] = "Desativado",
     },
     radar_guides = {
         en = "Radar guides",
@@ -156,6 +173,7 @@ return {
         it = "Guide radar",
         es = "Guías del radar",
         pl = "Linie pomocnicze radaru",
+        ["pt-br"] = "Guias do radar",
     },
     radar_guides_crosshair = {
         en = "Crosshair",
@@ -164,6 +182,7 @@ return {
         it = "Mirino",
         es = "Retícula",
         pl = "Celownik",
+        ["pt-br"] = "Mira",
     },
     radar_guides_view_guides = {
         en = "View guides",
@@ -172,6 +191,7 @@ return {
         it = "Guide visuale",
         es = "Guías de vista",
         pl = "Linie widoku",
+        ["pt-br"] = "Guias de visão",
     },
     radar_guides_range_rings = {
         en = "Range rings",
@@ -180,6 +200,7 @@ return {
         it = "Anelli di distanza",
         es = "Anillos de alcance",
         pl = "Pierścienie zasięgu",
+        ["pt-br"] = "Anéis de alcance",
     },
     radar_guides_off = {
         en = "Off",
@@ -188,6 +209,7 @@ return {
         it = "Disattivato",
         es = "Desactivado",
         pl = "Wyłączone",
+        ["pt-br"] = "Desativado",
     },
     enemy_display_style = {
         en = "Enemy marker style",
@@ -196,6 +218,7 @@ return {
         it = "Stile indicatori nemici",
         es = "Estilo de marcador de enemigos",
         pl = "Styl znaczników wrogów",
+        ["pt-br"] = "Estilo dos marcadores de inimigos",
         ["zh-cn"] = "敌人标记样式",
     },
     player_display_style = {
@@ -205,6 +228,7 @@ return {
         it = "Stile indicatori giocatori",
         es = "Estilo de marcador de jugadores",
         pl = "Styl znaczników graczy",
+        ["pt-br"] = "Estilo dos marcadores de jogadores",
         ["zh-cn"] = "玩家标记样式",
     },
     display_style_icon_only = {
@@ -214,6 +238,7 @@ return {
         it = "Solo icona",
         es = "Solo icono",
         pl = "Tylko ikona",
+        ["pt-br"] = "Somente ícone",
         ["zh-cn"] = "仅图标",
     },
     display_style_marked_icon = {
@@ -223,6 +248,7 @@ return {
         it = "Icona marcata",
         es = "Icono marcado",
         pl = "Ikona z oznaczeniem",
+        ["pt-br"] = "Ícone marcado",
         ["zh-cn"] = "带标记的图标",
     },
     display_style_dot_only = {
@@ -232,6 +258,7 @@ return {
         it = "Solo punto",
         es = "Solo punto",
         pl = "Tylko kropka",
+        ["pt-br"] = "Somente ponto",
     },
     display_style_marked_dot = {
         en = "Marked Dot",
@@ -240,6 +267,7 @@ return {
         it = "Punto marcato",
         es = "Punto marcado",
         pl = "Oznaczona kropka",
+        ["pt-br"] = "Ponto marcado",
     },
     position_group = {
         en = "Position",
@@ -248,6 +276,7 @@ return {
         it = "Posizione",
         es = "Posición",
         pl = "Pozycja",
+        ["pt-br"] = "Posição",
         ["zh-cn"] = "位置",
     },
     radar_pos_x = {
@@ -257,6 +286,7 @@ return {
         it = "Posizione X radar",
         es = "Posición X del radar",
         pl = "Pozycja radaru X",
+        ["pt-br"] = "Posição X do radar",
         ["zh-cn"] = "雷达位置 X 轴",
     },
     radar_pos_y = {
@@ -266,6 +296,7 @@ return {
         it = "Posizione Y radar",
         es = "Posición Y del radar",
         pl = "Pozycja radaru Y",
+        ["pt-br"] = "Posição Y do radar",
         ["zh-cn"] = "雷达位置 Y 轴",
     },
     radar_move_step = {
@@ -275,6 +306,7 @@ return {
         it = "Passi per input",
         es = "Pasos por pulsación",
         pl = "Krok na naciśnięcie",
+        ["pt-br"] = "Passos por comando",
         ["zh-cn"] = "每次按键的移动步长",
     },
     move_radar_left_key = {
@@ -284,6 +316,7 @@ return {
         it = "Sposta radar a sinistra",
         es = "Mover radar a la izquierda",
         pl = "Przesuń radar w lewo",
+        ["pt-br"] = "Mover radar para a esquerda",
         ["zh-cn"] = "快捷键：雷达左移",
     },
     move_radar_right_key = {
@@ -293,6 +326,7 @@ return {
         it = "Sposta radar a destra",
         es = "Mover radar a la derecha",
         pl = "Przesuń radar w prawo",
+        ["pt-br"] = "Mover radar para a direita",
         ["zh-cn"] = "快捷键：雷达右移",
     },
     move_radar_up_key = {
@@ -302,6 +336,7 @@ return {
         it = "Sposta radar in alto",
         es = "Mover radar hacia arriba",
         pl = "Przesuń radar w górę",
+        ["pt-br"] = "Mover radar para cima",
         ["zh-cn"] = "快捷键：雷达上移",
     },
     move_radar_down_key = {
@@ -311,6 +346,7 @@ return {
         it = "Sposta radar in basso",
         es = "Mover radar hacia abajo",
         pl = "Przesuń radar w dół",
+        ["pt-br"] = "Mover radar para baixo",
         ["zh-cn"] = "快捷键：雷达下移",
     },
     common_pickups_group = {
@@ -320,6 +356,7 @@ return {
         it = "Oggetti comuni",
         es = "Objetos comunes",
         pl = "Popularne przedmioty",
+        ["pt-br"] = "Itens comuns",
         ["zh-cn"] = "常见拾取物",
     },
     show_crates = {
@@ -329,6 +366,7 @@ return {
         it = "Casse",
         es = "Cajas",
         pl = "Skrzynie",
+        ["pt-br"] = "Caixas",
         ["zh-cn"] = "箱子",
     },
     show_ammo_small = {
@@ -338,6 +376,7 @@ return {
         it = "Scatola di munizioni",
         es = "Caja pequeña de munición",
         pl = "Puszka z amunicją",
+        ["pt-br"] = "Lata de munição",
         ["zh-cn"] = "弹药罐 (小弹药)",
     },
     show_ammo_big = {
@@ -347,6 +386,7 @@ return {
         it = "Scorta di munizioni",
         es = "Alijo de munición",
         pl = "Zapas amunicji",
+        ["pt-br"] = "Reserva de munição",
         ["zh-cn"] = "弹药储存包 (大弹药)",
     },
     show_grenades = {
@@ -356,6 +396,7 @@ return {
         it = "Granata",
         es = "Granada",
         pl = "Granat",
+        ["pt-br"] = "Granada",
         ["zh-cn"] = "手雷",
     },
     show_pocketable_ammo_crate = {
@@ -365,6 +406,7 @@ return {
         it = "Cassa di munizioni",
         es = "Caja de munición",
         pl = "Skrzynia z amunicją",
+        ["pt-br"] = "Caixa de munição",
         ["zh-cn"] = "弹药箱",
     },
     show_pocketable_medical_crate = {
@@ -374,6 +416,7 @@ return {
         it = "Cassa medica",
         es = "Caja médica",
         pl = "Skrzynia medyczna",
+        ["pt-br"] = "Caixa médica",
         ["zh-cn"] = "医疗箱",
     },
     show_pocketable_syringe_ability = {
@@ -383,6 +426,7 @@ return {
         it = "Stim di concentrazione",
         es = "Estimulante de concentración",
         pl = "Stym koncentracji",
+        ["pt-br"] = "Estimulante de concentração",
         ["zh-cn"] = "专注针剂 (黄针)",
     },
     show_pocketable_syringe_corruption = {
@@ -392,6 +436,7 @@ return {
         it = "Stim medico",
         es = "Estimulante médico",
         pl = "Medi-stym",
+        ["pt-br"] = "Estimulante médico",
         ["zh-cn"] = "医疗针剂 (绿针)",
     },
     show_pocketable_syringe_power = {
@@ -401,6 +446,7 @@ return {
         it = "Stim da combattimento",
         es = "Estimulante de combate",
         pl = "Stym bojowy",
+        ["pt-br"] = "Estimulante de combate",
         ["zh-cn"] = "战斗针剂 (红针)",
     },
     show_pocketable_syringe_speed = {
@@ -410,6 +456,7 @@ return {
         it = "Stim di celerità",
         es = "Estimulante de celeridad",
         pl = "Stym szybkości",
+        ["pt-br"] = "Estimulante de celeridade",
         ["zh-cn"] = "迅捷针剂 (蓝针)",
     },
 
@@ -420,6 +467,7 @@ return {
         it = "Materiali raccoglibili",
         es = "Materiales coleccionables",
         pl = "Materiały do zebrania",
+        ["pt-br"] = "Materiais coletáveis",
         ["zh-cn"] = "可收集材料",
     },
     show_diamantine = {
@@ -429,6 +477,7 @@ return {
         it = "Diamantina",
         es = "Diamantina",
         pl = "Diamantyna",
+        ["pt-br"] = "Diamantina",
         ["zh-cn"] = "金刚砂",
     },
     show_plasteel = {
@@ -438,6 +487,7 @@ return {
         it = "Plasteel",
         es = "Plastacero",
         pl = "Plasteel",
+        ["pt-br"] = "Plasteel",
         ["zh-cn"] = "塑钢",
     },
 
@@ -448,6 +498,7 @@ return {
         it = "Oggetti obiettivo principale",
         es = "Objetos del objetivo principal",
         pl = "Przedmioty celu głównego",
+        ["pt-br"] = "Itens do objetivo principal",
         ["zh-cn"] = "主要目标任务物品",
     },
     show_power_cell_teal = {
@@ -457,6 +508,7 @@ return {
         it = "Cella energetica",
         es = "Célula de energía",
         pl = "Ogniwo zasilające",
+        ["pt-br"] = "Célula de energia",
         ["zh-cn"] = "能量电池",
     },
     show_cryonic_rod = {
@@ -466,6 +518,7 @@ return {
         it = "Asta criogenica",
         es = "Vara criónica",
         pl = "Pręt kriogeniczny",
+        ["pt-br"] = "Haste criônica",
         ["zh-cn"] = "冷却棒",
     },
     show_moebian_pox_zetaphyte_13_sample = {
@@ -475,6 +528,7 @@ return {
         it = "Campione di Peste Zetafita-13 Moebiana",
         es = "Muestra de Moebian Pox Zetaphyte-13",
         pl = "Próbka Moebian Pox Zetaphyte-13",
+        ["pt-br"] = "Amostra de Moebian Pox Zetaphyte-13",
         ["zh-cn"] = "莫比亚PZ-13样本",
     },
     show_vacuum_capsule = {
@@ -484,6 +538,7 @@ return {
         it = "Capsula sottovuoto",
         es = "Cápsula de vacío",
         pl = "Kapsuła próżniowa",
+        ["pt-br"] = "Cápsula a vácuo",
         ["zh-cn"] = "真空舱",
     },
     show_special_issue_ammo = {
@@ -493,6 +548,7 @@ return {
         it = "Munizioni speciali",
         es = "Munición especial",
         pl = "Specjalna amunicja",
+        ["pt-br"] = "Munição especial",
         ["zh-cn"] = "特制弹药",
     },
     show_prismata_crystal_repository = {
@@ -502,6 +558,7 @@ return {
         it = "Contenitore di cristalli Prismata",
         es = "Contenedor de cristales Prismata",
         pl = "Pojemnik na kryształy Prismata",
+        ["pt-br"] = "Repositório de cristais Prismata",
         ["zh-cn"] = "棱镜晶体仓库",
     },
     show_mortis_relic = {
@@ -511,6 +568,7 @@ return {
         it = "Reliquia Mortis",
         es = "Reliquia Mortis",
         pl = "Relikt Mortis",
+        ["pt-br"] = "Relíquia Mortis",
         ["zh-cn"] = "死灵遗物",
     },
     show_coordinates_paper = {
@@ -520,6 +578,7 @@ return {
         it = "Coordinate",
         es = "Coordenadas",
         pl = "Koordynaty",
+        ["pt-br"] = "Coordenadas",
         ["zh-cn"] = "坐标数据",
     },
 
@@ -530,6 +589,7 @@ return {
         it = "Oggetti obiettivo secondario",
         es = "Objetos del objetivo secundario",
         pl = "Przedmioty celu pobocznego",
+        ["pt-br"] = "Itens do objetivo secundário",
         ["zh-cn"] = "次要目标任务物品",
     },
     show_pocketable_grimoire = {
@@ -539,6 +599,7 @@ return {
         it = "Grimorio",
         es = "Grimorio",
         pl = "Grimuar",
+        ["pt-br"] = "Grimório",
         ["zh-cn"] = "魔法书",
     },
     show_pocketable_scripture = {
@@ -548,6 +609,7 @@ return {
         it = "Scrittura",
         es = "Escritura",
         pl = "Pismo",
+        ["pt-br"] = "Escritura",
         ["zh-cn"] = "圣经",
     },
 
@@ -558,6 +620,7 @@ return {
         it = "Oggetti specifici delle spedizioni",
         es = "Objetos específicos de expediciones",
         pl = "Przedmioty specyficzne dla ekspedycji",
+        ["pt-br"] = "Itens específicos de Expedições",
         ["zh-cn"] = "远征特定物品",
     },
     show_expeditions_currency = {
@@ -567,6 +630,7 @@ return {
         it = "Rottami",
         es = "Chatarra",
         pl = "Złom",
+        ["pt-br"] = "Sucata",
         ["zh-cn"] = "回收物",
     },
     show_expeditions_loot = {
@@ -576,6 +640,7 @@ return {
         it = "Resti tecnologici",
         es = "Restos tecnológicos",
         pl = "Relikty technologii",
+        ["pt-br"] = "Remanescentes tecnológicos",
         ["zh-cn"] = "科技遗物",
     },
     show_expeditions_dropped_loot = {
@@ -585,6 +650,7 @@ return {
         it = "Resti tecnologici a terra",
         es = "Restos tecnológicos caídos",
         pl = "Upuszczone relikty technologii",
+        ["pt-br"] = "Remanescentes tecnológicos largados",
         ["zh-cn"] = "掉落科技遗物",
     },
     expeditions_location_group = {
@@ -594,6 +660,7 @@ return {
         it = "Punti di interesse spedizioni",
         es = "Puntos de interés de expediciones",
         pl = "Punkty zainteresowania ekspedycji",
+        ["pt-br"] = "Pontos de interesse de Expedições",
     },
     ignore_radar_range_for_expedition_markers = {
         en = "Ignore range limit for POI",
@@ -602,6 +669,7 @@ return {
         it = "Ignora il limite di portata per i punti di interesse",
         es = "Ignorar límite de alcance para puntos de interés",
         pl = "Ignoruj limit zasięgu dla POI",
+        ["pt-br"] = "Ignorar limite de alcance para pontos de interesse",
     },
     show_expedition_objective_opportunity = {
         en = "Sites of Interest",
@@ -610,6 +678,7 @@ return {
         it = "Siti di interesse",
         es = "Lugares de interés",
         pl = "Miejsca zainteresowania",
+        ["pt-br"] = "Locais de interesse",
     },
     show_expedition_objective_transition = {
         en = "Deadsider Sanctuaries",
@@ -618,6 +687,7 @@ return {
         it = "Santuari Deadsider",
         es = "Santuarios Deadsider",
         pl = "Sanktuaria Deadsiderów",
+        ["pt-br"] = "Santuários Deadsider",
     },
     show_expedition_loot_converter = {
         en = "Data Reliquary Harvesters",
@@ -626,6 +696,7 @@ return {
         it = "Mietitori di reliquiari di dati",
         es = "Recolectores de relicarios de datos",
         pl = "Żniwiarze relikwiarzy danych",
+        ["pt-br"] = "Coletoras de relicários de dados",
     },
     show_expedition_objective_main_objective = {
         en = "Main Objective",
@@ -634,6 +705,7 @@ return {
         it = "Obiettivo principale",
         es = "Objetivo principal",
         pl = "Cel główny",
+        ["pt-br"] = "Objetivo principal",
     },
     show_expedition_objective_extraction = {
         en = "Valkyrie Extraction Zone",
@@ -642,6 +714,7 @@ return {
         it = "Zona di estrazione Valkyrie",
         es = "Zona de extracción Valkyrie",
         pl = "Strefa ewakuacji Valkyrii",
+        ["pt-br"] = "Zona de extração da Valkyrie",
     },
     show_expedition_objective_arrival = {
         en = "Valkyrie Arrival Zone",
@@ -650,6 +723,7 @@ return {
         it = "Zona di arrivo Valkyrie",
         es = "Zona de llegada Valkyrie",
         pl = "Strefa lądowania Valkyrii",
+        ["pt-br"] = "Zona de chegada da Valkyrie",
     },
     show_data_reliquaries = {
         en = "Data Reliquaries",
@@ -658,6 +732,7 @@ return {
         it = "Reliquiari di dati",
         es = "Relicarios de datos",
         pl = "Relikwiarze danych",
+        ["pt-br"] = "Relicários de dados",
         ["zh-cn"] = "数据圣骨匣",
     },
     show_pocketable_landmine_explosive = {
@@ -667,6 +742,7 @@ return {
         it = "Mina ad attivazione servo",
         es = "Mina activada por servo",
         pl = "Mina aktywowana serwem",
+        ["pt-br"] = "Mina acionada por servo",
         ["zh-cn"] = "伺服地雷",
     },
     show_pocketable_landmine_fire = {
@@ -676,6 +752,7 @@ return {
         it = "Trappola purgante",
         es = "Trampa de purga",
         pl = "Sidła oczyszczenia",
+        ["pt-br"] = "Armadilha de purgação",
         ["zh-cn"] = "涤罪陷阱",
     },
     show_pocketable_landmine_shock = {
@@ -685,6 +762,7 @@ return {
         it = "Trappola voltaica",
         es = "Trampa voltaica",
         pl = "Sidła woltaiczne",
+        ["pt-br"] = "Armadilha voltaica",
         ["zh-cn"] = "电能陷阱",
     },
     show_pocketable_void_shield = {
@@ -694,6 +772,7 @@ return {
         it = "Scudo del vuoto",
         es = "Escudo del vacío",
         pl = "Tarcza pustki",
+        ["pt-br"] = "Escudo do vazio",
         ["zh-cn"] = "虚空盾",
     },
     show_pocketable_airstrike = {
@@ -703,6 +782,7 @@ return {
         it = "Segnalatore di bombardamento",
         es = "Marcador de señal de bombardeo",
         pl = "Znacznik nalotu bombowego",
+        ["pt-br"] = "Marcador de sinal de bombardeio",
         ["zh-cn"] = "空袭信号标记",
     },
     show_pocketable_artillery_strike = {
@@ -712,6 +792,7 @@ return {
         it = "Faro di puntamento artiglieria",
         es = "Baliza localizadora de artillería",
         pl = "Radiolatarnia artyleryjska",
+        ["pt-br"] = "Baliza de localização de artilharia",
         ["zh-cn"] = "炮击定位信标",
     },
     show_pocketable_big_grenade = {
@@ -721,6 +802,7 @@ return {
         it = "Granata modificata",
         es = "Granada modificada",
         pl = "Zmodyfikowany granat",
+        ["pt-br"] = "Granada modificada",
         ["zh-cn"] = "改装手雷",
     },
     show_pocketable_valkyrie_hover = {
@@ -730,6 +812,7 @@ return {
         it = "Segnalatore di supporto di fuoco",
         es = "Marcador de señal de apoyo de fuego",
         pl = "Znacznik wsparcia ogniowego",
+        ["pt-br"] = "Marcador de sinal de apoio de fogo",
         ["zh-cn"] = "火力支援信号标记",
     },
     show_promethium_barrel = {
@@ -739,6 +822,7 @@ return {
         it = "Barile di promethium",
         es = "Barril de promethium",
         pl = "Beczka promethium",
+        ["pt-br"] = "Barril de promethium",
         ["zh-cn"] = "钷桶",
     },
     show_large_ammunition_crate = {
@@ -748,6 +832,7 @@ return {
         it = "Grande cassa di munizioni",
         es = "Caja grande de munición",
         pl = "Duża skrzynia z amunicją",
+        ["pt-br"] = "Caixa grande de munição",
         ["zh-cn"] = "大型弹药箱",
     },
     show_anti_rad_stimm = {
@@ -757,6 +842,7 @@ return {
         it = "Stim anti-rad",
         es = "Estimulantes antirradiación",
         pl = "Stymy antyradiacyjne",
+        ["pt-br"] = "Estimulantes antirradição",
         ["zh-cn"] = "抗辐射兴奋剂",
     },
 
@@ -767,6 +853,7 @@ return {
         it = "Oggetti del Teschio del Martire",
         es = "Objetos de la Calavera del Mártir",
         pl = "Przedmioty Czaszki Męczennika",
+        ["pt-br"] = "Itens da Caveira do Mártir",
         ["zh-cn"] = "殉道者头骨物品",
     },
     show_martyr_skull = {
@@ -776,6 +863,7 @@ return {
         it = "Teschio del Martire",
         es = "Calavera del Mártir",
         pl = "Czaszka Męczennika",
+        ["pt-br"] = "Caveira do Mártir",
         ["zh-cn"] = "殉道者头骨",
     },
     show_power_cell_orange = {
@@ -785,6 +873,7 @@ return {
         it = "Cella energetica",
         es = "Célula de energía",
         pl = "Ogniwo zasilające",
+        ["pt-br"] = "Célula de energia",
         ["zh-cn"] = "能量电池 (橙色)",
     },
 
@@ -795,6 +884,7 @@ return {
         it = "Oggetti schierati",
         es = "Objetos desplegados",
         pl = "Rozstawione przedmioty",
+        ["pt-br"] = "Itens posicionados",
         ["zh-cn"] = "已部署物品",
     },
     show_ammo_crate_deployable = {
@@ -804,6 +894,7 @@ return {
         it = "Cassa di munizioni",
         es = "Caja de munición",
         pl = "Skrzynia z amunicją",
+        ["pt-br"] = "Caixa de munição",
         ["zh-cn"] = "弹药箱 (已部署)",
     },
     show_medical_crate_deployable = {
@@ -813,6 +904,7 @@ return {
         it = "Cassa medica",
         es = "Caja médica",
         pl = "Skrzynia medyczna",
+        ["pt-br"] = "Caixa médica",
         ["zh-cn"] = "医疗箱 (已部署)",
     },
 
@@ -823,6 +915,7 @@ return {
         it = "Nemici",
         es = "Enemigos",
         pl = "Wrogowie",
+        ["pt-br"] = "Inimigos",
         ["zh-cn"] = "敌人",
     },
     show_monstrosities = {
@@ -832,6 +925,7 @@ return {
         it = "Mostruosità",
         es = "Monstruosidades",
         pl = "Potworności",
+        ["pt-br"] = "Monstruosidades",
         ["zh-cn"] = "怪物",
     },
     show_captains = {
@@ -841,6 +935,7 @@ return {
         it = "Capitani",
         es = "Capitanes",
         pl = "Kapitanowie",
+        ["pt-br"] = "Capitães",
         ["zh-cn"] = "连长",
     },
     show_karnak_twins = {
@@ -850,6 +945,7 @@ return {
         it = "Gemelli Karnak",
         es = "Gemelos Karnak",
         pl = "Bliźnięta Karnak",
+        ["pt-br"] = "Gêmeos Karnak",
         ["zh-cn"] = "双子",
     },
 
@@ -860,6 +956,7 @@ return {
         it = "Giocatori",
         es = "Jugadores",
         pl = "Gracze",
+        ["pt-br"] = "Jogadores",
         ["zh-cn"] = "玩家",
     },
     show_teammates = {
@@ -869,6 +966,7 @@ return {
         it = "Compagni di squadra",
         es = "Compañeros de equipo",
         pl = "Członkowie drużyny",
+        ["pt-br"] = "Companheiros de equipe",
         ["zh-cn"] = "队友",
     },
 
@@ -879,6 +977,7 @@ return {
         it = "Oggetti legati agli eventi",
         es = "Objetos relacionados con eventos",
         pl = "Przedmioty związane z wydarzeniami",
+        ["pt-br"] = "Itens relacionados a eventos",
         ["zh-cn"] = "事件相关物品",
     },
     show_tainted_skull = {
@@ -888,6 +987,7 @@ return {
         it = "Teschi corrotti",
         es = "Calaveras corruptas",
         pl = "Skalane czaszki",
+        ["pt-br"] = "Caveiras maculadas",
         ["zh-cn"] = "受污染的头骨",
     },
     show_pocketable_corrupted_auspex_scanner = {
@@ -897,6 +997,7 @@ return {
         it = "Dispositivo di comunicazione corrotto",
         es = "Dispositivo de comunicaciones corrupto",
         pl = "Skalane urządzenie komunikacyjne",
+        ["pt-br"] = "Dispositivo de comunicação maculado",
         ["zh-cn"] = "受污染的通讯设备",
     },
     show_saints = {
@@ -906,6 +1007,7 @@ return {
         it = "Reliquie sacre",
         es = "Reliquias sagradas",
         pl = "Święte relikwie",
+        ["pt-br"] = "Relíquias sagradas",
         ["zh-cn"] = "圣物",
     },
     show_stolen_rations = {
@@ -915,6 +1017,7 @@ return {
         it = "Razioni rubate",
         es = "Raciones robadas",
         pl = "Skradzione racje",
+        ["pt-br"] = "Rações roubadas",
         ["zh-cn"] = "失窃口粮",
     },
 
@@ -925,6 +1028,7 @@ return {
         it = "Debug",
         es = "Depuración",
         pl = "Debugowanie",
+        ["pt-br"] = "Depuração",
         ["zh-cn"] = "调试",
     },
     debug_mode = {
@@ -934,6 +1038,7 @@ return {
         it = "Log di debug",
         es = "Registros de depuración",
         pl = "Logi debugowania",
+        ["pt-br"] = "Logs de depuração",
         ["zh-cn"] = "调试日志",
     },
     show_unknown_pickups = {
@@ -943,6 +1048,7 @@ return {
         it = "Mostra oggetti sconosciuti",
         es = "Mostrar objetos desconocidos",
         pl = "Pokaż nieznane przedmioty",
+        ["pt-br"] = "Mostrar itens desconhecidos",
         ["zh-cn"] = "显示未知拾取物",
     },
 }
