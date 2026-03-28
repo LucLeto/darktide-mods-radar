@@ -2253,6 +2253,19 @@ mod.update = function(dt)
     _update_internal(dt, _safe_gameplay_time())
 end
 
+function mod:get_player_display_style()
+    local value = tostring(self:get("player_display_style") or "marked_icon")
+
+    if value ~= "icon_only"
+        and value ~= "marked_icon"
+        and value ~= "dot_only"
+        and value ~= "marked_dot" then
+        value = "marked_icon"
+    end
+
+    return value
+end
+
 function mod:get_radar_snapshot()
     return self._radar_snapshot
 end

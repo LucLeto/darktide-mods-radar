@@ -113,36 +113,6 @@ return {
                         },
                     },
                     {
-                        setting_id = "enemy_display_style",
-                        type = "dropdown",
-                        default_value = "marked_icon",
-                        options = {
-                            {
-                                text = "display_style_icon_only",
-                                value = "icon_only",
-                            },
-                            {
-                                text = "display_style_marked_icon",
-                                value = "marked_icon",
-                            },
-                        },
-                    },
-                    {
-                        setting_id = "player_display_style",
-                        type = "dropdown",
-                        default_value = "marked_icon",
-                        options = {
-                            {
-                                text = "display_style_icon_only",
-                                value = "icon_only",
-                            },
-                            {
-                                text = "display_style_marked_icon",
-                                value = "marked_icon",
-                            },
-                        },
-                    },
-                    {
                         setting_id = "highlight_distance",
                         type = "numeric",
                         default_value = 15,
@@ -531,6 +501,21 @@ return {
                 type = "group",
                 sub_widgets = {
                     {
+                        setting_id = "enemy_display_style",
+                        type = "dropdown",
+                        default_value = "marked_icon",
+                        options = {
+                            {
+                                text = "display_style_icon_only",
+                                value = "icon_only",
+                            },
+                            {
+                                text = "display_style_marked_icon",
+                                value = "marked_icon",
+                            },
+                        },
+                    },
+                    {
                         setting_id = "show_monstrosities",
                         type = "checkbox",
                         default_value = true,
@@ -555,6 +540,29 @@ return {
                         setting_id = "show_teammates",
                         type = "checkbox",
                         default_value = true,
+                    },
+                    {
+                        setting_id = "player_display_style",
+                        type = "dropdown",
+                        default_value = "marked_icon",
+                        options = {
+                            {
+                                text = "display_style_icon_only",
+                                value = "icon_only",
+                            },
+                            {
+                                text = "display_style_marked_icon",
+                                value = "marked_icon",
+                            },
+                            {
+                                text = "display_style_dot_only",
+                                value = "dot_only",
+                            },
+                            {
+                                text = "display_style_marked_dot",
+                                value = "marked_dot",
+                            },
+                        },
                     },
                 },
             },

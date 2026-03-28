@@ -856,7 +856,15 @@ end
 local function _display_style_for_kind(kind)
     if kind == "player_teammate" then
         local value = tostring(mod:get("player_display_style") or "marked_icon")
-        return value == "icon_only" and "icon_only" or "marked_icon"
+
+        if value ~= "icon_only"
+            and value ~= "marked_icon"
+            and value ~= "dot_only"
+            and value ~= "marked_dot" then
+            value = "marked_icon"
+        end
+
+        return value
     end
 
     if _is_enemy_kind(kind) then
@@ -872,7 +880,8 @@ local function _display_style_for_kind(kind)
 end
 
 local function _should_draw_marker_brackets(target)
-    return _display_style_for_kind(target and target.kind) == "marked_icon"
+    local style = _display_style_for_kind(target and target.kind)
+    return style == "marked_icon" or style == "marked_dot"
 end
 
 local function _center_dot_color(snapshot)
@@ -977,7 +986,10 @@ local function _target_visual(target)
         local player_slot = tonumber(meta.player_slot)
         local slot_colors = UISettings and UISettings.player_slot_colors
         local player_color = player_slot and slot_colors and slot_colors[player_slot] or nil
-        local icon = PLAYER_CLASS_ICONS[archetype_name] or "content/ui/materials/icons/pickups/default"
+        local display_style = mod:get_player_display_style()
+        local use_dot = display_style == "dot_only" or display_style == "marked_dot"
+
+        local icon = use_dot and DEFAULT_INTERACTION_ICON or PLAYER_CLASS_ICONS[archetype_name]
         local widget_color = _any_to_widget_color(player_color)
 
         if mod:get("debug_mode") then
@@ -993,7 +1005,7 @@ local function _target_visual(target)
             icon = icon,
             color = widget_color,
             accent_color = _with_alpha_widget(widget_color, 180),
-            size = 15,
+            size = use_dot or 15,
         }
     end
 
@@ -1127,7 +1139,25 @@ HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input
             local live_camera_rotation = _safe_player_camera_rotation(self)
             local projection_rotation = live_camera_rotation or snapshot.player_rotation
 
-            _draw_box(ui_renderer, center_x - 2, center_y - 2, z + 4, 4, 4, _center_dot_color(snapshot))
+            local player_slot = tonumber(snapshot.player_slot)
+            local slot_colors = UISettings and UISettings.player_slot_colors
+            local player_color = player_slot and slot_colors and slot_colors[player_slot] or nil
+
+            local self_visual = {
+                icon = DEFAULT_INTERACTION_ICON,
+                color = _any_to_widget_color(player_color, _widget_color(255, 255, 255, 255)),
+                size = 4,
+            }
+
+            local self_icon_size = _scaled_icon_size(self_visual.size)
+            local self_draw_x = center_x - self_icon_size / 2
+            local self_draw_y = center_y - self_icon_size / 2
+            local self_widget = self._marker_widgets[next_widget_index]
+
+            _apply_marker_widget(self_widget, self_visual, self_draw_x, self_draw_y, z + 5)
+            UIWidget.draw(self_widget, ui_renderer)
+
+            next_widget_index = next_widget_index + 1
 
             if #targets > max_markers then
                 _log_once(

@@ -95,6 +95,12 @@ return {
         en = "Marked icon",
         ["zh-cn"] = "带标记的图标",
     },
+    display_style_dot_only = {
+        en = "Dot only",
+    },
+    display_style_marked_dot = {
+        en = "Marked Dot",
+    },
     position_group = {
         en = "Position",
         ["zh-cn"] = "位置",
