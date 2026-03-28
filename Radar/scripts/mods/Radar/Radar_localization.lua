@@ -7,7 +7,7 @@ return {
         es = "Radar",
         pl = "Radar",
         ["pt-br"] = "Radar",
-        ["ru"] = "Radar",
+        ["ru"] = "Радар",
         ["zh-cn"] = "雷达（小地图）",
     },
     mod_description = {
