@@ -152,6 +152,7 @@ return {
         pl = "Obrys radaru",
         ["pt-br"] = "Contorno do radar",
         ["ru"] = "Контур радара",
+        ["zh-cn"] = "雷达轮廓",
     },
     radar_outline_solid = {
         en = "Solid",
@@ -162,6 +163,7 @@ return {
         pl = "Ciągły",
         ["pt-br"] = "Sólido",
         ["ru"] = "Сплошной",
+        ["zh-cn"] = "实线",
     },
     radar_outline_dotted = {
         en = "Dotted",
@@ -172,6 +174,7 @@ return {
         pl = "Kropkowany",
         ["pt-br"] = "Pontilhado",
         ["ru"] = "Пунктир",
+        ["zh-cn"] = "点状",
     },
     radar_outline_off = {
         en = "Off",
@@ -182,6 +185,7 @@ return {
         pl = "Wyłączone",
         ["pt-br"] = "Desativado",
         ["ru"] = "Выкл.",
+        ["zh-cn"] = "关闭",
     },
     radar_guides = {
         en = "Radar guides",
@@ -192,6 +196,7 @@ return {
         pl = "Linie pomocnicze radaru",
         ["pt-br"] = "Guias do radar",
         ["ru"] = "Направляющие радара",
+        ["zh-cn"] = "雷达辅助线",
     },
     radar_guides_crosshair = {
         en = "Crosshair",
@@ -202,6 +207,7 @@ return {
         pl = "Celownik",
         ["pt-br"] = "Mira",
         ["ru"] = "Перекрестие",
+        ["zh-cn"] = "十字准星",
     },
     radar_guides_view_guides = {
         en = "View guides",
@@ -212,6 +218,7 @@ return {
         pl = "Linie widoku",
         ["pt-br"] = "Guias de visão",
         ["ru"] = "Линии обзора",
+        ["zh-cn"] = "视野辅助线",
     },
     radar_guides_range_rings = {
         en = "Range rings",
@@ -222,6 +229,7 @@ return {
         pl = "Pierścienie zasięgu",
         ["pt-br"] = "Anéis de alcance",
         ["ru"] = "Кольца дальности",
+        ["zh-cn"] = "距离环",
     },
     radar_guides_off = {
         en = "Off",
@@ -232,6 +240,7 @@ return {
         pl = "Wyłączone",
         ["pt-br"] = "Desativado",
         ["ru"] = "Выкл.",
+        ["zh-cn"] = "关闭",
     },
     enemy_display_style = {
         en = "Enemy marker style",
@@ -286,6 +295,7 @@ return {
         pl = "Tylko kropka",
         ["pt-br"] = "Somente ponto",
         ["ru"] = "Только точка",
+        ["zh-cn"] = "仅圆点",
     },
     display_style_marked_dot = {
         en = "Marked Dot",
@@ -296,6 +306,7 @@ return {
         pl = "Oznaczona kropka",
         ["pt-br"] = "Ponto marcado",
         ["ru"] = "Точка с меткой",
+        ["zh-cn"] = "带标记的圆点",
     },
     position_group = {
         en = "Position",
@@ -728,6 +739,7 @@ return {
         pl = "Punkty zainteresowania ekspedycji",
         ["pt-br"] = "Pontos de interesse de Expedições",
         ["ru"] = "Точки интереса экспедиций",
+        ["zh-cn"] = "远征兴趣点",
     },
     ignore_radar_range_for_expedition_markers = {
         en = "Ignore range limit for POI",
@@ -738,6 +750,7 @@ return {
         pl = "Ignoruj limit zasięgu dla POI",
         ["pt-br"] = "Ignorar limite de alcance para pontos de interesse",
         ["ru"] = "Игнорировать ограничение дальности для точек интереса",
+        ["zh-cn"] = "忽略兴趣点的距离限制",
     },
     show_expedition_objective_opportunity = {
         en = "Sites of Interest",
@@ -748,6 +761,7 @@ return {
         pl = "Miejsca zainteresowania",
         ["pt-br"] = "Locais de interesse",
         ["ru"] = "Места интереса",
+        ["zh-cn"] = "兴趣地点",
     },
     show_expedition_objective_transition = {
         en = "Deadsider Sanctuaries",
@@ -758,6 +772,7 @@ return {
         pl = "Sanktuaria Deadsiderów",
         ["pt-br"] = "Santuários Deadsider",
         ["ru"] = "Святилища Deadsider",
+        ["zh-cn"] = "亡行者圣所",
     },
     show_expedition_loot_converter = {
         en = "Data Reliquary Harvesters",
@@ -768,6 +783,7 @@ return {
         pl = "Żniwiarze relikwiarzy danych",
         ["pt-br"] = "Coletoras de relicários de dados",
         ["ru"] = "Сборщики реликвариев данных",
+        ["zh-cn"] = "数据圣骨匣采集器",
     },
     show_expedition_objective_main_objective = {
         en = "Main Objective",
@@ -778,6 +794,7 @@ return {
         pl = "Cel główny",
         ["pt-br"] = "Objetivo principal",
         ["ru"] = "Основная задача",
+        ["zh-cn"] = "主要目标",
     },
     show_expedition_objective_extraction = {
         en = "Valkyrie Extraction Zone",
@@ -788,6 +805,7 @@ return {
         pl = "Strefa ewakuacji Valkyrii",
         ["pt-br"] = "Zona de extração da Valkyrie",
         ["ru"] = "Зона эвакуации Valkyrie",
+        ["zh-cn"] = "瓦尔基里撤离区",
     },
     show_expedition_objective_arrival = {
         en = "Valkyrie Arrival Zone",
@@ -798,6 +816,7 @@ return {
         pl = "Strefa lądowania Valkyrii",
         ["pt-br"] = "Zona de chegada da Valkyrie",
         ["ru"] = "Зона прибытия Valkyrie",
+        ["zh-cn"] = "瓦尔基里抵达区",
     },
     show_data_reliquaries = {
         en = "Data Reliquaries",
