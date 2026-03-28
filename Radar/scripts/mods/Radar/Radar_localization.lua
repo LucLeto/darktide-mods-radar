@@ -948,6 +948,7 @@ return {
         pl = "Stymy antyradiacyjne",
         ["pt-br"] = "Estimulantes antirradição",
         ["ru"] = "Антирад-стиммы",
+        ja = "抗放射線スティム",
         ["zh-cn"] = "抗辐射兴奋剂",
     },
 
