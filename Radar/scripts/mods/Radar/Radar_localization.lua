@@ -11,6 +11,7 @@ return {
         ja = "Radar",
         ko = "Radar",
         ["zh-cn"] = "雷达（小地图）",
+        ["zh-tw"] = "雷達（小地圖）",
     },
     mod_description = {
         en = "Displays items, teammates and high-priority enemies on a configurable radar.",
@@ -24,6 +25,7 @@ return {
         ja = "設定可能なレーダーにアイテム、味方、優先度の高い敵を表示します。",
         ko = "설정 가능한 레이더에 아이템, 팀원, 우선순위가 높은 적을 표시합니다.",
         ["zh-cn"] = "在一个可配置的雷达上显示物品、队友和高优先级的敌人。  翻译 by Caimao",
+        ["zh-tw"] = "在可自訂的雷達上顯示物品、隊友與高優先敵人。",
     },
 
     general_group = {
@@ -38,6 +40,7 @@ return {
         ja = "一般",
         ko = "일반",
         ["zh-cn"] = "常规",
+        ["zh-tw"] = "一般",
     },
     enable_radar = {
         en = "Enable radar",
@@ -51,6 +54,7 @@ return {
         ja = "レーダーを有効化",
         ko = "레이더 활성화",
         ["zh-cn"] = "启用雷达",
+        ["zh-tw"] = "啟用雷達",
     },
     toggle_radar_key = {
         en = "Toggle radar on or off",
@@ -64,6 +68,7 @@ return {
         ja = "レーダーのオン/オフ切り替え",
         ko = "레이더 켜기/끄기",
         ["zh-cn"] = "切换雷达开关快捷键",
+        ["zh-tw"] = "切換雷達開關",
     },
     radar_size = {
         en = "Radar size",
@@ -77,6 +82,7 @@ return {
         ja = "レーダーサイズ",
         ko = "레이더 크기",
         ["zh-cn"] = "雷达尺寸",
+        ["zh-tw"] = "雷達大小",
     },
     radar_range = {
         en = "Radar range / filter distance (m)",
@@ -90,6 +96,7 @@ return {
         ja = "レーダー範囲 / フィルター距離 (m)",
         ko = "레이더 범위 / 필터 거리 (m)",
         ["zh-cn"] = "雷达范围 / 过滤距离 (米)",
+        ["zh-tw"] = "雷達範圍 / 篩選距離 (公尺)",
     },
     highlight_distance = {
         en = "Highlight distance",
@@ -103,6 +110,7 @@ return {
         ja = "ハイライト距離",
         ko = "강조 표시 거리",
         ["zh-cn"] = "高亮显示距离",
+        ["zh-tw"] = "高亮顯示距離",
     },
     max_radar_markers = {
         en = "Max radar markers",
@@ -116,6 +124,7 @@ return {
         ja = "レーダーマーカー最大数",
         ko = "레이더 마커 최대 수",
         ["zh-cn"] = "雷达最大标记数量",
+        ["zh-tw"] = "雷達標記上限",
     },
     scale_icons_with_radar_size = {
         en = "Scale icons with radar size",
@@ -129,6 +138,7 @@ return {
         ja = "レーダーサイズに合わせてアイコンを拡大縮小",
         ko = "레이더 크기에 맞춰 아이콘 크기 조절",
         ["zh-cn"] = "图标随雷达尺寸缩放",
+        ["zh-tw"] = "圖示隨雷達大小縮放",
     },
     radar_style = {
         en = "Radar style",
@@ -142,6 +152,7 @@ return {
         ja = "レーダースタイル",
         ko = "레이더 스타일",
         ["zh-cn"] = "雷达样式",
+        ["zh-tw"] = "雷達樣式",
     },
     radar_style_square = {
         en = "Square",
@@ -155,6 +166,7 @@ return {
         ja = "四角",
         ko = "사각형",
         ["zh-cn"] = "方形",
+        ["zh-tw"] = "方形",
     },
     radar_style_circle = {
         en = "Circle",
@@ -168,6 +180,7 @@ return {
         ja = "円形",
         ko = "원형",
         ["zh-cn"] = "圆形",
+        ["zh-tw"] = "圓形",
     },
     radar_outline = {
         en = "Radar outline",
@@ -181,6 +194,7 @@ return {
         ja = "レーダー外枠",
         ko = "레이더 외곽선",
         ["zh-cn"] = "雷达轮廓",
+        ["zh-tw"] = "雷達外框",
     },
     radar_outline_solid = {
         en = "Solid",
@@ -194,6 +208,7 @@ return {
         ja = "実線",
         ko = "실선",
         ["zh-cn"] = "实线",
+        ["zh-tw"] = "實線",
     },
     radar_outline_dotted = {
         en = "Dotted",
@@ -207,6 +222,7 @@ return {
         ja = "点線",
         ko = "점선",
         ["zh-cn"] = "点状",
+        ["zh-tw"] = "點線",
     },
     radar_outline_off = {
         en = "Off",
@@ -220,6 +236,7 @@ return {
         ja = "オフ",
         ko = "끔",
         ["zh-cn"] = "关闭",
+        ["zh-tw"] = "關閉",
     },
     radar_guides = {
         en = "Radar guides",
@@ -233,6 +250,7 @@ return {
         ja = "レーダーガイド",
         ko = "레이더 가이드",
         ["zh-cn"] = "雷达辅助线",
+        ["zh-tw"] = "雷達輔助線",
     },
     radar_guides_crosshair = {
         en = "Crosshair",
@@ -246,6 +264,7 @@ return {
         ja = "十字線",
         ko = "십자선",
         ["zh-cn"] = "十字准星",
+        ["zh-tw"] = "十字準星",
     },
     radar_guides_view_guides = {
         en = "View guides",
@@ -259,6 +278,7 @@ return {
         ja = "視界ガイド",
         ko = "시야 가이드",
         ["zh-cn"] = "视野辅助线",
+        ["zh-tw"] = "視野輔助線",
     },
     radar_guides_range_rings = {
         en = "Range rings",
@@ -272,6 +292,7 @@ return {
         ja = "距離リング",
         ko = "거리 원",
         ["zh-cn"] = "距离环",
+        ["zh-tw"] = "距離環",
     },
     radar_guides_off = {
         en = "Off",
@@ -285,6 +306,7 @@ return {
         ja = "オフ",
         ko = "끔",
         ["zh-cn"] = "关闭",
+        ["zh-tw"] = "關閉",
     },
     enemy_display_style = {
         en = "Enemy marker style",
@@ -298,6 +320,7 @@ return {
         ja = "敵マーカーのスタイル",
         ko = "적 마커 스타일",
         ["zh-cn"] = "敌人标记样式",
+        ["zh-tw"] = "敵人標記樣式",
     },
     player_display_style = {
         en = "Player marker style",
@@ -311,6 +334,7 @@ return {
         ja = "プレイヤーマーカーのスタイル",
         ko = "플레이어 마커 스타일",
         ["zh-cn"] = "玩家标记样式",
+        ["zh-tw"] = "玩家標記樣式",
     },
     display_style_icon_only = {
         en = "Icon only",
@@ -324,6 +348,7 @@ return {
         ja = "アイコンのみ",
         ko = "아이콘만",
         ["zh-cn"] = "仅图标",
+        ["zh-tw"] = "僅圖示",
     },
     display_style_marked_icon = {
         en = "Marked icon",
@@ -337,6 +362,7 @@ return {
         ja = "マーク付きアイコン",
         ko = "표식 아이콘",
         ["zh-cn"] = "带标记的图标",
+        ["zh-tw"] = "帶標記圖示",
     },
     display_style_dot_only = {
         en = "Dot only",
@@ -350,6 +376,7 @@ return {
         ja = "ドットのみ",
         ko = "점만",
         ["zh-cn"] = "仅圆点",
+        ["zh-tw"] = "僅圓點",
     },
     display_style_marked_dot = {
         en = "Marked Dot",
@@ -363,6 +390,7 @@ return {
         ja = "マーク付きドット",
         ko = "표식 점",
         ["zh-cn"] = "带标记的圆点",
+        ["zh-tw"] = "帶標記圓點",
     },
     position_group = {
         en = "Position",
@@ -376,6 +404,7 @@ return {
         ja = "位置",
         ko = "위치",
         ["zh-cn"] = "位置",
+        ["zh-tw"] = "位置",
     },
     radar_pos_x = {
         en = "Radar position X",
@@ -389,6 +418,7 @@ return {
         ja = "レーダー位置 X",
         ko = "레이더 위치 X",
         ["zh-cn"] = "雷达位置 X 轴",
+        ["zh-tw"] = "雷達位置 X 軸",
     },
     radar_pos_y = {
         en = "Radar position Y",
@@ -402,6 +432,7 @@ return {
         ja = "レーダー位置 Y",
         ko = "레이더 위치 Y",
         ["zh-cn"] = "雷达位置 Y 轴",
+        ["zh-tw"] = "雷達位置 Y 軸",
     },
     radar_move_step = {
         en = "Steps per input",
@@ -415,6 +446,7 @@ return {
         ja = "1回の入力あたりの移動量",
         ko = "입력당 이동량",
         ["zh-cn"] = "每次按键的移动步长",
+        ["zh-tw"] = "每次輸入的移動步長",
     },
     move_radar_left_key = {
         en = "Move radar left",
@@ -428,6 +460,7 @@ return {
         ja = "レーダーを左へ移動",
         ko = "레이더 왼쪽으로 이동",
         ["zh-cn"] = "快捷键：雷达左移",
+        ["zh-tw"] = "將雷達左移",
     },
     move_radar_right_key = {
         en = "Move radar right",
@@ -441,6 +474,7 @@ return {
         ja = "レーダーを右へ移動",
         ko = "레이더 오른쪽으로 이동",
         ["zh-cn"] = "快捷键：雷达右移",
+        ["zh-tw"] = "將雷達右移",
     },
     move_radar_up_key = {
         en = "Move radar up",
@@ -454,6 +488,7 @@ return {
         ja = "レーダーを上へ移動",
         ko = "레이더 위로 이동",
         ["zh-cn"] = "快捷键：雷达上移",
+        ["zh-tw"] = "將雷達上移",
     },
     move_radar_down_key = {
         en = "Move radar down",
@@ -467,6 +502,7 @@ return {
         ja = "レーダーを下へ移動",
         ko = "레이더 아래로 이동",
         ["zh-cn"] = "快捷键：雷达下移",
+        ["zh-tw"] = "將雷達下移",
     },
     common_pickups_group = {
         en = "Common Pickups",
@@ -480,6 +516,7 @@ return {
         ja = "一般ピックアップ",
         ko = "일반 픽업",
         ["zh-cn"] = "常见拾取物",
+        ["zh-tw"] = "常見拾取物",
     },
     show_crates = {
         en = "Crates",
@@ -493,6 +530,7 @@ return {
         ja = "箱",
         ko = "상자",
         ["zh-cn"] = "箱子",
+        ["zh-tw"] = "箱子",
     },
     show_ammo_small = {
         en = "Ammo Tin",
@@ -506,6 +544,7 @@ return {
         ja = "弾薬缶",
         ko = "탄약 통",
         ["zh-cn"] = "弹药罐 (小弹药)",
+        ["zh-tw"] = "小型彈藥罐",
     },
     show_ammo_big = {
         en = "Ammo Stash",
@@ -519,6 +558,7 @@ return {
         ja = "弾薬備蓄",
         ko = "탄약 보관함",
         ["zh-cn"] = "弹药储存包 (大弹药)",
+        ["zh-tw"] = "彈藥儲備",
     },
     show_grenades = {
         en = "Grenade",
@@ -532,6 +572,7 @@ return {
         ja = "グレネード",
         ko = "수류탄",
         ["zh-cn"] = "手雷",
+        ["zh-tw"] = "手榴彈",
     },
     show_pocketable_ammo_crate = {
         en = "Ammo Crate",
@@ -545,6 +586,7 @@ return {
         ja = "弾薬箱",
         ko = "탄약 상자",
         ["zh-cn"] = "弹药箱",
+        ["zh-tw"] = "彈藥箱",
     },
     show_pocketable_medical_crate = {
         en = "Medical Crate",
@@ -558,6 +600,7 @@ return {
         ja = "医療箱",
         ko = "의료 상자",
         ["zh-cn"] = "医疗箱",
+        ["zh-tw"] = "醫療箱",
     },
     show_pocketable_syringe_ability = {
         en = "Concentration Stimm",
@@ -571,6 +614,7 @@ return {
         ja = "集中スティム",
         ko = "집중 스팀",
         ["zh-cn"] = "专注针剂 (黄针)",
+        ["zh-tw"] = "專注針劑",
     },
     show_pocketable_syringe_corruption = {
         en = "Med Stimm",
@@ -584,6 +628,7 @@ return {
         ja = "医療スティム",
         ko = "메드 스팀",
         ["zh-cn"] = "医疗针剂 (绿针)",
+        ["zh-tw"] = "醫療針劑",
     },
     show_pocketable_syringe_power = {
         en = "Combat Stimm",
@@ -597,6 +642,7 @@ return {
         ja = "戦闘スティム",
         ko = "전투 스팀",
         ["zh-cn"] = "战斗针剂 (红针)",
+        ["zh-tw"] = "戰鬥針劑",
     },
     show_pocketable_syringe_speed = {
         en = "Celerity Stimm",
@@ -610,6 +656,7 @@ return {
         ja = "迅速スティム",
         ko = "신속 스팀",
         ["zh-cn"] = "迅捷针剂 (蓝针)",
+        ["zh-tw"] = "迅捷針劑",
     },
 
     materials_group = {
@@ -624,6 +671,7 @@ return {
         ja = "収集素材",
         ko = "수집 재료",
         ["zh-cn"] = "可收集材料",
+        ["zh-tw"] = "可收集材料",
     },
     show_diamantine = {
         en = "Diamantine",
@@ -637,6 +685,7 @@ return {
         ja = "ダイアマンティン",
         ko = "다이아만틴",
         ["zh-cn"] = "金刚砂",
+        ["zh-tw"] = "金剛砂",
     },
     show_plasteel = {
         en = "Plasteel",
@@ -650,6 +699,7 @@ return {
         ja = "プラスチール",
         ko = "플라스틸",
         ["zh-cn"] = "塑钢",
+        ["zh-tw"] = "塑鋼",
     },
 
     primary_objective_group = {
@@ -664,6 +714,7 @@ return {
         ja = "主要目標アイテム",
         ko = "주요 목표 아이템",
         ["zh-cn"] = "主要目标任务物品",
+        ["zh-tw"] = "主要目標物品",
     },
     show_power_cell_teal = {
         en = "Power Cell",
@@ -677,6 +728,7 @@ return {
         ja = "パワーセル",
         ko = "파워 셀",
         ["zh-cn"] = "能量电池",
+        ["zh-tw"] = "能量電池",
     },
     show_cryonic_rod = {
         en = "Cryonic Rod",
@@ -690,6 +742,7 @@ return {
         ja = "クライオニックロッド",
         ko = "크라이오닉 로드",
         ["zh-cn"] = "冷却棒",
+        ["zh-tw"] = "低溫棒",
     },
     show_moebian_pox_zetaphyte_13_sample = {
         en = "Moebian Pox Zetaphyte-13 Sample",
@@ -703,6 +756,7 @@ return {
         ja = "モエビアン痘ゼータファイト-13サンプル",
         ko = "모에비안 폭스 제타파이트-13 표본",
         ["zh-cn"] = "莫比亚PZ-13样本",
+        ["zh-tw"] = "莫比亞膿毒澤塔菲特-13樣本",
     },
     show_vacuum_capsule = {
         en = "Vacuum Capsule",
@@ -716,6 +770,7 @@ return {
         ja = "真空カプセル",
         ko = "진공 캡슐",
         ["zh-cn"] = "真空舱",
+        ["zh-tw"] = "真空艙",
     },
     show_special_issue_ammo = {
         en = "Special Issue Ammo",
@@ -729,6 +784,7 @@ return {
         ja = "特別支給弾薬",
         ko = "특수 지급 탄약",
         ["zh-cn"] = "特制弹药",
+        ["zh-tw"] = "特製彈藥",
     },
     show_prismata_crystal_repository = {
         en = "Prismata Crystal Repository",
@@ -742,6 +798,7 @@ return {
         ja = "プリズマタ結晶保管庫",
         ko = "프리즈마타 수정 보관함",
         ["zh-cn"] = "棱镜晶体仓库",
+        ["zh-tw"] = "稜鏡水晶儲存庫",
     },
     show_mortis_relic = {
         en = "Mortis Relic",
@@ -755,6 +812,7 @@ return {
         ja = "モーティスの遺物",
         ko = "모르티스 유물",
         ["zh-cn"] = "死灵遗物",
+        ["zh-tw"] = "莫提斯遺物",
     },
     show_coordinates_paper = {
         en = "Coordinates",
@@ -768,6 +826,7 @@ return {
         ja = "座標",
         ko = "좌표",
         ["zh-cn"] = "坐标数据",
+        ["zh-tw"] = "座標資料",
     },
 
     secondary_objective_group = {
@@ -782,6 +841,7 @@ return {
         ja = "副次目標アイテム",
         ko = "보조 목표 아이템",
         ["zh-cn"] = "次要目标任务物品",
+        ["zh-tw"] = "次要目標物品",
     },
     show_pocketable_grimoire = {
         en = "Grimoire",
@@ -795,6 +855,7 @@ return {
         ja = "グリモア",
         ko = "그리모어",
         ["zh-cn"] = "魔法书",
+        ["zh-tw"] = "魔典",
     },
     show_pocketable_scripture = {
         en = "Scripture",
@@ -808,6 +869,7 @@ return {
         ja = "聖典",
         ko = "경전",
         ["zh-cn"] = "圣经",
+        ["zh-tw"] = "聖典",
     },
 
     expeditions_specific_group = {
@@ -822,6 +884,7 @@ return {
         ja = "遠征専用アイテム",
         ko = "원정 전용 아이템",
         ["zh-cn"] = "远征特定物品",
+        ["zh-tw"] = "遠征專屬物品",
     },
     show_expeditions_currency = {
         en = "Salvage",
@@ -835,6 +898,7 @@ return {
         ja = "サルベージ",
         ko = "회수품",
         ["zh-cn"] = "回收物",
+        ["zh-tw"] = "回收物",
     },
     show_expeditions_loot = {
         en = "Tech-Remnants",
@@ -848,6 +912,7 @@ return {
         ja = "技術遺物",
         ko = "기술 잔재",
         ["zh-cn"] = "科技遗物",
+        ["zh-tw"] = "科技殘骸",
     },
     show_expeditions_dropped_loot = {
         en = "Dropped Tech-Remnants",
@@ -861,6 +926,7 @@ return {
         ja = "落ちた技術遺物",
         ko = "떨어진 기술 잔재",
         ["zh-cn"] = "掉落科技遗物",
+        ["zh-tw"] = "掉落的科技殘骸",
     },
     expeditions_location_group = {
         en = "Expeditions POI",
@@ -874,6 +940,7 @@ return {
         ja = "遠征の注目地点",
         ko = "원정 관심 지점",
         ["zh-cn"] = "远征兴趣点",
+        ["zh-tw"] = "遠征興趣點",
     },
     ignore_radar_range_for_expedition_markers = {
         en = "Ignore range limit for POI",
@@ -887,6 +954,7 @@ return {
         ja = "注目地点の距離制限を無視",
         ko = "관심 지점 거리 제한 무시",
         ["zh-cn"] = "忽略兴趣点的距离限制",
+        ["zh-tw"] = "忽略興趣點距離限制",
     },
     show_expedition_objective_opportunity = {
         en = "Sites of Interest",
@@ -900,6 +968,7 @@ return {
         ja = "注目地点",
         ko = "관심 지점",
         ["zh-cn"] = "兴趣地点",
+        ["zh-tw"] = "興趣點",
     },
     show_expedition_objective_transition = {
         en = "Deadsider Sanctuaries",
@@ -913,6 +982,7 @@ return {
         ja = "デッドサイダーの聖域",
         ko = "데드사이더 성소",
         ["zh-cn"] = "亡行者圣所",
+        ["zh-tw"] = "亡行者聖所",
     },
     show_expedition_loot_converter = {
         en = "Data Reliquary Harvesters",
@@ -926,6 +996,7 @@ return {
         ja = "データ聖骨匣ハーベスター",
         ko = "데이터 유물함 수확기",
         ["zh-cn"] = "数据圣骨匣采集器",
+        ["zh-tw"] = "資料聖骨匣採集器",
     },
     show_expedition_objective_main_objective = {
         en = "Main Objective",
@@ -939,6 +1010,7 @@ return {
         ja = "メイン目標",
         ko = "주요 목표",
         ["zh-cn"] = "主要目标",
+        ["zh-tw"] = "主要目標",
     },
     show_expedition_objective_extraction = {
         en = "Valkyrie Extraction Zone",
@@ -952,6 +1024,7 @@ return {
         ja = "ヴァルキリー脱出ゾーン",
         ko = "발키리 탈출 구역",
         ["zh-cn"] = "瓦尔基里撤离区",
+        ["zh-tw"] = "瓦爾基里撤離區",
     },
     show_expedition_objective_arrival = {
         en = "Valkyrie Arrival Zone",
@@ -965,6 +1038,7 @@ return {
         ja = "ヴァルキリー到着ゾーン",
         ko = "발키리 도착 구역",
         ["zh-cn"] = "瓦尔基里抵达区",
+        ["zh-tw"] = "瓦爾基里抵達區",
     },
     show_data_reliquaries = {
         en = "Data Reliquaries",
@@ -978,6 +1052,7 @@ return {
         ja = "データ聖骨匣",
         ko = "데이터 유물함",
         ["zh-cn"] = "数据圣骨匣",
+        ["zh-tw"] = "資料聖骨匣",
     },
     show_pocketable_landmine_explosive = {
         en = "Servo-Triggered Mine",
@@ -991,6 +1066,7 @@ return {
         ja = "サーボ起動地雷",
         ko = "서보 기폭 지뢰",
         ["zh-cn"] = "伺服地雷",
+        ["zh-tw"] = "伺服觸發地雷",
     },
     show_pocketable_landmine_fire = {
         en = "Purgation Snare",
@@ -1004,6 +1080,7 @@ return {
         ja = "粛清トラップ",
         ko = "정화 덫",
         ["zh-cn"] = "涤罪陷阱",
+        ["zh-tw"] = "淨化陷阱",
     },
     show_pocketable_landmine_shock = {
         en = "Voltaic Snare",
@@ -1017,6 +1094,7 @@ return {
         ja = "電撃トラップ",
         ko = "전격 덫",
         ["zh-cn"] = "电能陷阱",
+        ["zh-tw"] = "電能陷阱",
     },
     show_pocketable_void_shield = {
         en = "Void Shell",
@@ -1030,6 +1108,7 @@ return {
         ja = "ヴォイドシールド",
         ko = "보이드 실드",
         ["zh-cn"] = "虚空盾",
+        ["zh-tw"] = "虛空盾",
     },
     show_pocketable_airstrike = {
         en = "Bombing Run Signal Marker",
@@ -1043,6 +1122,7 @@ return {
         ja = "爆撃支援信号マーカー",
         ko = "폭격 지원 신호 표지기",
         ["zh-cn"] = "空袭信号标记",
+        ["zh-tw"] = "轟炸信號標記",
     },
     show_pocketable_artillery_strike = {
         en = "Artillery Locator Beacon",
@@ -1056,6 +1136,7 @@ return {
         ja = "砲撃誘導ビーコン",
         ko = "포격 유도 비콘",
         ["zh-cn"] = "炮击定位信标",
+        ["zh-tw"] = "砲擊定位信標",
     },
     show_pocketable_big_grenade = {
         en = "Modified Grenade",
@@ -1069,6 +1150,7 @@ return {
         ja = "改造グレネード",
         ko = "개조 수류탄",
         ["zh-cn"] = "改装手雷",
+        ["zh-tw"] = "改裝手榴彈",
     },
     show_pocketable_valkyrie_hover = {
         en = "Fire-Support Signal Marker",
@@ -1082,6 +1164,7 @@ return {
         ja = "火力支援信号マーカー",
         ko = "화력 지원 신호 표지기",
         ["zh-cn"] = "火力支援信号标记",
+        ["zh-tw"] = "火力支援信號標記",
     },
     show_promethium_barrel = {
         en = "Promethium Barrel",
@@ -1095,6 +1178,7 @@ return {
         ja = "プロメチウム樽",
         ko = "프로메튬 통",
         ["zh-cn"] = "钷桶",
+        ["zh-tw"] = "普羅米修姆桶",
     },
     show_large_ammunition_crate = {
         en = "Large Ammunition Crate",
@@ -1108,6 +1192,7 @@ return {
         ja = "大型弾薬箱",
         ko = "대형 탄약 상자",
         ["zh-cn"] = "大型弹药箱",
+        ["zh-tw"] = "大型彈藥箱",
     },
     show_anti_rad_stimm = {
         en = "Anti-Rad Stimms",
@@ -1121,6 +1206,7 @@ return {
         ja = "抗放射線スティム",
         ko = "항방사능 스팀",
         ["zh-cn"] = "抗辐射兴奋剂",
+        ["zh-tw"] = "抗輻射針劑",
     },
 
     martyr_s_skull_group = {
@@ -1135,6 +1221,7 @@ return {
         ja = "殉教者の頭蓋骨アイテム",
         ko = "순교자 해골 아이템",
         ["zh-cn"] = "殉道者头骨物品",
+        ["zh-tw"] = "殉道者頭骨物品",
     },
     show_martyr_skull = {
         en = "Martyr's Skull",
@@ -1148,6 +1235,7 @@ return {
         ja = "殉教者の頭蓋骨",
         ko = "순교자의 해골",
         ["zh-cn"] = "殉道者头骨",
+        ["zh-tw"] = "殉道者頭骨",
     },
     show_power_cell_orange = {
         en = "Power Cell",
@@ -1161,6 +1249,7 @@ return {
         ja = "パワーセル",
         ko = "파워 셀",
         ["zh-cn"] = "能量电池 (橙色)",
+        ["zh-tw"] = "能量電池 (橙色)",
     },
 
     deployables_group = {
@@ -1175,6 +1264,7 @@ return {
         ja = "設置物",
         ko = "설치된 아이템",
         ["zh-cn"] = "已部署物品",
+        ["zh-tw"] = "已部署物品",
     },
     show_ammo_crate_deployable = {
         en = "Ammo Crate",
@@ -1188,6 +1278,7 @@ return {
         ja = "弾薬箱",
         ko = "탄약 상자",
         ["zh-cn"] = "弹药箱 (已部署)",
+        ["zh-tw"] = "彈藥箱 (已部署)",
     },
     show_medical_crate_deployable = {
         en = "Medical Crate",
@@ -1201,6 +1292,7 @@ return {
         ja = "医療箱",
         ko = "의료 상자",
         ["zh-cn"] = "医疗箱 (已部署)",
+        ["zh-tw"] = "醫療箱 (已部署)",
     },
 
     enemies_group = {
@@ -1215,6 +1307,7 @@ return {
         ja = "敵",
         ko = "적",
         ["zh-cn"] = "敌人",
+        ["zh-tw"] = "敵人",
     },
     show_monstrosities = {
         en = "Monstrosities",
@@ -1228,6 +1321,7 @@ return {
         ja = "怪物",
         ko = "괴물",
         ["zh-cn"] = "怪物",
+        ["zh-tw"] = "巨獸",
     },
     show_captains = {
         en = "Captains",
@@ -1241,6 +1335,7 @@ return {
         ja = "隊長",
         ko = "지휘관",
         ["zh-cn"] = "连长",
+        ["zh-tw"] = "指揮官",
     },
     show_karnak_twins = {
         en = "Karnak Twins",
@@ -1254,6 +1349,7 @@ return {
         ja = "カーナックの双子",
         ko = "카르낙 쌍둥이",
         ["zh-cn"] = "双子",
+        ["zh-tw"] = "卡納克雙子",
     },
 
     players_group = {
@@ -1268,6 +1364,7 @@ return {
         ja = "プレイヤー",
         ko = "플레이어",
         ["zh-cn"] = "玩家",
+        ["zh-tw"] = "玩家",
     },
     show_teammates = {
         en = "Teammates",
@@ -1281,6 +1378,7 @@ return {
         ja = "チームメイト",
         ko = "팀원",
         ["zh-cn"] = "队友",
+        ["zh-tw"] = "隊友",
     },
 
     event_group = {
@@ -1295,6 +1393,7 @@ return {
         ja = "イベント関連アイテム",
         ko = "이벤트 관련 아이템",
         ["zh-cn"] = "事件相关物品",
+        ["zh-tw"] = "活動相關物品",
     },
     show_tainted_skull = {
         en = "Tainted Skulls",
@@ -1308,6 +1407,7 @@ return {
         ja = "汚染された頭蓋骨",
         ko = "오염된 해골",
         ["zh-cn"] = "受污染的头骨",
+        ["zh-tw"] = "污染頭骨",
     },
     show_pocketable_corrupted_auspex_scanner = {
         en = "Tainted Communications Device",
@@ -1321,6 +1421,7 @@ return {
         ja = "汚染された通信装置",
         ko = "오염된 통신 장치",
         ["zh-cn"] = "受污染的通讯设备",
+        ["zh-tw"] = "受污染的通訊裝置",
     },
     show_saints = {
         en = "Holy Relics",
@@ -1334,6 +1435,7 @@ return {
         ja = "聖遺物",
         ko = "성유물",
         ["zh-cn"] = "圣物",
+        ["zh-tw"] = "聖遺物",
     },
     show_stolen_rations = {
         en = "Stolen Rations",
@@ -1347,6 +1449,7 @@ return {
         ja = "盗まれた配給品",
         ko = "도난당한 배급품",
         ["zh-cn"] = "失窃口粮",
+        ["zh-tw"] = "失竊口糧",
     },
 
     debug_group = {
@@ -1361,6 +1464,7 @@ return {
         ja = "デバッグ",
         ko = "디버그",
         ["zh-cn"] = "调试",
+        ["zh-tw"] = "除錯",
     },
     debug_mode = {
         en = "Debug logs",
@@ -1374,6 +1478,7 @@ return {
         ja = "デバッグログ",
         ko = "디버그 로그",
         ["zh-cn"] = "调试日志",
+        ["zh-tw"] = "除錯日誌",
     },
     show_unknown_pickups = {
         en = "Show unknown pickups",
@@ -1387,5 +1492,6 @@ return {
         ja = "不明な拾得品を表示",
         ko = "알 수 없는 픽업 표시",
         ["zh-cn"] = "显示未知拾取物",
+        ["zh-tw"] = "顯示未知拾取物",
     },
 }
