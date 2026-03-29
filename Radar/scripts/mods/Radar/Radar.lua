@@ -1195,7 +1195,7 @@ local function _classify_pickup_like(interaction_type, ui_interaction_type, icon
     end
 
     -- Martyr's Skull items
-    if pickup_name == "martyr_skull_pickup" then
+    if pickup_name == "collectible_01_pickup" then
         return "pickup_martyr_skull", meta
     end
 
