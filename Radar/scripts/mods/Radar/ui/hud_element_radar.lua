@@ -929,9 +929,9 @@ local EXPEDITION_UNMARKED_COLORS = {
     expedition_loot_converter = _widget_color(255, 192, 160, 0),
     expedition_objective_opportunity = DEFAULT_EXPEDITION_UNMARKED_COLOR,
     expedition_objective_transition = DEFAULT_EXPEDITION_UNMARKED_COLOR,
-    expedition_objective_main_objective = _widget_color(255, 255, 255, 255),
+    expedition_objective_main_objective = DEFAULT_EXPEDITION_UNMARKED_COLOR,
     expedition_objective_extraction = DEFAULT_EXPEDITION_UNMARKED_COLOR,
-    expedition_objective_arrival = _widget_color(255, 255, 255, 255),
+    expedition_objective_arrival = DEFAULT_EXPEDITION_UNMARKED_COLOR,
 }
 
 local function _expedition_unmarked_color(target)
