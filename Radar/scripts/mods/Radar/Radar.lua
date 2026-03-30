@@ -15,6 +15,7 @@ mod._gameplay_run = false
 mod._last_update_t = nil
 mod._last_scan_signature = nil
 mod._last_block_signature = nil
+mod._last_scan_error_signature = nil
 
 local MONSTROSITY_BREEDS = {
     chaos_daemonhost = true,
@@ -889,6 +890,14 @@ local function _safe_game_mode_name()
     return nil
 end
 
+local function _has_runtime_gameplay_context()
+    if mod._gameplay_run == true or mod._last_state_gameplay ~= nil then
+        return true
+    end
+
+    return _safe_game_mode_name() ~= nil
+end
+
 local function _is_expedition_runtime()
     return _safe_game_mode_name() == "expedition"
 end
@@ -1074,19 +1083,10 @@ local function _get_runtime_state()
     local activity = _safe_presence_activity()
     local mechanism_name = _safe_mechanism_name()
     local source_player, player_unit, player_pos = _resolve_scanner_source()
-
-    if activity == "loading" then
-        return false, "loading", gameplay_t, mission_name, activity, mechanism_name, source_player, player_unit,
-            player_pos
-    end
+    local has_gameplay_context = _has_runtime_gameplay_context()
 
     if mechanism_name == "left_session" or mechanism_name == "hub" then
         return false, "hub_mechanism", gameplay_t, mission_name, activity, mechanism_name, source_player, player_unit,
-            player_pos
-    end
-
-    if not mission_name then
-        return false, "no_mission", gameplay_t, mission_name, activity, mechanism_name, source_player, player_unit,
             player_pos
     end
 
@@ -1103,6 +1103,16 @@ local function _get_runtime_state()
 
     if _is_hub_runtime() then
         return false, "hub_runtime", gameplay_t, mission_name, activity, mechanism_name, source_player, player_unit,
+            player_pos
+    end
+
+    if activity == "loading" and not has_gameplay_context then
+        return false, "loading", gameplay_t, mission_name, activity, mechanism_name, source_player, player_unit,
+            player_pos
+    end
+
+    if not mission_name and not has_gameplay_context then
+        return false, "no_mission", gameplay_t, mission_name, activity, mechanism_name, source_player, player_unit,
             player_pos
     end
 
@@ -2229,6 +2239,7 @@ local function _reset_runtime_state()
     mod._last_update_t = nil
     mod._last_scan_signature = nil
     mod._last_block_signature = nil
+    mod._last_scan_error_signature = nil
     mod._last_state_gameplay = nil
 end
 
@@ -2258,6 +2269,38 @@ local function _debug_log_block(reason, gameplay_t, mission_name, activity, mech
         tostring(mechanism_name),
         tostring(gameplay_t)
     ))
+end
+
+local function _debug_log_scan_error(step_name, err)
+    if mod:get("debug_mode") ~= true then
+        return
+    end
+
+    local signature = table.concat({
+        tostring(step_name),
+        tostring(err),
+    }, "|")
+
+    if signature == mod._last_scan_error_signature then
+        return
+    end
+
+    mod._last_scan_error_signature = signature
+    mod:echo(string.format(
+        "Radar scan step failed | step=%s err=%s",
+        tostring(step_name),
+        tostring(err)
+    ))
+end
+
+local function _safe_scan_step(step_name, callback)
+    local ok, err = pcall(callback)
+
+    if not ok then
+        _debug_log_scan_error(step_name, err)
+    end
+
+    return ok
 end
 
 local function _update_internal(dt, t)
@@ -2299,16 +2342,27 @@ local function _update_internal(dt, t)
 
     mod._next_scan_t = scan_clock + SCAN_INTERVAL
 
-    _scan_interactees()
-    _scan_chests()
-    _scan_minions()
-    _scan_smart_tag_targets()
-    _refresh_player_units()
-    _scan_expedition_objectives()
-    _prune_units()
+    _safe_scan_step("scan_interactees", _scan_interactees)
+    _safe_scan_step("scan_chests", _scan_chests)
+    _safe_scan_step("scan_minions", _scan_minions)
+    _safe_scan_step("scan_smart_tag_targets", _scan_smart_tag_targets)
+    _safe_scan_step("refresh_player_units", _refresh_player_units)
+    _safe_scan_step("scan_expedition_objectives", _scan_expedition_objectives)
+    _safe_scan_step("prune_units", _prune_units)
 
-    mod._radar_targets = _collect_radar_targets()
-    mod._radar_snapshot = _collect_radar_snapshot()
+    local collected_targets = nil
+    if _safe_scan_step("collect_radar_targets", function()
+            collected_targets = _collect_radar_targets()
+        end) then
+        mod._radar_targets = collected_targets or {}
+    end
+
+    local collected_snapshot = nil
+    if _safe_scan_step("collect_radar_snapshot", function()
+            collected_snapshot = _collect_radar_snapshot()
+        end) then
+        mod._radar_snapshot = collected_snapshot
+    end
 
     _debug_log_scan()
 end
