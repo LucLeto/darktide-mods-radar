@@ -1,5 +1,6 @@
 local mod = get_mod("Radar")
 local Pickups = require("scripts/settings/pickup/pickups")
+local PlayerUnitStatus = require("scripts/utilities/attack/player_unit_status")
 
 local SCAN_INTERVAL = 0.25
 
@@ -622,6 +623,23 @@ local function _player_unit()
     return local_player and local_player.player_unit
 end
 
+local function _is_local_player_alive()
+    return _safe_unit_alive(_player_unit())
+end
+
+local function _is_local_player_captured()
+    local player_unit = _player_unit()
+    if not _safe_unit_alive(player_unit) or not PlayerUnitStatus or not PlayerUnitStatus.is_hogtied then
+        return false
+    end
+
+    local ok, captured = pcall(function()
+        return PlayerUnitStatus.is_hogtied(player_unit)
+    end)
+
+    return ok and captured == true or false
+end
+
 local function _safe_camera_rotation()
     local local_player = _local_player()
     if not local_player then
@@ -984,8 +1002,12 @@ local function _get_runtime_state()
         return false, "hub_runtime", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
     end
 
-    if not _safe_unit_alive(player_unit) then
-        return false, "no_player_unit", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+    if not _is_local_player_alive() then
+        return false, "player_not_alive", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+    end
+
+    if _is_local_player_captured() then
+        return false, "player_captured", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
     end
 
     if not player_pos then
@@ -1005,6 +1027,10 @@ local function _is_expedition_marker_kind(kind)
 end
 
 local function _ignore_radar_range_for_kind(kind)
+    if kind == "expedition_loot_converter" then
+        return false
+    end
+
     return _is_expedition_marker_kind(kind) and mod:get("ignore_radar_range_for_expedition_markers") == true
 end
 
@@ -2151,6 +2177,10 @@ local function _update_internal(dt, t)
     mod._last_update_t = scan_clock
 
     if not allowed then
+        if reason == "player_not_alive" or reason == "player_captured" or reason == "no_player_unit" then
+            mod._tracked_units = {}
+        end
+
         mod._tracked_points = {}
         mod._radar_targets = {}
         mod._radar_snapshot = nil
@@ -2272,6 +2302,14 @@ end
 
 function mod:should_draw_radar()
     if self:get("enable_radar") == false then
+        return false
+    end
+
+    if not _is_local_player_alive() then
+        return false
+    end
+
+    if _is_local_player_captured() then
         return false
     end
 
