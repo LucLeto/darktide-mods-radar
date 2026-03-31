@@ -37,6 +37,7 @@ local EXPEDITION_OBJECTIVE_KINDS = {
     expedition_objective_arrival = true,
 }
 
+
 local function _log_once(bucket, key, message)
     if mod:get("debug_mode") ~= true then
         return
@@ -86,6 +87,79 @@ local function _with_alpha_widget(color, alpha)
     c[1] = alpha or c[1] or 255
     return c
 end
+
+local ARTWORK_MODE_ICON_PRESENTATIONS = {
+    crate_unknown = {
+        icon = "content/ui/materials/icons/generic/loot",
+        color = _widget_color(255, 225, 200, 136),
+        size = 14,
+    },
+    material_diamantine = {
+        icon = "content/ui/materials/hud/interactions/icons/environment_generic",
+        color = _widget_color(255, 70, 130, 220),
+        size = 14,
+    },
+    material_plasteel = {
+        icon = "content/ui/materials/hud/interactions/icons/environment_generic",
+        color = _widget_color(255, 130, 135, 140),
+        size = 14,
+    },
+    material_expeditions_currency = {
+        icon = "content/ui/materials/hud/interactions/icons/expeditions_salvage",
+        color = _widget_color(255, 120, 160, 140),
+        size = 14,
+    },
+    material_expeditions_loot = {
+        icon = "content/ui/materials/hud/interactions/icons/expeditions_loot",
+        color = _widget_color(255, 192, 160, 0),
+        size = 14,
+    },
+    material_expeditions_loot_player_drop = {
+        icon = "content/ui/materials/hud/interactions/icons/expeditions_loot",
+        color = _widget_color(220, 255, 0, 0),
+        size = 14,
+    },
+    pocketable_airstrike = {
+        icon = "content/ui/materials/hud/interactions/icons/valkyrie_payload",
+        color = _widget_color(255, 95, 125, 70),
+        size = 14,
+    },
+    pocketable_artillery_strike = {
+        icon = "content/ui/materials/hud/interactions/icons/artillery_strike",
+        color = _widget_color(255, 95, 125, 70),
+        size = 14,
+    },
+    pocketable_big_grenade = {
+        icon = "content/ui/materials/hud/interactions/icons/big_fn_grenade",
+        color = _widget_color(255, 205, 156, 77),
+        size = 14,
+    },
+    pocketable_valkyrie_hover = {
+        icon = "content/ui/materials/hud/interactions/icons/valkyrie_hover",
+        color = _widget_color(255, 95, 125, 70),
+        size = 14,
+    },
+    pocketable_landmine_explosive = {
+        icon = "content/ui/materials/hud/interactions/icons/landmine_explosive",
+        color = _widget_color(255, 205, 156, 77),
+        size = 14,
+    },
+    pocketable_landmine_fire = {
+        icon = "content/ui/materials/hud/interactions/icons/landmine_fire",
+        color = _widget_color(255, 255, 110, 0),
+        size = 14,
+    },
+    pocketable_landmine_shock = {
+        icon = "content/ui/materials/hud/interactions/icons/landmine_shock",
+        color = _widget_color(255, 80, 160, 255),
+        size = 14,
+    },
+    pocketable_void_shield = {
+        icon = "content/ui/materials/hud/interactions/icons/void_shield",
+        color = _widget_color(255, 181, 166, 66),
+        size = 14,
+    },
+}
 
 local PRESENTATIONS = {
     enemy_daemonhost = {
@@ -273,17 +347,17 @@ local PRESENTATIONS = {
         size = 14,
     },
     pocketable_airstrike = {
-        icon = "content/ui/materials/hud/interactions/icons/valkyrie_payload",
+        icon = "content/ui/materials/icons/throwables/hud/valkyrie_payload",
         color = _widget_color(255, 255, 255, 255),
         size = 14,
     },
     pocketable_artillery_strike = {
-        icon = "content/ui/materials/hud/interactions/icons/artillery_strike",
+        icon = "content/ui/materials/icons/throwables/hud/artillery_strike",
         color = _widget_color(255, 255, 255, 255),
         size = 14,
     },
     pocketable_big_grenade = {
-        icon = "content/ui/materials/hud/interactions/icons/big_fn_grenade",
+        icon = "content/ui/materials/icons/throwables/hud/big_fn_grenade",
         color = _widget_color(255, 255, 255, 255),
         size = 14,
     },
@@ -293,17 +367,17 @@ local PRESENTATIONS = {
         size = 14,
     },
     pocketable_landmine_explosive = {
-        icon = "content/ui/materials/hud/interactions/icons/landmine_explosive",
+        icon = "content/ui/materials/icons/pocketables/hud/landmine_explosive",
         color = _widget_color(255, 255, 255, 255),
         size = 14,
     },
     pocketable_landmine_fire = {
-        icon = "content/ui/materials/hud/interactions/icons/landmine_fire",
+        icon = "content/ui/materials/icons/pocketables/hud/landmine_fire",
         color = _widget_color(255, 255, 255, 255),
         size = 14,
     },
     pocketable_landmine_shock = {
-        icon = "content/ui/materials/hud/interactions/icons/landmine_shock",
+        icon = "content/ui/materials/icons/pocketables/hud/landmine_shock",
         color = _widget_color(255, 255, 255, 255),
         size = 14,
     },
@@ -338,7 +412,7 @@ local PRESENTATIONS = {
         size = 14,
     },
     pocketable_valkyrie_hover = {
-        icon = "content/ui/materials/hud/interactions/icons/valkyrie_hover",
+        icon = "content/ui/materials/icons/throwables/hud/valkyrie_hover",
         color = _widget_color(255, 255, 255, 255),
         size = 14,
     },
@@ -940,6 +1014,41 @@ local function _expedition_unmarked_color(target)
     return EXPEDITION_UNMARKED_COLORS[kind] or DEFAULT_EXPEDITION_UNMARKED_COLOR
 end
 
+
+local function _copy_visual(visual)
+    if not visual then
+        return nil
+    end
+
+    local copy = {}
+
+    for key, value in pairs(visual) do
+        if type(value) == "table" then
+            local value_copy = {}
+
+            for index, item in pairs(value) do
+                value_copy[index] = item
+            end
+
+            copy[key] = value_copy
+        else
+            copy[key] = value
+        end
+    end
+
+    return copy
+end
+
+local function _artwork_mode_icon_visual(kind)
+    local mode = mod.get_marker_display_mode and mod:get_marker_display_mode(kind) or nil
+
+    if mode ~= "icon" then
+        return nil
+    end
+
+    return _copy_visual(ARTWORK_MODE_ICON_PRESENTATIONS[kind])
+end
+
 local function _expedition_objective_visual(target)
     local meta = target and target.meta or {}
     local player_slot = tonumber(meta.marked_by_player_slot)
@@ -1027,6 +1136,19 @@ local function _target_visual(target)
         end
 
         return _expedition_objective_visual(target)
+    end
+
+    local icon_visual = _artwork_mode_icon_visual(target.kind)
+    if icon_visual then
+        if mod:get("debug_mode") then
+            _log_once(
+                _logged_visuals,
+                "icon_mode:" .. tostring(target.kind),
+                string.format("[Radar] visual icon mode | kind=%s icon=%s", tostring(target.kind), tostring(icon_visual.icon))
+            )
+        end
+
+        return icon_visual
     end
 
     local presentation = PRESENTATIONS[target.kind]

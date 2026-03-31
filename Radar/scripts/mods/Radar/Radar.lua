@@ -104,7 +104,76 @@ local EXPEDITION_OBJECTIVE_ICON_DEFAULTS = {
     expedition_objective_arrival = "content/ui/materials/icons/mission_types/mission_type_05",
 }
 
+local ARTWORK_MODE_KIND_TO_SETTING = {
+    crate_unknown = "show_crates",
+    material_diamantine = "show_diamantine",
+    material_plasteel = "show_plasteel",
+    material_expeditions_currency = "show_expeditions_currency",
+    material_expeditions_loot = "show_expeditions_loot",
+    material_expeditions_loot_player_drop = "show_expeditions_dropped_loot",
+    pocketable_airstrike = "show_pocketable_airstrike",
+    pocketable_artillery_strike = "show_pocketable_artillery_strike",
+    pocketable_big_grenade = "show_pocketable_big_grenade",
+    pocketable_valkyrie_hover = "show_pocketable_valkyrie_hover",
+    pocketable_landmine_explosive = "show_pocketable_landmine_explosive",
+    pocketable_landmine_fire = "show_pocketable_landmine_fire",
+    pocketable_landmine_shock = "show_pocketable_landmine_shock",
+    pocketable_void_shield = "show_pocketable_void_shield",
+}
+
+local ARTWORK_MODE_SETTING_IDS = {
+    "show_crates",
+    "show_diamantine",
+    "show_plasteel",
+    "show_expeditions_currency",
+    "show_expeditions_loot",
+    "show_expeditions_dropped_loot",
+    "show_pocketable_airstrike",
+    "show_pocketable_artillery_strike",
+    "show_pocketable_big_grenade",
+    "show_pocketable_valkyrie_hover",
+    "show_pocketable_landmine_explosive",
+    "show_pocketable_landmine_fire",
+    "show_pocketable_landmine_shock",
+    "show_pocketable_void_shield",
+}
+
+local function _normalize_marker_display_mode(value)
+    if value == false or value == "off" then
+        return "off"
+    end
+
+    if value == "icon" then
+        return "icon"
+    end
+
+    return "artwork"
+end
+
+function mod:get_marker_display_mode(kind)
+    local setting_id = ARTWORK_MODE_KIND_TO_SETTING[kind]
+    if not setting_id then
+        return nil
+    end
+
+    return _normalize_marker_display_mode(mod:get(setting_id))
+end
+
+local function _migrate_marker_display_mode_settings()
+    for _, setting_id in ipairs(ARTWORK_MODE_SETTING_IDS) do
+        local value = mod:get(setting_id)
+
+        if value == true then
+            mod:set(setting_id, "artwork")
+        elseif value == false then
+            mod:set(setting_id, "off")
+        end
+    end
+end
+
 function mod.on_all_mods_loaded()
+    _migrate_marker_display_mode_settings()
+
     -- Preload icon packages
     local function load_package(package_name)
         local ok, err = pcall(function()
@@ -1035,6 +1104,11 @@ local function _ignore_radar_range_for_kind(kind)
 end
 
 local function _kind_enabled(kind)
+    local display_mode = mod:get_marker_display_mode(kind)
+    if display_mode ~= nil then
+        return display_mode ~= "off"
+    end
+
     local setting_id = KIND_TO_SETTING[kind]
     if not setting_id then
         return true

@@ -1,5 +1,39 @@
 local mod = get_mod("Radar")
 
+local function _artwork_icon_off_dropdown(setting_id)
+    return {
+        setting_id = setting_id,
+        type = "dropdown",
+        default_value = "artwork",
+        options = {
+            {
+                text = "marker_display_mode_artwork",
+                value = "artwork",
+            },
+            {
+                text = "marker_display_mode_icon",
+                value = "icon",
+            },
+            {
+                text = "radar_outline_off",
+                value = "off",
+            },
+        },
+        get = function()
+            local value = mod:get(setting_id)
+
+            if value == "icon" or value == "off" or value == "artwork" then
+                return value
+            end
+
+            return value == false and "off" or "artwork"
+        end,
+        change = function(new_value)
+            mod:set(setting_id, new_value)
+        end,
+    }
+end
+
 return {
     name = mod:localize("mod_name"),
     description = mod:localize("mod_description"),
@@ -212,11 +246,7 @@ return {
                 setting_id = "common_pickups_group",
                 type = "group",
                 sub_widgets = {
-                    {
-                        setting_id = "show_crates",
-                        type = "checkbox",
-                        default_value = true,
-                    },
+                    _artwork_icon_off_dropdown("show_crates"),
                     {
                         setting_id = "show_ammo_small",
                         type = "checkbox",
@@ -268,16 +298,8 @@ return {
                 setting_id = "materials_group",
                 type = "group",
                 sub_widgets = {
-                    {
-                        setting_id = "show_diamantine",
-                        type = "checkbox",
-                        default_value = true,
-                    },
-                    {
-                        setting_id = "show_plasteel",
-                        type = "checkbox",
-                        default_value = true,
-                    },
+                    _artwork_icon_off_dropdown("show_diamantine"),
+                    _artwork_icon_off_dropdown("show_plasteel"),
                 },
             },
             {
@@ -387,66 +409,22 @@ return {
                 setting_id = "expeditions_specific_group",
                 type = "group",
                 sub_widgets = {
-                    {
-                        setting_id = "show_expeditions_currency",
-                        type = "checkbox",
-                        default_value = true,
-                    },
-                    {
-                        setting_id = "show_expeditions_loot",
-                        type = "checkbox",
-                        default_value = true,
-                    },
-                    {
-                        setting_id = "show_expeditions_dropped_loot",
-                        type = "checkbox",
-                        default_value = true,
-                    },
+                    _artwork_icon_off_dropdown("show_expeditions_currency"),
+                    _artwork_icon_off_dropdown("show_expeditions_loot"),
+                    _artwork_icon_off_dropdown("show_expeditions_dropped_loot"),
                     {
                         setting_id = "show_data_reliquaries",
                         type = "checkbox",
                         default_value = true,
                     },
-                    {
-                        setting_id = "show_pocketable_landmine_explosive",
-                        type = "checkbox",
-                        default_value = true,
-                    },
-                    {
-                        setting_id = "show_pocketable_landmine_fire",
-                        type = "checkbox",
-                        default_value = true,
-                    },
-                    {
-                        setting_id = "show_pocketable_landmine_shock",
-                        type = "checkbox",
-                        default_value = true,
-                    },
-                    {
-                        setting_id = "show_pocketable_void_shield",
-                        type = "checkbox",
-                        default_value = true,
-                    },
-                    {
-                        setting_id = "show_pocketable_airstrike",
-                        type = "checkbox",
-                        default_value = true,
-                    },
-                    {
-                        setting_id = "show_pocketable_artillery_strike",
-                        type = "checkbox",
-                        default_value = true,
-                    },
-                    {
-                        setting_id = "show_pocketable_big_grenade",
-                        type = "checkbox",
-                        default_value = true,
-                    },
-                    {
-                        setting_id = "show_pocketable_valkyrie_hover",
-                        type = "checkbox",
-                        default_value = true,
-                    },
+                    _artwork_icon_off_dropdown("show_pocketable_landmine_explosive"),
+                    _artwork_icon_off_dropdown("show_pocketable_landmine_fire"),
+                    _artwork_icon_off_dropdown("show_pocketable_landmine_shock"),
+                    _artwork_icon_off_dropdown("show_pocketable_void_shield"),
+                    _artwork_icon_off_dropdown("show_pocketable_airstrike"),
+                    _artwork_icon_off_dropdown("show_pocketable_artillery_strike"),
+                    _artwork_icon_off_dropdown("show_pocketable_big_grenade"),
+                    _artwork_icon_off_dropdown("show_pocketable_valkyrie_hover"),
                     {
                         setting_id = "show_promethium_barrel",
                         type = "checkbox",
