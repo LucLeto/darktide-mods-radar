@@ -43,6 +43,9 @@ local KIND_TO_SETTING = {
     pickup_medkit = "show_medkits",
     pickup_stimm = "show_stimms",
     pickup_unknown = "show_unknown_pickups",
+    medicae_station = "show_medicae_station",
+    luggable_socket = "show_luggable_socket",
+    pickup_heretic_idol = "show_heretic_idol",
     crate_unknown = "show_crates",
     enemy_daemonhost = "show_monstrosities",
     enemy_monstrosity = "show_monstrosities",
@@ -337,6 +340,10 @@ local function _safe_unit_smart_tag_target_type(unit)
     return _safe_unit_data_string(unit, "smart_tag_target_type")
 end
 
+local function _safe_unit_collectible_type(unit)
+    return _safe_unit_data_string(unit, "collectible_type")
+end
+
 local function _table_size(t)
     local n = 0
     for _, _ in pairs(t) do
@@ -466,6 +473,13 @@ local function _is_trackable_unit_alive(unit, kind)
             return false
         end
 
+        local health_alive = _safe_health_alive(unit)
+        if health_alive == false then
+            return false
+        end
+    end
+
+    if kind == "pickup_heretic_idol" then
         local health_alive = _safe_health_alive(unit)
         if health_alive == false then
             return false
@@ -1145,6 +1159,20 @@ local function _classify_pickup_like(interaction_type, ui_interaction_type, icon
     if interaction_type == "expedition_loot_converter" or (ui_interaction_type == "point_of_interest" and pickup_name == "expedition_loot_converter") then
         meta.objective_icon = EXPEDITION_OBJECTIVE_ICON_DEFAULTS.expedition_loot_converter
         return "expedition_loot_converter", meta
+    end
+
+    if interaction_type == "health_station" or pickup_name == "health_station" then
+        return "medicae_station", meta
+    end
+
+    if (interaction_type == "health" or pickup_name == "health")
+        and pickup_name ~= "medical_crate_deployable"
+        and icon == "content/ui/materials/hud/interactions/icons/respawn" then
+        return "medicae_station", meta
+    end
+
+    if interaction_type == "luggable_socket" or pickup_name == "luggable_socket" then
+        return "luggable_socket", meta
     end
 
     if pickup_name == "small_clip" then
@@ -1940,6 +1968,30 @@ local function _scan_minions()
     end
 end
 
+local function _scan_destructibles()
+    local destructible_map = _safe_unit_to_extension_map("destructible_system")
+    if not destructible_map then
+        return
+    end
+
+    for unit, extension in pairs(destructible_map) do
+        if _safe_unit_alive(unit) and extension then
+            local collectible_type = _safe_unit_collectible_type(unit)
+
+            if collectible_type == "heretic_idol" then
+                local health_alive = _safe_health_alive(unit)
+
+                if health_alive ~= false then
+                    _track_unit(unit, "pickup_heretic_idol", "destructible_system", {
+                        collectible_type = collectible_type,
+                        unit_name = _safe_lower_string(_safe_unit_name(unit)),
+                    })
+                end
+            end
+        end
+    end
+end
+
 local function _scan_smart_tag_targets()
     local smart_tag_map = _safe_unit_to_extension_map("smart_tag_system")
     if not smart_tag_map then
@@ -2279,6 +2331,7 @@ local function _update_internal(dt, t)
     _scan_interactees()
     _scan_chests()
     _scan_minions()
+    _scan_destructibles()
     _scan_smart_tag_targets()
     _refresh_player_units()
     _scan_expedition_objectives()

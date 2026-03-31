@@ -188,27 +188,27 @@ local PRESENTATIONS = {
     },
     pickup_ammo_small = {
         icon = "content/ui/materials/hud/interactions/icons/ammunition",
-        color = _widget_color(255, 255, 255, 255),
+        color = _widget_color(255, 240, 210, 80),
         size = 14,
     },
     pickup_ammo_big = {
         icon = "content/ui/materials/icons/presets/preset_16",
-        color = _widget_color(255, 255, 255, 255),
+        color = _widget_color(255, 240, 210, 80),
         size = 14,
     },
     pickup_large_ammunition_crate = {
         icon = "content/ui/materials/hud/interactions/icons/pocketable_ammo",
-        color = _widget_color(255, 255, 255, 255),
+        color = _widget_color(255, 240, 210, 80),
         size = 14,
     },
     pickup_grenade = {
         icon = "content/ui/materials/hud/interactions/icons/grenade",
-        color = _widget_color(255, 255, 255, 255),
+        color = _widget_color(255, 205, 156, 77),
         size = 14,
     },
     pickup_ammo_cache_deployable = {
         icon = "content/ui/materials/hud/interactions/icons/pocketable_ammo",
-        color = _widget_color(255, 215, 237, 188),
+        color = _widget_color(255, 240, 210, 80),
         size = 14,
     },
     pickup_medkit = {
@@ -276,6 +276,21 @@ local PRESENTATIONS = {
         color = _widget_color(255, 255, 255, 255),
         size = 14,
     },
+    medicae_station = {
+        icon = "content/ui/materials/hud/interactions/icons/respawn",
+        color = _widget_color(255, 38, 205, 26),
+        size = 14,
+    },
+    luggable_socket = {
+        icon = "content/ui/materials/icons/presets/preset_11",
+        color = _widget_color(255, 255, 245, 80),
+        size = 14,
+    },
+    pickup_heretic_idol = {
+        icon = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_rampaging_enemies",
+        color = _widget_color(255, 150, 190, 60),
+        size = 14,
+    },
     pickup_mortis_relic = {
         icon = "content/ui/materials/icons/item_types/devices",
         color = _widget_color(255, 110, 95, 125),
@@ -333,7 +348,7 @@ local PRESENTATIONS = {
     },
     pocketable_ammo_crate = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_ammo_crate",
-        color = _widget_color(255, 255, 255, 255),
+        color = _widget_color(255, 240, 210, 80),
         size = 14,
     },
     pocketable_anti_rad_stimm = {
@@ -363,7 +378,7 @@ local PRESENTATIONS = {
     },
     pocketable_grimoire = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_grimoire",
-        color = _widget_color(255, 255, 255, 255),
+        color = _widget_color(255, 150, 190, 60),
         size = 14,
     },
     pocketable_landmine_explosive = {
@@ -383,12 +398,12 @@ local PRESENTATIONS = {
     },
     pocketable_medical_crate = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_medic_crate",
-        color = _widget_color(255, 255, 255, 255),
+        color = _widget_color(255, 38, 205, 26),
         size = 14,
     },
     pocketable_scripture = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_scripture",
-        color = _widget_color(255, 255, 255, 255),
+        color = _widget_color(255, 192, 160, 0),
         size = 14,
     },
     pocketable_syringe_ability = {

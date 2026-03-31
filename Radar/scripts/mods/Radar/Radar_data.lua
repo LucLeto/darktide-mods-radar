@@ -459,6 +459,27 @@ return {
                 },
             },
             {
+                setting_id = "environment_group",
+                type = "group",
+                sub_widgets = {
+                    {
+                        setting_id = "show_medicae_station",
+                        type = "checkbox",
+                        default_value = true,
+                    },
+                    {
+                        setting_id = "show_luggable_socket",
+                        type = "checkbox",
+                        default_value = true,
+                    },
+                    {
+                        setting_id = "show_heretic_idol",
+                        type = "checkbox",
+                        default_value = true,
+                    },
+                },
+            },
+            {
                 setting_id = "deployables_group",
                 type = "group",
                 sub_widgets = {
