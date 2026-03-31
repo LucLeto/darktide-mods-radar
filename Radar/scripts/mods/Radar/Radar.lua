@@ -15,7 +15,6 @@ mod._gameplay_run = false
 mod._last_update_t = nil
 mod._last_scan_signature = nil
 mod._last_block_signature = nil
-mod._last_scan_error_signature = nil
 
 local MONSTROSITY_BREEDS = {
     chaos_daemonhost = true,
@@ -664,123 +663,6 @@ local function _safe_camera_rotation()
     return nil
 end
 
-local function _safe_camera_position()
-    local local_player = _local_player()
-    if not local_player then
-        return nil
-    end
-
-    local viewport_name = local_player.viewport_name
-    if not viewport_name then
-        return nil
-    end
-
-    local camera_manager = Managers and Managers.state and Managers.state.camera
-    if not camera_manager then
-        return nil
-    end
-
-    if camera_manager.has_camera then
-        local ok_has_camera, has_camera = pcall(function()
-            return camera_manager:has_camera(viewport_name)
-        end)
-
-        if ok_has_camera and not has_camera then
-            return nil
-        end
-    end
-
-    if camera_manager.camera_position then
-        local ok_position, position = pcall(function()
-            return camera_manager:camera_position(viewport_name)
-        end)
-
-        if ok_position and position then
-            return _copy_vector3(position)
-        end
-    end
-
-    if camera_manager.camera and Camera and Camera.local_position then
-        local ok_camera, camera = pcall(function()
-            return camera_manager:camera(viewport_name)
-        end)
-
-        if ok_camera and camera then
-            local ok_position, position = pcall(function()
-                return Camera.local_position(camera)
-            end)
-
-            if ok_position and position then
-                return _copy_vector3(position)
-            end
-        end
-    end
-
-    return nil
-end
-
-local SPECTATOR_SOURCE_MAX_DISTANCE_SQ = 36
-
-local function _position_distance_squared(a, b)
-    local ax, ay, az = _vector3_components(a)
-    local bx, by, bz = _vector3_components(b)
-
-    if not _is_finite_number(ax) or not _is_finite_number(ay) or not _is_finite_number(az) then
-        return math.huge
-    end
-
-    if not _is_finite_number(bx) or not _is_finite_number(by) or not _is_finite_number(bz) then
-        return math.huge
-    end
-
-    local dx = ax - bx
-    local dy = ay - by
-    local dz = az - bz
-
-    return dx * dx + dy * dy + dz * dz
-end
-
-local function _resolve_scanner_source()
-    local local_player = _local_player()
-    local local_player_unit = local_player and local_player.player_unit
-    local local_player_pos = _safe_unit_position(local_player_unit)
-    local camera_pos = _safe_camera_position()
-
-    if not camera_pos then
-        return local_player, local_player_unit, local_player_pos
-    end
-
-    local player_manager = _player_manager()
-    local best_player = nil
-    local best_unit = nil
-    local best_pos = nil
-    local best_distance_sq = math.huge
-
-    if player_manager and player_manager.players then
-        for _, player in pairs(player_manager:players()) do
-            local unit = player.player_unit
-            local unit_pos = _safe_unit_position(unit)
-
-            if unit_pos then
-                local distance_sq = _position_distance_squared(camera_pos, unit_pos)
-
-                if distance_sq < best_distance_sq then
-                    best_player = player
-                    best_unit = unit
-                    best_pos = unit_pos
-                    best_distance_sq = distance_sq
-                end
-            end
-        end
-    end
-
-    if best_unit and best_distance_sq <= SPECTATOR_SOURCE_MAX_DISTANCE_SQ then
-        return best_player, best_unit, best_pos
-    end
-
-    return local_player, nil, camera_pos
-end
-
 local function _safe_player_rotation(player_unit)
     local camera_rotation = _safe_camera_rotation()
     if camera_rotation then
@@ -888,14 +770,6 @@ local function _safe_game_mode_name()
     end
 
     return nil
-end
-
-local function _has_runtime_gameplay_context()
-    if mod._gameplay_run == true or mod._last_state_gameplay ~= nil then
-        return true
-    end
-
-    return _safe_game_mode_name() ~= nil
 end
 
 local function _is_expedition_runtime()
@@ -1082,55 +956,43 @@ local function _get_runtime_state()
     local mission_name = _safe_mission_name()
     local activity = _safe_presence_activity()
     local mechanism_name = _safe_mechanism_name()
-    local source_player, player_unit, player_pos = _resolve_scanner_source()
-    local has_gameplay_context = _has_runtime_gameplay_context()
+    local player_unit = _player_unit()
+    local player_pos = _safe_unit_position(player_unit)
+
+    if activity == "loading" then
+        return false, "loading", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+    end
 
     if mechanism_name == "left_session" or mechanism_name == "hub" then
-        return false, "hub_mechanism", gameplay_t, mission_name, activity, mechanism_name, source_player, player_unit,
-            player_pos
+        return false, "hub_mechanism", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+    end
+
+    if not mission_name then
+        return false, "no_mission", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
     end
 
     if mission_name == "hub_ship" then
-        return false, "hub_mission", gameplay_t, mission_name, activity, mechanism_name, source_player, player_unit,
-            player_pos
+        return false, "hub_mission", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
     end
 
     if mechanism_name == "onboarding" and mission_name ~= "tg_shooting_range" then
-        return false, "onboarding_non_psykhanium", gameplay_t, mission_name, activity, mechanism_name, source_player,
-            player_unit,
+        return false, "onboarding_non_psykhanium", gameplay_t, mission_name, activity, mechanism_name, player_unit,
             player_pos
     end
 
     if _is_hub_runtime() then
-        return false, "hub_runtime", gameplay_t, mission_name, activity, mechanism_name, source_player, player_unit,
-            player_pos
+        return false, "hub_runtime", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
     end
 
-    if activity == "loading" and not has_gameplay_context then
-        return false, "loading", gameplay_t, mission_name, activity, mechanism_name, source_player, player_unit,
-            player_pos
-    end
-
-    if not mission_name and not has_gameplay_context then
-        return false, "no_mission", gameplay_t, mission_name, activity, mechanism_name, source_player, player_unit,
-            player_pos
-    end
-
-    if player_unit and not _safe_unit_alive(player_unit) then
-        player_unit = nil
-    end
-
-    if not player_unit and not player_pos then
-        return false, "no_player_unit", gameplay_t, mission_name, activity, mechanism_name, source_player, player_unit,
-            player_pos
+    if not _safe_unit_alive(player_unit) then
+        return false, "no_player_unit", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
     end
 
     if not player_pos then
-        return false, "no_player_position", gameplay_t, mission_name, activity, mechanism_name, source_player,
-            player_unit, player_pos
+        return false, "no_player_position", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
     end
 
-    return true, "ok", gameplay_t, mission_name, activity, mechanism_name, source_player, player_unit, player_pos
+    return true, "ok", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
 end
 
 local function _is_allowed_runtime()
@@ -1841,11 +1703,10 @@ local function _refresh_player_units()
     end
 
     local local_player = _local_player()
-    local _, scanner_source_unit = _resolve_scanner_source()
 
     for _, player in pairs(player_manager:players()) do
         local unit = player.player_unit
-        if unit and _safe_unit_alive(unit) and player ~= local_player and unit ~= scanner_source_unit then
+        if unit and _safe_unit_alive(unit) and player ~= local_player then
             local archetype_name = nil
             local player_name = nil
             local player_slot = _safe_player_slot(player)
@@ -1889,7 +1750,7 @@ local function _scan_interactees()
         return
     end
 
-    local _, player_unit = _resolve_scanner_source()
+    local player_unit = _player_unit()
 
     for unit, extension in pairs(interactee_map) do
         if _safe_unit_alive(unit) then
@@ -2063,13 +1924,13 @@ local function _distance_squared_horizontal(a, b)
 end
 
 local function _collect_radar_targets()
-    local _, player_unit, player_pos = _resolve_scanner_source()
-
-    if player_unit and not _safe_unit_alive(player_unit) then
-        player_unit = nil
+    local player_unit = _player_unit()
+    if not _safe_unit_alive(player_unit) then
+        return {}
     end
 
-    if not player_unit and not player_pos then
+    local player_pos = _safe_unit_position(player_unit)
+    if not player_pos then
         return {}
     end
 
@@ -2126,21 +1987,23 @@ local function _collect_radar_targets()
 end
 
 local function _collect_radar_snapshot()
-    local source_player, player_unit, player_pos = _resolve_scanner_source()
-
-    if player_unit and not _safe_unit_alive(player_unit) then
-        player_unit = nil
-    end
-
-    if not player_unit and not player_pos then
+    local player_unit = _player_unit()
+    if not _safe_unit_alive(player_unit) then
         return nil
     end
+
+    local player_pos = _safe_unit_position(player_unit)
+    if not player_pos then
+        return nil
+    end
+
+    local local_player = _local_player()
 
     return {
         player_unit = player_unit,
         player_position = player_pos,
         player_rotation = _safe_player_rotation(player_unit),
-        player_slot = _safe_player_slot(source_player or _local_player()),
+        player_slot = _safe_player_slot(local_player),
         targets = mod._radar_targets,
     }
 end
@@ -2239,7 +2102,6 @@ local function _reset_runtime_state()
     mod._last_update_t = nil
     mod._last_scan_signature = nil
     mod._last_block_signature = nil
-    mod._last_scan_error_signature = nil
     mod._last_state_gameplay = nil
 end
 
@@ -2271,38 +2133,6 @@ local function _debug_log_block(reason, gameplay_t, mission_name, activity, mech
     ))
 end
 
-local function _debug_log_scan_error(step_name, err)
-    if mod:get("debug_mode") ~= true then
-        return
-    end
-
-    local signature = table.concat({
-        tostring(step_name),
-        tostring(err),
-    }, "|")
-
-    if signature == mod._last_scan_error_signature then
-        return
-    end
-
-    mod._last_scan_error_signature = signature
-    mod:echo(string.format(
-        "Radar scan step failed | step=%s err=%s",
-        tostring(step_name),
-        tostring(err)
-    ))
-end
-
-local function _safe_scan_step(step_name, callback)
-    local ok, err = pcall(callback)
-
-    if not ok then
-        _debug_log_scan_error(step_name, err)
-    end
-
-    return ok
-end
-
 local function _update_internal(dt, t)
     if mod:get("enable_radar") == false then
         mod._tracked_points = {}
@@ -2311,7 +2141,7 @@ local function _update_internal(dt, t)
         return
     end
 
-    local allowed, reason, gameplay_t, mission_name, activity, mechanism_name, source_player, player_unit, player_pos =
+    local allowed, reason, gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos =
         _get_runtime_state()
     local scan_clock = gameplay_t or t or 0
 
@@ -2332,7 +2162,7 @@ local function _update_internal(dt, t)
         player_unit = player_unit,
         player_position = player_pos,
         player_rotation = _safe_player_rotation(player_unit),
-        player_slot = _safe_player_slot(source_player or _local_player()),
+        player_slot = _safe_player_slot(_local_player()),
         targets = mod._radar_targets,
     }
 
@@ -2342,27 +2172,16 @@ local function _update_internal(dt, t)
 
     mod._next_scan_t = scan_clock + SCAN_INTERVAL
 
-    _safe_scan_step("scan_interactees", _scan_interactees)
-    _safe_scan_step("scan_chests", _scan_chests)
-    _safe_scan_step("scan_minions", _scan_minions)
-    _safe_scan_step("scan_smart_tag_targets", _scan_smart_tag_targets)
-    _safe_scan_step("refresh_player_units", _refresh_player_units)
-    _safe_scan_step("scan_expedition_objectives", _scan_expedition_objectives)
-    _safe_scan_step("prune_units", _prune_units)
+    _scan_interactees()
+    _scan_chests()
+    _scan_minions()
+    _scan_smart_tag_targets()
+    _refresh_player_units()
+    _scan_expedition_objectives()
+    _prune_units()
 
-    local collected_targets = nil
-    if _safe_scan_step("collect_radar_targets", function()
-            collected_targets = _collect_radar_targets()
-        end) then
-        mod._radar_targets = collected_targets or {}
-    end
-
-    local collected_snapshot = nil
-    if _safe_scan_step("collect_radar_snapshot", function()
-            collected_snapshot = _collect_radar_snapshot()
-        end) then
-        mod._radar_snapshot = collected_snapshot
-    end
+    mod._radar_targets = _collect_radar_targets()
+    mod._radar_snapshot = _collect_radar_snapshot()
 
     _debug_log_scan()
 end
