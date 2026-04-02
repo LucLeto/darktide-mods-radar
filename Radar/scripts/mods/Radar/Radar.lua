@@ -344,6 +344,56 @@ local function _safe_unit_collectible_type(unit)
     return _safe_unit_data_string(unit, "collectible_type")
 end
 
+local function _safe_destructible_collectible_data(extension)
+    if not extension then
+        return nil
+    end
+
+    local collectible_data = rawget(extension, "_collectible_data")
+    if type(collectible_data) == "table" then
+        return collectible_data
+    end
+
+    return nil
+end
+
+local function _safe_destructible_visible(extension)
+    if not extension then
+        return nil
+    end
+
+    local visibility_info = rawget(extension, "_visibility_info")
+    if type(visibility_info) == "table" and visibility_info.visible ~= nil then
+        return visibility_info.visible == true
+    end
+
+    return nil
+end
+
+local function _safe_unit_main_visible(unit)
+    if not unit or not Unit or not Unit.is_visible then
+        return nil
+    end
+
+    local ok_visible, is_visible = pcall(function()
+        return Unit.is_visible(unit, "main")
+    end)
+
+    if ok_visible then
+        return is_visible == true
+    end
+
+    local ok_visible_2, is_visible_2 = pcall(function()
+        return Unit.is_visible(unit)
+    end)
+
+    if ok_visible_2 then
+        return is_visible_2 == true
+    end
+
+    return nil
+end
+
 local function _table_size(t)
     local n = 0
     for _, _ in pairs(t) do
@@ -527,10 +577,6 @@ end
 
 local function _safe_forward_xy(rotation)
     return _safe_flat_direction_xy(Quaternion.forward, rotation)
-end
-
-local function _safe_right_xy(rotation)
-    return _safe_flat_direction_xy(Quaternion.right, rotation)
 end
 
 local function _safe_mission_name()
@@ -1977,16 +2023,26 @@ local function _scan_destructibles()
     for unit, extension in pairs(destructible_map) do
         if _safe_unit_alive(unit) and extension then
             local collectible_type = _safe_unit_collectible_type(unit)
+            local collectible_data = _safe_destructible_collectible_data(extension)
+            local collectible_id = collectible_data and collectible_data.id or nil
+            local collectible_section_id = collectible_data and collectible_data.section_id or nil
+            local collectible_name = collectible_data and collectible_data.name or nil
+            local extension_visible = _safe_destructible_visible(extension)
+            local unit_visible = _safe_unit_main_visible(unit)
+            local health_alive = _safe_health_alive(unit)
+            local has_active_collectible = collectible_id ~= nil and collectible_section_id ~= nil
 
-            if collectible_type == "heretic_idol" then
-                local health_alive = _safe_health_alive(unit)
-
-                if health_alive ~= false then
-                    _track_unit(unit, "pickup_heretic_idol", "destructible_system", {
-                        collectible_type = collectible_type,
-                        unit_name = _safe_lower_string(_safe_unit_name(unit)),
-                    })
-                end
+            if has_active_collectible and extension_visible == true and health_alive ~= false and unit_visible ~= false then
+                _track_unit(unit, "pickup_heretic_idol", "destructible_system", {
+                    collectible_type = collectible_type,
+                    unit_name = _safe_lower_string(_safe_unit_name(unit)),
+                    extension_visible = extension_visible,
+                    unit_visible = unit_visible,
+                    health_alive = health_alive,
+                    collectible_id = collectible_id,
+                    collectible_name = collectible_name,
+                    collectible_section_id = collectible_section_id,
+                })
             end
         end
     end
@@ -2136,6 +2192,13 @@ local function _collect_radar_targets()
             return
         end
 
+        if data.kind == "pickup_heretic_idol" and data.source == "destructible_system" then
+            local meta = data.meta
+            if not meta or meta.collectible_id == nil then
+                return
+            end
+        end
+
         local distance_sq_horizontal = _distance_squared_horizontal(player_pos, data.position)
         local ignore_range = _ignore_radar_range_for_kind(data.kind)
 
@@ -2224,16 +2287,6 @@ local function _collect_radar_snapshot()
         player_slot = _safe_player_slot(local_player),
         targets = mod._radar_targets,
     }
-end
-
-local function _count_kind(kind)
-    local n = 0
-    for unit, data in pairs(mod._tracked_units) do
-        if _safe_unit_alive(unit) and data.kind == kind then
-            n = n + 1
-        end
-    end
-    return n
 end
 
 local function _debug_log_scan()
@@ -2441,27 +2494,6 @@ mod:register_hud_element({
     visibility_groups = { "alive" },
     use_hud_scale = true,
 })
-
-if mod:get("debug_mode") then
-    _log_once("radar_hook_reg_marker", "Radar registering HudElementWorldMarkers hook")
-end
-mod:hook_safe("HudElementWorldMarkers", "event_add_world_marker_unit", function(self, unit, template_name, position, ...)
-    if mod:get("enable_radar") == false or not _is_allowed_runtime() then
-        return
-    end
-
-    local key = _safe_lower_string(template_name)
-
-    if key and string.find(key, "ammo", 1, true) then
-        _track_unit(unit, "pickup_ammo", "world_marker", { template_name = template_name })
-    elseif key and string.find(key, "grenade", 1, true) then
-        _track_unit(unit, "pickup_grenade", "world_marker", { template_name = template_name })
-    elseif key and (string.find(key, "medical", 1, true) or string.find(key, "medkit", 1, true) or string.find(key, "health", 1, true)) then
-        _track_unit(unit, "pickup_medkit", "world_marker", { template_name = template_name })
-    elseif key and (string.find(key, "stim", 1, true) or string.find(key, "syringe", 1, true)) then
-        _track_unit(unit, "pickup_stimm", "world_marker", { template_name = template_name })
-    end
-end)
 
 mod:hook_safe("StateGameplay", "update", function(self, dt, t, ...)
     mod._last_state_gameplay = self
