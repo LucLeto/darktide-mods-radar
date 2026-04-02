@@ -79,6 +79,22 @@ return {
                         range = { 25, 100 },
                     },
                     {
+                        setting_id = "item_vertical_arrow_threshold",
+                        type = "numeric",
+                        default_value = 25,
+                        range = { 25, 100 },
+                        decimals_number = 0,
+                        step_size_value = 1,
+                    },
+                    {
+                        setting_id = "item_vertical_hide_threshold",
+                        type = "numeric",
+                        default_value = 12,
+                        range = { 8, 50 },
+                        decimals_number = 0,
+                        step_size_value = 1,
+                    },
+                    {
                         setting_id = "max_radar_markers",
                         type = "numeric",
                         default_value = 64,

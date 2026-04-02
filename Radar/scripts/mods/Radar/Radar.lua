@@ -2075,6 +2075,43 @@ local function _distance_squared_horizontal(a, b)
     return dx * dx + dy * dy
 end
 
+local function _vertical_delta(a, b)
+    if not a or not b then
+        return nil
+    end
+
+    local az = a.z
+    local bz = b.z
+
+    if not _is_finite_number(az) or not _is_finite_number(bz) then
+        return nil
+    end
+
+    return bz - az
+end
+
+local ITEM_VERTICAL_ARROW_Z_DEADZONE = 2
+
+local function _supports_vertical_item_marker(kind)
+    if not kind then
+        return false
+    end
+
+    if kind == "player_teammate" then
+        return false
+    end
+
+    if _is_enemy_kind(kind) then
+        return false
+    end
+
+    if _is_expedition_marker_kind(kind) then
+        return false
+    end
+
+    return true
+end
+
 local function _collect_radar_targets()
     local player_unit = _player_unit()
     if not _safe_unit_alive(player_unit) then
@@ -2089,6 +2126,9 @@ local function _collect_radar_targets()
     local max_range = mod:get_radar_range()
     local max_range_sq = max_range * max_range
     local max_markers = mod:get_max_radar_markers()
+    local item_vertical_arrow_threshold = mod:get_item_vertical_arrow_threshold()
+    local item_vertical_hide_threshold = mod:get_item_vertical_hide_threshold()
+    local item_vertical_arrow_threshold_sq = item_vertical_arrow_threshold * item_vertical_arrow_threshold
     local targets = {}
 
     local function append_target(unit, data)
@@ -2103,6 +2143,30 @@ local function _collect_radar_targets()
             return
         end
 
+        local vertical_delta = nil
+        local vertical_state = nil
+
+        if _supports_vertical_item_marker(data.kind) then
+            vertical_delta = _vertical_delta(player_pos, data.position)
+
+            if vertical_delta ~= nil then
+                local abs_vertical_delta = math.abs(vertical_delta)
+
+                if abs_vertical_delta >= item_vertical_hide_threshold then
+                    return
+                end
+
+                if abs_vertical_delta >= ITEM_VERTICAL_ARROW_Z_DEADZONE
+                    and distance_sq_horizontal <= item_vertical_arrow_threshold_sq then
+                    if vertical_delta > 0 then
+                        vertical_state = "up"
+                    elseif vertical_delta < 0 then
+                        vertical_state = "down"
+                    end
+                end
+            end
+        end
+
         targets[#targets + 1] = {
             unit = unit,
             kind = data.kind,
@@ -2111,6 +2175,8 @@ local function _collect_radar_targets()
             meta = data.meta,
             distance_sq = distance_sq_horizontal,
             distance_sq_3d = _distance_squared(player_pos, data.position),
+            vertical_delta = vertical_delta,
+            vertical_state = vertical_state,
             ignore_radar_range = ignore_range,
         }
     end
@@ -2469,6 +2535,30 @@ function mod:get_max_radar_markers()
     end
 
     return math.floor(value)
+end
+
+function mod:get_item_vertical_arrow_threshold()
+    local value = tonumber(self:get("item_vertical_arrow_threshold")) or 25
+
+    if value < 25 then
+        value = 25
+    elseif value > 100 then
+        value = 100
+    end
+
+    return value
+end
+
+function mod:get_item_vertical_hide_threshold()
+    local value = tonumber(self:get("item_vertical_hide_threshold")) or 12
+
+    if value < 8 then
+        value = 8
+    elseif value > 50 then
+        value = 50
+    end
+
+    return value
 end
 
 function mod:get_radar_style()

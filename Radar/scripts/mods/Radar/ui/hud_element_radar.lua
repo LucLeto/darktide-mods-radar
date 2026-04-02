@@ -229,42 +229,42 @@ local PRESENTATIONS = {
     luggable_data_reliquary = {
         icon = "content/ui/materials/icons/player_states/lugged",
         color = _widget_color(255, 192, 160, 0),
-        size = 20,
+        size = 25,
     },
     luggable_power_cell_teal = {
         icon = "content/ui/materials/icons/player_states/lugged",
         color = _widget_color(255, 0, 200, 200),
-        size = 20,
+        size = 25,
     },
     luggable_power_cell_orange = {
         icon = "content/ui/materials/icons/player_states/lugged",
         color = _widget_color(255, 255, 140, 0),
-        size = 20,
+        size = 25,
     },
     luggable_cryonic_rod = {
         icon = "content/ui/materials/icons/player_states/lugged",
         color = _widget_color(255, 180, 220, 255),
-        size = 20,
+        size = 25,
     },
     luggable_moebian_pox_zetaphyte_13_sample = {
         icon = "content/ui/materials/icons/player_states/lugged",
         color = _widget_color(255, 150, 190, 60),
-        size = 20,
+        size = 25,
     },
     luggable_vacuum_capsule = {
         icon = "content/ui/materials/icons/player_states/lugged",
         color = _widget_color(255, 80, 85, 90),
-        size = 20,
+        size = 25,
     },
     luggable_special_issue_ammo = {
         icon = "content/ui/materials/icons/player_states/lugged",
         color = _widget_color(255, 95, 125, 70),
-        size = 20,
+        size = 25,
     },
     luggable_prismata_crystal_repository = {
         icon = "content/ui/materials/icons/player_states/lugged",
         color = _widget_color(255, 255, 70, 90),
-        size = 20,
+        size = 25,
     },
     luggable_promethium_barrel = {
         icon = "content/ui/materials/hud/interactions/icons/barrel_explosive",
@@ -878,6 +878,21 @@ local function _marker_definition()
                 return content.title_icon ~= nil and content.title_icon ~= ""
             end,
         },
+        {
+            pass_type = "texture",
+            value_id = "arrow_icon",
+            style_id = "arrow_icon",
+            style = {
+                vertical_alignment = "top",
+                horizontal_alignment = "left",
+                offset = { 2, 2, 16 },
+                size = { 4, 4 },
+                color = { 255, 255, 255, 255 },
+            },
+            visibility_function = function(content, style)
+                return content.arrow_icon ~= nil and content.arrow_icon ~= ""
+            end,
+        },
     }, "screen")
 end
 
@@ -890,6 +905,7 @@ end
 local function _clear_marker_widget(widget)
     widget.content.icon = nil
     widget.content.title_icon = nil
+    widget.content.arrow_icon = nil
 end
 
 local function _ensure_marker_widgets(self)
@@ -985,14 +1001,27 @@ local function _center_dot_color(snapshot)
     return _color(255, 0, 255, 0)
 end
 
-local function _apply_marker_widget(widget, visual, x, y, z)
+local ITEM_VERTICAL_ARROW_UP_ICON = "content/ui/materials/icons/circumstances/more_resistance_01"
+local ITEM_VERTICAL_ARROW_DOWN_ICON = "content/ui/materials/icons/circumstances/less_resistance_01"
+
+local function _apply_marker_widget(widget, visual, x, y, z, target)
     local icon_style = widget.style.icon
     local title_icon_style = widget.style.title_icon
+    local arrow_icon_style = widget.style.arrow_icon
     local size = _scaled_icon_size(visual and visual.size or 14)
     local color = _any_to_widget_color(visual and visual.color or nil)
+    local vertical_state = target and target.vertical_state or nil
+    local arrow_icon = nil
+
+    if vertical_state == "up" then
+        arrow_icon = ITEM_VERTICAL_ARROW_UP_ICON
+    elseif vertical_state == "down" then
+        arrow_icon = ITEM_VERTICAL_ARROW_DOWN_ICON
+    end
 
     widget.content.icon = visual and visual.icon or nil
     widget.content.title_icon = visual and visual.title_icon or nil
+    widget.content.arrow_icon = arrow_icon
 
     icon_style.offset[1] = math.floor((x or 0) + 0.5)
     icon_style.offset[2] = math.floor((y or 0) + 0.5)
@@ -1008,6 +1037,18 @@ local function _apply_marker_widget(widget, visual, x, y, z)
         title_icon_style.size[1] = size
         title_icon_style.size[2] = size
         title_icon_style.color = color
+    end
+
+    if arrow_icon_style then
+        local arrow_size = math.max(6, math.floor(size * 0.45 + 1))
+        local overlap = math.floor(arrow_size * 0.5 + 1) + 2
+
+        arrow_icon_style.offset[1] = icon_style.offset[1] + size - overlap
+        arrow_icon_style.offset[2] = icon_style.offset[2] + size - overlap
+        arrow_icon_style.offset[3] = (icon_style.offset[3] or 0) + 2
+        arrow_icon_style.size[1] = arrow_size
+        arrow_icon_style.size[2] = arrow_size
+        arrow_icon_style.color = _widget_color(255, 255, 255, 255)
     end
 end
 
@@ -1159,7 +1200,8 @@ local function _target_visual(target)
             _log_once(
                 _logged_visuals,
                 "icon_mode:" .. tostring(target.kind),
-                string.format("[Radar] visual icon mode | kind=%s icon=%s", tostring(target.kind), tostring(icon_visual.icon))
+                string.format("[Radar] visual icon mode | kind=%s icon=%s", tostring(target.kind),
+                    tostring(icon_visual.icon))
             )
         end
 
@@ -1291,7 +1333,7 @@ HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input
             local self_draw_y = center_y - self_icon_size / 2
             local self_widget = self._marker_widgets[next_widget_index]
 
-            _apply_marker_widget(self_widget, self_visual, self_draw_x, self_draw_y, z + 5)
+            _apply_marker_widget(self_widget, self_visual, self_draw_x, self_draw_y, z + 5, nil)
             UIWidget.draw(self_widget, ui_renderer)
 
             next_widget_index = next_widget_index + 1
@@ -1326,7 +1368,7 @@ HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input
                         _draw_marker_brackets(ui_renderer, draw_x, draw_y, z + 4, icon_size, visual.accent_color)
                     end
 
-                    _apply_marker_widget(widget, visual, draw_x, draw_y, z + 5)
+                    _apply_marker_widget(widget, visual, draw_x, draw_y, z + 5, target)
 
                     _log_once(
                         _logged_draws,
