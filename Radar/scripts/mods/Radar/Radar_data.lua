@@ -66,7 +66,7 @@ return {
                         step_size_value = 5,
                         change = function(new_value)
                             mod:set("radar_size", new_value)
-                            mod:set_radar_position(mod:get_radar_pos_x(new_value), mod:get_radar_pos_y(new_value), true)
+                            mod:set_radar_position(mod:get_radar_offset_x(new_value), mod:get_radar_offset_y(new_value), true)
                         end,
                         get = function()
                             return mod:get_radar_size()
@@ -175,31 +175,60 @@ return {
                 type = "group",
                 sub_widgets = {
                     {
+                        setting_id = "radar_anchor",
+                        type = "dropdown",
+                        default_value = "top_left",
+                        options = {
+                            {
+                                text = "radar_anchor_top_left",
+                                value = "top_left",
+                            },
+                            {
+                                text = "radar_anchor_top_right",
+                                value = "top_right",
+                            },
+                            {
+                                text = "radar_anchor_bottom_left",
+                                value = "bottom_left",
+                            },
+                            {
+                                text = "radar_anchor_bottom_right",
+                                value = "bottom_right",
+                            },
+                        },
+                        change = function(new_value)
+                            mod:set_radar_anchor(new_value, true)
+                        end,
+                        get = function()
+                            return mod:get_radar_anchor()
+                        end,
+                    },
+                    {
                         setting_id = "radar_pos_x",
                         type = "numeric",
                         default_value = 40,
-                        range = { 0, 6000 },
+                        range = { 0, 12000 },
                         decimals_number = 0,
                         step_size_value = 5,
                         change = function(new_value)
                             mod:set_radar_position(new_value, nil, true)
                         end,
                         get = function()
-                            return mod:get_radar_pos_x()
+                            return mod:get_radar_offset_x()
                         end,
                     },
                     {
                         setting_id = "radar_pos_y",
                         type = "numeric",
                         default_value = 220,
-                        range = { 0, 4000 },
+                        range = { 0, 8000 },
                         decimals_number = 0,
                         step_size_value = 5,
                         change = function(new_value)
                             mod:set_radar_position(nil, new_value, true)
                         end,
                         get = function()
-                            return mod:get_radar_pos_y()
+                            return mod:get_radar_offset_y()
                         end,
                     },
                     {

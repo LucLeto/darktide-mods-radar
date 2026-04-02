@@ -405,6 +405,14 @@ end
 local DEFAULT_RADAR_POS_X = 40
 local DEFAULT_RADAR_POS_Y = 220
 local DEFAULT_RADAR_MOVE_STEP = 10
+local DEFAULT_RADAR_ANCHOR = "top_left"
+
+local RADAR_ANCHORS = {
+    top_left = true,
+    top_right = true,
+    bottom_left = true,
+    bottom_right = true,
+}
 
 local function _clamp(value, min_value, max_value)
     if value < min_value then
@@ -430,6 +438,55 @@ local function _get_ui_space_size()
     end
 
     return width, height
+end
+
+local function _normalize_radar_anchor(value)
+    if RADAR_ANCHORS[value] then
+        return value
+    end
+
+    return DEFAULT_RADAR_ANCHOR
+end
+
+local function _get_radar_position_bounds(size)
+    local radar_size = tonumber(size) or 0
+    local ui_width, ui_height = _get_ui_space_size()
+    local max_x = math.max(0, ui_width - radar_size)
+    local max_y = math.max(0, ui_height - radar_size)
+
+    return max_x, max_y
+end
+
+local function _get_radar_origin_from_offsets(anchor, offset_x, offset_y, size)
+    local max_x, max_y = _get_radar_position_bounds(size)
+    local x = offset_x
+    local y = offset_y
+
+    if anchor == "top_right" or anchor == "bottom_right" then
+        x = max_x - offset_x
+    end
+
+    if anchor == "bottom_left" or anchor == "bottom_right" then
+        y = max_y - offset_y
+    end
+
+    return x, y, max_x, max_y
+end
+
+local function _get_radar_offsets_from_origin(anchor, x, y, size)
+    local max_x, max_y = _get_radar_position_bounds(size)
+    local offset_x = x
+    local offset_y = y
+
+    if anchor == "top_right" or anchor == "bottom_right" then
+        offset_x = max_x - x
+    end
+
+    if anchor == "bottom_left" or anchor == "bottom_right" then
+        offset_y = max_y - y
+    end
+
+    return offset_x, offset_y, max_x, max_y
 end
 
 local function _log_once(key, text)
@@ -2635,10 +2692,13 @@ function mod:get_radar_move_step()
     return math.floor(value)
 end
 
-function mod:get_radar_pos_x(size)
+function mod:get_radar_anchor()
+    return _normalize_radar_anchor(self:get("radar_anchor"))
+end
+
+function mod:get_radar_offset_x(size)
     local radar_size = tonumber(size) or self:get_radar_size()
-    local ui_width = _get_ui_space_size()
-    local max_x = math.max(0, ui_width - radar_size)
+    local max_x = _get_radar_position_bounds(radar_size)
     local value = tonumber(self:get("radar_pos_x"))
 
     if value == nil then
@@ -2648,10 +2708,9 @@ function mod:get_radar_pos_x(size)
     return math.floor(_clamp(value, 0, max_x) + 0.5)
 end
 
-function mod:get_radar_pos_y(size)
+function mod:get_radar_offset_y(size)
     local radar_size = tonumber(size) or self:get_radar_size()
-    local _, ui_height = _get_ui_space_size()
-    local max_y = math.max(0, ui_height - radar_size)
+    local _, max_y = _get_radar_position_bounds(radar_size)
     local value = tonumber(self:get("radar_pos_y"))
 
     if value == nil then
@@ -2661,38 +2720,105 @@ function mod:get_radar_pos_y(size)
     return math.floor(_clamp(value, 0, max_y) + 0.5)
 end
 
+function mod:get_radar_pos_x(size)
+    local radar_size = tonumber(size) or self:get_radar_size()
+    local anchor = self:get_radar_anchor()
+    local offset_x = self:get_radar_offset_x(radar_size)
+    local offset_y = self:get_radar_offset_y(radar_size)
+    local x = _get_radar_origin_from_offsets(anchor, offset_x, offset_y, radar_size)
+
+    return math.floor(x + 0.5)
+end
+
+function mod:get_radar_pos_y(size)
+    local radar_size = tonumber(size) or self:get_radar_size()
+    local anchor = self:get_radar_anchor()
+    local offset_x = self:get_radar_offset_x(radar_size)
+    local offset_y = self:get_radar_offset_y(radar_size)
+    local _, y = _get_radar_origin_from_offsets(anchor, offset_x, offset_y, radar_size)
+
+    return math.floor(y + 0.5)
+end
+
 function mod:set_radar_position(x, y)
     local radar_size = self:get_radar_size()
-    local ui_width, ui_height = _get_ui_space_size()
-    local clamped_x = self:get_radar_pos_x(radar_size)
-    local clamped_y = self:get_radar_pos_y(radar_size)
+    local max_x, max_y = _get_radar_position_bounds(radar_size)
+    local offset_x = self:get_radar_offset_x(radar_size)
+    local offset_y = self:get_radar_offset_y(radar_size)
 
     if x ~= nil then
-        local max_x = math.max(0, ui_width - radar_size)
-
-        clamped_x = math.floor(_clamp(tonumber(x) or DEFAULT_RADAR_POS_X, 0, max_x) + 0.5)
-        self:set("radar_pos_x", clamped_x)
+        offset_x = math.floor(_clamp(tonumber(x) or DEFAULT_RADAR_POS_X, 0, max_x) + 0.5)
+        self:set("radar_pos_x", offset_x)
     end
 
     if y ~= nil then
-        local max_y = math.max(0, ui_height - radar_size)
-
-        clamped_y = math.floor(_clamp(tonumber(y) or DEFAULT_RADAR_POS_Y, 0, max_y) + 0.5)
-        self:set("radar_pos_y", clamped_y)
+        offset_y = math.floor(_clamp(tonumber(y) or DEFAULT_RADAR_POS_Y, 0, max_y) + 0.5)
+        self:set("radar_pos_y", offset_y)
     end
 
+    local anchor = self:get_radar_anchor()
+    local resolved_x, resolved_y = _get_radar_origin_from_offsets(anchor, offset_x, offset_y, radar_size)
+
     if mod:get("debug_mode") == true then
-        self:notify("Radar position: X %d | Y %d", clamped_x, clamped_y)
+        self:notify(
+            "Radar anchor %s | offset X %d | offset Y %d | origin X %d | origin Y %d",
+            anchor,
+            offset_x,
+            offset_y,
+            resolved_x,
+            resolved_y
+        )
+    end
+
+    return resolved_x, resolved_y
+end
+
+function mod:set_radar_origin(x, y)
+    local radar_size = self:get_radar_size()
+    local anchor = self:get_radar_anchor()
+    local max_x, max_y = _get_radar_position_bounds(radar_size)
+
+    local clamped_x = math.floor(_clamp(tonumber(x) or DEFAULT_RADAR_POS_X, 0, max_x) + 0.5)
+    local clamped_y = math.floor(_clamp(tonumber(y) or DEFAULT_RADAR_POS_Y, 0, max_y) + 0.5)
+    local offset_x, offset_y = _get_radar_offsets_from_origin(anchor, clamped_x, clamped_y, radar_size)
+
+    self:set("radar_pos_x", math.floor(_clamp(offset_x, 0, max_x) + 0.5))
+    self:set("radar_pos_y", math.floor(_clamp(offset_y, 0, max_y) + 0.5))
+
+    if mod:get("debug_mode") == true then
+        self:notify(
+            "Radar anchor %s | offset X %d | offset Y %d | origin X %d | origin Y %d",
+            anchor,
+            self:get_radar_offset_x(radar_size),
+            self:get_radar_offset_y(radar_size),
+            clamped_x,
+            clamped_y
+        )
     end
 
     return clamped_x, clamped_y
+end
+
+function mod:set_radar_anchor(anchor, preserve_visual_position)
+    local radar_size = self:get_radar_size()
+    local current_x = self:get_radar_pos_x(radar_size)
+    local current_y = self:get_radar_pos_y(radar_size)
+    local normalized_anchor = _normalize_radar_anchor(anchor)
+
+    self:set("radar_anchor", normalized_anchor)
+
+    if preserve_visual_position then
+        return self:set_radar_origin(current_x, current_y)
+    end
+
+    return self:set_radar_position(self:get("radar_pos_x"), self:get("radar_pos_y"))
 end
 
 function mod:nudge_radar(dx, dy)
     local x = self:get_radar_pos_x()
     local y = self:get_radar_pos_y()
 
-    return self:set_radar_position(x + (tonumber(dx) or 0), y + (tonumber(dy) or 0))
+    return self:set_radar_origin(x + (tonumber(dx) or 0), y + (tonumber(dy) or 0))
 end
 
 function mod:set_radar_enabled(enabled)
