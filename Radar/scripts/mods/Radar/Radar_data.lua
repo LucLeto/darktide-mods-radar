@@ -163,6 +163,17 @@ return {
                         },
                     },
                     {
+                        setting_id = "background_opacity",
+                        type = "numeric",
+                        default_value = 90,
+                        range = { 0, 255 },
+                        decimals_number = 0,
+                        step_size_value = 5,
+                        get = function()
+                            return mod:get_background_opacity()
+                        end,
+                    },
+                    {
                         setting_id = "highlight_distance",
                         type = "numeric",
                         default_value = 15,
@@ -558,6 +569,27 @@ return {
                                 value = "marked_icon",
                             },
                         },
+                    },
+                    {
+                        setting_id = "boss_marker_range_mode",
+                        type = "dropdown",
+                        default_value = "normal",
+                        options = {
+                            {
+                                text = "boss_marker_range_mode_normal",
+                                value = "normal",
+                            },
+                            {
+                                text = "boss_marker_range_mode_infinite",
+                                value = "infinite",
+                            },
+                        },
+                        get = function()
+                            return mod:get_boss_marker_range_mode()
+                        end,
+                        change = function(new_value)
+                            mod:set("boss_marker_range_mode", new_value)
+                        end,
                     },
                     {
                         setting_id = "show_monstrosities",

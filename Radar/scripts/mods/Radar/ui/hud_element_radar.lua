@@ -58,6 +58,14 @@ end
 local function _color(a, r, g, b)
     return Color(a, r, g, b)
 end
+local function _radar_background_alpha()
+    if mod.get_background_opacity then
+        return mod:get_background_opacity()
+    end
+
+    return 90
+end
+
 
 local function _widget_to_color(color)
     if not color then
@@ -796,7 +804,7 @@ end
 
 local function _draw_radar_frame_square(ui_renderer, x, y, z, size, outline_style)
     local thickness = 2
-    local fill_color = _color(90, 0, 0, 0)
+    local fill_color = _color(_radar_background_alpha(), 0, 0, 0)
     local outline_color = _color(255, 213, 226, 206)
 
     _draw_box(ui_renderer, x, y, z, size, size, fill_color)
@@ -821,7 +829,7 @@ local function _draw_radar_frame_circle(ui_renderer, x, y, z, size, outline_styl
     local center_x = x + size / 2
     local center_y = y + size / 2
     local radius = math.max(1, size / 2 - 1)
-    local fill_color = _color(90, 0, 0, 0)
+    local fill_color = _color(_radar_background_alpha(), 0, 0, 0)
     local outline_color = _color(255, 213, 226, 206)
 
     _draw_circle_fill(ui_renderer, center_x, center_y, z, radius, fill_color)

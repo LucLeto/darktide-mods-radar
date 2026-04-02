@@ -1212,9 +1212,19 @@ local function _is_expedition_marker_kind(kind)
     return EXPEDITION_MARKER_KINDS[kind] == true
 end
 
+local function _is_boss_marker_kind(kind)
+    return kind == "enemy_monstrosity"
+        or kind == "enemy_captain"
+        or kind == "enemy_karnak_twin"
+end
+
 local function _ignore_radar_range_for_kind(kind)
     if kind == "expedition_loot_converter" then
         return false
+    end
+
+    if _is_boss_marker_kind(kind) and mod:get_boss_marker_range_mode() == "infinite" then
+        return true
     end
 
     return _is_expedition_marker_kind(kind) and mod:get("ignore_radar_range_for_expedition_markers") == true
@@ -2312,6 +2322,17 @@ local function _collect_radar_targets()
     end
 
     table.sort(targets, function(a, b)
+        local boss_infinite = mod:get_boss_marker_range_mode() == "infinite"
+
+        if boss_infinite then
+            local a_is_boss = _is_boss_marker_kind(a.kind)
+            local b_is_boss = _is_boss_marker_kind(b.kind)
+
+            if a_is_boss ~= b_is_boss then
+                return a_is_boss
+            end
+        end
+
         return (a.distance_sq or math.huge) < (b.distance_sq or math.huge)
     end)
 
@@ -2624,6 +2645,28 @@ function mod:get_max_radar_markers()
     end
 
     return math.floor(value)
+end
+
+function mod:get_background_opacity()
+    local value = tonumber(self:get("background_opacity")) or 90
+
+    if value < 0 then
+        value = 0
+    elseif value > 255 then
+        value = 255
+    end
+
+    return math.floor(value)
+end
+
+function mod:get_boss_marker_range_mode()
+    local value = tostring(self:get("boss_marker_range_mode") or "normal")
+
+    if value ~= "infinite" then
+        value = "normal"
+    end
+
+    return value
 end
 
 function mod:get_item_vertical_arrow_threshold()
