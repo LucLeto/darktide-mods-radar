@@ -217,12 +217,12 @@ local PRESENTATIONS = {
     pickup_ammo_cache_deployable = {
         icon = "content/ui/materials/hud/interactions/icons/pocketable_ammo",
         color = _widget_color(255, 240, 210, 80),
-        size = 14,
+        size = 7,
     },
     pickup_medkit = {
         icon = "content/ui/materials/hud/interactions/icons/pocketable_medkit",
         color = _widget_color(255, 38, 205, 26),
-        size = 14,
+        size = 7,
     },
     medical_crate_deployable = {
         icon = "content/ui/materials/hud/interactions/icons/pocketable_medkit",
@@ -941,15 +941,35 @@ local function _icon_scale_factor()
 
     if scale < 0.6 then
         scale = 0.6
-    elseif scale > 2.0 then
-        scale = 2.0
+    elseif scale > 4.0 then
+        scale = 4.0
     end
 
     return scale
 end
 
-local function _scaled_icon_size(base_size)
-    local scaled = math.floor((tonumber(base_size) or 14) * _icon_scale_factor() + 0.5)
+local function _marker_group_scale_factor(target)
+    if not target or not mod.get_marker_scale_group or not mod.get_marker_scale_factor then
+        return 1
+    end
+
+    local group_name = mod:get_marker_scale_group(target.kind)
+
+    if not group_name then
+        return 1
+    end
+
+    return mod:get_marker_scale_factor(group_name)
+end
+
+local function _scaled_icon_size(base_size, target)
+    local final_scale = _icon_scale_factor() * _marker_group_scale_factor(target)
+
+    if final_scale > 4.0 then
+        final_scale = 4.0
+    end
+
+    local scaled = math.floor((tonumber(base_size) or 14) * final_scale + 0.5)
 
     if scaled < 10 then
         scaled = 10
@@ -1016,7 +1036,7 @@ local function _apply_marker_widget(widget, visual, x, y, z, target)
     local icon_style = widget.style.icon
     local title_icon_style = widget.style.title_icon
     local arrow_icon_style = widget.style.arrow_icon
-    local size = _scaled_icon_size(visual and visual.size or 14)
+    local size = _scaled_icon_size(visual and visual.size or 14, target)
     local color = _any_to_widget_color(visual and visual.color or nil)
     local vertical_state = target and target.vertical_state or nil
     local arrow_icon = nil
@@ -1367,7 +1387,7 @@ HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input
 
                 if px and py then
                     local visual = _target_visual(target)
-                    local icon_size = _scaled_icon_size(visual and visual.size or 14)
+                    local icon_size = _scaled_icon_size(visual and visual.size or 14, target)
                     local draw_x = center_x + px - icon_size / 2
                     local draw_y = center_y + py - icon_size / 2
                     local widget = self._marker_widgets[next_widget_index]

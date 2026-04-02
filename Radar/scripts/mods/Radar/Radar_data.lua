@@ -34,6 +34,18 @@ local function _artwork_icon_off_dropdown(setting_id)
     }
 end
 
+local function _icon_scale_slider(setting_id)
+    return {
+        setting_id = setting_id,
+        title = "icon_size_percent",
+        type = "numeric",
+        default_value = 100,
+        range = { 50, 300 },
+        decimals_number = 0,
+        step_size_value = 5,
+    }
+end
+
 return {
     name = mod:localize("mod_name"),
     description = mod:localize("mod_description"),
@@ -61,12 +73,13 @@ return {
                         setting_id = "radar_size",
                         type = "numeric",
                         default_value = 180,
-                        range = { 100, 350 },
+                        range = { 100, 1200 },
                         decimals_number = 0,
                         step_size_value = 5,
                         change = function(new_value)
                             mod:set("radar_size", new_value)
-                            mod:set_radar_position(mod:get_radar_offset_x(new_value), mod:get_radar_offset_y(new_value), true)
+                            mod:set_radar_position(mod:get_radar_offset_x(new_value), mod:get_radar_offset_y(new_value),
+                                true)
                         end,
                         get = function()
                             return mod:get_radar_size()
@@ -302,6 +315,7 @@ return {
                 setting_id = "common_pickups_group",
                 type = "group",
                 sub_widgets = {
+                    _icon_scale_slider("common_pickups_icon_scale"),
                     _artwork_icon_off_dropdown("show_crates"),
                     {
                         setting_id = "show_ammo_small",
@@ -354,6 +368,7 @@ return {
                 setting_id = "materials_group",
                 type = "group",
                 sub_widgets = {
+                    _icon_scale_slider("materials_icon_scale"),
                     _artwork_icon_off_dropdown("show_diamantine"),
                     _artwork_icon_off_dropdown("show_plasteel"),
                 },
@@ -362,6 +377,7 @@ return {
                 setting_id = "primary_objective_group",
                 type = "group",
                 sub_widgets = {
+                    _icon_scale_slider("primary_objective_icon_scale"),
                     {
                         setting_id = "show_power_cell_teal",
                         type = "checkbox",
@@ -408,6 +424,7 @@ return {
                 setting_id = "secondary_objective_group",
                 type = "group",
                 sub_widgets = {
+                    _icon_scale_slider("secondary_objective_icon_scale"),
                     {
                         setting_id = "show_pocketable_grimoire",
                         type = "checkbox",
@@ -424,6 +441,7 @@ return {
                 setting_id = "expeditions_location_group",
                 type = "group",
                 sub_widgets = {
+                    _icon_scale_slider("expeditions_location_icon_scale"),
                     {
                         setting_id = "ignore_radar_range_for_expedition_markers",
                         type = "checkbox",
@@ -465,6 +483,7 @@ return {
                 setting_id = "expeditions_specific_group",
                 type = "group",
                 sub_widgets = {
+                    _icon_scale_slider("expeditions_specific_icon_scale"),
                     _artwork_icon_off_dropdown("show_expeditions_currency"),
                     _artwork_icon_off_dropdown("show_expeditions_loot"),
                     _artwork_icon_off_dropdown("show_expeditions_dropped_loot"),
@@ -502,6 +521,7 @@ return {
                 setting_id = "martyr_s_skull_group",
                 type = "group",
                 sub_widgets = {
+                    _icon_scale_slider("martyr_s_skull_icon_scale"),
                     {
                         setting_id = "show_martyr_skull",
                         type = "checkbox",
@@ -518,6 +538,7 @@ return {
                 setting_id = "environment_group",
                 type = "group",
                 sub_widgets = {
+                    _icon_scale_slider("environment_icon_scale"),
                     {
                         setting_id = "show_medicae_station",
                         type = "checkbox",
@@ -539,6 +560,7 @@ return {
                 setting_id = "deployables_group",
                 type = "group",
                 sub_widgets = {
+                    _icon_scale_slider("deployables_icon_scale"),
                     {
                         setting_id = "show_ammo_crate_deployable",
                         type = "checkbox",
@@ -555,6 +577,7 @@ return {
                 setting_id = "enemies_group",
                 type = "group",
                 sub_widgets = {
+                    _icon_scale_slider("enemies_icon_scale"),
                     {
                         setting_id = "enemy_display_style",
                         type = "dropdown",
@@ -612,6 +635,7 @@ return {
                 setting_id = "players_group",
                 type = "group",
                 sub_widgets = {
+                    _icon_scale_slider("players_icon_scale"),
                     {
                         setting_id = "show_teammates",
                         type = "checkbox",
@@ -646,6 +670,7 @@ return {
                 setting_id = "event_group",
                 type = "group",
                 sub_widgets = {
+                    _icon_scale_slider("event_icon_scale"),
                     {
                         setting_id = "show_tainted_skull",
                         type = "checkbox",
@@ -672,6 +697,7 @@ return {
                 setting_id = "debug_group",
                 type = "group",
                 sub_widgets = {
+                    _icon_scale_slider("debug_icon_scale"),
                     {
                         setting_id = "debug_mode",
                         type = "checkbox",

@@ -124,6 +124,84 @@ local ARTWORK_MODE_KIND_TO_SETTING = {
     pocketable_void_shield = "show_pocketable_void_shield",
 }
 
+local MARKER_SCALE_GROUP_BY_KIND = {
+    crate_unknown = "common_pickups_group",
+    pickup_ammo = "common_pickups_group",
+    pickup_ammo_small = "common_pickups_group",
+    pickup_ammo_big = "common_pickups_group",
+    pickup_grenade = "common_pickups_group",
+    pickup_medkit = "common_pickups_group",
+    pickup_stimm = "common_pickups_group",
+    pocketable_ammo_crate = "common_pickups_group",
+    pocketable_medical_crate = "common_pickups_group",
+    pocketable_syringe_ability = "common_pickups_group",
+    pocketable_syringe_corruption = "common_pickups_group",
+    pocketable_syringe_power = "common_pickups_group",
+    pocketable_syringe_speed = "common_pickups_group",
+    material_diamantine = "materials_group",
+    material_plasteel = "materials_group",
+    luggable_power_cell_teal = "primary_objective_group",
+    luggable_cryonic_rod = "primary_objective_group",
+    luggable_moebian_pox_zetaphyte_13_sample = "primary_objective_group",
+    luggable_vacuum_capsule = "primary_objective_group",
+    luggable_special_issue_ammo = "primary_objective_group",
+    luggable_prismata_crystal_repository = "primary_objective_group",
+    pickup_mortis_relic = "primary_objective_group",
+    pickup_coordinates_paper = "primary_objective_group",
+    pocketable_grimoire = "secondary_objective_group",
+    pocketable_scripture = "secondary_objective_group",
+    expedition_loot_converter = "expeditions_location_group",
+    expedition_objective_opportunity = "expeditions_location_group",
+    expedition_objective_transition = "expeditions_location_group",
+    expedition_objective_main_objective = "expeditions_location_group",
+    expedition_objective_extraction = "expeditions_location_group",
+    expedition_objective_arrival = "expeditions_location_group",
+    material_expeditions_currency = "expeditions_specific_group",
+    material_expeditions_loot = "expeditions_specific_group",
+    material_expeditions_loot_player_drop = "expeditions_specific_group",
+    luggable_data_reliquary = "expeditions_specific_group",
+    pickup_large_ammunition_crate = "expeditions_specific_group",
+    luggable_promethium_barrel = "expeditions_specific_group",
+    pocketable_anti_rad_stimm = "expeditions_specific_group",
+    pocketable_airstrike = "expeditions_specific_group",
+    pocketable_artillery_strike = "expeditions_specific_group",
+    pocketable_big_grenade = "expeditions_specific_group",
+    pocketable_landmine_explosive = "expeditions_specific_group",
+    pocketable_landmine_fire = "expeditions_specific_group",
+    pocketable_landmine_shock = "expeditions_specific_group",
+    pocketable_valkyrie_hover = "expeditions_specific_group",
+    pocketable_void_shield = "expeditions_specific_group",
+    pickup_martyr_skull = "martyr_s_skull_group",
+    luggable_power_cell_orange = "martyr_s_skull_group",
+    medicae_station = "environment_group",
+    luggable_socket = "environment_group",
+    pickup_heretic_idol = "environment_group",
+    pickup_ammo_cache_deployable = "deployables_group",
+    medical_crate_deployable = "deployables_group",
+    player_teammate = "players_group",
+    pickup_tainted_skull = "event_group",
+    pocketable_corrupted_auspex_scanner = "event_group",
+    pickup_saints = "event_group",
+    pickup_stolen_rations = "event_group",
+    pickup_unknown = "debug_group",
+}
+
+local ICON_SCALE_SETTING_BY_GROUP = {
+    common_pickups_group = "common_pickups_icon_scale",
+    materials_group = "materials_icon_scale",
+    primary_objective_group = "primary_objective_icon_scale",
+    secondary_objective_group = "secondary_objective_icon_scale",
+    expeditions_location_group = "expeditions_location_icon_scale",
+    expeditions_specific_group = "expeditions_specific_icon_scale",
+    martyr_s_skull_group = "martyr_s_skull_icon_scale",
+    environment_group = "environment_icon_scale",
+    deployables_group = "deployables_icon_scale",
+    enemies_group = "enemies_icon_scale",
+    players_group = "players_icon_scale",
+    event_group = "event_icon_scale",
+    debug_group = "debug_icon_scale",
+}
+
 local ARTWORK_MODE_SETTING_IDS = {
     "show_crates",
     "show_diamantine",
@@ -151,6 +229,36 @@ local function _normalize_marker_display_mode(value)
     end
 
     return "artwork"
+end
+
+function mod:get_marker_scale_group(kind)
+    if not kind then
+        return nil
+    end
+
+    if string.sub(tostring(kind), 1, 6) == "enemy_" then
+        return "enemies_group"
+    end
+
+    return MARKER_SCALE_GROUP_BY_KIND[kind]
+end
+
+function mod:get_marker_scale_factor(group_name)
+    local setting_id = ICON_SCALE_SETTING_BY_GROUP[group_name]
+
+    if not setting_id then
+        return 1
+    end
+
+    local value = tonumber(self:get(setting_id)) or 100
+
+    if value < 50 then
+        value = 50
+    elseif value > 300 then
+        value = 300
+    end
+
+    return value / 100
 end
 
 function mod:get_marker_display_mode(kind)

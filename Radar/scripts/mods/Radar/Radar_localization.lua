@@ -1689,7 +1689,20 @@ return {
         ["zh-cn"] = "失窃口粮",
         ["zh-tw"] = "失竊口糧",
     },
-
+    icon_size_percent = {
+        en = "Icon size (%%)",
+        fr = "Taille des icônes (%%)",
+        de = "Symbolgröße (%%)",
+        it = "Dimensione icone (%%)",
+        es = "Tamaño de iconos (%%)",
+        pl = "Rozmiar ikon (%%)",
+        ["pt-br"] = "Tamanho dos ícones (%%)",
+        ["ru"] = "Размер значков (%%)",
+        ja = "アイコンサイズ (%%)",
+        ko = "아이콘 크기 (%%)",
+        ["zh-cn"] = "图标大小 (%%)",
+        ["zh-tw"] = "圖示大小 (%%)",
+    },
     debug_group = {
         en = "Debugging",
         fr = "Débogage",
