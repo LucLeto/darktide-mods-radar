@@ -256,6 +256,14 @@ local ICON_SCALE_SETTING_BY_GROUP = {
     debug_group = "debug_icon_scale",
 }
 
+
+local RADAR_GAME_MODE_SETTING_BY_ID = {
+    regular_missions = "enable_in_regular_missions",
+    havoc = "enable_in_havoc",
+    mortis_trials = "enable_in_mortis_trials",
+    expeditions = "enable_in_expeditions",
+}
+
 local ARTWORK_MODE_SETTING_IDS = {
     "show_crates",
     "show_diamantine",
@@ -1484,6 +1492,93 @@ local function _expedition_opportunity_title_icon(location_id)
     return string.format("content/ui/materials/backgrounds/scanner/scanner_map_%d", numeric_id % 9)
 end
 
+local function _safe_havoc_runtime_active()
+    local state_gameplay = mod._last_state_gameplay
+    local shared_state = state_gameplay and state_gameplay._shared_state
+    local havoc_data = shared_state and shared_state.havoc_data
+
+    if havoc_data ~= nil and havoc_data ~= "" then
+        return true
+    end
+
+    local difficulty_manager = Managers and Managers.state and Managers.state.difficulty
+    if difficulty_manager and difficulty_manager.get_parsed_havoc_data then
+        local ok_parsed, parsed_havoc_data = pcall(function()
+            return difficulty_manager:get_parsed_havoc_data()
+        end)
+
+        if ok_parsed and parsed_havoc_data then
+            return true
+        end
+    end
+
+    local game_mode = _safe_game_mode()
+    if game_mode and game_mode.extension then
+        local ok_extension, havoc_extension = pcall(function()
+            return game_mode:extension("havoc")
+        end)
+
+        if ok_extension and havoc_extension then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function _classify_radar_game_mode(mission_name, mechanism_name)
+    local game_mode_name = _safe_game_mode_name()
+
+    if game_mode_name == "expedition" or mechanism_name == "expedition" then
+        return "expeditions", game_mode_name
+    end
+
+    if game_mode_name == "survival" then
+        return "mortis_trials", game_mode_name
+    end
+
+    if _safe_havoc_runtime_active() then
+        return "havoc", game_mode_name
+    end
+
+    if game_mode_name == "coop_complete_objective"
+        or game_mode_name == "training_grounds"
+        or game_mode_name == "shooting_range"
+        or mechanism_name == "adventure"
+        or mission_name == "tg_shooting_range" then
+        return "regular_missions", game_mode_name
+    end
+
+    return nil, game_mode_name
+end
+
+function mod:is_radar_enabled_for_game_mode(game_mode_id)
+    local setting_id = RADAR_GAME_MODE_SETTING_BY_ID[game_mode_id]
+
+    if not setting_id then
+        return false
+    end
+
+    return self:get(setting_id) ~= false
+end
+
+function mod:get_current_radar_game_mode()
+    local mission_name = _safe_mission_name()
+    local mechanism_name = _safe_mechanism_name()
+
+    return _classify_radar_game_mode(mission_name, mechanism_name)
+end
+
+local function _is_radar_enabled_for_current_mode(mission_name, mechanism_name)
+    local game_mode_id = _classify_radar_game_mode(mission_name, mechanism_name)
+
+    if not game_mode_id then
+        return false
+    end
+
+    return mod:is_radar_enabled_for_game_mode(game_mode_id)
+end
+
 local function _get_runtime_state()
     local gameplay_t = _safe_gameplay_time()
     local mission_name = _safe_mission_name()
@@ -1515,6 +1610,10 @@ local function _get_runtime_state()
 
     if _is_hub_runtime() then
         return false, "hub_runtime", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+    end
+
+    if not _is_radar_enabled_for_current_mode(mission_name, mechanism_name) then
+        return false, "game_mode_disabled", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
     end
 
     if not _is_local_player_alive() then

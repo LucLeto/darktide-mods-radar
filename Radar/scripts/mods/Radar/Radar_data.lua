@@ -62,6 +62,26 @@ return {
                         default_value = true,
                     },
                     {
+                        setting_id = "enable_in_regular_missions",
+                        type = "checkbox",
+                        default_value = true,
+                    },
+                    {
+                        setting_id = "enable_in_havoc",
+                        type = "checkbox",
+                        default_value = true,
+                    },
+                    {
+                        setting_id = "enable_in_mortis_trials",
+                        type = "checkbox",
+                        default_value = true,
+                    },
+                    {
+                        setting_id = "enable_in_expeditions",
+                        type = "checkbox",
+                        default_value = true,
+                    },
+                    {
                         setting_id = "toggle_radar_key",
                         type = "keybind",
                         default_value = {},
