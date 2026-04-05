@@ -4,6 +4,59 @@ local PlayerUnitStatus = require("scripts/utilities/attack/player_unit_status")
 
 local SCAN_INTERVAL = 0.25
 
+local NEARBY_OUTLINE_NAME = "radar_item_nearby"
+local NEARBY_OUTLINE_OCCLUDED_MULTIPLIER = 0.6
+
+local NEARBY_OUTLINE_COLOR_BY_KIND = {
+    material_diamantine = { 255, 70, 130, 220 },
+    material_plasteel = { 255, 130, 135, 140 },
+    crate_unknown = { 255, 225, 200, 136 },
+    pickup_ammo = { 255, 240, 210, 80 },
+    pickup_ammo_small = { 255, 240, 210, 80 },
+    pickup_ammo_big = { 255, 240, 210, 80 },
+    pickup_grenade = { 255, 205, 156, 77 },
+    pocketable_ammo_crate = { 255, 240, 210, 80 },
+    pocketable_medical_crate = { 255, 38, 205, 26 },
+    pocketable_syringe_ability = { 255, 230, 192, 13 },
+    pocketable_syringe_corruption = { 255, 38, 205, 26 },
+    pocketable_syringe_power = { 255, 205, 51, 26 },
+    pocketable_syringe_speed = { 255, 0, 127, 218 },
+    luggable_power_cell_teal = { 255, 0, 200, 200 },
+    luggable_cryonic_rod = { 255, 180, 220, 255 },
+    luggable_moebian_pox_zetaphyte_13_sample = { 255, 150, 190, 60 },
+    luggable_vacuum_capsule = { 255, 80, 85, 90 },
+    luggable_special_issue_ammo = { 255, 95, 125, 70 },
+    luggable_prismata_crystal_repository = { 255, 255, 70, 90 },
+    pickup_mortis_relic = { 255, 110, 95, 125 },
+    pickup_coordinates_paper = { 255, 255, 255, 255 },
+    pocketable_grimoire = { 255, 150, 190, 60 },
+    pocketable_scripture = { 255, 192, 160, 0 },
+    material_expeditions_currency = { 255, 120, 160, 140 },
+    material_expeditions_loot = { 255, 192, 160, 0 },
+    material_expeditions_loot_player_drop = { 220, 255, 0, 0 },
+    luggable_data_reliquary = { 255, 192, 160, 0 },
+    pickup_large_ammunition_crate = { 255, 240, 210, 80 },
+    luggable_promethium_barrel = { 255, 255, 110, 0 },
+    pocketable_anti_rad_stimm = { 255, 255, 255, 255 },
+    pocketable_airstrike = { 255, 95, 125, 70 },
+    pocketable_artillery_strike = { 255, 95, 125, 70 },
+    pocketable_big_grenade = { 255, 205, 156, 77 },
+    pocketable_landmine_explosive = { 255, 205, 156, 77 },
+    pocketable_landmine_fire = { 255, 255, 110, 0 },
+    pocketable_landmine_shock = { 255, 80, 160, 255 },
+    pocketable_valkyrie_hover = { 255, 95, 125, 70 },
+    pocketable_void_shield = { 255, 181, 166, 66 },
+    pickup_martyr_skull = { 255, 255, 215, 0 },
+    luggable_power_cell_orange = { 255, 255, 140, 0 },
+    medicae_station = { 255, 38, 205, 26 },
+    luggable_socket = { 255, 255, 245, 80 },
+    pickup_heretic_idol = { 255, 150, 190, 60 },
+    pickup_tainted_skull = { 255, 150, 190, 60 },
+    pocketable_corrupted_auspex_scanner = { 255, 255, 120, 0 },
+    pickup_saints = { 255, 192, 160, 0 },
+    pickup_stolen_rations = { 255, 150, 190, 60 },
+}
+
 local _marked_by_player_slot_for_unit
 
 mod._next_scan_t = 0
@@ -16,6 +69,7 @@ mod._gameplay_run = false
 mod._last_update_t = nil
 mod._last_scan_signature = nil
 mod._last_block_signature = nil
+mod._screen_highlight_targets = {}
 
 local MONSTROSITY_BREEDS = {
     chaos_daemonhost = true,
@@ -1027,6 +1081,173 @@ local function _safe_extension_system(system_name)
     end
 
     return nil
+end
+
+local function _copy_color_array(color)
+    if not color then
+        return nil
+    end
+
+    return {
+        color[1] or 255,
+        color[2] or 255,
+        color[3] or 255,
+        color[4] or 255,
+    }
+end
+
+local function _darkened_color_array(color, multiplier)
+    local copy = _copy_color_array(color) or { 255, 255, 255, 255 }
+    local mul = multiplier or 1
+
+    copy[2] = math.floor(_clamp((copy[2] or 255) * mul, 0, 255) + 0.5)
+    copy[3] = math.floor(_clamp((copy[3] or 255) * mul, 0, 255) + 0.5)
+    copy[4] = math.floor(_clamp((copy[4] or 255) * mul, 0, 255) + 0.5)
+
+    return copy
+end
+
+local function _outline_color_vector3(color)
+    local src = color or { 255, 255, 255, 255 }
+
+    return Vector3(
+        (src[2] or 255) / 255,
+        (src[3] or 255) / 255,
+        (src[4] or 255) / 255
+    )
+end
+
+local function _nearby_outline_color_signature(color)
+    local src = color or { 255, 255, 255, 255 }
+
+    return string.format(
+        "%d:%d:%d",
+        src[2] or 255,
+        src[3] or 255,
+        src[4] or 255
+    )
+end
+
+local SCREEN_HIGHLIGHT_Z_OFFSET_BY_KIND = {
+    material_diamantine = 0.1,
+    material_plasteel = 0.1,
+    crate_unknown = 0.08,
+    pickup_ammo = 0.08,
+    pickup_ammo_small = 0.08,
+    pickup_ammo_big = 0.08,
+    pickup_grenade = 0.08,
+    pocketable_ammo_crate = 0.08,
+    pocketable_medical_crate = 0.08,
+    pocketable_syringe_ability = 0.08,
+    pocketable_syringe_corruption = 0.08,
+    pocketable_syringe_power = 0.08,
+    pocketable_syringe_speed = 0.08,
+    luggable_power_cell_teal = 0.18,
+    luggable_cryonic_rod = 0.18,
+    luggable_moebian_pox_zetaphyte_13_sample = 0.18,
+    luggable_vacuum_capsule = 0.18,
+    luggable_special_issue_ammo = 0.18,
+    luggable_prismata_crystal_repository = 0.18,
+    pickup_mortis_relic = 0.1,
+    pickup_coordinates_paper = 0.08,
+    pocketable_grimoire = 0.08,
+    pocketable_scripture = 0.08,
+    material_expeditions_currency = 0.1,
+    material_expeditions_loot = 0.1,
+    material_expeditions_loot_player_drop = 0.1,
+    luggable_data_reliquary = 0.18,
+    pickup_large_ammunition_crate = 0.1,
+    luggable_promethium_barrel = 0.12,
+    pocketable_anti_rad_stimm = 0.08,
+    pocketable_airstrike = 0.08,
+    pocketable_artillery_strike = 0.08,
+    pocketable_big_grenade = 0.08,
+    pocketable_landmine_explosive = 0.08,
+    pocketable_landmine_fire = 0.08,
+    pocketable_landmine_shock = 0.08,
+    pocketable_valkyrie_hover = 0.08,
+    pocketable_void_shield = 0.08,
+    pickup_martyr_skull = 0.1,
+    luggable_power_cell_orange = 0.18,
+    medicae_station = 0.2,
+    luggable_socket = 0.18,
+    pickup_heretic_idol = 0.12,
+    pickup_tainted_skull = 0.1,
+    pocketable_corrupted_auspex_scanner = 0.08,
+    pickup_saints = 0.12,
+    pickup_stolen_rations = 0.08,
+}
+
+local function _screen_highlight_color_for_kind(kind)
+    return _copy_color_array(NEARBY_OUTLINE_COLOR_BY_KIND[kind])
+end
+
+local function _screen_highlight_anchor_position(target)
+    local position = target and target.position
+
+    if not position then
+        return nil
+    end
+
+    local z_offset = SCREEN_HIGHLIGHT_Z_OFFSET_BY_KIND[target.kind] or 0
+
+    return {
+        x = position.x,
+        y = position.y,
+        z = (position.z or 0) + z_offset,
+    }
+end
+
+local function _collect_screen_highlight_targets()
+    if not mod:has_any_nearby_highlight_enabled() then
+        return {}
+    end
+
+    local player_unit = _player_unit()
+
+    if not _safe_unit_alive(player_unit) then
+        return {}
+    end
+
+    local player_pos = _safe_unit_position(player_unit)
+
+    if not player_pos then
+        return {}
+    end
+
+    local max_distance = mod:get_nearby_highlight_range()
+    local max_distance_sq = max_distance * max_distance
+    local highlights = {}
+
+    for i = 1, #(mod._radar_targets or {}) do
+        local target = mod._radar_targets[i]
+
+        if target and mod:is_nearby_highlight_enabled_for_kind(target.kind) then
+            local distance_sq = target.distance_sq_3d
+
+            if distance_sq == nil and target.position then
+                distance_sq = _distance_squared(player_pos, target.position)
+            end
+
+            if distance_sq ~= nil and distance_sq <= max_distance_sq then
+                local color = _screen_highlight_color_for_kind(target.kind)
+                local world_position = _screen_highlight_anchor_position(target)
+
+                if color and world_position then
+                    highlights[#highlights + 1] = {
+                        unit = target.unit,
+                        kind = target.kind,
+                        world_position = world_position,
+                        color = color,
+                        occluded_color = _darkened_color_array(color, NEARBY_OUTLINE_OCCLUDED_MULTIPLIER),
+                        distance_sq_3d = distance_sq,
+                    }
+                end
+            end
+        end
+    end
+
+    return highlights
 end
 
 local function _safe_unit_to_extension_map(system_name)
@@ -2472,6 +2693,7 @@ local function _collect_radar_snapshot()
         player_rotation = _safe_player_rotation(player_unit),
         player_slot = _safe_player_slot(local_player),
         targets = mod._radar_targets,
+        screen_highlights = mod._screen_highlight_targets,
     }
 end
 
@@ -2550,6 +2772,7 @@ local function _debug_log_scan()
 end
 
 local function _reset_runtime_state()
+    mod._screen_highlight_targets = {}
     mod._next_scan_t = 0
     mod._tracked_units = {}
     mod._tracked_points = {}
@@ -2594,6 +2817,7 @@ local function _update_internal(dt, t)
     if mod:get("enable_radar") == false then
         mod._tracked_points = {}
         mod._radar_targets = {}
+        mod._screen_highlight_targets = {}
         mod._radar_snapshot = nil
         return
     end
@@ -2614,6 +2838,7 @@ local function _update_internal(dt, t)
 
         mod._tracked_points = {}
         mod._radar_targets = {}
+        mod._screen_highlight_targets = {}
         mod._radar_snapshot = nil
         _debug_log_block(reason, gameplay_t, mission_name, activity, mechanism_name)
         return
@@ -2625,6 +2850,7 @@ local function _update_internal(dt, t)
         player_rotation = _safe_player_rotation(player_unit),
         player_slot = _safe_player_slot(_local_player()),
         targets = mod._radar_targets,
+        screen_highlights = mod._screen_highlight_targets,
     }
 
     if scan_clock < (mod._next_scan_t or 0) then
@@ -2643,6 +2869,7 @@ local function _update_internal(dt, t)
     _prune_units()
 
     mod._radar_targets = _collect_radar_targets()
+    mod._screen_highlight_targets = _collect_screen_highlight_targets()
     mod._radar_snapshot = _collect_radar_snapshot()
 
     _debug_log_scan()
@@ -2709,6 +2936,10 @@ end
 
 function mod:get_radar_snapshot()
     return self._radar_snapshot
+end
+
+function mod:get_screen_highlight_targets()
+    return self._screen_highlight_targets or {}
 end
 
 function mod:should_draw_radar()
@@ -2891,6 +3122,54 @@ function mod:get_radar_pos_y(size)
     return math.floor(y + 0.5)
 end
 
+local NEARBY_HIGHLIGHT_SETTING_BY_GROUP = {
+    common_pickups_group = "nearby_highlight_common_pickups",
+    materials_group = "nearby_highlight_materials",
+    primary_objective_group = "nearby_highlight_primary_objective",
+    secondary_objective_group = "nearby_highlight_secondary_objective",
+    expeditions_specific_group = "nearby_highlight_expeditions_specific",
+    martyr_s_skull_group = "nearby_highlight_martyr_s_skull",
+    environment_group = "nearby_highlight_environment",
+    event_group = "nearby_highlight_event",
+}
+
+function mod:has_any_nearby_highlight_enabled()
+    for _, setting_id in pairs(NEARBY_HIGHLIGHT_SETTING_BY_GROUP) do
+        if self:get(setting_id) == true then
+            return true
+        end
+    end
+
+    return false
+end
+
+function mod:get_nearby_highlight_range()
+    local value = tonumber(self:get("highlight_distance")) or 10
+
+    if value < 5 then
+        value = 5
+    elseif value > 20 then
+        value = 20
+    end
+
+    return value
+end
+
+function mod:is_nearby_highlight_enabled_for_kind(kind)
+    if not kind or not _kind_enabled(kind) then
+        return false
+    end
+
+    local group_name = self:get_marker_scale_group(kind)
+    local setting_id = group_name and NEARBY_HIGHLIGHT_SETTING_BY_GROUP[group_name] or nil
+
+    if not setting_id then
+        return false
+    end
+
+    return self:get(setting_id) == true
+end
+
 function mod:set_radar_position(x, y)
     local radar_size = self:get_radar_size()
     local max_x, max_y = _get_radar_position_bounds(radar_size)
@@ -2979,6 +3258,7 @@ function mod:set_radar_enabled(enabled)
 
     if not is_enabled then
         self._radar_targets = {}
+        self._screen_highlight_targets = {}
         self._radar_snapshot = nil
     end
 

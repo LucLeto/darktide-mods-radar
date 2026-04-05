@@ -189,8 +189,13 @@ return {
                     {
                         setting_id = "highlight_distance",
                         type = "numeric",
-                        default_value = 15,
-                        range = { 5, 50 },
+                        default_value = 10,
+                        range = { 5, 20 },
+                        decimals_number = 0,
+                        step_size_value = 1,
+                        get = function()
+                            return mod:get_nearby_outline_range()
+                        end,
                     },
                 },
             },
@@ -316,6 +321,11 @@ return {
                 type = "group",
                 sub_widgets = {
                     _icon_scale_slider("common_pickups_icon_scale"),
+                    {
+                        setting_id = "nearby_highlight_common_pickups",
+                        type = "checkbox",
+                        default_value = false,
+                    },
                     _artwork_icon_off_dropdown("show_crates"),
                     {
                         setting_id = "show_ammo_small",
@@ -369,6 +379,11 @@ return {
                 type = "group",
                 sub_widgets = {
                     _icon_scale_slider("materials_icon_scale"),
+                    {
+                        setting_id = "nearby_highlight_materials",
+                        type = "checkbox",
+                        default_value = false,
+                    },
                     _artwork_icon_off_dropdown("show_diamantine"),
                     _artwork_icon_off_dropdown("show_plasteel"),
                 },
@@ -378,6 +393,11 @@ return {
                 type = "group",
                 sub_widgets = {
                     _icon_scale_slider("primary_objective_icon_scale"),
+                    {
+                        setting_id = "nearby_highlight_primary_objective",
+                        type = "checkbox",
+                        default_value = false,
+                    },
                     {
                         setting_id = "show_power_cell_teal",
                         type = "checkbox",
@@ -425,6 +445,11 @@ return {
                 type = "group",
                 sub_widgets = {
                     _icon_scale_slider("secondary_objective_icon_scale"),
+                    {
+                        setting_id = "nearby_highlight_secondary_objective",
+                        type = "checkbox",
+                        default_value = false,
+                    },
                     {
                         setting_id = "show_pocketable_grimoire",
                         type = "checkbox",
@@ -484,6 +509,11 @@ return {
                 type = "group",
                 sub_widgets = {
                     _icon_scale_slider("expeditions_specific_icon_scale"),
+                    {
+                        setting_id = "nearby_highlight_expeditions_specific",
+                        type = "checkbox",
+                        default_value = false,
+                    },
                     _artwork_icon_off_dropdown("show_expeditions_currency"),
                     _artwork_icon_off_dropdown("show_expeditions_loot"),
                     _artwork_icon_off_dropdown("show_expeditions_dropped_loot"),
@@ -523,6 +553,11 @@ return {
                 sub_widgets = {
                     _icon_scale_slider("martyr_s_skull_icon_scale"),
                     {
+                        setting_id = "nearby_highlight_martyr_s_skull",
+                        type = "checkbox",
+                        default_value = false,
+                    },
+                    {
                         setting_id = "show_martyr_skull",
                         type = "checkbox",
                         default_value = true,
@@ -539,6 +574,11 @@ return {
                 type = "group",
                 sub_widgets = {
                     _icon_scale_slider("environment_icon_scale"),
+                    {
+                        setting_id = "nearby_highlight_environment",
+                        type = "checkbox",
+                        default_value = false,
+                    },
                     {
                         setting_id = "show_medicae_station",
                         type = "checkbox",
@@ -671,6 +711,11 @@ return {
                 type = "group",
                 sub_widgets = {
                     _icon_scale_slider("event_icon_scale"),
+                    {
+                        setting_id = "nearby_highlight_event",
+                        type = "checkbox",
+                        default_value = false,
+                    },
                     {
                         setting_id = "show_tainted_skull",
                         type = "checkbox",

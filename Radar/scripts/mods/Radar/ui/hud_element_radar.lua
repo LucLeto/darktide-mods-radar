@@ -18,6 +18,7 @@ local Definitions = {
 
 local _logged_visuals = {}
 local _logged_draws = {}
+local _safe_player_camera_rotation
 
 local PLAYER_CLASS_ICONS = {
     veteran = "content/ui/materials/icons/classes/veteran",
@@ -94,6 +95,49 @@ local function _with_alpha_widget(color, alpha)
     local c = _any_to_widget_color(color)
     c[1] = alpha or c[1] or 255
     return c
+end
+
+local function _is_finite_number(v)
+    return type(v) == "number" and v == v and v ~= math.huge and v ~= -math.huge
+end
+
+local function _vector3_components(vec)
+    if not vec then
+        return nil, nil, nil
+    end
+
+    if type(vec) == "table" then
+        return vec.x, vec.y, vec.z
+    end
+
+    local ok_x, x = pcall(function()
+        return Vector3.x(vec)
+    end)
+    local ok_y, y = pcall(function()
+        return Vector3.y(vec)
+    end)
+    local ok_z, z = pcall(function()
+        return Vector3.z(vec)
+    end)
+
+    if ok_x and ok_y and ok_z then
+        return x, y, z
+    end
+
+    return nil, nil, nil
+end
+
+local function _ui_space_size()
+    local width = 1920
+    local height = 1080
+
+    if RESOLUTION_LOOKUP and RESOLUTION_LOOKUP.width and RESOLUTION_LOOKUP.height then
+        local inverse_scale = RESOLUTION_LOOKUP.inverse_scale or 1
+        width = RESOLUTION_LOOKUP.width * inverse_scale
+        height = RESOLUTION_LOOKUP.height * inverse_scale
+    end
+
+    return width, height
 end
 
 local ARTWORK_MODE_ICON_PRESENTATIONS = {
@@ -1280,8 +1324,9 @@ local function _target_visual(target)
     return PRESENTATIONS.pickup_unknown
 end
 
-local function _safe_player_camera_rotation(self)
+local function _safe_player_camera(self)
     local parent = self and self._parent
+
     if not parent or not parent.player_camera then
         return nil
     end
@@ -1290,7 +1335,346 @@ local function _safe_player_camera_rotation(self)
         return parent:player_camera()
     end)
 
-    if not ok_camera or not camera then
+    if ok_camera and camera then
+        return camera
+    end
+
+    return nil
+end
+
+local function _safe_player_camera_position(self)
+    local camera = _safe_player_camera(self)
+
+    if not camera or not Camera or not Camera.local_position then
+        return nil
+    end
+
+    local ok_position, position = pcall(function()
+        return Camera.local_position(camera)
+    end)
+
+    if ok_position and position then
+        local x, y, z = _vector3_components(position)
+
+        if _is_finite_number(x) and _is_finite_number(y) and _is_finite_number(z) then
+            return { x = x, y = y, z = z }
+        end
+    end
+
+    return nil
+end
+
+local function _safe_player_vertical_fov()
+    local local_player = _safe_local_player()
+
+    if not local_player then
+        return nil
+    end
+
+    local viewport_name = local_player.viewport_name
+    local camera_manager = Managers and Managers.state and Managers.state.camera
+
+    if not viewport_name or not camera_manager or type(camera_manager.fov) ~= "function" then
+        return nil
+    end
+
+    if type(camera_manager.has_camera) == "function" then
+        local ok_has_camera, has_camera = pcall(function()
+            return camera_manager:has_camera(viewport_name)
+        end)
+
+        if ok_has_camera and not has_camera then
+            return nil
+        end
+    end
+
+    local ok_fov, vertical_fov = pcall(function()
+        return camera_manager:fov(viewport_name)
+    end)
+
+    vertical_fov = ok_fov and tonumber(vertical_fov) or nil
+
+    if vertical_fov and vertical_fov > 0 then
+        return vertical_fov
+    end
+
+    return nil
+end
+
+local function _rotation_basis(rotation)
+    if not rotation then
+        return nil
+    end
+
+    local ok_forward, forward = pcall(function()
+        return Quaternion.forward(rotation)
+    end)
+    local ok_right, right = pcall(function()
+        return Quaternion.right(rotation)
+    end)
+    local ok_up, up = pcall(function()
+        return Quaternion.up(rotation)
+    end)
+
+    if not ok_forward or not ok_right or not ok_up or not forward or not right or not up then
+        return nil
+    end
+
+    local fx, fy, fz = _vector3_components(forward)
+    local rx, ry, rz = _vector3_components(right)
+    local ux, uy, uz = _vector3_components(up)
+
+    if not (_is_finite_number(fx) and _is_finite_number(fy) and _is_finite_number(fz)) then
+        return nil
+    end
+
+    if not (_is_finite_number(rx) and _is_finite_number(ry) and _is_finite_number(rz)) then
+        return nil
+    end
+
+    if not (_is_finite_number(ux) and _is_finite_number(uy) and _is_finite_number(uz)) then
+        return nil
+    end
+
+    return {
+        forward = { x = fx, y = fy, z = fz },
+        right = { x = rx, y = ry, z = rz },
+        up = { x = ux, y = uy, z = uz },
+    }
+end
+
+local function _safe_physics_world()
+    local candidates = {
+        function()
+            local physics_manager = Managers and Managers.state and Managers.state.physics
+            if physics_manager and type(physics_manager.physics_world) == "function" then
+                return physics_manager:physics_world()
+            end
+        end,
+        function()
+            local world_manager = Managers and Managers.state and Managers.state.world
+            if world_manager and type(world_manager.world) == "function" and World and World.physics_world then
+                local world = world_manager:world("level_world")
+                if world then
+                    return World.physics_world(world)
+                end
+            end
+        end,
+        function()
+            local world_manager = Managers and Managers.world
+            if world_manager and type(world_manager.world) == "function" and World and World.physics_world then
+                local world = world_manager:world("level_world")
+                if world then
+                    return World.physics_world(world)
+                end
+            end
+        end,
+    }
+
+    for i = 1, #candidates do
+        local ok, physics_world = pcall(candidates[i])
+        if ok and physics_world then
+            return physics_world
+        end
+    end
+
+    return nil
+end
+
+local function _extract_raycast_distance(...)
+    local values = { ... }
+
+    for i = 1, #values do
+        local value = values[i]
+
+        if type(value) == "number" and _is_finite_number(value) then
+            return value
+        end
+
+        if type(value) == "table" then
+            if _is_finite_number(value.distance) then
+                return value.distance
+            end
+
+            local first = value[1]
+            if type(first) == "table" and _is_finite_number(first.distance) then
+                return first.distance
+            end
+        end
+    end
+
+    return nil
+end
+
+local function _is_world_position_occluded(camera_position, world_position)
+    local physics_world = _safe_physics_world()
+
+    if not physics_world or not PhysicsWorld or not PhysicsWorld.immediate_raycast then
+        return false
+    end
+
+    local dx = world_position.x - camera_position.x
+    local dy = world_position.y - camera_position.y
+    local dz = world_position.z - camera_position.z
+    local distance = math.sqrt(dx * dx + dy * dy + dz * dz)
+
+    if not _is_finite_number(distance) or distance <= 0.05 then
+        return false
+    end
+
+    local origin = Vector3(camera_position.x, camera_position.y, camera_position.z)
+    local direction = Vector3(dx / distance, dy / distance, dz / distance)
+    local filters = {
+        "filter_player_character_shooting",
+        "filter_ray_projectile",
+        "filter_minion_shooting",
+        "filter_cover",
+    }
+
+    for i = 1, #filters do
+        local ok, a, b, c, d = pcall(function()
+            return PhysicsWorld.immediate_raycast(
+                physics_world,
+                origin,
+                direction,
+                distance,
+                "closest",
+                "collision_filter",
+                filters[i]
+            )
+        end)
+
+        if ok then
+            local hit_distance = _extract_raycast_distance(a, b, c, d)
+
+            if hit_distance ~= nil then
+                return hit_distance < distance - 0.05
+            end
+        end
+    end
+
+    return false
+end
+
+local function _project_world_to_screen(self, world_position, fallback_camera_position, fallback_rotation)
+    if not world_position then
+        return nil, nil, nil
+    end
+
+    local camera_position = _safe_player_camera_position(self) or fallback_camera_position
+    local camera_rotation = _safe_player_camera_rotation(self) or fallback_rotation
+    local basis = _rotation_basis(camera_rotation)
+
+    if not camera_position or not basis then
+        return nil, nil, nil
+    end
+
+    local dx = world_position.x - camera_position.x
+    local dy = world_position.y - camera_position.y
+    local dz = world_position.z - camera_position.z
+
+    local view_x = dx * basis.right.x + dy * basis.right.y + dz * basis.right.z
+    local view_y = dx * basis.up.x + dy * basis.up.y + dz * basis.up.z
+    local view_z = dx * basis.forward.x + dy * basis.forward.y + dz * basis.forward.z
+
+    if not (_is_finite_number(view_x) and _is_finite_number(view_y) and _is_finite_number(view_z)) then
+        return nil, nil, nil
+    end
+
+    if view_z <= 0.05 then
+        return nil, nil, nil
+    end
+
+    local ui_width, ui_height = _ui_space_size()
+    local vertical_fov = _safe_player_vertical_fov() or math.rad(65)
+    local tan_half_vertical = math.tan(vertical_fov * 0.5)
+    local aspect_ratio = ui_width / math.max(ui_height, 1)
+    local tan_half_horizontal = tan_half_vertical * aspect_ratio
+
+    if tan_half_vertical <= 0 or tan_half_horizontal <= 0 then
+        return nil, nil, nil
+    end
+
+    local ndc_x = view_x / (view_z * tan_half_horizontal)
+    local ndc_y = view_y / (view_z * tan_half_vertical)
+
+    if not (_is_finite_number(ndc_x) and _is_finite_number(ndc_y)) then
+        return nil, nil, nil
+    end
+
+    if math.abs(ndc_x) > 1 or math.abs(ndc_y) > 1 then
+        return nil, nil, nil
+    end
+
+    local screen_x = (ndc_x * 0.5 + 0.5) * ui_width
+    local screen_y = (0.5 - ndc_y * 0.5) * ui_height
+
+    if not (_is_finite_number(screen_x) and _is_finite_number(screen_y)) then
+        return nil, nil, nil
+    end
+
+    return screen_x, screen_y, camera_position
+end
+
+local function _screen_highlight_bracket_size(distance_sq)
+    local distance = math.sqrt(math.max(distance_sq or 0, 0))
+    local min_distance = 5
+    local max_distance = 20
+    local near_size = 24
+    local far_size = 18
+
+    if distance <= min_distance then
+        return near_size
+    end
+
+    if distance >= max_distance then
+        return far_size
+    end
+
+    local t = (distance - min_distance) / (max_distance - min_distance)
+    return near_size + (far_size - near_size) * t
+end
+
+local function _draw_screen_highlights(self, ui_renderer, snapshot, z)
+    local highlights = snapshot and snapshot.screen_highlights or nil
+
+    if not highlights or #highlights == 0 then
+        return
+    end
+
+    local fallback_camera_position = snapshot and snapshot.player_position or nil
+    local fallback_rotation = snapshot and snapshot.player_rotation or nil
+
+    for i = 1, #highlights do
+        local highlight = highlights[i]
+        local screen_x, screen_y, camera_position = _project_world_to_screen(self, highlight.world_position,
+            fallback_camera_position, fallback_rotation)
+
+        if screen_x and screen_y then
+            local bracket_size = _screen_highlight_bracket_size(highlight.distance_sq_3d)
+            local draw_x = screen_x - bracket_size * 0.5
+            local draw_y = screen_y - bracket_size * 0.5
+            local draw_color = highlight.color
+
+            if camera_position and highlight.world_position then
+                local ok_occluded, occluded = pcall(function()
+                    return _is_world_position_occluded(camera_position, highlight.world_position)
+                end)
+
+                if ok_occluded and occluded == true then
+                    draw_color = highlight.occluded_color or highlight.color
+                end
+            end
+
+            _draw_marker_brackets(ui_renderer, draw_x, draw_y, z, bracket_size, draw_color)
+        end
+    end
+end
+
+_safe_player_camera_rotation = function(self)
+    local camera = _safe_player_camera(self)
+
+    if not camera or not Camera or not Camera.local_rotation then
         return nil
     end
 
@@ -1425,6 +1809,8 @@ HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input
                 end
             end
         end
+
+        _draw_screen_highlights(self, ui_renderer, snapshot, z + 40)
 
         for i = next_widget_index, #self._marker_widgets do
             _clear_marker_widget(self._marker_widgets[i])
