@@ -46,6 +46,28 @@ local function _icon_scale_slider(setting_id)
     }
 end
 
+local function _expedition_loot_marker_mode_dropdown(setting_id)
+    return {
+        setting_id = setting_id,
+        type = "dropdown",
+        default_value = "default",
+        options = {
+            {
+                text = "expedition_loot_marker_mode_default",
+                value = "default",
+            },
+            {
+                text = "expedition_loot_marker_mode_scaled",
+                value = "scaled",
+            },
+            {
+                text = "expedition_loot_marker_mode_clustered",
+                value = "clustered",
+            },
+        },
+    }
+end
+
 return {
     name = mod:localize("mod_name"),
     description = mod:localize("mod_description"),
@@ -537,6 +559,28 @@ return {
                     _artwork_icon_off_dropdown("show_expeditions_currency"),
                     _artwork_icon_off_dropdown("show_expeditions_loot"),
                     _artwork_icon_off_dropdown("show_expeditions_dropped_loot"),
+                    _expedition_loot_marker_mode_dropdown("expedition_loot_marker_mode"),
+                    {
+                        setting_id = "expedition_loot_cluster_horizontal_radius",
+                        type = "numeric",
+                        default_value = 5,
+                        range = { 1, 10 },
+                        decimals_number = 0,
+                        step_size_value = 1,
+                    },
+                    {
+                        setting_id = "expedition_loot_cluster_vertical_radius",
+                        type = "numeric",
+                        default_value = 3,
+                        range = { 1, 5 },
+                        decimals_number = 0,
+                        step_size_value = 1,
+                    },
+                    {
+                        setting_id = "show_expedition_loot_cluster_value",
+                        type = "checkbox",
+                        default_value = false,
+                    },
                     {
                         setting_id = "show_data_reliquaries",
                         type = "checkbox",

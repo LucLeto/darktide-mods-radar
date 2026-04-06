@@ -4,7 +4,6 @@ local PlayerUnitStatus = require("scripts/utilities/attack/player_unit_status")
 
 local SCAN_INTERVAL = 0.25
 
-local NEARBY_OUTLINE_NAME = "radar_item_nearby"
 local NEARBY_OUTLINE_OCCLUDED_MULTIPLIER = 0.6
 
 local NEARBY_OUTLINE_COLOR_BY_KIND = {
@@ -70,6 +69,8 @@ mod._last_update_t = nil
 mod._last_scan_signature = nil
 mod._last_block_signature = nil
 mod._screen_highlight_targets = {}
+mod._unclustered_radar_targets = {}
+mod._highlight_source_radar_targets = {}
 
 local MONSTROSITY_BREEDS = {
     chaos_daemonhost = true,
@@ -280,6 +281,13 @@ local ARTWORK_MODE_SETTING_IDS = {
     "show_pocketable_landmine_shock",
     "show_pocketable_void_shield",
 }
+
+local EXPEDITION_LOOT_VALUE_BY_PICKUP_NAME = {
+    expedition_loot_small_tier_1 = 10,
+    expedition_loot_small_tier_2 = 25,
+    expedition_loot_small_tier_3 = 50,
+}
+
 
 local function _normalize_marker_display_mode(value)
     if value == false or value == "off" then
@@ -1206,6 +1214,16 @@ local function _screen_highlight_anchor_position(target)
     }
 end
 
+local function _copy_target_list(targets)
+    local copy = {}
+
+    for i = 1, #(targets or {}) do
+        copy[i] = targets[i]
+    end
+
+    return copy
+end
+
 local function _collect_screen_highlight_targets()
     if not mod:has_any_nearby_highlight_enabled() then
         return {}
@@ -1227,8 +1245,10 @@ local function _collect_screen_highlight_targets()
     local max_distance_sq = max_distance * max_distance
     local highlights = {}
 
-    for i = 1, #(mod._radar_targets or {}) do
-        local target = mod._radar_targets[i]
+    local source_targets = mod._highlight_source_radar_targets or mod._unclustered_radar_targets or mod._radar_targets or {}
+
+    for i = 1, #source_targets do
+        local target = source_targets[i]
 
         if target and mod:is_nearby_highlight_enabled_for_kind(target.kind) then
             local distance_sq = target.distance_sq_3d
@@ -1315,6 +1335,65 @@ end
 
 local function _is_expedition_runtime()
     return _safe_game_mode_name() == "expedition"
+end
+
+local function _expedition_loot_value_for_pickup_name(pickup_name)
+    if not pickup_name then
+        return nil
+    end
+
+    return EXPEDITION_LOOT_VALUE_BY_PICKUP_NAME[pickup_name]
+end
+
+local function _safe_expedition_loot_handler()
+    if not _is_expedition_runtime() then
+        return nil
+    end
+
+    local game_mode = _safe_game_mode()
+
+    if not game_mode then
+        return nil
+    end
+
+    local logic = rawget(game_mode, "_game_mode_logic")
+
+    if logic and logic.loot_handler then
+        local ok_handler, handler = pcall(function()
+            return logic:loot_handler()
+        end)
+
+        if ok_handler and handler then
+            return handler
+        end
+    end
+
+    if logic then
+        local handler = rawget(logic, "_loot_handler")
+
+        if handler then
+            return handler
+        end
+    end
+
+    return nil
+end
+
+local function _safe_expedition_player_drop_amount(unit)
+    if not unit then
+        return nil
+    end
+
+    local loot_handler = _safe_expedition_loot_handler()
+    local dropped_loot_by_pickup_unit = loot_handler and rawget(loot_handler, "_dropped_loot_by_pickup_unit")
+    local amount = dropped_loot_by_pickup_unit and dropped_loot_by_pickup_unit[unit] or nil
+    local numeric_amount = tonumber(amount)
+
+    if numeric_amount and numeric_amount > 0 then
+        return math.floor(numeric_amount + 0.5)
+    end
+
+    return nil
 end
 
 local function _is_in_expedition_safe_zone()
@@ -1968,8 +2047,19 @@ local function _classify_interactee(extension, unit)
     local pickup_data = pickup_name and Pickups and Pickups.by_name and Pickups.by_name[pickup_name] or nil
     local marked_by_player_slot = _marked_by_player_slot_for_unit(unit)
 
-    return _classify_pickup_like(interaction_type, ui_interaction_type, icon, description, unit_name, pickup_name,
-        pickup_data, marked_by_player_slot)
+    local kind, meta = _classify_pickup_like(interaction_type, ui_interaction_type, icon, description, unit_name,
+        pickup_name, pickup_data, marked_by_player_slot)
+
+    if kind == "material_expeditions_loot" then
+        meta.remnant_value = _expedition_loot_value_for_pickup_name(pickup_name)
+        meta.remnant_tier = pickup_name and string.match(pickup_name, "tier_(%d+)$") or nil
+        meta.is_player_drop = false
+    elseif kind == "material_expeditions_loot_player_drop" then
+        meta.remnant_value = _safe_expedition_player_drop_amount(unit)
+        meta.is_player_drop = true
+    end
+
+    return kind, meta
 end
 
 local function _classify_enemy_from_breed(breed_name)
@@ -2663,6 +2753,212 @@ local function _supports_vertical_item_marker(kind)
     return true
 end
 
+local function _expedition_loot_target_value(target)
+    local meta = target and target.meta or nil
+    local value = meta and tonumber(meta.remnant_value or meta.remnant_cluster_value) or nil
+
+    if value and value > 0 then
+        return value
+    end
+
+    local pickup_name = meta and meta.pickup_name or nil
+
+    return _expedition_loot_value_for_pickup_name(pickup_name) or 0
+end
+
+local function _should_cluster_expedition_loot_target(target)
+    return target ~= nil and target.kind == "material_expeditions_loot" and target.position ~= nil
+end
+
+local function _expedition_loot_cluster_center(cluster_members)
+    local total_weight = 0
+    local sum_x = 0
+    local sum_y = 0
+    local sum_z = 0
+    local fallback_position = cluster_members[1] and cluster_members[1].position or nil
+
+    for i = 1, #cluster_members do
+        local member = cluster_members[i]
+        local position = member and member.position
+
+        if position then
+            local weight = _expedition_loot_target_value(member)
+
+            if weight <= 0 then
+                weight = 1
+            end
+
+            total_weight = total_weight + weight
+            sum_x = sum_x + position.x * weight
+            sum_y = sum_y + position.y * weight
+            sum_z = sum_z + (position.z or 0) * weight
+        end
+    end
+
+    if total_weight <= 0 or not fallback_position then
+        return fallback_position
+    end
+
+    return {
+        x = sum_x / total_weight,
+        y = sum_y / total_weight,
+        z = sum_z / total_weight,
+    }
+end
+
+local function _expedition_loot_vertical_state(player_pos, position, item_vertical_arrow_threshold_sq, item_vertical_hide_threshold)
+    local vertical_delta = _vertical_delta(player_pos, position)
+    local vertical_state = nil
+
+    if vertical_delta ~= nil then
+        local abs_vertical_delta = math.abs(vertical_delta)
+        local distance_sq_horizontal = _distance_squared_horizontal(player_pos, position)
+
+        if abs_vertical_delta >= item_vertical_hide_threshold then
+            return nil, nil, true
+        end
+
+        if abs_vertical_delta >= ITEM_VERTICAL_ARROW_Z_DEADZONE
+            and distance_sq_horizontal <= item_vertical_arrow_threshold_sq then
+            if vertical_delta > 0 then
+                vertical_state = "up"
+            elseif vertical_delta < 0 then
+                vertical_state = "down"
+            end
+        end
+    end
+
+    return vertical_delta, vertical_state, false
+end
+
+local function _create_expedition_loot_cluster_target(cluster_members, player_pos, item_vertical_arrow_threshold_sq,
+                                                      item_vertical_hide_threshold)
+    local position = _expedition_loot_cluster_center(cluster_members)
+
+    if not position then
+        return nil
+    end
+
+    local total_value = 0
+    local cluster_count = 0
+    local marked_by_player_slot = nil
+
+    for i = 1, #cluster_members do
+        local member = cluster_members[i]
+        local meta = member and member.meta or nil
+
+        cluster_count = cluster_count + 1
+        total_value = total_value + _expedition_loot_target_value(member)
+
+        if meta and meta.marked_by_player_slot ~= nil and marked_by_player_slot == nil then
+            marked_by_player_slot = meta.marked_by_player_slot
+        end
+    end
+
+    local vertical_delta, vertical_state, should_hide = _expedition_loot_vertical_state(player_pos, position,
+        item_vertical_arrow_threshold_sq, item_vertical_hide_threshold)
+
+    if should_hide then
+        return nil
+    end
+
+    return {
+        unit = nil,
+        kind = "material_expeditions_loot",
+        position = position,
+        source = "expedition_loot_cluster",
+        meta = {
+            is_tech_remnant_cluster = true,
+            remnant_cluster_count = cluster_count,
+            remnant_cluster_value = total_value,
+            remnant_value = total_value,
+            remnant_show_value_text = cluster_count > 1,
+            remnant_value_text = tostring(total_value),
+            marked_by_player_slot = marked_by_player_slot,
+        },
+        distance_sq = _distance_squared_horizontal(player_pos, position),
+        distance_sq_3d = _distance_squared(player_pos, position),
+        vertical_delta = vertical_delta,
+        vertical_state = vertical_state,
+        ignore_radar_range = false,
+    }
+end
+
+local function _cluster_expedition_loot_targets(targets, player_pos, item_vertical_arrow_threshold_sq,
+                                                item_vertical_hide_threshold)
+    if mod:get_expedition_loot_marker_mode() ~= "clustered" then
+        return targets
+    end
+
+    local pass_through_targets = {}
+    local cluster_candidates = {}
+
+    for i = 1, #targets do
+        local target = targets[i]
+
+        if _should_cluster_expedition_loot_target(target) then
+            cluster_candidates[#cluster_candidates + 1] = target
+        else
+            pass_through_targets[#pass_through_targets + 1] = target
+        end
+    end
+
+    local horizontal_radius = mod:get_expedition_loot_cluster_horizontal_radius()
+    local vertical_threshold = mod:get_expedition_loot_cluster_vertical_radius()
+    local radius_sq = horizontal_radius * horizontal_radius
+    local consumed = {}
+
+    for i = 1, #cluster_candidates do
+        if not consumed[i] then
+            local seed = cluster_candidates[i]
+            local cluster_members = { seed }
+
+            consumed[i] = true
+
+            local changed = true
+
+            while changed do
+                changed = false
+
+                local center = _expedition_loot_cluster_center(cluster_members)
+
+                for j = i + 1, #cluster_candidates do
+                    if not consumed[j] then
+                        local candidate = cluster_candidates[j]
+                        local distance_sq_horizontal = _distance_squared_horizontal(center, candidate.position)
+                        local vertical_delta = _vertical_delta(center, candidate.position)
+                        local abs_vertical_delta = vertical_delta and math.abs(vertical_delta) or 0
+
+                        if distance_sq_horizontal <= radius_sq
+                            and abs_vertical_delta <= vertical_threshold then
+                            consumed[j] = true
+                            cluster_members[#cluster_members + 1] = candidate
+                            changed = true
+                        end
+                    end
+                end
+            end
+
+            if #cluster_members > 1 then
+                local clustered_target = _create_expedition_loot_cluster_target(cluster_members, player_pos,
+                    item_vertical_arrow_threshold_sq, item_vertical_hide_threshold)
+
+                if clustered_target then
+                    pass_through_targets[#pass_through_targets + 1] = clustered_target
+                else
+                    for j = 1, #cluster_members do
+                        pass_through_targets[#pass_through_targets + 1] = cluster_members[j]
+                    end
+                end
+            else
+                pass_through_targets[#pass_through_targets + 1] = seed
+            end
+        end
+    end
+
+    return pass_through_targets
+end
+
 local function _collect_radar_targets()
     local player_unit = _player_unit()
     if not _safe_unit_alive(player_unit) then
@@ -2748,6 +3044,12 @@ local function _collect_radar_targets()
     for id, data in pairs(mod._tracked_points) do
         append_target(id, data)
     end
+
+    mod._unclustered_radar_targets = targets
+    mod._highlight_source_radar_targets = _copy_target_list(targets)
+
+    targets = _cluster_expedition_loot_targets(targets, player_pos, item_vertical_arrow_threshold_sq,
+        item_vertical_hide_threshold)
 
     table.sort(targets, function(a, b)
         local boss_infinite = mod:get_boss_marker_range_mode() == "infinite"
@@ -2872,6 +3174,8 @@ end
 
 local function _reset_runtime_state()
     mod._screen_highlight_targets = {}
+    mod._unclustered_radar_targets = {}
+    mod._highlight_source_radar_targets = {}
     mod._next_scan_t = 0
     mod._tracked_units = {}
     mod._tracked_points = {}
@@ -2917,6 +3221,8 @@ local function _update_internal(dt, t)
         mod._tracked_points = {}
         mod._radar_targets = {}
         mod._screen_highlight_targets = {}
+        mod._unclustered_radar_targets = {}
+        mod._highlight_source_radar_targets = {}
         mod._radar_snapshot = nil
         return
     end
@@ -2938,6 +3244,8 @@ local function _update_internal(dt, t)
         mod._tracked_points = {}
         mod._radar_targets = {}
         mod._screen_highlight_targets = {}
+        mod._unclustered_radar_targets = {}
+        mod._highlight_source_radar_targets = {}
         mod._radar_snapshot = nil
         _debug_log_block(reason, gameplay_t, mission_name, activity, mechanism_name)
         return
@@ -3106,6 +3414,49 @@ function mod:get_boss_marker_range_mode()
 
     return value
 end
+
+function mod:get_expedition_loot_marker_mode()
+    local value = tostring(self:get("expedition_loot_marker_mode") or "default")
+
+    if value ~= "scaled" and value ~= "clustered" then
+        value = "default"
+    end
+
+    return value
+end
+
+function mod:get_show_expedition_loot_cluster_value()
+    return self:get("show_expedition_loot_cluster_value") == true
+end
+
+function mod:get_show_expedition_loot_value_text()
+    return self:get_show_expedition_loot_cluster_value()
+end
+
+function mod:get_expedition_loot_cluster_horizontal_radius()
+    local value = tonumber(self:get("expedition_loot_cluster_horizontal_radius")) or 5
+
+    if value < 1 then
+        value = 1
+    elseif value > 10 then
+        value = 10
+    end
+
+    return value
+end
+
+function mod:get_expedition_loot_cluster_vertical_radius()
+    local value = tonumber(self:get("expedition_loot_cluster_vertical_radius")) or 3
+
+    if value < 1 then
+        value = 1
+    elseif value > 5 then
+        value = 5
+    end
+
+    return value
+end
+
 
 function mod:get_item_vertical_arrow_threshold()
     local value = tonumber(self:get("item_vertical_arrow_threshold")) or 25
@@ -3358,6 +3709,8 @@ function mod:set_radar_enabled(enabled)
     if not is_enabled then
         self._radar_targets = {}
         self._screen_highlight_targets = {}
+        self._highlight_source_radar_targets = {}
+        self._unclustered_radar_targets = {}
         self._radar_snapshot = nil
     end
 

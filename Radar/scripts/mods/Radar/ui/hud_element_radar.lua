@@ -1,5 +1,7 @@
 local mod = get_mod("Radar")
 local UIRenderer = require("scripts/managers/ui/ui_renderer")
+local UIFonts = require("scripts/managers/ui/ui_fonts")
+local UIFontSettings = require("scripts/managers/ui/ui_font_settings")
 local UISettings = require("scripts/settings/ui/ui_settings")
 local UIWidget = require("scripts/managers/ui/ui_widget")
 
@@ -59,14 +61,6 @@ end
 local function _color(a, r, g, b)
     return Color(a, r, g, b)
 end
-local function _radar_background_alpha()
-    if mod.get_background_opacity then
-        return mod:get_background_opacity()
-    end
-
-    return 90
-end
-
 
 local function _widget_to_color(color)
     if not color then
@@ -848,7 +842,7 @@ end
 
 local function _draw_radar_frame_square(ui_renderer, x, y, z, size, outline_style)
     local thickness = 2
-    local fill_color = _color(_radar_background_alpha(), 0, 0, 0)
+    local fill_color = _color(90, 0, 0, 0)
     local outline_color = _color(255, 213, 226, 206)
 
     _draw_box(ui_renderer, x, y, z, size, size, fill_color)
@@ -873,7 +867,7 @@ local function _draw_radar_frame_circle(ui_renderer, x, y, z, size, outline_styl
     local center_x = x + size / 2
     local center_y = y + size / 2
     local radius = math.max(1, size / 2 - 1)
-    local fill_color = _color(_radar_background_alpha(), 0, 0, 0)
+    local fill_color = _color(90, 0, 0, 0)
     local outline_color = _color(255, 213, 226, 206)
 
     _draw_circle_fill(ui_renderer, center_x, center_y, z, radius, fill_color)
@@ -958,6 +952,7 @@ local function _clear_marker_widget(widget)
     widget.content.icon = nil
     widget.content.title_icon = nil
     widget.content.arrow_icon = nil
+    widget.content.value_text = ""
 end
 
 local function _ensure_marker_widgets(self)
@@ -985,35 +980,15 @@ local function _icon_scale_factor()
 
     if scale < 0.6 then
         scale = 0.6
-    elseif scale > 4.0 then
-        scale = 4.0
+    elseif scale > 2.0 then
+        scale = 2.0
     end
 
     return scale
 end
 
-local function _marker_group_scale_factor(target)
-    if not target or not mod.get_marker_scale_group or not mod.get_marker_scale_factor then
-        return 1
-    end
-
-    local group_name = mod:get_marker_scale_group(target.kind)
-
-    if not group_name then
-        return 1
-    end
-
-    return mod:get_marker_scale_factor(group_name)
-end
-
-local function _scaled_icon_size(base_size, target)
-    local final_scale = _icon_scale_factor() * _marker_group_scale_factor(target)
-
-    if final_scale > 4.0 then
-        final_scale = 4.0
-    end
-
-    local scaled = math.floor((tonumber(base_size) or 14) * final_scale + 0.5)
+local function _scaled_icon_size(base_size)
+    local scaled = math.floor((tonumber(base_size) or 14) * _icon_scale_factor() + 0.5)
 
     if scaled < 10 then
         scaled = 10
@@ -1073,6 +1048,78 @@ local function _center_dot_color(snapshot)
     return _color(255, 0, 255, 0)
 end
 
+local MARKER_VALUE_TEXT_STYLE = table.merge_recursive(table.clone(UIFontSettings.body_small), {
+    font_size = 12,
+    font_type = "proxima_nova_bold",
+    text_horizontal_alignment = "center",
+    text_vertical_alignment = "center",
+    text_color = Color(255, 255, 225, 0),
+    offset = { 0, 0, 0 },
+})
+local _marker_value_text_position = { 0, 0, 0 }
+local _marker_value_text_size = { 0, 0 }
+local _marker_value_text_color = { 255, 255, 225, 0 }
+local _marker_value_text_options = {}
+
+local function _marker_value_font_size(icon_size, digits)
+    local font_size = math.max(10, math.floor(icon_size * 0.52 + 0.5))
+
+    if digits >= 4 then
+        font_size = math.max(9, font_size - 3)
+    elseif digits >= 3 then
+        font_size = math.max(10, font_size - 2)
+    end
+
+    return font_size
+end
+
+local function _draw_marker_value_text(ui_renderer, value_text, x, y, z, icon_size, has_arrow)
+    if value_text == nil or value_text == "" then
+        return
+    end
+
+    local digits = string.len(value_text)
+
+    if digits <= 0 then
+        return
+    end
+
+    local font_size = _marker_value_font_size(icon_size, digits)
+    local arrow_size = math.max(6, math.floor(icon_size * 0.45 + 1))
+    local text_box_width = math.max(font_size + 2, math.floor(font_size * (digits * 0.62 + 0.45) + 0.5))
+    local text_box_height = font_size + 2
+    local text_x = math.floor((x or 0) + icon_size - text_box_width + 0.5)
+    local text_y = math.floor((y or 0) + icon_size - text_box_height + 0.5)
+
+    if has_arrow then
+        text_x = text_x - math.floor(arrow_size * 0.8 + 0.5)
+    end
+
+    _marker_value_text_position[1] = text_x
+    _marker_value_text_position[2] = text_y
+    _marker_value_text_position[3] = math.floor((z or 0) + 4 + 0.5)
+    _marker_value_text_size[1] = text_box_width
+    _marker_value_text_size[2] = text_box_height
+    _marker_value_text_color[1] = 255
+    _marker_value_text_color[2] = 255
+    _marker_value_text_color[3] = 225
+    _marker_value_text_color[4] = 0
+
+    table.clear(_marker_value_text_options)
+    UIFonts.get_font_options_by_style(MARKER_VALUE_TEXT_STYLE, _marker_value_text_options)
+
+    UIRenderer.draw_text(
+        ui_renderer,
+        value_text,
+        font_size,
+        MARKER_VALUE_TEXT_STYLE.font_type,
+        Vector3(_marker_value_text_position[1], _marker_value_text_position[2], _marker_value_text_position[3]),
+        _marker_value_text_size,
+        _marker_value_text_color,
+        _marker_value_text_options
+    )
+end
+
 local ITEM_VERTICAL_ARROW_UP_ICON = "content/ui/materials/icons/circumstances/more_resistance_01"
 local ITEM_VERTICAL_ARROW_DOWN_ICON = "content/ui/materials/icons/circumstances/less_resistance_01"
 
@@ -1080,7 +1127,7 @@ local function _apply_marker_widget(widget, visual, x, y, z, target)
     local icon_style = widget.style.icon
     local title_icon_style = widget.style.title_icon
     local arrow_icon_style = widget.style.arrow_icon
-    local size = _scaled_icon_size(visual and visual.size or 14, target)
+    local size = _scaled_icon_size(visual and visual.size or 14)
     local color = _any_to_widget_color(visual and visual.color or nil)
     local vertical_state = target and target.vertical_state or nil
     local arrow_icon = nil
@@ -1094,6 +1141,7 @@ local function _apply_marker_widget(widget, visual, x, y, z, target)
     widget.content.icon = visual and visual.icon or nil
     widget.content.title_icon = visual and visual.title_icon or nil
     widget.content.arrow_icon = arrow_icon
+    widget.content.value_text = visual and visual.value_text or ""
 
     icon_style.offset[1] = math.floor((x or 0) + 0.5)
     icon_style.offset[2] = math.floor((y or 0) + 0.5)
@@ -1122,6 +1170,7 @@ local function _apply_marker_widget(widget, visual, x, y, z, target)
         arrow_icon_style.size[2] = arrow_size
         arrow_icon_style.color = _widget_color(255, 255, 255, 255)
     end
+
 end
 
 local DEFAULT_INTERACTION_ICON = "content/ui/materials/hud/interactions/icons/default"
@@ -1165,6 +1214,84 @@ local function _copy_visual(visual)
     end
 
     return copy
+end
+
+local function _is_tech_remnant_kind(kind)
+    return kind == "material_expeditions_loot" or kind == "material_expeditions_loot_player_drop"
+end
+
+local function _tech_remnant_target_value(target)
+    local meta = target and target.meta or nil
+    local value = meta and tonumber(meta.remnant_cluster_value or meta.remnant_value) or nil
+
+    if value and value > 0 then
+        return value
+    end
+
+    return nil
+end
+
+local function _tech_remnant_scaled_size(base_size, value)
+    local size = tonumber(base_size) or 14
+    local amount = tonumber(value) or 0
+
+    if amount <= 10 then
+        return size
+    elseif amount <= 25 then
+        return size + 2
+    elseif amount <= 50 then
+        return size + 4
+    elseif amount <= 75 then
+        return size + 6
+    elseif amount <= 100 then
+        return size + 8
+    elseif amount <= 150 then
+        return size + 10
+    elseif amount <= 200 then
+        return size + 12
+    end
+
+    return size + 14
+end
+
+local function _tech_remnant_value_text(target)
+    if not (mod.get_show_expedition_loot_value_text and mod:get_show_expedition_loot_value_text()) then
+        return nil
+    end
+
+    if not _is_tech_remnant_kind(target and target.kind) then
+        return nil
+    end
+
+    local value = _tech_remnant_target_value(target)
+
+    if not value or value <= 0 then
+        return nil
+    end
+
+    return tostring(math.floor(value + 0.5))
+end
+
+local function _apply_target_specific_visual_overrides(target, visual)
+    if not visual then
+        return nil
+    end
+
+    local result = _copy_visual(visual)
+
+    if _is_tech_remnant_kind(target and target.kind) then
+        local mode = mod.get_expedition_loot_marker_mode and mod:get_expedition_loot_marker_mode() or "default"
+        local meta = target and target.meta or {}
+        local value = _tech_remnant_target_value(target)
+
+        if mode == "scaled" or meta.is_tech_remnant_cluster == true then
+            result.size = _tech_remnant_scaled_size(result.size or 14, value)
+        end
+
+        result.value_text = _tech_remnant_value_text(target)
+    end
+
+    return result
 end
 
 local function _artwork_mode_icon_visual(kind)
@@ -1277,7 +1404,7 @@ local function _target_visual(target)
             )
         end
 
-        return icon_visual
+        return _apply_target_specific_visual_overrides(target, icon_visual)
     end
 
     local presentation = PRESENTATIONS[target.kind]
@@ -1291,7 +1418,7 @@ local function _target_visual(target)
             )
         end
 
-        return presentation
+        return _apply_target_specific_visual_overrides(target, presentation)
     end
 
     local meta = target.meta or {}
@@ -1305,11 +1432,11 @@ local function _target_visual(target)
             )
         end
 
-        return {
+        return _apply_target_specific_visual_overrides(target, {
             icon = meta.interaction_icon,
             color = _widget_color(255, 255, 255, 255),
             size = 14,
-        }
+        })
     end
 
     if mod:get("debug_mode") then
@@ -1321,7 +1448,7 @@ local function _target_visual(target)
         )
     end
 
-    return PRESENTATIONS.pickup_unknown
+    return _apply_target_specific_visual_overrides(target, PRESENTATIONS.pickup_unknown)
 end
 
 local function _safe_player_camera(self)
@@ -1672,9 +1799,16 @@ local function _draw_screen_highlights(self, ui_renderer, snapshot, z)
 end
 
 _safe_player_camera_rotation = function(self)
-    local camera = _safe_player_camera(self)
+    local parent = self and self._parent
+    if not parent or not parent.player_camera then
+        return nil
+    end
 
-    if not camera or not Camera or not Camera.local_rotation then
+    local ok_camera, camera = pcall(function()
+        return parent:player_camera()
+    end)
+
+    if not ok_camera or not camera then
         return nil
     end
 
@@ -1771,7 +1905,7 @@ HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input
 
                 if px and py then
                     local visual = _target_visual(target)
-                    local icon_size = _scaled_icon_size(visual and visual.size or 14, target)
+                    local icon_size = _scaled_icon_size(visual and visual.size or 14)
                     local draw_x = center_x + px - icon_size / 2
                     local draw_y = center_y + py - icon_size / 2
                     local widget = self._marker_widgets[next_widget_index]
@@ -1804,6 +1938,9 @@ HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input
                         _draw_box(ui_renderer, draw_x, draw_y, z + 5, icon_size, icon_size,
                             _widget_to_color(visual and visual.color or nil))
                     end
+
+                    _draw_marker_value_text(ui_renderer, visual and visual.value_text or nil, draw_x, draw_y, z + 5, icon_size,
+                        target and target.vertical_state ~= nil)
 
                     next_widget_index = next_widget_index + 1
                 end
