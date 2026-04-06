@@ -2,6 +2,15 @@ local mod = get_mod("Radar")
 local Pickups = require("scripts/settings/pickup/pickups")
 local PlayerUnitStatus = require("scripts/utilities/attack/player_unit_status")
 
+local pcall = pcall
+local pairs = pairs
+local tonumber = tonumber
+local tostring = tostring
+local type = type
+local rawget = rawget
+local math_huge = math.huge
+local table_sort = table.sort
+
 local SCAN_INTERVAL = 0.25
 
 local NEARBY_OUTLINE_OCCLUDED_MULTIPLIER = 0.6
@@ -289,6 +298,8 @@ local EXPEDITION_LOOT_VALUE_BY_PICKUP_NAME = {
 }
 
 
+local NEARBY_HIGHLIGHT_SETTING_BY_GROUP
+
 local function _normalize_marker_display_mode(value)
     if value == false or value == "off" then
         return "off"
@@ -553,17 +564,13 @@ local function _safe_unit_main_visible(unit)
         return nil
     end
 
-    local ok_visible, is_visible = pcall(function()
-        return Unit.is_visible(unit, "main")
-    end)
+    local ok_visible, is_visible = pcall(Unit.is_visible, unit, "main")
 
     if ok_visible then
         return is_visible == true
     end
 
-    local ok_visible_2, is_visible_2 = pcall(function()
-        return Unit.is_visible(unit)
-    end)
+    local ok_visible_2, is_visible_2 = pcall(Unit.is_visible, unit)
 
     if ok_visible_2 then
         return is_visible_2 == true
@@ -720,9 +727,7 @@ local function _safe_health_alive(unit)
         return nil
     end
 
-    local ok_alive, is_alive = pcall(function()
-        return health_extension:is_alive()
-    end)
+    local ok_alive, is_alive = pcall(health_extension.is_alive, health_extension)
 
     if ok_alive then
         return is_alive
@@ -741,9 +746,7 @@ local function _is_owned_by_death_manager(unit)
         return false
     end
 
-    local ok_owned, owned = pcall(function()
-        return unit_data_extension:is_owned_by_death_manager()
-    end)
+    local ok_owned, owned = pcall(unit_data_extension.is_owned_by_death_manager, unit_data_extension)
 
     return ok_owned and owned or false
 end
@@ -971,9 +974,7 @@ local function _local_player()
         return nil
     end
 
-    local ok, player = pcall(function()
-        return getter(player_manager, 1)
-    end)
+    local ok, player = pcall(getter, player_manager, 1)
 
     if ok then
         return player
@@ -997,9 +998,7 @@ local function _is_local_player_captured()
         return false
     end
 
-    local ok, captured = pcall(function()
-        return PlayerUnitStatus.is_hogtied(player_unit)
-    end)
+    local ok, captured = pcall(PlayerUnitStatus.is_hogtied, player_unit)
 
     return ok and captured == true or false
 end
@@ -1244,32 +1243,46 @@ local function _collect_screen_highlight_targets()
     local max_distance = mod:get_nearby_highlight_range()
     local max_distance_sq = max_distance * max_distance
     local highlights = {}
+    local highlight_enabled_by_kind = {}
 
     local source_targets = mod._highlight_source_radar_targets or mod._unclustered_radar_targets or mod._radar_targets or {}
 
     for i = 1, #source_targets do
         local target = source_targets[i]
+        local kind = target and target.kind or nil
 
-        if target and mod:is_nearby_highlight_enabled_for_kind(target.kind) then
-            local distance_sq = target.distance_sq_3d
+        if kind ~= nil then
+            local enabled = highlight_enabled_by_kind[kind]
 
-            if distance_sq == nil and target.position then
-                distance_sq = _distance_squared(player_pos, target.position)
+            if enabled == nil then
+                local group_name = mod:get_marker_scale_group(kind)
+                local setting_id = group_name and NEARBY_HIGHLIGHT_SETTING_BY_GROUP[group_name] or nil
+
+                enabled = setting_id ~= nil and mod:get(setting_id) == true or false
+                highlight_enabled_by_kind[kind] = enabled
             end
 
-            if distance_sq ~= nil and distance_sq <= max_distance_sq then
-                local color = _screen_highlight_color_for_kind(target.kind)
-                local world_position = _screen_highlight_anchor_position(target)
+            if enabled then
+                local distance_sq = target.distance_sq_3d
 
-                if color and world_position then
-                    highlights[#highlights + 1] = {
-                        unit = target.unit,
-                        kind = target.kind,
-                        world_position = world_position,
-                        color = color,
-                        occluded_color = _darkened_color_array(color, NEARBY_OUTLINE_OCCLUDED_MULTIPLIER),
-                        distance_sq_3d = distance_sq,
-                    }
+                if distance_sq == nil and target.position then
+                    distance_sq = _distance_squared(player_pos, target.position)
+                end
+
+                if distance_sq ~= nil and distance_sq <= max_distance_sq then
+                    local color = _screen_highlight_color_for_kind(kind)
+                    local world_position = _screen_highlight_anchor_position(target)
+
+                    if color and world_position then
+                        highlights[#highlights + 1] = {
+                            unit = target.unit,
+                            kind = kind,
+                            world_position = world_position,
+                            color = color,
+                            occluded_color = _darkened_color_array(color, NEARBY_OUTLINE_OCCLUDED_MULTIPLIER),
+                            distance_sq_3d = distance_sq,
+                        }
+                    end
                 end
             end
         end
@@ -2014,30 +2027,22 @@ local function _classify_interactee(extension, unit)
     local icon = nil
     local description = nil
 
-    local ok_interaction_type, interaction_type_value = pcall(function()
-        return extension:interaction_type()
-    end)
+    local ok_interaction_type, interaction_type_value = pcall(extension.interaction_type, extension)
     if ok_interaction_type then
         interaction_type = _safe_lower_string(interaction_type_value)
     end
 
-    local ok_ui_interaction_type, ui_interaction_type_value = pcall(function()
-        return extension:ui_interaction_type()
-    end)
+    local ok_ui_interaction_type, ui_interaction_type_value = pcall(extension.ui_interaction_type, extension)
     if ok_ui_interaction_type then
         ui_interaction_type = _safe_lower_string(ui_interaction_type_value)
     end
 
-    local ok_icon, icon_value = pcall(function()
-        return extension:interaction_icon()
-    end)
+    local ok_icon, icon_value = pcall(extension.interaction_icon, extension)
     if ok_icon then
         icon = _safe_lower_string(icon_value)
     end
 
-    local ok_description, description_value = pcall(function()
-        return extension:description()
-    end)
+    local ok_description, description_value = pcall(extension.description, extension)
     if ok_description then
         description = _safe_lower_string(description_value)
     end
@@ -2352,9 +2357,8 @@ local function _track_expedition_tagged_levels(game_mode, navigation_handler, cu
         return
     end
 
-    local ok_levels, levels = pcall(function()
-        return game_mode:get_all_levels_of_specified_tag(current_location_index, { [level_tag] = true })
-    end)
+    local ok_levels, levels = pcall(game_mode.get_all_levels_of_specified_tag, game_mode, current_location_index,
+        { [level_tag] = true })
     if not ok_levels or type(levels) ~= "table" then
         return
     end
@@ -2399,9 +2403,7 @@ local function _scan_expedition_objectives()
 
     local navigation_handler = nil
     if game_mode.get_navigation_handler then
-        local ok_navigation, value = pcall(function()
-            return game_mode:get_navigation_handler()
-        end)
+        local ok_navigation, value = pcall(game_mode.get_navigation_handler, game_mode)
         if ok_navigation then
             navigation_handler = value
         end
@@ -2409,9 +2411,7 @@ local function _scan_expedition_objectives()
 
     local current_location_index = nil
     if game_mode.current_location_index then
-        local ok_location, value = pcall(function()
-            return game_mode:current_location_index()
-        end)
+        local ok_location, value = pcall(game_mode.current_location_index, game_mode)
         if ok_location then
             current_location_index = value
         end
@@ -2420,9 +2420,7 @@ local function _scan_expedition_objectives()
     local active_section_index = _safe_expedition_active_section_index(game_mode) or current_location_index
 
     if navigation_handler and navigation_handler.get_registered_opportunities then
-        local ok, opportunities = pcall(function()
-            return navigation_handler:get_registered_opportunities()
-        end)
+        local ok, opportunities = pcall(navigation_handler.get_registered_opportunities, navigation_handler)
         if ok then
             _track_expedition_registered_points(game_mode, navigation_handler, active_section_index, opportunities,
                 "expedition_objective_opportunity", "type_opportunity")
@@ -2430,9 +2428,7 @@ local function _scan_expedition_objectives()
     end
 
     if navigation_handler and navigation_handler.get_registered_exits then
-        local ok, exits = pcall(function()
-            return navigation_handler:get_registered_exits()
-        end)
+        local ok, exits = pcall(navigation_handler.get_registered_exits, navigation_handler)
         if ok then
             _track_expedition_registered_points(game_mode, navigation_handler, active_section_index, exits,
                 "expedition_objective_transition", "type_transition")
@@ -2440,9 +2436,7 @@ local function _scan_expedition_objectives()
     end
 
     if navigation_handler and navigation_handler.get_registered_extractions then
-        local ok, extractions = pcall(function()
-            return navigation_handler:get_registered_extractions()
-        end)
+        local ok, extractions = pcall(navigation_handler.get_registered_extractions, navigation_handler)
         if ok then
             _track_expedition_registered_points(game_mode, navigation_handler, active_section_index, extractions,
                 "expedition_objective_extraction", "type_extraction")
@@ -2470,25 +2464,19 @@ local function _refresh_player_units()
             local player_name = nil
             local player_slot = _safe_player_slot(player)
 
-            local ok_player_name, resolved_player_name = pcall(function()
-                return player:name()
-            end)
+            local ok_player_name, resolved_player_name = pcall(player.name, player)
             if ok_player_name then
                 player_name = resolved_player_name
             end
 
-            local ok_profile, profile = pcall(function()
-                return player:profile()
-            end)
+            local ok_profile, profile = pcall(player.profile, player)
             if ok_profile and profile and profile.archetype and profile.archetype.name then
                 archetype_name = profile.archetype.name
             end
 
             local unit_data_extension = ScriptUnit.has_extension(unit, "unit_data_system")
             if unit_data_extension and unit_data_extension.archetype_name then
-                local ok_archetype, value = pcall(function()
-                    return unit_data_extension:archetype_name()
-                end)
+                local ok_archetype, value = pcall(unit_data_extension.archetype_name, unit_data_extension)
                 if ok_archetype and value ~= nil then
                     archetype_name = value
                 end
@@ -2518,27 +2506,21 @@ local function _scan_interactees()
             local show_marker = true
 
             if extension.active then
-                local ok_active, value = pcall(function()
-                    return extension:active()
-                end)
+                local ok_active, value = pcall(extension.active, extension)
                 if ok_active then
                     is_active = value
                 end
             end
 
             if extension.used then
-                local ok_used, value = pcall(function()
-                    return extension:used()
-                end)
+                local ok_used, value = pcall(extension.used, extension)
                 if ok_used then
                     is_used = value
                 end
             end
 
             if player_unit and extension.show_marker then
-                local ok_show, value = pcall(function()
-                    return extension:show_marker(player_unit)
-                end)
+                local ok_show, value = pcall(extension.show_marker, extension, player_unit)
                 if ok_show then
                     show_marker = value
                 end
@@ -2564,9 +2546,7 @@ local function _scan_chests()
 
     for unit, extension in pairs(chest_map) do
         if _safe_unit_alive(unit) and extension and extension.is_open then
-            local ok_open, is_open = pcall(function()
-                return extension:is_open()
-            end)
+            local ok_open, is_open = pcall(extension.is_open, extension)
 
             if ok_open and not is_open then
                 _track_unit(unit, "crate_unknown", "chest_system")
@@ -2583,9 +2563,7 @@ local function _scan_minions()
 
     for unit, extension in pairs(unit_data_map) do
         if _safe_unit_alive(unit) and extension and extension.breed_name then
-            local ok_breed, breed_name = pcall(function()
-                return extension:breed_name()
-            end)
+            local ok_breed, breed_name = pcall(extension.breed_name, extension)
 
             if ok_breed and breed_name then
                 local kind = _classify_enemy_from_breed(breed_name)
@@ -3051,10 +3029,10 @@ local function _collect_radar_targets()
     targets = _cluster_expedition_loot_targets(targets, player_pos, item_vertical_arrow_threshold_sq,
         item_vertical_hide_threshold)
 
-    table.sort(targets, function(a, b)
-        local boss_infinite = mod:get_boss_marker_range_mode() == "infinite"
+    local boss_markers_infinite = mod:get_boss_marker_range_mode() == "infinite"
 
-        if boss_infinite then
+    table_sort(targets, function(a, b)
+        if boss_markers_infinite then
             local a_is_boss = _is_boss_marker_kind(a.kind)
             local b_is_boss = _is_boss_marker_kind(b.kind)
 
@@ -3063,7 +3041,7 @@ local function _collect_radar_targets()
             end
         end
 
-        return (a.distance_sq or math.huge) < (b.distance_sq or math.huge)
+        return (a.distance_sq or math_huge) < (b.distance_sq or math_huge)
     end)
 
     if #targets > max_markers then
@@ -3572,7 +3550,7 @@ function mod:get_radar_pos_y(size)
     return math.floor(y + 0.5)
 end
 
-local NEARBY_HIGHLIGHT_SETTING_BY_GROUP = {
+NEARBY_HIGHLIGHT_SETTING_BY_GROUP = {
     common_pickups_group = "nearby_highlight_common_pickups",
     materials_group = "nearby_highlight_materials",
     primary_objective_group = "nearby_highlight_primary_objective",
