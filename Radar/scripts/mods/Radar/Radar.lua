@@ -8,6 +8,7 @@ local tonumber = tonumber
 local tostring = tostring
 local type = type
 local rawget = rawget
+local math_abs = math.abs
 local math_huge = math.huge
 local table_sort = table.sort
 
@@ -1216,7 +1217,11 @@ end
 local function _copy_target_list(targets)
     local copy = {}
 
-    for i = 1, #(targets or {}) do
+    if not targets then
+        return copy
+    end
+
+    for i = 1, #targets do
         copy[i] = targets[i]
     end
 
@@ -1240,33 +1245,37 @@ local function _collect_screen_highlight_targets()
         return {}
     end
 
+    local get_setting = mod.get
+    local get_marker_scale_group = mod.get_marker_scale_group
     local max_distance = mod:get_nearby_highlight_range()
     local max_distance_sq = max_distance * max_distance
     local highlights = {}
+    local highlight_count = 0
     local highlight_enabled_by_kind = {}
 
     local source_targets = mod._highlight_source_radar_targets or mod._unclustered_radar_targets or mod._radar_targets or {}
 
     for i = 1, #source_targets do
         local target = source_targets[i]
-        local kind = target and target.kind or nil
+        local kind = target and target.kind
 
         if kind ~= nil then
             local enabled = highlight_enabled_by_kind[kind]
 
             if enabled == nil then
-                local group_name = mod:get_marker_scale_group(kind)
+                local group_name = get_marker_scale_group(mod, kind)
                 local setting_id = group_name and NEARBY_HIGHLIGHT_SETTING_BY_GROUP[group_name] or nil
 
-                enabled = setting_id ~= nil and mod:get(setting_id) == true or false
+                enabled = setting_id ~= nil and get_setting(mod, setting_id) == true or false
                 highlight_enabled_by_kind[kind] = enabled
             end
 
             if enabled then
                 local distance_sq = target.distance_sq_3d
+                local position = target.position
 
-                if distance_sq == nil and target.position then
-                    distance_sq = _distance_squared(player_pos, target.position)
+                if distance_sq == nil and position then
+                    distance_sq = _distance_squared(player_pos, position)
                 end
 
                 if distance_sq ~= nil and distance_sq <= max_distance_sq then
@@ -1274,7 +1283,8 @@ local function _collect_screen_highlight_targets()
                     local world_position = _screen_highlight_anchor_position(target)
 
                     if color and world_position then
-                        highlights[#highlights + 1] = {
+                        highlight_count = highlight_count + 1
+                        highlights[highlight_count] = {
                             unit = target.unit,
                             kind = kind,
                             world_position = world_position,
@@ -2505,22 +2515,25 @@ local function _scan_interactees()
             local is_used = false
             local show_marker = true
 
-            if extension.active then
-                local ok_active, value = pcall(extension.active, extension)
+            local active = extension.active
+            if active then
+                local ok_active, value = pcall(active, extension)
                 if ok_active then
                     is_active = value
                 end
             end
 
-            if extension.used then
-                local ok_used, value = pcall(extension.used, extension)
+            local used = extension.used
+            if used then
+                local ok_used, value = pcall(used, extension)
                 if ok_used then
                     is_used = value
                 end
             end
 
-            if player_unit and extension.show_marker then
-                local ok_show, value = pcall(extension.show_marker, extension, player_unit)
+            local show_marker_fn = extension.show_marker
+            if player_unit and show_marker_fn then
+                local ok_show, value = pcall(show_marker_fn, extension, player_unit)
                 if ok_show then
                     show_marker = value
                 end
@@ -2545,11 +2558,15 @@ local function _scan_chests()
     end
 
     for unit, extension in pairs(chest_map) do
-        if _safe_unit_alive(unit) and extension and extension.is_open then
-            local ok_open, is_open = pcall(extension.is_open, extension)
+        if _safe_unit_alive(unit) and extension then
+            local is_open_fn = extension.is_open
 
-            if ok_open and not is_open then
-                _track_unit(unit, "crate_unknown", "chest_system")
+            if is_open_fn then
+                local ok_open, is_open = pcall(is_open_fn, extension)
+
+                if ok_open and not is_open then
+                    _track_unit(unit, "crate_unknown", "chest_system")
+                end
             end
         end
     end
@@ -2562,15 +2579,19 @@ local function _scan_minions()
     end
 
     for unit, extension in pairs(unit_data_map) do
-        if _safe_unit_alive(unit) and extension and extension.breed_name then
-            local ok_breed, breed_name = pcall(extension.breed_name, extension)
+        if _safe_unit_alive(unit) and extension then
+            local breed_name_fn = extension.breed_name
 
-            if ok_breed and breed_name then
-                local kind = _classify_enemy_from_breed(breed_name)
-                if kind and _is_trackable_unit_alive(unit, kind) then
-                    _track_unit(unit, kind, "unit_data_system", {
-                        breed_name = breed_name,
-                    })
+            if breed_name_fn then
+                local ok_breed, breed_name = pcall(breed_name_fn, extension)
+
+                if ok_breed and breed_name then
+                    local kind = _classify_enemy_from_breed(breed_name)
+                    if kind and _is_trackable_unit_alive(unit, kind) then
+                        _track_unit(unit, kind, "unit_data_system", {
+                            breed_name = breed_name,
+                        })
+                    end
                 end
             end
         end
@@ -2634,16 +2655,24 @@ end
 
 local function _prune_units()
     local now = _safe_gameplay_time() or 0
+    local tracked_units = mod._tracked_units
 
-    for unit, data in pairs(mod._tracked_units) do
+    for unit, data in pairs(tracked_units) do
         if not _is_trackable_unit_alive(unit, data and data.kind) then
-            mod._tracked_units[unit] = nil
-        elseif data.last_seen_t and now - data.last_seen_t > 2.5 then
-            mod._tracked_units[unit] = nil
+            tracked_units[unit] = nil
         else
-            data.position = _safe_unit_position(unit) or data.position
-            if not data.position then
-                mod._tracked_units[unit] = nil
+            local last_seen_t = data.last_seen_t
+
+            if last_seen_t and now - last_seen_t > 2.5 then
+                tracked_units[unit] = nil
+            else
+                local position = _safe_unit_position(unit) or data.position
+
+                if position then
+                    data.position = position
+                else
+                    tracked_units[unit] = nil
+                end
             end
         end
     end
@@ -2789,7 +2818,7 @@ local function _expedition_loot_vertical_state(player_pos, position, item_vertic
     local vertical_state = nil
 
     if vertical_delta ~= nil then
-        local abs_vertical_delta = math.abs(vertical_delta)
+        local abs_vertical_delta = math_abs(vertical_delta)
         local distance_sq_horizontal = _distance_squared_horizontal(player_pos, position)
 
         if abs_vertical_delta >= item_vertical_hide_threshold then
@@ -2870,14 +2899,18 @@ local function _cluster_expedition_loot_targets(targets, player_pos, item_vertic
 
     local pass_through_targets = {}
     local cluster_candidates = {}
+    local pass_count = 0
+    local cluster_candidate_count = 0
 
     for i = 1, #targets do
         local target = targets[i]
 
         if _should_cluster_expedition_loot_target(target) then
-            cluster_candidates[#cluster_candidates + 1] = target
+            cluster_candidate_count = cluster_candidate_count + 1
+            cluster_candidates[cluster_candidate_count] = target
         else
-            pass_through_targets[#pass_through_targets + 1] = target
+            pass_count = pass_count + 1
+            pass_through_targets[pass_count] = target
         end
     end
 
@@ -2886,10 +2919,11 @@ local function _cluster_expedition_loot_targets(targets, player_pos, item_vertic
     local radius_sq = horizontal_radius * horizontal_radius
     local consumed = {}
 
-    for i = 1, #cluster_candidates do
+    for i = 1, cluster_candidate_count do
         if not consumed[i] then
             local seed = cluster_candidates[i]
             local cluster_members = { seed }
+            local cluster_member_count = 1
 
             consumed[i] = true
 
@@ -2900,41 +2934,60 @@ local function _cluster_expedition_loot_targets(targets, player_pos, item_vertic
 
                 local center = _expedition_loot_cluster_center(cluster_members)
 
-                for j = i + 1, #cluster_candidates do
+                for j = i + 1, cluster_candidate_count do
                     if not consumed[j] then
                         local candidate = cluster_candidates[j]
                         local distance_sq_horizontal = _distance_squared_horizontal(center, candidate.position)
                         local vertical_delta = _vertical_delta(center, candidate.position)
-                        local abs_vertical_delta = vertical_delta and math.abs(vertical_delta) or 0
+                        local abs_vertical_delta = vertical_delta and math_abs(vertical_delta) or 0
 
                         if distance_sq_horizontal <= radius_sq
                             and abs_vertical_delta <= vertical_threshold then
                             consumed[j] = true
-                            cluster_members[#cluster_members + 1] = candidate
+                            cluster_member_count = cluster_member_count + 1
+                            cluster_members[cluster_member_count] = candidate
                             changed = true
                         end
                     end
                 end
             end
 
-            if #cluster_members > 1 then
+            if cluster_member_count > 1 then
                 local clustered_target = _create_expedition_loot_cluster_target(cluster_members, player_pos,
                     item_vertical_arrow_threshold_sq, item_vertical_hide_threshold)
 
                 if clustered_target then
-                    pass_through_targets[#pass_through_targets + 1] = clustered_target
+                    pass_count = pass_count + 1
+                    pass_through_targets[pass_count] = clustered_target
                 else
-                    for j = 1, #cluster_members do
-                        pass_through_targets[#pass_through_targets + 1] = cluster_members[j]
+                    for j = 1, cluster_member_count do
+                        pass_count = pass_count + 1
+                        pass_through_targets[pass_count] = cluster_members[j]
                     end
                 end
             else
-                pass_through_targets[#pass_through_targets + 1] = seed
+                pass_count = pass_count + 1
+                pass_through_targets[pass_count] = seed
             end
         end
     end
 
     return pass_through_targets
+end
+
+local function _compare_radar_targets_by_distance(a, b)
+    return (a.distance_sq or math_huge) < (b.distance_sq or math_huge)
+end
+
+local function _compare_radar_targets_boss_first(a, b)
+    local a_is_boss = _is_boss_marker_kind(a.kind)
+    local b_is_boss = _is_boss_marker_kind(b.kind)
+
+    if a_is_boss ~= b_is_boss then
+        return a_is_boss
+    end
+
+    return (a.distance_sq or math_huge) < (b.distance_sq or math_huge)
 end
 
 local function _collect_radar_targets()
@@ -2954,7 +3007,10 @@ local function _collect_radar_targets()
     local item_vertical_arrow_threshold = mod:get_item_vertical_arrow_threshold()
     local item_vertical_hide_threshold = mod:get_item_vertical_hide_threshold()
     local item_vertical_arrow_threshold_sq = item_vertical_arrow_threshold * item_vertical_arrow_threshold
+    local tracked_units = mod._tracked_units
+    local tracked_points = mod._tracked_points
     local targets = {}
+    local target_count = 0
 
     local function append_target(unit, data)
         if not data or not data.position or not data.kind or not _kind_enabled(data.kind) then
@@ -2982,7 +3038,7 @@ local function _collect_radar_targets()
             vertical_delta = _vertical_delta(player_pos, data.position)
 
             if vertical_delta ~= nil then
-                local abs_vertical_delta = math.abs(vertical_delta)
+                local abs_vertical_delta = math_abs(vertical_delta)
 
                 if abs_vertical_delta >= item_vertical_hide_threshold then
                     return
@@ -2999,7 +3055,8 @@ local function _collect_radar_targets()
             end
         end
 
-        targets[#targets + 1] = {
+        target_count = target_count + 1
+        targets[target_count] = {
             unit = unit,
             kind = data.kind,
             position = data.position,
@@ -3013,13 +3070,13 @@ local function _collect_radar_targets()
         }
     end
 
-    for unit, data in pairs(mod._tracked_units) do
+    for unit, data in pairs(tracked_units) do
         if _is_trackable_unit_alive(unit, data and data.kind) then
             append_target(unit, data)
         end
     end
 
-    for id, data in pairs(mod._tracked_points) do
+    for id, data in pairs(tracked_points) do
         append_target(id, data)
     end
 
@@ -3029,23 +3086,16 @@ local function _collect_radar_targets()
     targets = _cluster_expedition_loot_targets(targets, player_pos, item_vertical_arrow_threshold_sq,
         item_vertical_hide_threshold)
 
-    local boss_markers_infinite = mod:get_boss_marker_range_mode() == "infinite"
+    if mod:get_boss_marker_range_mode() == "infinite" then
+        table_sort(targets, _compare_radar_targets_boss_first)
+    else
+        table_sort(targets, _compare_radar_targets_by_distance)
+    end
 
-    table_sort(targets, function(a, b)
-        if boss_markers_infinite then
-            local a_is_boss = _is_boss_marker_kind(a.kind)
-            local b_is_boss = _is_boss_marker_kind(b.kind)
+    local target_total = #targets
 
-            if a_is_boss ~= b_is_boss then
-                return a_is_boss
-            end
-        end
-
-        return (a.distance_sq or math_huge) < (b.distance_sq or math_huge)
-    end)
-
-    if #targets > max_markers then
-        for i = #targets, max_markers + 1, -1 do
+    if target_total > max_markers then
+        for i = target_total, max_markers + 1, -1 do
             targets[i] = nil
         end
     end
@@ -3792,7 +3842,7 @@ function mod:project_target_to_radar(player_pos, player_rot, target_pos, max_rad
                 py = py * circle_scale
             end
         else
-            local max_component = math.max(math.abs(px), math.abs(py))
+            local max_component = math.max(math_abs(px), math_abs(py))
             if max_component > 0 then
                 local square_scale = max_radius / max_component
                 px = px * square_scale

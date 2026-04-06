@@ -27,6 +27,7 @@ local math_pi = math.pi
 local math_sin = math.sin
 local math_sqrt = math.sqrt
 local math_tan = math.tan
+local math_huge = math.huge
 local string_format = string.format
 local string_len = string.len
 local string_lower = string.lower
@@ -90,6 +91,14 @@ local function _color(a, r, g, b)
     return Color(a, r, g, b)
 end
 
+local WHITE_WIDGET_COLOR = _widget_color(255, 255, 255, 255)
+local OCCLUSION_RAYCAST_FILTERS = {
+    "filter_player_character_shooting",
+    "filter_ray_projectile",
+    "filter_minion_shooting",
+    "filter_cover",
+}
+
 local function _widget_to_color(color)
     if not color then
         return Color(255, 255, 255, 255)
@@ -104,7 +113,8 @@ local function _widget_to_color(color)
 end
 
 local function _any_to_widget_color(color, fallback)
-    local src = color or fallback or { 255, 255, 255, 255 }
+    local src = color or fallback or WHITE_WIDGET_COLOR
+
     return {
         src[1] or src.a or 255,
         src[2] or src.r or 255,
@@ -120,7 +130,7 @@ local function _with_alpha_widget(color, alpha)
 end
 
 local function _is_finite_number(v)
-    return type(v) == "number" and v == v and v ~= math.huge and v ~= -math.huge
+    return type(v) == "number" and v == v and v ~= math_huge and v ~= -math_huge
 end
 
 local function _vector3_components(vec)
@@ -507,7 +517,9 @@ local PRESENTATIONS = {
 }
 
 local function _draw_box(ui_renderer, x, y, z, w, h, color)
-    if not ui_renderer or not ui_renderer.gui then
+    local gui = ui_renderer and ui_renderer.gui
+
+    if not gui then
         return
     end
 
@@ -527,7 +539,7 @@ local function _draw_box(ui_renderer, x, y, z, w, h, color)
     local position = Vector3(x * scale, y * scale, start_layer + z)
     local size = Vector2(w * scale, h * scale)
 
-    Gui.rect(ui_renderer.gui, position, size, color)
+    Gui.rect(gui, position, size, color)
 end
 
 local function _draw_marker_brackets(ui_renderer, x, y, z, size, color)
@@ -634,7 +646,9 @@ local function _draw_square_outline(ui_renderer, x, y, z, size, thickness, color
 end
 
 local function _draw_screen_pixel(ui_renderer, screen_x, screen_y, z, color)
-    if not ui_renderer or not ui_renderer.gui then
+    local gui = ui_renderer and ui_renderer.gui
+
+    if not gui then
         return
     end
 
@@ -642,7 +656,7 @@ local function _draw_screen_pixel(ui_renderer, screen_x, screen_y, z, color)
     local start_layer = render_settings and render_settings.start_layer or 0
 
     Gui.rect(
-        ui_renderer.gui,
+        gui,
         Vector3(screen_x, screen_y, start_layer + z),
         Vector2(1, 1),
         color
@@ -766,29 +780,22 @@ end
 
 local function _view_cone_endpoint_square(center_x, center_y, left, top, right, bottom, angle)
     local dx, dy = _view_cone_direction(angle)
-    local t_candidates = {}
+    local best_t = nil
 
     if math_abs(dx) > 0.0001 then
-        if dx > 0 then
-            t_candidates[#t_candidates + 1] = (right - center_x) / dx
-        else
-            t_candidates[#t_candidates + 1] = (left - center_x) / dx
+        local t = ((dx > 0 and right) or left) - center_x
+        t = t / dx
+
+        if t > 0 then
+            best_t = t
         end
     end
 
     if math_abs(dy) > 0.0001 then
-        if dy > 0 then
-            t_candidates[#t_candidates + 1] = (bottom - center_y) / dy
-        else
-            t_candidates[#t_candidates + 1] = (top - center_y) / dy
-        end
-    end
+        local t = ((dy > 0 and bottom) or top) - center_y
+        t = t / dy
 
-    local best_t = nil
-
-    for i = 1, #t_candidates do
-        local t = t_candidates[i]
-        if t and t > 0 and (not best_t or t < best_t) then
+        if t > 0 and (not best_t or t < best_t) then
             best_t = t
         end
     end
@@ -1256,7 +1263,7 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size)
         arrow_icon_style.offset[3] = (icon_style.offset[3] or 0) + 2
         arrow_icon_style.size[1] = arrow_size
         arrow_icon_style.size[2] = arrow_size
-        arrow_icon_style.color = _widget_color(255, 255, 255, 255)
+        arrow_icon_style.color = WHITE_WIDGET_COLOR
     end
 
 end
@@ -1373,20 +1380,21 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
         return nil
     end
 
-    local result = _copy_visual(visual)
-
-    if _is_tech_remnant_kind(target and target.kind) then
-        local mode = draw_cache and draw_cache.expedition_loot_marker_mode or
-            (mod.get_expedition_loot_marker_mode and mod:get_expedition_loot_marker_mode() or "default")
-        local meta = target and target.meta or {}
-        local value = _tech_remnant_target_value(target)
-
-        if mode == "scaled" or meta.is_tech_remnant_cluster == true then
-            result.size = _tech_remnant_scaled_size(result.size or 14, value)
-        end
-
-        result.value_text = _tech_remnant_value_text(target, draw_cache)
+    if not _is_tech_remnant_kind(target and target.kind) then
+        return visual
     end
+
+    local result = _copy_visual(visual)
+    local mode = draw_cache and draw_cache.expedition_loot_marker_mode or
+        (mod.get_expedition_loot_marker_mode and mod:get_expedition_loot_marker_mode() or "default")
+    local meta = target and target.meta or {}
+    local value = _tech_remnant_target_value(target)
+
+    if mode == "scaled" or meta.is_tech_remnant_cluster == true then
+        result.size = _tech_remnant_scaled_size(result.size or 14, value)
+    end
+
+    result.value_text = _tech_remnant_value_text(target, draw_cache)
 
     return result
 end
@@ -1409,7 +1417,7 @@ local function _artwork_mode_icon_visual(kind, draw_cache)
         return nil
     end
 
-    return _copy_visual(ARTWORK_MODE_ICON_PRESENTATIONS[kind])
+    return ARTWORK_MODE_ICON_PRESENTATIONS[kind]
 end
 
 local function _expedition_objective_visual(target, draw_cache)
@@ -1667,62 +1675,119 @@ local function _rotation_basis(rotation)
 end
 
 local function _safe_physics_world()
-    local candidates = {
-        function()
-            local physics_manager = Managers and Managers.state and Managers.state.physics
-            if physics_manager and type(physics_manager.physics_world) == "function" then
-                return physics_manager:physics_world()
-            end
-        end,
-        function()
-            local world_manager = Managers and Managers.state and Managers.state.world
-            if world_manager and type(world_manager.world) == "function" and World and World.physics_world then
-                local world = world_manager:world("level_world")
-                if world then
-                    return World.physics_world(world)
-                end
-            end
-        end,
-        function()
-            local world_manager = Managers and Managers.world
-            if world_manager and type(world_manager.world) == "function" and World and World.physics_world then
-                local world = world_manager:world("level_world")
-                if world then
-                    return World.physics_world(world)
-                end
-            end
-        end,
-    }
+    local physics_manager = Managers and Managers.state and Managers.state.physics
 
-    for i = 1, #candidates do
-        local ok, physics_world = pcall(candidates[i])
+    if physics_manager and type(physics_manager.physics_world) == "function" then
+        local ok, physics_world = pcall(physics_manager.physics_world, physics_manager)
+
         if ok and physics_world then
             return physics_world
+        end
+    end
+
+    if World and World.physics_world then
+        local state_world_manager = Managers and Managers.state and Managers.state.world
+
+        if state_world_manager and type(state_world_manager.world) == "function" then
+            local ok_world, world = pcall(state_world_manager.world, state_world_manager, "level_world")
+
+            if ok_world and world then
+                local ok_physics_world, physics_world = pcall(World.physics_world, world)
+
+                if ok_physics_world and physics_world then
+                    return physics_world
+                end
+            end
+        end
+
+        local world_manager = Managers and Managers.world
+
+        if world_manager and type(world_manager.world) == "function" then
+            local ok_world, world = pcall(world_manager.world, world_manager, "level_world")
+
+            if ok_world and world then
+                local ok_physics_world, physics_world = pcall(World.physics_world, world)
+
+                if ok_physics_world and physics_world then
+                    return physics_world
+                end
+            end
         end
     end
 
     return nil
 end
 
-local function _extract_raycast_distance(...)
-    local values = { ... }
+local function _extract_raycast_distance(a, b, c, d)
+    local value = a
 
-    for i = 1, #values do
-        local value = values[i]
+    if type(value) == "number" and _is_finite_number(value) then
+        return value
+    end
 
-        if type(value) == "number" and _is_finite_number(value) then
-            return value
+    if type(value) == "table" then
+        if _is_finite_number(value.distance) then
+            return value.distance
         end
 
-        if type(value) == "table" then
-            if _is_finite_number(value.distance) then
-                return value.distance
-            end
+        local first = value[1]
 
-            local first = value[1]
-            if type(first) == "table" and _is_finite_number(first.distance) then
-                return first.distance
-            end
+        if type(first) == "table" and _is_finite_number(first.distance) then
+            return first.distance
+        end
+    end
+
+    value = b
+
+    if type(value) == "number" and _is_finite_number(value) then
+        return value
+    end
+
+    if type(value) == "table" then
+        if _is_finite_number(value.distance) then
+            return value.distance
+        end
+
+        local first = value[1]
+
+        if type(first) == "table" and _is_finite_number(first.distance) then
+            return first.distance
+        end
+    end
+
+    value = c
+
+    if type(value) == "number" and _is_finite_number(value) then
+        return value
+    end
+
+    if type(value) == "table" then
+        if _is_finite_number(value.distance) then
+            return value.distance
+        end
+
+        local first = value[1]
+
+        if type(first) == "table" and _is_finite_number(first.distance) then
+            return first.distance
+        end
+    end
+
+    value = d
+
+    if type(value) == "number" and _is_finite_number(value) then
+        return value
+    end
+
+    if type(value) == "table" then
+        if _is_finite_number(value.distance) then
+            return value.distance
+        end
+
+        local first = value[1]
+
+        if type(first) == "table" and _is_finite_number(first.distance) then
+            return first.distance
         end
     end
 
@@ -1747,14 +1812,8 @@ local function _is_world_position_occluded(camera_position, world_position)
 
     local origin = Vector3(camera_position.x, camera_position.y, camera_position.z)
     local direction = Vector3(dx / distance, dy / distance, dz / distance)
-    local filters = {
-        "filter_player_character_shooting",
-        "filter_ray_projectile",
-        "filter_minion_shooting",
-        "filter_cover",
-    }
 
-    for i = 1, #filters do
+    for i = 1, #OCCLUSION_RAYCAST_FILTERS do
         local ok, a, b, c, d = pcall(
             PhysicsWorld.immediate_raycast,
             physics_world,
@@ -1763,7 +1822,7 @@ local function _is_world_position_occluded(camera_position, world_position)
             distance,
             "closest",
             "collision_filter",
-            filters[i]
+            OCCLUSION_RAYCAST_FILTERS[i]
         )
 
         if ok then
@@ -1859,17 +1918,19 @@ end
 
 local function _draw_screen_highlights(self, ui_renderer, snapshot, z)
     local highlights = snapshot and snapshot.screen_highlights or nil
+    local highlight_count = highlights and #highlights or 0
 
-    if not highlights or #highlights == 0 then
+    if highlight_count == 0 then
         return
     end
 
     local fallback_camera_position = snapshot and snapshot.player_position or nil
     local fallback_rotation = snapshot and snapshot.player_rotation or nil
 
-    for i = 1, #highlights do
+    for i = 1, highlight_count do
         local highlight = highlights[i]
-        local screen_x, screen_y, camera_position = _project_world_to_screen(self, highlight.world_position,
+        local world_position = highlight.world_position
+        local screen_x, screen_y, camera_position = _project_world_to_screen(self, world_position,
             fallback_camera_position, fallback_rotation)
 
         if screen_x and screen_y then
@@ -1878,8 +1939,8 @@ local function _draw_screen_highlights(self, ui_renderer, snapshot, z)
             local draw_y = screen_y - bracket_size * 0.5
             local draw_color = highlight.color
 
-            if camera_position and highlight.world_position then
-                local ok_occluded, occluded = pcall(_is_world_position_occluded, camera_position, highlight.world_position)
+            if camera_position and world_position then
+                local ok_occluded, occluded = pcall(_is_world_position_occluded, camera_position, world_position)
 
                 if ok_occluded and occluded == true then
                     draw_color = highlight.occluded_color or highlight.color
@@ -1925,6 +1986,7 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
     _ensure_marker_widgets(self)
 
     local draw_cache = _build_draw_cache()
+    local marker_widgets = self._marker_widgets
     local size = mod:get_radar_size()
     local range = mod:get_radar_range()
     local x, y, z, radius = mod:get_radar_origin(size)
@@ -1935,47 +1997,50 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
 
     local next_widget_index = 1
     local max_markers = mod:get_max_radar_markers()
+    local max_widget_index = math_min(max_markers, MAX_RADAR_MARKERS)
 
     if snapshot and snapshot.player_position then
         local player_pos = snapshot.player_position
         local targets = snapshot.targets or {}
+        local target_count = #targets
         local live_camera_rotation = _safe_player_camera_rotation(self)
         local projection_rotation = live_camera_rotation or snapshot.player_rotation
+        local project_target_to_radar = mod.project_target_to_radar
 
         local player_slot = tonumber(snapshot.player_slot)
         local slot_colors = draw_cache.slot_colors
         local player_color = player_slot and slot_colors and slot_colors[player_slot] or nil
 
         local self_visual = _self_visual
-        self_visual.color = _any_to_widget_color(player_color, _widget_color(255, 255, 255, 255))
+        self_visual.color = _any_to_widget_color(player_color, WHITE_WIDGET_COLOR)
 
         local self_icon_size = _scaled_icon_size(self_visual.size, draw_cache.icon_scale)
         local self_draw_x = center_x - self_icon_size / 2
         local self_draw_y = center_y - self_icon_size / 2
-        local self_widget = self._marker_widgets[next_widget_index]
+        local self_widget = marker_widgets[next_widget_index]
 
         _apply_marker_widget(self_widget, self_visual, self_draw_x, self_draw_y, z + 5, nil, self_icon_size)
         UIWidget.draw(self_widget, ui_renderer)
 
         next_widget_index = next_widget_index + 1
 
-        if #targets > max_markers then
+        if target_count > max_markers then
             _log_once(
                 _logged_draws,
                 "marker_pool_overflow:" .. tostring(max_markers),
-                string_format("[Radar] marker pool overflow | targets=%d configured=%d pool=%d", #targets,
+                string_format("[Radar] marker pool overflow | targets=%d configured=%d pool=%d", target_count,
                     max_markers,
                     MAX_RADAR_MARKERS)
             )
         end
 
-        for i = 1, #targets do
-            if next_widget_index > max_markers or next_widget_index > MAX_RADAR_MARKERS then
+        for i = 1, target_count do
+            if next_widget_index > max_widget_index then
                 break
             end
 
             local target = targets[i]
-            local px, py = mod:project_target_to_radar(player_pos, projection_rotation, target.position, radius - 8,
+            local px, py = project_target_to_radar(mod, player_pos, projection_rotation, target.position, radius - 8,
                 range, target.ignore_radar_range)
 
             if px and py then
@@ -1983,7 +2048,7 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
                 local icon_size = _scaled_icon_size(visual and visual.size or 14, draw_cache.icon_scale)
                 local draw_x = center_x + px - icon_size / 2
                 local draw_y = center_y + py - icon_size / 2
-                local widget = self._marker_widgets[next_widget_index]
+                local widget = marker_widgets[next_widget_index]
 
                 if visual and visual.accent_color and _should_draw_marker_brackets(target, draw_cache) then
                     _draw_marker_brackets(ui_renderer, draw_x, draw_y, z + 4, icon_size, visual.accent_color)
@@ -2023,8 +2088,8 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
 
     _draw_screen_highlights(self, ui_renderer, snapshot, z + 40)
 
-    for i = next_widget_index, #self._marker_widgets do
-        _clear_marker_widget(self._marker_widgets[i])
+    for i = next_widget_index, #marker_widgets do
+        _clear_marker_widget(marker_widgets[i])
     end
 end
 
