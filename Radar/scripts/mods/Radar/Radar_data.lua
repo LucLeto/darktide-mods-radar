@@ -275,10 +275,15 @@ return {
                         end,
                     },
                     {
+                        setting_id = "unrestricted_radar_position",
+                        type = "checkbox",
+                        default_value = false,
+                    },
+                    {
                         setting_id = "radar_pos_x",
                         type = "numeric",
                         default_value = 40,
-                        range = { 0, 12000 },
+                        range = { -12000, 12000 },
                         decimals_number = 0,
                         step_size_value = 5,
                         change = function(new_value)
@@ -292,7 +297,7 @@ return {
                         setting_id = "radar_pos_y",
                         type = "numeric",
                         default_value = 220,
-                        range = { 0, 8000 },
+                        range = { -12000, 12000 },
                         decimals_number = 0,
                         step_size_value = 5,
                         change = function(new_value)

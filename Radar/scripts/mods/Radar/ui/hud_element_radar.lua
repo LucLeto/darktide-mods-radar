@@ -166,6 +166,38 @@ local function _ui_space_size()
     return width, height
 end
 
+local function _sync_screen_scenegraph(self)
+    local scenegraph = self and self._ui_scenegraph
+    local screen = scenegraph and scenegraph.screen
+
+    if not screen then
+        return
+    end
+
+    local width, height = _ui_space_size()
+    width = math_max(1, math_floor(width + 0.5))
+    height = math_max(1, math_floor(height + 0.5))
+
+    screen.scale = "fit"
+
+    local size = screen.size
+    if size then
+        size[1] = width
+        size[2] = height
+    else
+        screen.size = { width, height }
+    end
+
+    local position = screen.position
+    if position then
+        position[1] = 0
+        position[2] = 0
+        position[3] = 0
+    else
+        screen.position = { 0, 0, 0 }
+    end
+end
+
 local ARTWORK_MODE_ICON_PRESENTATIONS = {
     crate_unknown = {
         icon = "content/ui/materials/icons/generic/loot",
@@ -2137,6 +2169,7 @@ end
 
 HudElementRadar.init = function(self, parent, draw_layer, start_scale, optional_context)
     HudElementRadar.super.init(self, parent, draw_layer, start_scale, Definitions)
+    _sync_screen_scenegraph(self)
     _ensure_marker_widgets(self)
 end
 
@@ -2264,6 +2297,8 @@ HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input
 
     render_settings = render_settings or {}
     render_settings.start_layer = self._draw_layer
+
+    _sync_screen_scenegraph(self)
 
     UIRenderer.begin_pass(ui_renderer, self._ui_scenegraph, input_service, dt, render_settings)
 

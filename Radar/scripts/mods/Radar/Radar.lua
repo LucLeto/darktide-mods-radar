@@ -723,6 +723,20 @@ local function _get_radar_position_bounds(size)
     return max_x, max_y
 end
 
+local function _round_radar_position_value(value, default_value)
+    return math_floor((tonumber(value) or default_value or 0) + 0.5)
+end
+
+local function _resolve_radar_position_value(value, default_value, min_value, max_value, unrestricted)
+    local rounded_value = _round_radar_position_value(value, default_value)
+
+    if unrestricted == true then
+        return rounded_value
+    end
+
+    return math_floor(_clamp(rounded_value, min_value, max_value) + 0.5)
+end
+
 local function _get_radar_origin_from_offsets(anchor, offset_x, offset_y, size)
     local max_x, max_y = _get_radar_position_bounds(size)
     local x = offset_x
@@ -3624,28 +3638,36 @@ function mod:get_radar_anchor()
     return _normalize_radar_anchor(self:get("radar_anchor"))
 end
 
+function mod:is_radar_position_unrestricted()
+    return self:get("unrestricted_radar_position") == true
+end
+
 function mod:get_radar_offset_x(size)
     local radar_size = tonumber(size) or self:get_radar_size()
     local max_x = _get_radar_position_bounds(radar_size)
-    local value = tonumber(self:get("radar_pos_x"))
+    local value = self:get("radar_pos_x")
 
-    if value == nil then
-        value = DEFAULT_RADAR_POS_X
-    end
-
-    return math_floor(_clamp(value, 0, max_x) + 0.5)
+    return _resolve_radar_position_value(
+        value,
+        DEFAULT_RADAR_POS_X,
+        0,
+        max_x,
+        self:is_radar_position_unrestricted()
+    )
 end
 
 function mod:get_radar_offset_y(size)
     local radar_size = tonumber(size) or self:get_radar_size()
     local _, max_y = _get_radar_position_bounds(radar_size)
-    local value = tonumber(self:get("radar_pos_y"))
+    local value = self:get("radar_pos_y")
 
-    if value == nil then
-        value = DEFAULT_RADAR_POS_Y
-    end
-
-    return math_floor(_clamp(value, 0, max_y) + 0.5)
+    return _resolve_radar_position_value(
+        value,
+        DEFAULT_RADAR_POS_Y,
+        0,
+        max_y,
+        self:is_radar_position_unrestricted()
+    )
 end
 
 function mod:get_radar_pos_x(size)
@@ -3708,16 +3730,17 @@ end
 function mod:set_radar_position(x, y)
     local radar_size = self:get_radar_size()
     local max_x, max_y = _get_radar_position_bounds(radar_size)
+    local unrestricted = self:is_radar_position_unrestricted()
     local offset_x = self:get_radar_offset_x(radar_size)
     local offset_y = self:get_radar_offset_y(radar_size)
 
     if x ~= nil then
-        offset_x = math_floor(_clamp(tonumber(x) or DEFAULT_RADAR_POS_X, 0, max_x) + 0.5)
+        offset_x = _resolve_radar_position_value(x, DEFAULT_RADAR_POS_X, 0, max_x, unrestricted)
         self:set("radar_pos_x", offset_x)
     end
 
     if y ~= nil then
-        offset_y = math_floor(_clamp(tonumber(y) or DEFAULT_RADAR_POS_Y, 0, max_y) + 0.5)
+        offset_y = _resolve_radar_position_value(y, DEFAULT_RADAR_POS_Y, 0, max_y, unrestricted)
         self:set("radar_pos_y", offset_y)
     end
 
@@ -3742,13 +3765,17 @@ function mod:set_radar_origin(x, y)
     local radar_size = self:get_radar_size()
     local anchor = self:get_radar_anchor()
     local max_x, max_y = _get_radar_position_bounds(radar_size)
+    local unrestricted = self:is_radar_position_unrestricted()
 
-    local clamped_x = math_floor(_clamp(tonumber(x) or DEFAULT_RADAR_POS_X, 0, max_x) + 0.5)
-    local clamped_y = math_floor(_clamp(tonumber(y) or DEFAULT_RADAR_POS_Y, 0, max_y) + 0.5)
-    local offset_x, offset_y = _get_radar_offsets_from_origin(anchor, clamped_x, clamped_y, radar_size)
+    local resolved_x = _resolve_radar_position_value(x, DEFAULT_RADAR_POS_X, 0, max_x, unrestricted)
+    local resolved_y = _resolve_radar_position_value(y, DEFAULT_RADAR_POS_Y, 0, max_y, unrestricted)
+    local offset_x, offset_y = _get_radar_offsets_from_origin(anchor, resolved_x, resolved_y, radar_size)
 
-    self:set("radar_pos_x", math_floor(_clamp(offset_x, 0, max_x) + 0.5))
-    self:set("radar_pos_y", math_floor(_clamp(offset_y, 0, max_y) + 0.5))
+    offset_x = _resolve_radar_position_value(offset_x, DEFAULT_RADAR_POS_X, 0, max_x, unrestricted)
+    offset_y = _resolve_radar_position_value(offset_y, DEFAULT_RADAR_POS_Y, 0, max_y, unrestricted)
+
+    self:set("radar_pos_x", offset_x)
+    self:set("radar_pos_y", offset_y)
 
     if mod:get("debug_mode") == true then
         self:notify(
@@ -3756,12 +3783,12 @@ function mod:set_radar_origin(x, y)
             anchor,
             self:get_radar_offset_x(radar_size),
             self:get_radar_offset_y(radar_size),
-            clamped_x,
-            clamped_y
+            resolved_x,
+            resolved_y
         )
     end
 
-    return clamped_x, clamped_y
+    return resolved_x, resolved_y
 end
 
 function mod:set_radar_anchor(anchor, preserve_visual_position)
