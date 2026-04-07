@@ -19,11 +19,13 @@ local tostring = tostring
 local type = type
 local math_abs = math.abs
 local math_atan = math.atan
+local math_clamp = math.clamp
 local math_cos = math.cos
 local math_floor = math.floor
 local math_max = math.max
 local math_min = math.min
 local math_pi = math.pi
+local math_rad = math.rad
 local math_sin = math.sin
 local math_sqrt = math.sqrt
 local math_tan = math.tan
@@ -49,7 +51,6 @@ local Definitions = {
 
 local _logged_visuals = {}
 local _logged_draws = {}
-local _safe_player_camera_rotation
 
 local PLAYER_CLASS_ICONS = {
     veteran = "content/ui/materials/icons/classes/veteran",
@@ -68,7 +69,6 @@ local EXPEDITION_OBJECTIVE_KINDS = {
     expedition_objective_extraction = true,
     expedition_objective_arrival = true,
 }
-
 
 local function _log_once(bucket, key, message)
     if mod:get("debug_mode") ~= true then
@@ -101,7 +101,7 @@ local OCCLUSION_RAYCAST_FILTERS = {
 
 local function _widget_to_color(color)
     if not color then
-        return Color(255, 255, 255, 255)
+        return WHITE_WIDGET_COLOR
     end
 
     local a = color[1] or color.a or 255
@@ -566,7 +566,7 @@ local function _draw_marker_brackets(ui_renderer, x, y, z, size, color)
 end
 
 local function _draw_circle_fill(ui_renderer, center_x, center_y, z, radius, color)
-    local integer_radius = math_max(1, math_floor(radius))
+    local integer_radius = math_max(1, math_floor((radius or 0) + 0.5))
 
     for dy = -integer_radius, integer_radius do
         local span = math_floor(math_sqrt(math_max(0, integer_radius * integer_radius - dy * dy)))
@@ -578,6 +578,29 @@ local function _round(n)
     return math_floor(n + 0.5)
 end
 
+local function _color_with_alpha_scale(color, scale)
+    if not color then
+        return WHITE_WIDGET_COLOR
+    end
+
+    local a = color[1] or color.a or 255
+    local r = color[2] or color.r or 255
+    local g = color[3] or color.g or 255
+    local b = color[4] or color.b or 255
+    local scaled_alpha = math_max(0, math_min(255, math_floor(a * scale + 0.5)))
+
+    return Color(scaled_alpha, r, g, b)
+end
+
+local function _circle_metrics(x, y, size)
+    local snapped_size = math_max(2, math_floor((tonumber(size) or 0) + 0.5))
+    local center_x = math_floor(x + snapped_size * 0.5 + 0.5)
+    local center_y = math_floor(y + snapped_size * 0.5 + 0.5)
+    local radius = math_max(1, math_floor(snapped_size * 0.5 - 1 + 0.5))
+
+    return center_x, center_y, radius
+end
+
 local function _draw_dot(ui_renderer, x, y, z, size, color)
     size = tonumber(size) or 1
     size = math_max(1, size)
@@ -586,17 +609,112 @@ local function _draw_dot(ui_renderer, x, y, z, size, color)
     _draw_box(ui_renderer, _round(x - half), _round(y - half), z, size, size, color)
 end
 
-local function _draw_circle_outline(ui_renderer, center_x, center_y, z, radius, color)
-    local circumference = math_max(24, 2 * math_pi * radius)
-    local steps = math_max(96, math_floor(circumference * 1.25))
-    local dot_size = 1
+local function _draw_circle_pixel(ui_renderer, x, y, z, color)
+    _draw_box(ui_renderer, x, y, z, 1, 1, color)
+end
 
-    for i = 0, steps - 1 do
-        local angle = (math_pi * 2 * i) / steps
-        local px = center_x + math_cos(angle) * radius
-        local py = center_y + math_sin(angle) * radius
-        _draw_dot(ui_renderer, px, py, z, dot_size, color)
+local function _plot_circle_octants(ui_renderer, center_x, center_y, z, x, y, color)
+    if x == 0 and y == 0 then
+        _draw_circle_pixel(ui_renderer, center_x, center_y, z, color)
+        return
     end
+
+    if y == 0 then
+        _draw_circle_pixel(ui_renderer, center_x + x, center_y, z, color)
+        _draw_circle_pixel(ui_renderer, center_x - x, center_y, z, color)
+        _draw_circle_pixel(ui_renderer, center_x, center_y + x, z, color)
+        _draw_circle_pixel(ui_renderer, center_x, center_y - x, z, color)
+        return
+    end
+
+    if x == 0 then
+        _draw_circle_pixel(ui_renderer, center_x + y, center_y, z, color)
+        _draw_circle_pixel(ui_renderer, center_x - y, center_y, z, color)
+        _draw_circle_pixel(ui_renderer, center_x, center_y + y, z, color)
+        _draw_circle_pixel(ui_renderer, center_x, center_y - y, z, color)
+        return
+    end
+
+    if x == y then
+        _draw_circle_pixel(ui_renderer, center_x + x, center_y + y, z, color)
+        _draw_circle_pixel(ui_renderer, center_x - x, center_y + y, z, color)
+        _draw_circle_pixel(ui_renderer, center_x + x, center_y - y, z, color)
+        _draw_circle_pixel(ui_renderer, center_x - x, center_y - y, z, color)
+        return
+    end
+
+    _draw_circle_pixel(ui_renderer, center_x + x, center_y + y, z, color)
+    _draw_circle_pixel(ui_renderer, center_x - x, center_y + y, z, color)
+    _draw_circle_pixel(ui_renderer, center_x + x, center_y - y, z, color)
+    _draw_circle_pixel(ui_renderer, center_x - x, center_y - y, z, color)
+    _draw_circle_pixel(ui_renderer, center_x + y, center_y + x, z, color)
+    _draw_circle_pixel(ui_renderer, center_x - y, center_y + x, z, color)
+    _draw_circle_pixel(ui_renderer, center_x + y, center_y - x, z, color)
+    _draw_circle_pixel(ui_renderer, center_x - y, center_y - x, z, color)
+end
+
+local function _draw_circle_perimeter(ui_renderer, center_x, center_y, z, radius, color)
+    radius = math_max(1, math_floor((radius or 0) + 0.5))
+
+    local x = radius
+    local y = 0
+    local decision = 1 - radius
+
+    while y <= x do
+        _plot_circle_octants(ui_renderer, center_x, center_y, z, x, y, color)
+
+        y = y + 1
+
+        if decision < 0 then
+            decision = decision + 2 * y + 1
+        else
+            x = x - 1
+            decision = decision + 2 * (y - x) + 1
+        end
+    end
+end
+
+local _draw_circle_ring = function(ui_renderer, center_x, center_y, z, outer_radius, thickness, color)
+    local outer_r = math_max(1, math_floor((outer_radius or 0) + 0.5))
+    local band = math_max(1, math_floor((thickness or 1) + 0.5))
+
+    for i = 0, band - 1 do
+        local r = outer_r - i
+
+        if r > 0 then
+            _draw_circle_perimeter(ui_renderer, center_x, center_y, z, r, color)
+        end
+    end
+end
+
+local _draw_circle_ring_soft = function(ui_renderer, center_x, center_y, z, outer_radius, thickness, color)
+    local outer_r = math_max(1, math_floor((outer_radius or 0) + 0.5))
+    local main_thickness = math_max(1, math_floor((thickness or 1) + 0.5))
+    local feather_color = _color_with_alpha_scale(color, 0.35)
+
+    _draw_circle_ring(ui_renderer, center_x, center_y, z, outer_r, main_thickness, color)
+    _draw_circle_ring(ui_renderer, center_x, center_y, z, outer_r + 1, 1, feather_color)
+
+    local inner_r = outer_r - main_thickness
+    if inner_r > 0 then
+        _draw_circle_ring(ui_renderer, center_x, center_y, z, inner_r, 1, feather_color)
+    end
+end
+
+local function _draw_circle_fill_soft(ui_renderer, center_x, center_y, z, radius, color)
+    local integer_radius = math_max(1, math_floor((radius or 0) + 0.5))
+
+    if integer_radius <= 1 then
+        _draw_circle_fill(ui_renderer, center_x, center_y, z, integer_radius, color)
+        return
+    end
+
+    _draw_circle_fill(ui_renderer, center_x, center_y, z, integer_radius - 1, color)
+    _draw_circle_ring(ui_renderer, center_x, center_y, z, integer_radius, 1, _color_with_alpha_scale(color, 0.45))
+end
+
+local function _draw_circle_outline(ui_renderer, center_x, center_y, z, radius, color)
+    _draw_circle_ring_soft(ui_renderer, center_x, center_y, z, radius, 1, color)
 end
 
 local function _draw_hline_dotted(ui_renderer, x, y, z, length, thickness, color, dash, gap)
@@ -629,7 +747,7 @@ local function _draw_circle_outline_dotted(ui_renderer, center_x, center_y, z, r
         local angle = (math_pi * 2 * i) / steps
         local px = center_x + math_cos(angle) * radius
         local py = center_y + math_sin(angle) * radius
-        _draw_box(ui_renderer, px - point_size / 2, py - point_size / 2, z, point_size, point_size, color)
+        _draw_dot(ui_renderer, px, py, z, point_size, color)
     end
 end
 
@@ -762,10 +880,10 @@ local function _safe_player_horizontal_fov()
 end
 
 local function _view_cone_half_angle()
-    local horizontal_fov = _safe_player_horizontal_fov() or math.rad(90)
+    local horizontal_fov = _safe_player_horizontal_fov() or math_rad(90)
     local half_angle = horizontal_fov * 0.5
 
-    return math.clamp(half_angle, math.rad(15), math.rad(85))
+    return math_clamp(half_angle, math_rad(15), math_rad(85))
 end
 
 local function _view_cone_direction(angle)
@@ -805,30 +923,6 @@ local function _view_cone_endpoint_square(center_x, center_y, left, top, right, 
     return center_x + dx * best_t, center_y + dy * best_t
 end
 
-local function _draw_circle_ring(ui_renderer, center_x, center_y, z, outer_radius, thickness, color)
-    local outer_r = math_max(1, math_floor((outer_radius or 0) + 0.5))
-    local inner_r = math_max(0, outer_r - math_max(1, math_floor((thickness or 1) + 0.5)))
-
-    for dy = -outer_r, outer_r do
-        local outer_span = math_floor(math_sqrt(math_max(0, outer_r * outer_r - dy * dy)))
-        local inner_span = 0
-
-        if math_abs(dy) <= inner_r then
-            inner_span = math_floor(math_sqrt(math_max(0, inner_r * inner_r - dy * dy)))
-        end
-
-        if outer_span > inner_span then
-            local y_pos = center_y + dy
-            local left_x = center_x - outer_span
-            local right_x = center_x + inner_span + 1
-            local segment_width = outer_span - inner_span
-
-            _draw_box(ui_renderer, left_x, y_pos, z, segment_width, 1, color)
-            _draw_box(ui_renderer, right_x, y_pos, z, segment_width, 1, color)
-        end
-    end
-end
-
 local function _draw_radar_guides(ui_renderer, x, y, z, size, is_circle)
     local guide_style = mod.get_radar_guides and mod:get_radar_guides() or "crosshair"
 
@@ -836,9 +930,16 @@ local function _draw_radar_guides(ui_renderer, x, y, z, size, is_circle)
         return
     end
 
-    local center_x = x + size / 2
-    local center_y = y + size / 2
-    local radius = size / 2
+    local center_x, center_y, radius
+
+    if is_circle then
+        center_x, center_y, radius = _circle_metrics(x, y, size)
+    else
+        center_x = x + size / 2
+        center_y = y + size / 2
+        radius = size / 2
+    end
+
     local guide_color = _color(90, 255, 255, 255)
 
     if guide_style == "crosshair" then
@@ -892,7 +993,7 @@ local function _draw_radar_guides(ui_renderer, x, y, z, size, is_circle)
             local r = ring_gap * ring
 
             if is_circle then
-                _draw_circle_ring(ui_renderer, center_x, center_y, z, r, ring_thickness, guide_color)
+                _draw_circle_ring_soft(ui_renderer, center_x, center_y, z, r, ring_thickness, guide_color)
             else
                 local inset = radius - r
                 local ring_x = x + inset
@@ -906,7 +1007,8 @@ end
 
 local function _draw_radar_frame_square(ui_renderer, x, y, z, size, outline_style)
     local thickness = 2
-    local fill_color = _color(90, 0, 0, 0)
+    local fill_alpha = mod.get_background_opacity and mod:get_background_opacity() or 90
+    local fill_color = _color(fill_alpha, 0, 0, 0)
     local outline_color = _color(255, 213, 226, 206)
 
     _draw_box(ui_renderer, x, y, z, size, size, fill_color)
@@ -928,13 +1030,12 @@ local function _draw_radar_frame_square(ui_renderer, x, y, z, size, outline_styl
 end
 
 local function _draw_radar_frame_circle(ui_renderer, x, y, z, size, outline_style)
-    local center_x = x + size / 2
-    local center_y = y + size / 2
-    local radius = math_max(1, size / 2 - 1)
-    local fill_color = _color(90, 0, 0, 0)
+    local center_x, center_y, radius = _circle_metrics(x, y, size)
+    local fill_alpha = mod.get_background_opacity and mod:get_background_opacity() or 90
+    local fill_color = _color(fill_alpha, 0, 0, 0)
     local outline_color = _color(255, 213, 226, 206)
 
-    _draw_circle_fill(ui_renderer, center_x, center_y, z, radius, fill_color)
+    _draw_circle_fill_soft(ui_renderer, center_x, center_y, z, radius, fill_color)
 
     if outline_style == "solid" then
         _draw_circle_outline(ui_renderer, center_x, center_y, z + 1, radius, outline_color)
@@ -956,6 +1057,18 @@ local function _draw_radar_frame(ui_renderer, x, y, z, size)
     _draw_radar_guides(ui_renderer, x, y, z + 1, size, is_circle)
 end
 
+local function _has_icon(content)
+    return content.icon ~= nil and content.icon ~= ""
+end
+
+local function _has_title_icon(content)
+    return content.title_icon ~= nil and content.title_icon ~= ""
+end
+
+local function _has_arrow_icon(content)
+    return content.arrow_icon ~= nil and content.arrow_icon ~= ""
+end
+
 local function _marker_definition()
     return UIWidget.create_definition({
         {
@@ -969,9 +1082,7 @@ local function _marker_definition()
                 size = { 16, 16 },
                 color = { 255, 255, 255, 255 },
             },
-            visibility_function = function(content, style)
-                return content.icon ~= nil and content.icon ~= ""
-            end,
+            visibility_function = _has_icon,
         },
         {
             pass_type = "texture",
@@ -984,9 +1095,7 @@ local function _marker_definition()
                 size = { 16, 16 },
                 color = { 255, 255, 255, 255 },
             },
-            visibility_function = function(content, style)
-                return content.title_icon ~= nil and content.title_icon ~= ""
-            end,
+            visibility_function = _has_title_icon,
         },
         {
             pass_type = "texture",
@@ -999,9 +1108,7 @@ local function _marker_definition()
                 size = { 4, 4 },
                 color = { 255, 255, 255, 255 },
             },
-            visibility_function = function(content, style)
-                return content.arrow_icon ~= nil and content.arrow_icon ~= ""
-            end,
+            visibility_function = _has_arrow_icon,
         },
     }, "screen")
 end
@@ -1066,8 +1173,10 @@ local function _build_draw_cache()
     draw_cache.icon_scale = _icon_scale_factor()
     draw_cache.player_display_style = _normalized_player_display_style(mod:get("player_display_style"))
     draw_cache.enemy_display_style = _normalized_enemy_display_style(mod:get("enemy_display_style"))
-    draw_cache.expedition_loot_marker_mode = mod.get_expedition_loot_marker_mode and mod:get_expedition_loot_marker_mode() or "default"
-    draw_cache.show_expedition_loot_value_text = mod.get_show_expedition_loot_value_text and mod:get_show_expedition_loot_value_text() or false
+    draw_cache.expedition_loot_marker_mode = mod.get_expedition_loot_marker_mode and
+        mod:get_expedition_loot_marker_mode() or "default"
+    draw_cache.show_expedition_loot_value_text = mod.get_show_expedition_loot_value_text and
+        mod:get_show_expedition_loot_value_text() or false
     draw_cache.slot_colors = UISettings and UISettings.player_slot_colors or nil
     draw_cache.debug_mode = mod:get("debug_mode") == true
 
@@ -1103,7 +1212,15 @@ local function _scaled_icon_size(base_size, icon_scale)
 end
 
 local function _is_enemy_kind(kind)
-    return kind ~= nil and string_sub(tostring(kind), 1, 6) == "enemy_"
+    if kind == nil then
+        return false
+    end
+
+    if type(kind) == "string" then
+        return string_sub(kind, 1, 6) == "enemy_"
+    end
+
+    return string_sub(tostring(kind), 1, 6) == "enemy_"
 end
 
 local function _is_expedition_objective_kind(kind)
@@ -1112,11 +1229,13 @@ end
 
 local function _display_style_for_kind(kind, draw_cache)
     if kind == "player_teammate" then
-        return draw_cache and draw_cache.player_display_style or _normalized_player_display_style(mod:get("player_display_style"))
+        return draw_cache and draw_cache.player_display_style or
+            _normalized_player_display_style(mod:get("player_display_style"))
     end
 
     if _is_enemy_kind(kind) then
-        return draw_cache and draw_cache.enemy_display_style or _normalized_enemy_display_style(mod:get("enemy_display_style"))
+        return draw_cache and draw_cache.enemy_display_style or
+            _normalized_enemy_display_style(mod:get("enemy_display_style"))
     end
 
     if _is_expedition_objective_kind(kind) then
@@ -1265,7 +1384,6 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size)
         arrow_icon_style.size[2] = arrow_size
         arrow_icon_style.color = WHITE_WIDGET_COLOR
     end
-
 end
 
 local DEFAULT_INTERACTION_ICON = "content/ui/materials/hud/interactions/icons/default"
@@ -1290,7 +1408,6 @@ local function _expedition_unmarked_color(target)
 
     return EXPEDITION_UNMARKED_COLORS[kind] or DEFAULT_EXPEDITION_UNMARKED_COLOR
 end
-
 
 local function _copy_visual(visual)
     if not visual then
@@ -1384,17 +1501,26 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
         return visual
     end
 
-    local result = _copy_visual(visual)
     local mode = draw_cache and draw_cache.expedition_loot_marker_mode or
         (mod.get_expedition_loot_marker_mode and mod:get_expedition_loot_marker_mode() or "default")
     local meta = target and target.meta or {}
-    local value = _tech_remnant_target_value(target)
+    local base_size = visual.size or 14
+    local should_scale = mode == "scaled" or meta.is_tech_remnant_cluster == true
+    local scaled_size = should_scale and _tech_remnant_scaled_size(base_size, _tech_remnant_target_value(target)) or
+        base_size
+    local value_text = _tech_remnant_value_text(target, draw_cache)
 
-    if mode == "scaled" or meta.is_tech_remnant_cluster == true then
-        result.size = _tech_remnant_scaled_size(result.size or 14, value)
+    if scaled_size == base_size and value_text == nil and visual.value_text == nil then
+        return visual
     end
 
-    result.value_text = _tech_remnant_value_text(target, draw_cache)
+    local result = _copy_visual(visual)
+
+    if should_scale then
+        result.size = scaled_size
+    end
+
+    result.value_text = value_text
 
     return result
 end
@@ -1837,18 +1963,63 @@ local function _is_world_position_occluded(camera_position, world_position)
     return false
 end
 
-local function _project_world_to_screen(self, world_position, fallback_camera_position, fallback_rotation)
-    if not world_position then
-        return nil, nil, nil
+local _safe_player_camera_rotation = function(self)
+    local parent = self and self._parent
+    if not parent or not parent.player_camera then
+        return nil
     end
 
+    local ok_camera, camera = pcall(parent.player_camera, parent)
+
+    if not ok_camera or not camera then
+        return nil
+    end
+
+    local ok_rotation, rotation = pcall(Camera.local_rotation, camera)
+
+    if ok_rotation and rotation then
+        return rotation
+    end
+
+    return nil
+end
+
+local function _build_projection_context(self, fallback_camera_position, fallback_rotation)
     local camera_position = _safe_player_camera_position(self) or fallback_camera_position
     local camera_rotation = _safe_player_camera_rotation(self) or fallback_rotation
     local basis = _rotation_basis(camera_rotation)
 
     if not camera_position or not basis then
+        return nil
+    end
+
+    local ui_width, ui_height = _ui_space_size()
+    local vertical_fov = _safe_player_vertical_fov() or math_rad(65)
+    local tan_half_vertical = math_tan(vertical_fov * 0.5)
+    local aspect_ratio = ui_width / math_max(ui_height, 1)
+    local tan_half_horizontal = tan_half_vertical * aspect_ratio
+
+    if tan_half_vertical <= 0 or tan_half_horizontal <= 0 then
+        return nil
+    end
+
+    return {
+        camera_position = camera_position,
+        basis = basis,
+        ui_width = ui_width,
+        ui_height = ui_height,
+        tan_half_vertical = tan_half_vertical,
+        tan_half_horizontal = tan_half_horizontal,
+    }
+end
+
+local function _project_world_to_screen_with_context(world_position, projection_context)
+    if not world_position or not projection_context then
         return nil, nil, nil
     end
+
+    local camera_position = projection_context.camera_position
+    local basis = projection_context.basis
 
     local dx = world_position.x - camera_position.x
     local dy = world_position.y - camera_position.y
@@ -1866,18 +2037,8 @@ local function _project_world_to_screen(self, world_position, fallback_camera_po
         return nil, nil, nil
     end
 
-    local ui_width, ui_height = _ui_space_size()
-    local vertical_fov = _safe_player_vertical_fov() or math.rad(65)
-    local tan_half_vertical = math_tan(vertical_fov * 0.5)
-    local aspect_ratio = ui_width / math_max(ui_height, 1)
-    local tan_half_horizontal = tan_half_vertical * aspect_ratio
-
-    if tan_half_vertical <= 0 or tan_half_horizontal <= 0 then
-        return nil, nil, nil
-    end
-
-    local ndc_x = view_x / (view_z * tan_half_horizontal)
-    local ndc_y = view_y / (view_z * tan_half_vertical)
+    local ndc_x = view_x / (view_z * projection_context.tan_half_horizontal)
+    local ndc_y = view_y / (view_z * projection_context.tan_half_vertical)
 
     if not (_is_finite_number(ndc_x) and _is_finite_number(ndc_y)) then
         return nil, nil, nil
@@ -1887,14 +2048,28 @@ local function _project_world_to_screen(self, world_position, fallback_camera_po
         return nil, nil, nil
     end
 
-    local screen_x = (ndc_x * 0.5 + 0.5) * ui_width
-    local screen_y = (0.5 - ndc_y * 0.5) * ui_height
+    local screen_x = (ndc_x * 0.5 + 0.5) * projection_context.ui_width
+    local screen_y = (0.5 - ndc_y * 0.5) * projection_context.ui_height
 
     if not (_is_finite_number(screen_x) and _is_finite_number(screen_y)) then
         return nil, nil, nil
     end
 
     return screen_x, screen_y, camera_position
+end
+
+local function _project_world_to_screen(self, world_position, fallback_camera_position, fallback_rotation)
+    if not world_position then
+        return nil, nil, nil
+    end
+
+    local projection_context = _build_projection_context(self, fallback_camera_position, fallback_rotation)
+
+    if not projection_context then
+        return nil, nil, nil
+    end
+
+    return _project_world_to_screen_with_context(world_position, projection_context)
 end
 
 local function _screen_highlight_bracket_size(distance_sq)
@@ -1926,12 +2101,20 @@ local function _draw_screen_highlights(self, ui_renderer, snapshot, z)
 
     local fallback_camera_position = snapshot and snapshot.player_position or nil
     local fallback_rotation = snapshot and snapshot.player_rotation or nil
+    local projection_context = _build_projection_context(self, fallback_camera_position, fallback_rotation)
 
     for i = 1, highlight_count do
         local highlight = highlights[i]
         local world_position = highlight.world_position
-        local screen_x, screen_y, camera_position = _project_world_to_screen(self, world_position,
-            fallback_camera_position, fallback_rotation)
+        local screen_x, screen_y, camera_position
+
+        if projection_context then
+            screen_x, screen_y, camera_position = _project_world_to_screen_with_context(world_position,
+                projection_context)
+        else
+            screen_x, screen_y, camera_position = _project_world_to_screen(self, world_position,
+                fallback_camera_position, fallback_rotation)
+        end
 
         if screen_x and screen_y then
             local bracket_size = _screen_highlight_bracket_size(highlight.distance_sq_3d)
@@ -1950,27 +2133,6 @@ local function _draw_screen_highlights(self, ui_renderer, snapshot, z)
             _draw_marker_brackets(ui_renderer, draw_x, draw_y, z, bracket_size, draw_color)
         end
     end
-end
-
-_safe_player_camera_rotation = function(self)
-    local parent = self and self._parent
-    if not parent or not parent.player_camera then
-        return nil
-    end
-
-    local ok_camera, camera = pcall(parent.player_camera, parent)
-
-    if not ok_camera or not camera then
-        return nil
-    end
-
-    local ok_rotation, rotation = pcall(Camera.local_rotation, camera)
-
-    if ok_rotation and rotation then
-        return rotation
-    end
-
-    return nil
 end
 
 HudElementRadar.init = function(self, parent, draw_layer, start_scale, optional_context)

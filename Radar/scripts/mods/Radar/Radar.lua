@@ -4,12 +4,23 @@ local PlayerUnitStatus = require("scripts/utilities/attack/player_unit_status")
 
 local pcall = pcall
 local pairs = pairs
+local ipairs = ipairs
 local tonumber = tonumber
 local tostring = tostring
 local type = type
 local rawget = rawget
 local math_abs = math.abs
+local math_floor = math.floor
 local math_huge = math.huge
+local math_max = math.max
+local math_sqrt = math.sqrt
+local string_find = string.find
+local string_format = string.format
+local string_len = string.len
+local string_lower = string.lower
+local string_match = string.match
+local string_sub = string.sub
+local table_concat = table.concat
 local table_sort = table.sort
 
 local SCAN_INTERVAL = 0.25
@@ -65,8 +76,6 @@ local NEARBY_OUTLINE_COLOR_BY_KIND = {
     pickup_saints = { 255, 192, 160, 0 },
     pickup_stolen_rations = { 255, 150, 190, 60 },
 }
-
-local _marked_by_player_slot_for_unit
 
 mod._next_scan_t = 0
 mod._tracked_units = {}
@@ -299,7 +308,16 @@ local EXPEDITION_LOOT_VALUE_BY_PICKUP_NAME = {
 }
 
 
-local NEARBY_HIGHLIGHT_SETTING_BY_GROUP
+local NEARBY_HIGHLIGHT_SETTING_BY_GROUP = {
+    common_pickups_group = "nearby_highlight_common_pickups",
+    materials_group = "nearby_highlight_materials",
+    primary_objective_group = "nearby_highlight_primary_objective",
+    secondary_objective_group = "nearby_highlight_secondary_objective",
+    expeditions_specific_group = "nearby_highlight_expeditions_specific",
+    martyr_s_skull_group = "nearby_highlight_martyr_s_skull",
+    environment_group = "nearby_highlight_environment",
+    event_group = "nearby_highlight_event",
+}
 
 local function _normalize_marker_display_mode(value)
     if value == false or value == "off" then
@@ -318,7 +336,7 @@ function mod:get_marker_scale_group(kind)
         return nil
     end
 
-    if string.sub(tostring(kind), 1, 6) == "enemy_" then
+    if string_sub(tostring(kind), 1, 6) == "enemy_" then
         return "enemies_group"
     end
 
@@ -377,18 +395,18 @@ function mod.on_all_mods_loaded()
             if not Managers.package:has_loaded(package_name) then
                 Managers.package:load(package_name, "Radar", nil, true)
                 if mod:get("debug_mode") then
-                    mod:echo(string.format("[Radar] package load requested | %s", tostring(package_name)))
+                    mod:echo(string_format("[Radar] package load requested | %s", tostring(package_name)))
                 end
             else
                 if mod:get("debug_mode") then
-                    mod:echo(string.format("[Radar] package already loaded | %s", tostring(package_name)))
+                    mod:echo(string_format("[Radar] package already loaded | %s", tostring(package_name)))
                 end
             end
         end)
 
         if not ok then
             if mod:get("debug_mode") then
-                mod:echo(string.format("[Radar] package load failed | %s | %s", tostring(package_name), tostring(err)))
+                mod:echo(string_format("[Radar] package load failed | %s | %s", tostring(package_name), tostring(err)))
             end
         end
     end
@@ -445,7 +463,7 @@ local function _safe_unit_name(unit)
 end
 
 local function _is_finite_number(v)
-    return type(v) == "number" and v == v and v ~= math.huge and v ~= -math.huge
+    return type(v) == "number" and v == v and v ~= math_huge and v ~= -math_huge
 end
 
 local function _vector3_components(vec)
@@ -457,15 +475,9 @@ local function _vector3_components(vec)
         return vec.x, vec.y, vec.z
     end
 
-    local ok_x, x = pcall(function()
-        return Vector3.x(vec)
-    end)
-    local ok_y, y = pcall(function()
-        return Vector3.y(vec)
-    end)
-    local ok_z, z = pcall(function()
-        return Vector3.z(vec)
-    end)
+    local ok_x, x = pcall(Vector3.x, vec)
+    local ok_y, y = pcall(Vector3.y, vec)
+    local ok_z, z = pcall(Vector3.z, vec)
 
     if ok_x and ok_y and ok_z then
         return x, y, z
@@ -489,7 +501,7 @@ local function _safe_lower_string(value)
         return nil
     end
 
-    return string.lower(tostring(value))
+    return string_lower(tostring(value))
 end
 
 local function _string_starts_with(value, prefix)
@@ -497,7 +509,7 @@ local function _string_starts_with(value, prefix)
         return false
     end
 
-    return string.sub(value, 1, string.len(prefix)) == prefix
+    return string_sub(value, 1, string_len(prefix)) == prefix
 end
 
 local function _safe_unit_data_string(unit, field_name)
@@ -637,8 +649,8 @@ end
 local function _get_radar_position_bounds(size)
     local radar_size = tonumber(size) or 0
     local ui_width, ui_height = _get_ui_space_size()
-    local max_x = math.max(0, ui_width - radar_size)
-    local max_y = math.max(0, ui_height - radar_size)
+    local max_x = math_max(0, ui_width - radar_size)
+    local max_y = math_max(0, ui_height - radar_size)
 
     return max_x, max_y
 end
@@ -806,7 +818,7 @@ local function _safe_flat_direction_xy(vector_getter, rotation)
         return nil, nil
     end
 
-    local length = math.sqrt(x * x + y * y)
+    local length = math_sqrt(x * x + y * y)
     if length <= 0 then
         return nil, nil
     end
@@ -828,39 +840,34 @@ local function _safe_mission_name()
         end
     end
 
-    local game_mode_manager = Managers and Managers.state and Managers.state.game_mode
+    local state_manager = Managers and Managers.state
+    local game_mode_manager = state_manager and state_manager.game_mode
     if game_mode_manager and game_mode_manager.mission_name then
-        local ok, mission_name = pcall(function()
-            return game_mode_manager:mission_name()
-        end)
+        local ok, mission_name = pcall(game_mode_manager.mission_name, game_mode_manager)
 
         if ok and mission_name ~= nil then
             return mission_name
         end
     end
 
-    local state_manager = Managers and Managers.state
-    local candidates = {
-        function()
-            local gameplay = state_manager and state_manager.gameplay
-            local shared_state = gameplay and gameplay._shared_state
-            return shared_state and shared_state.mission_name
-        end,
-        function()
-            local package_synchronizer_client = Managers and Managers.package_synchronizer_client
-            return package_synchronizer_client and package_synchronizer_client._mission_name
-        end,
-        function()
-            local mechanism = Managers and Managers.mechanism and Managers.mechanism._mechanism
-            return mechanism and mechanism._mission_name
-        end,
-    }
+    local gameplay = state_manager and state_manager.gameplay
+    local shared_state = gameplay and gameplay._shared_state
+    local mission_name = shared_state and shared_state.mission_name
+    if mission_name ~= nil then
+        return mission_name
+    end
 
-    for _, getter in ipairs(candidates) do
-        local ok, mission_name = pcall(getter)
-        if ok and mission_name ~= nil then
-            return mission_name
-        end
+    local package_synchronizer_client = Managers and Managers.package_synchronizer_client
+    mission_name = package_synchronizer_client and package_synchronizer_client._mission_name
+    if mission_name ~= nil then
+        return mission_name
+    end
+
+    local mechanism_manager = Managers and Managers.mechanism
+    local mechanism = mechanism_manager and mechanism_manager._mechanism
+    mission_name = mechanism and mechanism._mission_name
+    if mission_name ~= nil then
+        return mission_name
     end
 
     return nil
@@ -872,33 +879,33 @@ local function _safe_presence_activity()
         return nil
     end
 
-    local candidates = {
-        function()
-            if presence_manager.activity then
-                return presence_manager:activity()
-            end
-        end,
-        function()
-            if presence_manager.current_activity then
-                return presence_manager:current_activity()
-            end
-        end,
-        function()
-            return presence_manager._current_activity
-        end,
-        function()
-            return presence_manager._activity
-        end,
-        function()
-            return presence_manager._presence_name
-        end,
-    }
-
-    for _, getter in ipairs(candidates) do
-        local ok, value = pcall(getter)
+    if presence_manager.activity then
+        local ok, value = pcall(presence_manager.activity, presence_manager)
         if ok and value ~= nil then
             return tostring(value)
         end
+    end
+
+    if presence_manager.current_activity then
+        local ok, value = pcall(presence_manager.current_activity, presence_manager)
+        if ok and value ~= nil then
+            return tostring(value)
+        end
+    end
+
+    local value = presence_manager._current_activity
+    if value ~= nil then
+        return tostring(value)
+    end
+
+    value = presence_manager._activity
+    if value ~= nil then
+        return tostring(value)
+    end
+
+    value = presence_manager._presence_name
+    if value ~= nil then
+        return tostring(value)
     end
 
     return nil
@@ -910,43 +917,44 @@ local function _safe_mechanism_name()
         return nil
     end
 
-    local candidates = {
-        function()
-            if mechanism_manager.current_mechanism_name then
-                return mechanism_manager:current_mechanism_name()
-            end
-        end,
-        function()
-            if mechanism_manager.mechanism_name then
-                return mechanism_manager:mechanism_name()
-            end
-        end,
-        function()
-            return mechanism_manager._mechanism_name
-        end,
-        function()
-            local mechanism = mechanism_manager._mechanism
-            if type(mechanism) == "table" then
-                return mechanism.name or mechanism._name
-            end
-            return mechanism
-        end,
-    }
-
-    for _, getter in ipairs(candidates) do
-        local ok, value = pcall(getter)
+    if mechanism_manager.current_mechanism_name then
+        local ok, value = pcall(mechanism_manager.current_mechanism_name, mechanism_manager)
         if ok and value ~= nil then
             return tostring(value)
+        end
+    end
+
+    if mechanism_manager.mechanism_name then
+        local ok, value = pcall(mechanism_manager.mechanism_name, mechanism_manager)
+        if ok and value ~= nil then
+            return tostring(value)
+        end
+    end
+
+    local value = mechanism_manager._mechanism_name
+    if value ~= nil then
+        return tostring(value)
+    end
+
+    local mechanism = mechanism_manager._mechanism
+    if mechanism ~= nil then
+        if type(mechanism) == "table" then
+            value = mechanism.name or mechanism._name
+            if value ~= nil then
+                return tostring(value)
+            end
+        else
+            return tostring(mechanism)
         end
     end
 
     return nil
 end
 
-local function _is_hub_runtime()
-    local mission_name = _safe_mission_name()
-    local activity = _safe_presence_activity()
-    local mechanism_name = _safe_mechanism_name()
+local function _is_hub_runtime(mission_name, activity, mechanism_name)
+    mission_name = mission_name or _safe_mission_name()
+    activity = activity or _safe_presence_activity()
+    mechanism_name = mechanism_name or _safe_mechanism_name()
 
     return mission_name == "hub_ship"
         or activity == "hub"
@@ -989,12 +997,11 @@ local function _player_unit()
     return local_player and local_player.player_unit
 end
 
-local function _is_local_player_alive()
-    return _safe_unit_alive(_player_unit())
+local function _is_player_unit_alive(player_unit)
+    return _safe_unit_alive(player_unit)
 end
 
-local function _is_local_player_captured()
-    local player_unit = _player_unit()
+local function _is_player_unit_captured(player_unit)
     if not _safe_unit_alive(player_unit) or not PlayerUnitStatus or not PlayerUnitStatus.is_hogtied then
         return false
     end
@@ -1002,6 +1009,14 @@ local function _is_local_player_captured()
     local ok, captured = pcall(PlayerUnitStatus.is_hogtied, player_unit)
 
     return ok and captured == true or false
+end
+
+local function _is_local_player_alive()
+    return _is_player_unit_alive(_player_unit())
+end
+
+local function _is_local_player_captured()
+    return _is_player_unit_captured(_player_unit())
 end
 
 local function _safe_camera_rotation()
@@ -1021,9 +1036,7 @@ local function _safe_camera_rotation()
     end
 
     if camera_manager.has_camera then
-        local ok_has_camera, has_camera = pcall(function()
-            return camera_manager:has_camera(viewport_name)
-        end)
+        local ok_has_camera, has_camera = pcall(camera_manager.has_camera, camera_manager, viewport_name)
 
         if ok_has_camera and not has_camera then
             return nil
@@ -1034,9 +1047,7 @@ local function _safe_camera_rotation()
         return nil
     end
 
-    local ok_rotation, rotation = pcall(function()
-        return camera_manager:camera_rotation(viewport_name)
-    end)
+    local ok_rotation, rotation = pcall(camera_manager.camera_rotation, camera_manager, viewport_name)
 
     if ok_rotation and rotation then
         return rotation
@@ -1088,9 +1099,7 @@ local function _safe_extension_system(system_name)
         return nil
     end
 
-    local ok, system = pcall(function()
-        return extension_manager:system(system_name)
-    end)
+    local ok, system = pcall(extension_manager.system, extension_manager, system_name)
 
     if ok then
         return system
@@ -1116,9 +1125,9 @@ local function _darkened_color_array(color, multiplier)
     local copy = _copy_color_array(color) or { 255, 255, 255, 255 }
     local mul = multiplier or 1
 
-    copy[2] = math.floor(_clamp((copy[2] or 255) * mul, 0, 255) + 0.5)
-    copy[3] = math.floor(_clamp((copy[3] or 255) * mul, 0, 255) + 0.5)
-    copy[4] = math.floor(_clamp((copy[4] or 255) * mul, 0, 255) + 0.5)
+    copy[2] = math_floor(_clamp((copy[2] or 255) * mul, 0, 255) + 0.5)
+    copy[3] = math_floor(_clamp((copy[3] or 255) * mul, 0, 255) + 0.5)
+    copy[4] = math_floor(_clamp((copy[4] or 255) * mul, 0, 255) + 0.5)
 
     return copy
 end
@@ -1136,7 +1145,7 @@ end
 local function _nearby_outline_color_signature(color)
     local src = color or { 255, 255, 255, 255 }
 
-    return string.format(
+    return string_format(
         "%d:%d:%d",
         src[2] or 255,
         src[3] or 255,
@@ -1253,7 +1262,8 @@ local function _collect_screen_highlight_targets()
     local highlight_count = 0
     local highlight_enabled_by_kind = {}
 
-    local source_targets = mod._highlight_source_radar_targets or mod._unclustered_radar_targets or mod._radar_targets or {}
+    local source_targets = mod._highlight_source_radar_targets or mod._unclustered_radar_targets or mod._radar_targets or
+        {}
 
     for i = 1, #source_targets do
         local target = source_targets[i]
@@ -1328,9 +1338,7 @@ local function _safe_game_mode()
         return nil
     end
 
-    local ok, game_mode = pcall(function()
-        return game_mode_manager:game_mode()
-    end)
+    local ok, game_mode = pcall(game_mode_manager.game_mode, game_mode_manager)
 
     if ok then
         return game_mode
@@ -1345,9 +1353,7 @@ local function _safe_game_mode_name()
         return nil
     end
 
-    local ok, game_mode_name = pcall(function()
-        return game_mode_manager:game_mode_name()
-    end)
+    local ok, game_mode_name = pcall(game_mode_manager.game_mode_name, game_mode_manager)
 
     if ok then
         return game_mode_name
@@ -1382,9 +1388,7 @@ local function _safe_expedition_loot_handler()
     local logic = rawget(game_mode, "_game_mode_logic")
 
     if logic and logic.loot_handler then
-        local ok_handler, handler = pcall(function()
-            return logic:loot_handler()
-        end)
+        local ok_handler, handler = pcall(logic.loot_handler, logic)
 
         if ok_handler and handler then
             return handler
@@ -1413,7 +1417,7 @@ local function _safe_expedition_player_drop_amount(unit)
     local numeric_amount = tonumber(amount)
 
     if numeric_amount and numeric_amount > 0 then
-        return math.floor(numeric_amount + 0.5)
+        return math_floor(numeric_amount + 0.5)
     end
 
     return nil
@@ -1446,9 +1450,7 @@ local function _safe_vector3_unbox(value)
     end
 
     if value.unbox then
-        local ok, vector = pcall(function()
-            return value:unbox()
-        end)
+        local ok, vector = pcall(value.unbox, value)
 
         if ok and vector then
             return _copy_vector3(vector)
@@ -1468,9 +1470,7 @@ local function _safe_expedition_level_index(level)
         return nil
     end
 
-    local ok, level_index = pcall(function()
-        return unit_spawner:index_by_level(level)
-    end)
+    local ok, level_index = pcall(unit_spawner.index_by_level, unit_spawner, level)
 
     if ok then
         return level_index
@@ -1489,9 +1489,7 @@ local function _safe_expedition_level_by_index(level_index, sub_level_index)
         return nil
     end
 
-    local ok, level = pcall(function()
-        return unit_spawner:level_by_index(level_index, sub_level_index)
-    end)
+    local ok, level = pcall(unit_spawner.level_by_index, unit_spawner, level_index, sub_level_index)
 
     if ok then
         return level
@@ -1510,9 +1508,7 @@ local function _safe_expedition_level_data_by_index(game_mode, level_index, sub_
         return nil
     end
 
-    local ok, level_data = pcall(function()
-        return game_mode:get_level_data(level)
-    end)
+    local ok, level_data = pcall(game_mode.get_level_data, game_mode, level)
 
     if ok then
         return level_data
@@ -1586,12 +1582,12 @@ local function _expedition_opportunity_icon(level_index)
     local numeric_index = tonumber(level_index) or 0
     local icon_index = 1 + numeric_index % 24
 
-    return string.format("content/ui/materials/backgrounds/scanner/scanner_map_greek_%02d", icon_index)
+    return string_format("content/ui/materials/backgrounds/scanner/scanner_map_greek_%02d", icon_index)
 end
 
 local function _expedition_opportunity_title_icon(location_id)
     local numeric_id = tonumber(location_id) or 0
-    return string.format("content/ui/materials/backgrounds/scanner/scanner_map_%d", numeric_id % 9)
+    return string_format("content/ui/materials/backgrounds/scanner/scanner_map_%d", numeric_id % 9)
 end
 
 local function _safe_havoc_runtime_active()
@@ -1605,9 +1601,7 @@ local function _safe_havoc_runtime_active()
 
     local difficulty_manager = Managers and Managers.state and Managers.state.difficulty
     if difficulty_manager and difficulty_manager.get_parsed_havoc_data then
-        local ok_parsed, parsed_havoc_data = pcall(function()
-            return difficulty_manager:get_parsed_havoc_data()
-        end)
+        local ok_parsed, parsed_havoc_data = pcall(difficulty_manager.get_parsed_havoc_data, difficulty_manager)
 
         if ok_parsed and parsed_havoc_data then
             return true
@@ -1616,9 +1610,7 @@ local function _safe_havoc_runtime_active()
 
     local game_mode = _safe_game_mode()
     if game_mode and game_mode.extension then
-        local ok_extension, havoc_extension = pcall(function()
-            return game_mode:extension("havoc")
-        end)
+        local ok_extension, havoc_extension = pcall(game_mode.extension, game_mode, "havoc")
 
         if ok_extension and havoc_extension then
             return true
@@ -1710,7 +1702,7 @@ local function _get_runtime_state()
             player_pos
     end
 
-    if _is_hub_runtime() then
+    if _is_hub_runtime(mission_name, activity, mechanism_name) then
         return false, "hub_runtime", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
     end
 
@@ -1718,11 +1710,11 @@ local function _get_runtime_state()
         return false, "game_mode_disabled", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
     end
 
-    if not _is_local_player_alive() then
+    if not _is_player_unit_alive(player_unit) then
         return false, "player_not_alive", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
     end
 
-    if _is_local_player_captured() then
+    if _is_player_unit_captured(player_unit) then
         return false, "player_captured", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
     end
 
@@ -2000,31 +1992,74 @@ local function _classify_pickup_like(interaction_type, ui_interaction_type, icon
         return "pickup_stolen_rations", meta
     end
 
-    local key = string.format("%s|%s|%s|%s|%s|%s",
+    local key = string_format("%s|%s|%s|%s|%s|%s",
         tostring(pickup_name or ""),
         tostring(interaction_type or ""),
         tostring(icon or ""),
         tostring(description or ""),
         tostring(unit_name or ""),
         tostring(pickup_data and pickup_data.group or ""))
-    key = string.lower(key)
+    key = string_lower(key)
 
-    if string.find(key, "grimoire", 1, true)
-        or string.find(key, "scripture", 1, true)
-        or string.find(key, "side_mission", 1, true)
-        or string.find(key, "objective_side", 1, true)
-        or string.find(key, "objective_pickup", 1, true)
-        or string.find(key, "luggable", 1, true)
-        or string.find(key, "forge_material", 1, true)
-        or string.find(key, "tainted_skull", 1, true)
-        or string.find(key, "saints_pickup", 1, true)
-        or string.find(key, "stolen_rations", 1, true)
-        or string.find(key, "penance_collectible", 1, true) then
+    if string_find(key, "grimoire", 1, true)
+        or string_find(key, "scripture", 1, true)
+        or string_find(key, "side_mission", 1, true)
+        or string_find(key, "objective_side", 1, true)
+        or string_find(key, "objective_pickup", 1, true)
+        or string_find(key, "luggable", 1, true)
+        or string_find(key, "forge_material", 1, true)
+        or string_find(key, "tainted_skull", 1, true)
+        or string_find(key, "saints_pickup", 1, true)
+        or string_find(key, "stolen_rations", 1, true)
+        or string_find(key, "penance_collectible", 1, true) then
         _log_once(key, "Unknown pickup: " .. key)
         return "pickup_unknown", meta
     end
 
     return nil, meta
+end
+
+local function _safe_player_slot(player)
+    if not player or not player.slot then
+        return nil
+    end
+
+    local ok_slot, slot = pcall(function()
+        return player:slot()
+    end)
+
+    if ok_slot then
+        return slot
+    end
+
+    return nil
+end
+
+local _marked_by_player_slot_for_unit = function(unit)
+    if not _safe_unit_alive(unit) then
+        return nil
+    end
+
+    local smart_tag_system = _safe_extension_system("smart_tag_system")
+    if not smart_tag_system or not smart_tag_system.unit_tag then
+        return nil
+    end
+
+    local ok_tag, tag = pcall(function()
+        return smart_tag_system:unit_tag(unit)
+    end)
+    if not ok_tag or not tag or not tag.tagger_player then
+        return nil
+    end
+
+    local ok_player, player = pcall(function()
+        return tag:tagger_player()
+    end)
+    if not ok_player or not player then
+        return nil
+    end
+
+    return _safe_player_slot(player)
 end
 
 local function _classify_interactee(extension, unit)
@@ -2067,7 +2102,7 @@ local function _classify_interactee(extension, unit)
 
     if kind == "material_expeditions_loot" then
         meta.remnant_value = _expedition_loot_value_for_pickup_name(pickup_name)
-        meta.remnant_tier = pickup_name and string.match(pickup_name, "tier_(%d+)$") or nil
+        meta.remnant_tier = pickup_name and string_match(pickup_name, "tier_(%d+)$") or nil
         meta.is_player_drop = false
     elseif kind == "material_expeditions_loot_player_drop" then
         meta.remnant_value = _safe_expedition_player_drop_amount(unit)
@@ -2078,25 +2113,25 @@ local function _classify_interactee(extension, unit)
 end
 
 local function _classify_enemy_from_breed(breed_name)
-    local key = string.lower(breed_name or "")
+    local key = string_lower(breed_name or "")
 
-    if key == "chaos_daemonhost" or string.find(key, "daemonhost", 1, true) then
+    if key == "chaos_daemonhost" or string_find(key, "daemonhost", 1, true) then
         return "enemy_daemonhost"
     end
 
-    if TWIN_BREEDS[key] or string.find(key, "twin_captain", 1, true) then
+    if TWIN_BREEDS[key] or string_find(key, "twin_captain", 1, true) then
         return "enemy_karnak_twin"
     end
 
-    if CAPTAIN_BREEDS[key] or string.find(key, "captain", 1, true) then
+    if CAPTAIN_BREEDS[key] or string_find(key, "captain", 1, true) then
         return "enemy_captain"
     end
 
     if MONSTROSITY_BREEDS[key]
-        or string.find(key, "beast_of_nurgle", 1, true)
-        or string.find(key, "plague_ogryn", 1, true)
-        or string.find(key, "chaos_spawn", 1, true)
-        or string.find(key, "houndmaster", 1, true) then
+        or string_find(key, "beast_of_nurgle", 1, true)
+        or string_find(key, "plague_ogryn", 1, true)
+        or string_find(key, "chaos_spawn", 1, true)
+        or string_find(key, "houndmaster", 1, true) then
         return "enemy_monstrosity"
     end
 
@@ -2129,49 +2164,6 @@ local function _track_unit(unit, kind, source, meta)
             meta = meta,
         }
     end
-end
-
-local function _safe_player_slot(player)
-    if not player or not player.slot then
-        return nil
-    end
-
-    local ok_slot, slot = pcall(function()
-        return player:slot()
-    end)
-
-    if ok_slot then
-        return slot
-    end
-
-    return nil
-end
-
-_marked_by_player_slot_for_unit = function(unit)
-    if not _safe_unit_alive(unit) then
-        return nil
-    end
-
-    local smart_tag_system = _safe_extension_system("smart_tag_system")
-    if not smart_tag_system or not smart_tag_system.unit_tag then
-        return nil
-    end
-
-    local ok_tag, tag = pcall(function()
-        return smart_tag_system:unit_tag(unit)
-    end)
-    if not ok_tag or not tag or not tag.tagger_player then
-        return nil
-    end
-
-    local ok_player, player = pcall(function()
-        return tag:tagger_player()
-    end)
-    if not ok_player or not player then
-        return nil
-    end
-
-    return _safe_player_slot(player)
 end
 
 local function _track_point(id, kind, position, source, meta)
@@ -2283,7 +2275,7 @@ local function _track_expedition_registered_points(game_mode, navigation_handler
 
             if position and is_active_section and not is_completed then
                 _track_point(
-                    string.format("%s:%s", tostring(kind), tostring(level_index)),
+                    string_format("%s:%s", tostring(kind), tostring(level_index)),
                     kind,
                     position,
                     "expedition_navigation",
@@ -2321,7 +2313,7 @@ local function _track_expedition_registered_points(game_mode, navigation_handler
         end
     end
 
-    table.sort(entries, function(a, b)
+    table_sort(entries, function(a, b)
         local a_level_index = tonumber(a.level_index)
         local b_level_index = tonumber(b.level_index)
 
@@ -2346,7 +2338,7 @@ local function _track_expedition_registered_points(game_mode, navigation_handler
         local position = entry.position
 
         _track_point(
-            string.format("%s:%s", tostring(kind), tostring(level_index)),
+            string_format("%s:%s", tostring(kind), tostring(level_index)),
             kind,
             position,
             "expedition_navigation",
@@ -2381,7 +2373,7 @@ local function _track_expedition_tagged_levels(game_mode, navigation_handler, cu
             local level_index = _safe_expedition_level_index(level_data and level_data.level or nil)
 
             _track_point(
-                string.format("%s:%s:%s", tostring(kind), tostring(level_index or i),
+                string_format("%s:%s:%s", tostring(kind), tostring(level_index or i),
                     tostring(level_data and level_data.reference_name or i)),
                 kind,
                 position,
@@ -2680,18 +2672,18 @@ end
 
 local function _distance_squared(a, b)
     if not a or not b then
-        return math.huge
+        return math_huge
     end
 
     local ax, ay, az = a.x, a.y, a.z
     local bx, by, bz = b.x, b.y, b.z
 
     if not _is_finite_number(ax) or not _is_finite_number(ay) or not _is_finite_number(az) then
-        return math.huge
+        return math_huge
     end
 
     if not _is_finite_number(bx) or not _is_finite_number(by) or not _is_finite_number(bz) then
-        return math.huge
+        return math_huge
     end
 
     local dx = ax - bx
@@ -2703,18 +2695,18 @@ end
 
 local function _distance_squared_horizontal(a, b)
     if not a or not b then
-        return math.huge
+        return math_huge
     end
 
     local ax, ay = a.x, a.y
     local bx, by = b.x, b.y
 
     if not _is_finite_number(ax) or not _is_finite_number(ay) then
-        return math.huge
+        return math_huge
     end
 
     if not _is_finite_number(bx) or not _is_finite_number(by) then
-        return math.huge
+        return math_huge
     end
 
     local dx = ax - bx
@@ -2813,7 +2805,8 @@ local function _expedition_loot_cluster_center(cluster_members)
     }
 end
 
-local function _expedition_loot_vertical_state(player_pos, position, item_vertical_arrow_threshold_sq, item_vertical_hide_threshold)
+local function _expedition_loot_vertical_state(player_pos, position, item_vertical_arrow_threshold_sq,
+                                               item_vertical_hide_threshold)
     local vertical_delta = _vertical_delta(player_pos, position)
     local vertical_state = nil
 
@@ -3155,7 +3148,7 @@ local function _debug_log_scan()
                 counts.pocketables = counts.pocketables + 1
             elseif _string_starts_with(kind, "material_") then
                 counts.materials = counts.materials + 1
-            elseif string.find(kind, "ammo", 1, true) then
+            elseif string_find(kind, "ammo", 1, true) then
                 counts.ammo = counts.ammo + 1
             else
                 counts.generic = counts.generic + 1
@@ -3163,7 +3156,7 @@ local function _debug_log_scan()
         end
     end
 
-    local signature = table.concat({
+    local signature = table_concat({
         tostring(counts.enemies),
         tostring(counts.players),
         tostring(counts.ammo),
@@ -3183,7 +3176,7 @@ local function _debug_log_scan()
 
     mod._last_scan_signature = signature
 
-    mod:echo(string.format(
+    mod:echo(string_format(
         "Radar scan | enemies=%d players=%d ammo=%d crates=%d pocketables=%d materials=%d generic=%d tracked=%d radar_targets=%d mission=%s activity=%s mechanism=%s",
         counts.enemies,
         counts.players,
@@ -3221,7 +3214,7 @@ local function _debug_log_block(reason, gameplay_t, mission_name, activity, mech
         return
     end
 
-    local signature = table.concat({
+    local signature = table_concat({
         tostring(reason),
         tostring(mission_name),
         tostring(activity),
@@ -3234,7 +3227,7 @@ local function _debug_log_block(reason, gameplay_t, mission_name, activity, mech
     end
 
     mod._last_block_signature = signature
-    mod:echo(string.format(
+    mod:echo(string_format(
         "Radar blocked | reason=%s mission=%s activity=%s mechanism=%s gameplay_t=%s",
         tostring(reason),
         tostring(mission_name),
@@ -3418,7 +3411,7 @@ function mod:get_max_radar_markers()
         value = 100
     end
 
-    return math.floor(value)
+    return math_floor(value)
 end
 
 function mod:get_background_opacity()
@@ -3430,7 +3423,7 @@ function mod:get_background_opacity()
         value = 255
     end
 
-    return math.floor(value)
+    return math_floor(value)
 end
 
 function mod:get_boss_marker_range_mode()
@@ -3484,7 +3477,6 @@ function mod:get_expedition_loot_cluster_vertical_radius()
 
     return value
 end
-
 
 function mod:get_item_vertical_arrow_threshold()
     local value = tonumber(self:get("item_vertical_arrow_threshold")) or 25
@@ -3549,7 +3541,7 @@ function mod:get_radar_move_step()
         value = 200
     end
 
-    return math.floor(value)
+    return math_floor(value)
 end
 
 function mod:get_radar_anchor()
@@ -3565,7 +3557,7 @@ function mod:get_radar_offset_x(size)
         value = DEFAULT_RADAR_POS_X
     end
 
-    return math.floor(_clamp(value, 0, max_x) + 0.5)
+    return math_floor(_clamp(value, 0, max_x) + 0.5)
 end
 
 function mod:get_radar_offset_y(size)
@@ -3577,7 +3569,7 @@ function mod:get_radar_offset_y(size)
         value = DEFAULT_RADAR_POS_Y
     end
 
-    return math.floor(_clamp(value, 0, max_y) + 0.5)
+    return math_floor(_clamp(value, 0, max_y) + 0.5)
 end
 
 function mod:get_radar_pos_x(size)
@@ -3587,7 +3579,7 @@ function mod:get_radar_pos_x(size)
     local offset_y = self:get_radar_offset_y(radar_size)
     local x = _get_radar_origin_from_offsets(anchor, offset_x, offset_y, radar_size)
 
-    return math.floor(x + 0.5)
+    return math_floor(x + 0.5)
 end
 
 function mod:get_radar_pos_y(size)
@@ -3597,19 +3589,8 @@ function mod:get_radar_pos_y(size)
     local offset_y = self:get_radar_offset_y(radar_size)
     local _, y = _get_radar_origin_from_offsets(anchor, offset_x, offset_y, radar_size)
 
-    return math.floor(y + 0.5)
+    return math_floor(y + 0.5)
 end
-
-NEARBY_HIGHLIGHT_SETTING_BY_GROUP = {
-    common_pickups_group = "nearby_highlight_common_pickups",
-    materials_group = "nearby_highlight_materials",
-    primary_objective_group = "nearby_highlight_primary_objective",
-    secondary_objective_group = "nearby_highlight_secondary_objective",
-    expeditions_specific_group = "nearby_highlight_expeditions_specific",
-    martyr_s_skull_group = "nearby_highlight_martyr_s_skull",
-    environment_group = "nearby_highlight_environment",
-    event_group = "nearby_highlight_event",
-}
 
 function mod:has_any_nearby_highlight_enabled()
     for _, setting_id in pairs(NEARBY_HIGHLIGHT_SETTING_BY_GROUP) do
@@ -3655,12 +3636,12 @@ function mod:set_radar_position(x, y)
     local offset_y = self:get_radar_offset_y(radar_size)
 
     if x ~= nil then
-        offset_x = math.floor(_clamp(tonumber(x) or DEFAULT_RADAR_POS_X, 0, max_x) + 0.5)
+        offset_x = math_floor(_clamp(tonumber(x) or DEFAULT_RADAR_POS_X, 0, max_x) + 0.5)
         self:set("radar_pos_x", offset_x)
     end
 
     if y ~= nil then
-        offset_y = math.floor(_clamp(tonumber(y) or DEFAULT_RADAR_POS_Y, 0, max_y) + 0.5)
+        offset_y = math_floor(_clamp(tonumber(y) or DEFAULT_RADAR_POS_Y, 0, max_y) + 0.5)
         self:set("radar_pos_y", offset_y)
     end
 
@@ -3686,12 +3667,12 @@ function mod:set_radar_origin(x, y)
     local anchor = self:get_radar_anchor()
     local max_x, max_y = _get_radar_position_bounds(radar_size)
 
-    local clamped_x = math.floor(_clamp(tonumber(x) or DEFAULT_RADAR_POS_X, 0, max_x) + 0.5)
-    local clamped_y = math.floor(_clamp(tonumber(y) or DEFAULT_RADAR_POS_Y, 0, max_y) + 0.5)
+    local clamped_x = math_floor(_clamp(tonumber(x) or DEFAULT_RADAR_POS_X, 0, max_x) + 0.5)
+    local clamped_y = math_floor(_clamp(tonumber(y) or DEFAULT_RADAR_POS_Y, 0, max_y) + 0.5)
     local offset_x, offset_y = _get_radar_offsets_from_origin(anchor, clamped_x, clamped_y, radar_size)
 
-    self:set("radar_pos_x", math.floor(_clamp(offset_x, 0, max_x) + 0.5))
-    self:set("radar_pos_y", math.floor(_clamp(offset_y, 0, max_y) + 0.5))
+    self:set("radar_pos_x", math_floor(_clamp(offset_x, 0, max_x) + 0.5))
+    self:set("radar_pos_y", math_floor(_clamp(offset_y, 0, max_y) + 0.5))
 
     if mod:get("debug_mode") == true then
         self:notify(
@@ -3835,14 +3816,14 @@ function mod:project_target_to_radar(player_pos, player_rot, target_pos, max_rad
         local radar_style = self.get_radar_style and self:get_radar_style() or "square"
 
         if radar_style == "circle" then
-            local projected_distance = math.sqrt(px * px + py * py)
+            local projected_distance = math_sqrt(px * px + py * py)
             if projected_distance > 0 then
                 local circle_scale = max_radius / projected_distance
                 px = px * circle_scale
                 py = py * circle_scale
             end
         else
-            local max_component = math.max(math_abs(px), math_abs(py))
+            local max_component = math_max(math_abs(px), math_abs(py))
             if max_component > 0 then
                 local square_scale = max_radius / max_component
                 px = px * square_scale
