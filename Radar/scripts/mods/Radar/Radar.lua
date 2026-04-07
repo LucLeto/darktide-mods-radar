@@ -90,6 +90,8 @@ mod._last_block_signature = nil
 mod._screen_highlight_targets = {}
 mod._unclustered_radar_targets = {}
 mod._highlight_source_radar_targets = {}
+mod._idol_destroyed_collectible_keys = {}
+mod._idol_destroyed_units = {}
 
 local MONSTROSITY_BREEDS = {
     chaos_daemonhost = true,
@@ -317,6 +319,71 @@ local NEARBY_HIGHLIGHT_SETTING_BY_GROUP = {
     martyr_s_skull_group = "nearby_highlight_martyr_s_skull",
     environment_group = "nearby_highlight_environment",
     event_group = "nearby_highlight_event",
+}
+
+
+local DEFAULT_COLOR_ARRAY = { 255, 255, 255, 255 }
+
+local EXACT_PICKUP_KIND_BY_NAME = {
+    small_clip = "pickup_ammo_small",
+    large_clip = "pickup_ammo_big",
+    small_grenade = "pickup_grenade",
+    small_metal = "material_plasteel",
+    large_metal = "material_plasteel",
+    small_platinum = "material_diamantine",
+    large_platinum = "material_diamantine",
+    ammo_cache_pocketable = "pocketable_ammo_crate",
+    medical_crate_pocketable = "pocketable_medical_crate",
+    syringe_ability_boost_pocketable = "pocketable_syringe_ability",
+    syringe_corruption_pocketable = "pocketable_syringe_corruption",
+    syringe_power_boost_pocketable = "pocketable_syringe_power",
+    syringe_speed_boost_pocketable = "pocketable_syringe_speed",
+    battery_01_luggable = "luggable_power_cell_teal",
+    control_rod_01_luggable = "luggable_cryonic_rod",
+    container_01_luggable = "luggable_moebian_pox_zetaphyte_13_sample",
+    container_02_luggable = "luggable_vacuum_capsule",
+    container_03_luggable = "luggable_special_issue_ammo",
+    prismata_case_01_luggable = "luggable_prismata_crystal_repository",
+    hordes_mcguffin = "pickup_mortis_relic",
+    grimoire = "pocketable_grimoire",
+    tome = "pocketable_scripture",
+    expedition_loot_player_drop = "material_expeditions_loot_player_drop",
+    large_ammunition_crate = "pickup_large_ammunition_crate",
+    expedition_deployable_force_field_pocketable = "pocketable_void_shield",
+    expedition_grenade_airstrike_pocketable = "pocketable_airstrike",
+    expedition_grenade_artillery_strike_pocketable = "pocketable_artillery_strike",
+    expedition_grenade_big_pocketable = "pocketable_big_grenade",
+    expedition_grenade_valkyrie_hover_pocketable = "pocketable_valkyrie_hover",
+    motion_detection_mine_explosive_pocketable = "pocketable_landmine_explosive",
+    motion_detection_mine_fire_pocketable = "pocketable_landmine_fire",
+    motion_detection_mine_shock_pocketable = "pocketable_landmine_shock",
+    expedition_loot_heavy_tier_1 = "luggable_data_reliquary",
+    expedition_loot_heavy_tier_2 = "luggable_data_reliquary",
+    expedition_loot_heavy_tier_3 = "luggable_data_reliquary",
+    expedition_explosive_luggable_01 = "luggable_promethium_barrel",
+    expedition_time_syringe_timed = "pocketable_anti_rad_stimm",
+    collectible_01_pickup = "pickup_martyr_skull",
+    battery_02_luggable = "luggable_power_cell_orange",
+    ammo_cache_deployable = "pickup_ammo_cache_deployable",
+    medical_crate_deployable = "medical_crate_deployable",
+    skulls_01_pickup = "pickup_tainted_skull",
+    communications_hack_device = "pocketable_corrupted_auspex_scanner",
+    stolen_rations_01_pickup_small = "pickup_stolen_rations",
+    stolen_rations_01_pickup_medium = "pickup_stolen_rations",
+}
+
+local PAPER_PICKUP_NAMES = {
+    paper_pickup = true,
+    paper_pickup_02 = true,
+    paper_pickup_03 = true,
+    paper_pickup_04 = true,
+}
+
+local SAINTS_PICKUP_NAMES = {
+    live_event_saints_01_pickup_small = true,
+    live_event_saints_01_pickup_medium = true,
+    live_event_saints_01_pickup_large = true,
+    consumable = true,
 }
 
 local function _normalize_marker_display_mode(value)
@@ -627,12 +694,13 @@ end
 local function _get_ui_space_size()
     local width = 1920
     local height = 1080
+    local resolution_lookup = RESOLUTION_LOOKUP
 
-    if RESOLUTION_LOOKUP and RESOLUTION_LOOKUP.width and RESOLUTION_LOOKUP.height then
-        local inverse_scale = RESOLUTION_LOOKUP.inverse_scale or 1
+    if resolution_lookup and resolution_lookup.width and resolution_lookup.height then
+        local inverse_scale = resolution_lookup.inverse_scale or 1
 
-        width = RESOLUTION_LOOKUP.width * inverse_scale
-        height = RESOLUTION_LOOKUP.height * inverse_scale
+        width = resolution_lookup.width * inverse_scale
+        height = resolution_lookup.height * inverse_scale
     end
 
     return width, height
@@ -1069,9 +1137,8 @@ local function _safe_player_rotation(player_unit)
     local unit_data_extension = ScriptUnit and ScriptUnit.has_extension and
         ScriptUnit.has_extension(player_unit, "unit_data_system")
     if unit_data_extension and unit_data_extension.read_component then
-        local ok_component, first_person_component = pcall(function()
-            return unit_data_extension:read_component("first_person")
-        end)
+        local ok_component, first_person_component = pcall(unit_data_extension.read_component, unit_data_extension,
+            "first_person")
 
         if ok_component and first_person_component and first_person_component.rotation then
             return first_person_component.rotation
@@ -1081,9 +1148,7 @@ local function _safe_player_rotation(player_unit)
     local first_person_extension = ScriptUnit and ScriptUnit.has_extension and
         ScriptUnit.has_extension(player_unit, "first_person_system")
     if first_person_extension and first_person_extension.extrapolated_rotation then
-        local ok_rotation, rotation = pcall(function()
-            return first_person_extension:extrapolated_rotation()
-        end)
+        local ok_rotation, rotation = pcall(first_person_extension.extrapolated_rotation, first_person_extension)
 
         if ok_rotation and rotation then
             return rotation
@@ -1122,18 +1187,19 @@ local function _copy_color_array(color)
 end
 
 local function _darkened_color_array(color, multiplier)
-    local copy = _copy_color_array(color) or { 255, 255, 255, 255 }
+    local src = color or DEFAULT_COLOR_ARRAY
     local mul = multiplier or 1
 
-    copy[2] = math_floor(_clamp((copy[2] or 255) * mul, 0, 255) + 0.5)
-    copy[3] = math_floor(_clamp((copy[3] or 255) * mul, 0, 255) + 0.5)
-    copy[4] = math_floor(_clamp((copy[4] or 255) * mul, 0, 255) + 0.5)
-
-    return copy
+    return {
+        src[1] or 255,
+        math_floor(_clamp((src[2] or 255) * mul, 0, 255) + 0.5),
+        math_floor(_clamp((src[3] or 255) * mul, 0, 255) + 0.5),
+        math_floor(_clamp((src[4] or 255) * mul, 0, 255) + 0.5),
+    }
 end
 
 local function _outline_color_vector3(color)
-    local src = color or { 255, 255, 255, 255 }
+    local src = color or DEFAULT_COLOR_ARRAY
 
     return Vector3(
         (src[2] or 255) / 255,
@@ -1143,7 +1209,7 @@ local function _outline_color_vector3(color)
 end
 
 local function _nearby_outline_color_signature(color)
-    local src = color or { 255, 255, 255, 255 }
+    local src = color or DEFAULT_COLOR_ARRAY
 
     return string_format(
         "%d:%d:%d",
@@ -1237,6 +1303,29 @@ local function _copy_target_list(targets)
     return copy
 end
 
+local function _distance_squared(a, b)
+    if not a or not b then
+        return math_huge
+    end
+
+    local ax, ay, az = a.x, a.y, a.z
+    local bx, by, bz = b.x, b.y, b.z
+
+    if not _is_finite_number(ax) or not _is_finite_number(ay) or not _is_finite_number(az) then
+        return math_huge
+    end
+
+    if not _is_finite_number(bx) or not _is_finite_number(by) or not _is_finite_number(bz) then
+        return math_huge
+    end
+
+    local dx = ax - bx
+    local dy = ay - by
+    local dz = az - bz
+
+    return dx * dx + dy * dy + dz * dz
+end
+
 local function _collect_screen_highlight_targets()
     if not mod:has_any_nearby_highlight_enabled() then
         return {}
@@ -1256,12 +1345,12 @@ local function _collect_screen_highlight_targets()
 
     local get_setting = mod.get
     local get_marker_scale_group = mod.get_marker_scale_group
+    local highlight_setting_by_group = NEARBY_HIGHLIGHT_SETTING_BY_GROUP
     local max_distance = mod:get_nearby_highlight_range()
     local max_distance_sq = max_distance * max_distance
     local highlights = {}
     local highlight_count = 0
     local highlight_enabled_by_kind = {}
-
     local source_targets = mod._highlight_source_radar_targets or mod._unclustered_radar_targets or mod._radar_targets or
         {}
 
@@ -1274,15 +1363,15 @@ local function _collect_screen_highlight_targets()
 
             if enabled == nil then
                 local group_name = get_marker_scale_group(mod, kind)
-                local setting_id = group_name and NEARBY_HIGHLIGHT_SETTING_BY_GROUP[group_name] or nil
+                local setting_id = group_name and highlight_setting_by_group[group_name] or nil
 
                 enabled = setting_id ~= nil and get_setting(mod, setting_id) == true or false
                 highlight_enabled_by_kind[kind] = enabled
             end
 
             if enabled then
-                local distance_sq = target.distance_sq_3d
                 local position = target.position
+                local distance_sq = target.distance_sq_3d
 
                 if distance_sq == nil and position then
                     distance_sq = _distance_squared(player_pos, position)
@@ -1313,13 +1402,13 @@ end
 
 local function _safe_unit_to_extension_map(system_name)
     local system = _safe_extension_system(system_name)
-    if not system or not system.unit_to_extension_map then
+    local unit_to_extension_map = system and system.unit_to_extension_map
+
+    if not unit_to_extension_map then
         return nil
     end
 
-    local ok, map = pcall(function()
-        return system:unit_to_extension_map()
-    end)
+    local ok, map = pcall(unit_to_extension_map, system)
 
     if ok and type(map) == "table" then
         return map
@@ -1429,15 +1518,15 @@ local function _is_in_expedition_safe_zone()
     end
 
     local game_mode = _safe_game_mode()
-    if not game_mode or not game_mode.in_safe_zone then
+    local in_safe_zone = game_mode and game_mode.in_safe_zone
+
+    if not in_safe_zone then
         return false
     end
 
-    local ok, in_safe_zone = pcall(function()
-        return game_mode:in_safe_zone()
-    end)
+    local ok, value = pcall(in_safe_zone, game_mode)
 
-    return ok and in_safe_zone == true or false
+    return ok and value == true or false
 end
 
 local function _safe_vector3_unbox(value)
@@ -1537,10 +1626,11 @@ local function _safe_expedition_active_section_index(game_mode)
     end
 
     local in_safe_zone = false
-    if game_mode.in_safe_zone then
-        local ok, value = pcall(function()
-            return game_mode:in_safe_zone()
-        end)
+    local in_safe_zone_fn = game_mode.in_safe_zone
+
+    if in_safe_zone_fn then
+        local ok, value = pcall(in_safe_zone_fn, game_mode)
+
         if ok then
             in_safe_zone = value == true
         end
@@ -1553,10 +1643,11 @@ local function _safe_expedition_active_section_index(game_mode)
         end
     end
 
-    if game_mode.current_location_index then
-        local ok, value = pcall(function()
-            return game_mode:current_location_index()
-        end)
+    local current_location_index = game_mode.current_location_index
+
+    if current_location_index then
+        local ok, value = pcall(current_location_index, game_mode)
+
         if ok then
             return value
         end
@@ -1791,7 +1882,8 @@ local function _classify_pickup_like(interaction_type, ui_interaction_type, icon
         return "crate_unknown", meta
     end
 
-    if interaction_type == "expedition_loot_converter" or (ui_interaction_type == "point_of_interest" and pickup_name == "expedition_loot_converter") then
+    if interaction_type == "expedition_loot_converter"
+        or (ui_interaction_type == "point_of_interest" and pickup_name == "expedition_loot_converter") then
         meta.objective_icon = EXPEDITION_OBJECTIVE_ICON_DEFAULTS.expedition_loot_converter
         return "expedition_loot_converter", meta
     end
@@ -1810,186 +1902,28 @@ local function _classify_pickup_like(interaction_type, ui_interaction_type, icon
         return "luggable_socket", meta
     end
 
-    if pickup_name == "small_clip" then
-        return "pickup_ammo_small", meta
-    end
+    if pickup_name ~= nil then
+        local exact_kind = EXACT_PICKUP_KIND_BY_NAME[pickup_name]
 
-    if pickup_name == "large_clip" then
-        return "pickup_ammo_big", meta
-    end
+        if exact_kind then
+            return exact_kind, meta
+        end
 
-    if pickup_name == "small_grenade" then
-        return "pickup_grenade", meta
-    end
+        if PAPER_PICKUP_NAMES[pickup_name] then
+            return "pickup_coordinates_paper", meta
+        end
 
-    if pickup_name == "small_metal" or pickup_name == "large_metal" then
-        return "material_plasteel", meta
-    end
+        if SAINTS_PICKUP_NAMES[pickup_name] then
+            return "pickup_saints", meta
+        end
 
-    if pickup_name == "small_platinum" or pickup_name == "large_platinum" then
-        return "material_diamantine", meta
-    end
+        if _string_starts_with(pickup_name, "expedition_currency_") then
+            return "material_expeditions_currency", meta
+        end
 
-    if pickup_name == "ammo_cache_pocketable" then
-        return "pocketable_ammo_crate", meta
-    end
-
-    if pickup_name == "medical_crate_pocketable" then
-        return "pocketable_medical_crate", meta
-    end
-
-    if pickup_name == "syringe_ability_boost_pocketable" then
-        return "pocketable_syringe_ability", meta
-    end
-
-    if pickup_name == "syringe_corruption_pocketable" then
-        return "pocketable_syringe_corruption", meta
-    end
-
-    if pickup_name == "syringe_power_boost_pocketable" then
-        return "pocketable_syringe_power", meta
-    end
-
-    if pickup_name == "syringe_speed_boost_pocketable" then
-        return "pocketable_syringe_speed", meta
-    end
-
-    -- primary objective items
-    if pickup_name == "battery_01_luggable" then
-        return "luggable_power_cell_teal", meta
-    end
-
-    if pickup_name == "control_rod_01_luggable" then
-        return "luggable_cryonic_rod", meta
-    end
-
-    if pickup_name == "container_01_luggable" then
-        return "luggable_moebian_pox_zetaphyte_13_sample", meta
-    end
-
-    if pickup_name == "container_02_luggable" then
-        return "luggable_vacuum_capsule", meta
-    end
-
-    if pickup_name == "container_03_luggable" then
-        return "luggable_special_issue_ammo", meta
-    end
-
-    if pickup_name == "prismata_case_01_luggable" then
-        return "luggable_prismata_crystal_repository", meta
-    end
-
-    if pickup_name == "hordes_mcguffin" then
-        return "pickup_mortis_relic", meta
-    end
-
-    if pickup_name == "paper_pickup" or pickup_name == "paper_pickup_02" or pickup_name == "paper_pickup_03" or pickup_name == "paper_pickup_04" then
-        return "pickup_coordinates_paper", meta
-    end
-
-    -- secondary objective items
-    if pickup_name == "grimoire" then
-        return "pocketable_grimoire", meta
-    end
-
-    if pickup_name == "tome" then
-        return "pocketable_scripture", meta
-    end
-
-    -- expeditions specific items
-    if pickup_name and _string_starts_with(pickup_name, "expedition_currency_") then
-        return "material_expeditions_currency", meta
-    end
-
-    if pickup_name and _string_starts_with(pickup_name, "expedition_loot_small_") then
-        return "material_expeditions_loot", meta
-    end
-
-    if pickup_name == "expedition_loot_player_drop" then
-        return "material_expeditions_loot_player_drop", meta
-    end
-
-    if pickup_name == "large_ammunition_crate" then
-        return "pickup_large_ammunition_crate", meta
-    end
-
-    if pickup_name == "expedition_deployable_force_field_pocketable" then
-        return "pocketable_void_shield", meta
-    end
-
-    if pickup_name == "expedition_grenade_airstrike_pocketable" then
-        return "pocketable_airstrike", meta
-    end
-
-    if pickup_name == "expedition_grenade_artillery_strike_pocketable" then
-        return "pocketable_artillery_strike", meta
-    end
-
-    if pickup_name == "expedition_grenade_big_pocketable" then
-        return "pocketable_big_grenade", meta
-    end
-
-    if pickup_name == "expedition_grenade_valkyrie_hover_pocketable" then
-        return "pocketable_valkyrie_hover", meta
-    end
-
-    if pickup_name == "motion_detection_mine_explosive_pocketable" then
-        return "pocketable_landmine_explosive", meta
-    end
-
-    if pickup_name == "motion_detection_mine_fire_pocketable" then
-        return "pocketable_landmine_fire", meta
-    end
-
-    if pickup_name == "motion_detection_mine_shock_pocketable" then
-        return "pocketable_landmine_shock", meta
-    end
-
-    if pickup_name == "expedition_loot_heavy_tier_1" or pickup_name == "expedition_loot_heavy_tier_2" or pickup_name == "expedition_loot_heavy_tier_3" then
-        return "luggable_data_reliquary", meta
-    end
-
-    if pickup_name == "expedition_explosive_luggable_01" then
-        return "luggable_promethium_barrel", meta
-    end
-
-    if pickup_name == "expedition_time_syringe_timed" then
-        return "pocketable_anti_rad_stimm", meta
-    end
-
-    -- Martyr's Skull items
-    if pickup_name == "collectible_01_pickup" then
-        return "pickup_martyr_skull", meta
-    end
-
-    if pickup_name == "battery_02_luggable" then
-        return "luggable_power_cell_orange", meta
-    end
-
-    -- deployables
-    if pickup_name == "ammo_cache_deployable" then
-        return "pickup_ammo_cache_deployable", meta
-    end
-
-    if pickup_name == "medical_crate_deployable" then
-        return "medical_crate_deployable", meta
-    end
-
-    -- Event items
-    if pickup_name == "skulls_01_pickup" then
-        return "pickup_tainted_skull", meta
-    end
-
-    if pickup_name == "communications_hack_device" then
-        return "pocketable_corrupted_auspex_scanner", meta
-    end
-
-    if pickup_name == "live_event_saints_01_pickup_small" or pickup_name == "live_event_saints_01_pickup_medium" or pickup_name == "live_event_saints_01_pickup_large" or pickup_name == "consumable" then
-        return "pickup_saints", meta
-    end
-
-    if pickup_name == "stolen_rations_01_pickup_small" or pickup_name == "stolen_rations_01_pickup_medium" then
-        return "pickup_stolen_rations", meta
+        if _string_starts_with(pickup_name, "expedition_loot_small_") then
+            return "material_expeditions_loot", meta
+        end
     end
 
     local key = string_format("%s|%s|%s|%s|%s|%s",
@@ -2020,13 +1954,13 @@ local function _classify_pickup_like(interaction_type, ui_interaction_type, icon
 end
 
 local function _safe_player_slot(player)
-    if not player or not player.slot then
+    local slot_fn = player and player.slot
+
+    if not slot_fn then
         return nil
     end
 
-    local ok_slot, slot = pcall(function()
-        return player:slot()
-    end)
+    local ok_slot, slot = pcall(slot_fn, player)
 
     if ok_slot then
         return slot
@@ -2041,20 +1975,21 @@ local _marked_by_player_slot_for_unit = function(unit)
     end
 
     local smart_tag_system = _safe_extension_system("smart_tag_system")
-    if not smart_tag_system or not smart_tag_system.unit_tag then
+    local unit_tag = smart_tag_system and smart_tag_system.unit_tag
+
+    if not unit_tag then
         return nil
     end
 
-    local ok_tag, tag = pcall(function()
-        return smart_tag_system:unit_tag(unit)
-    end)
-    if not ok_tag or not tag or not tag.tagger_player then
+    local ok_tag, tag = pcall(unit_tag, smart_tag_system, unit)
+    local tagger_player = tag and tag.tagger_player
+
+    if not ok_tag or not tagger_player then
         return nil
     end
 
-    local ok_player, player = pcall(function()
-        return tag:tagger_player()
-    end)
+    local ok_player, player = pcall(tagger_player, tag)
+
     if not ok_player or not player then
         return nil
     end
@@ -2143,26 +2078,111 @@ local function _track_unit(unit, kind, source, meta)
         return
     end
 
-    local existing = mod._tracked_units[unit]
+    local tracked_units = mod._tracked_units
+    local existing = tracked_units[unit]
     local now = _safe_gameplay_time() or 0
     local position = _safe_unit_position(unit)
 
     if existing then
-        existing.kind = kind or existing.kind
+        existing.kind = kind
         existing.source = source or existing.source
         existing.last_seen_t = now
         existing.position = position or existing.position
+
         if meta ~= nil then
             existing.meta = meta
         end
     else
-        mod._tracked_units[unit] = {
+        tracked_units[unit] = {
             kind = kind,
             source = source,
             last_seen_t = now,
             position = position,
             meta = meta,
         }
+    end
+end
+
+local function _clear_tracked_unit_from_source(unit, source)
+    local tracked_units = mod._tracked_units
+    local tracked = tracked_units and tracked_units[unit]
+
+    if tracked and tracked.source == source then
+        tracked_units[unit] = nil
+    end
+end
+
+local function _idol_collectible_key(section_id, id)
+    if section_id == nil or id == nil then
+        return nil
+    end
+
+    return tostring(section_id) .. ":" .. tostring(id)
+end
+
+local function _remember_destroyed_idol_collectible(section_id, id)
+    local collectible_key = _idol_collectible_key(section_id, id)
+
+    if collectible_key ~= nil then
+        mod._idol_destroyed_collectible_keys[collectible_key] = _safe_gameplay_time() or 0
+    end
+end
+
+local function _remember_destroyed_idol_unit(unit)
+    if unit ~= nil then
+        mod._idol_destroyed_units[unit] = _safe_gameplay_time() or 0
+    end
+end
+
+local function _clear_tracked_idol_by_collectible(section_id, id)
+    local collectible_key = _idol_collectible_key(section_id, id)
+
+    if collectible_key == nil then
+        return
+    end
+
+    local now = _safe_gameplay_time() or 0
+    mod._idol_destroyed_collectible_keys[collectible_key] = now
+
+    for unit, data in pairs(mod._tracked_units) do
+        local meta = data and data.meta or nil
+
+        if data and data.source == "destructible_system" and data.kind == "pickup_heretic_idol"
+            and meta and meta.collectible_section_id == section_id and meta.collectible_id == id then
+            mod._tracked_units[unit] = nil
+            mod._idol_destroyed_units[unit] = now
+        end
+    end
+end
+
+local function _mark_idol_unit_destroyed(unit, extension)
+    if unit == nil or _safe_unit_collectible_type(unit) ~= "heretic_idol" then
+        return
+    end
+
+    local collectible_data = _safe_destructible_collectible_data(extension)
+
+    if collectible_data then
+        _remember_destroyed_idol_collectible(collectible_data.section_id, collectible_data.id)
+    end
+
+    _remember_destroyed_idol_unit(unit)
+    _clear_tracked_unit_from_source(unit, "destructible_system")
+end
+
+local function _prune_destroyed_idol_state()
+    local now = _safe_gameplay_time() or 0
+
+    for collectible_key, destroyed_t in pairs(mod._idol_destroyed_collectible_keys) do
+        if now - (destroyed_t or 0) > 60 then
+            mod._idol_destroyed_collectible_keys[collectible_key] = nil
+        end
+    end
+
+    for unit, destroyed_t in pairs(mod._idol_destroyed_units) do
+        if now - (destroyed_t or 0) > 60 or not _safe_unit_alive(unit) then
+            mod._idol_destroyed_units[unit] = nil
+        end
     end
 end
 
@@ -2180,13 +2200,13 @@ local function _track_point(id, kind, position, source, meta)
 end
 
 local function _safe_navigation_handler_marked_by_slot(navigation_handler, level_index)
-    if not navigation_handler or not navigation_handler.player_slot_by_level_marked or level_index == nil then
+    local player_slot_by_level_marked = navigation_handler and navigation_handler.player_slot_by_level_marked
+
+    if not player_slot_by_level_marked or level_index == nil then
         return nil
     end
 
-    local ok, player_slot = pcall(function()
-        return navigation_handler:player_slot_by_level_marked(level_index)
-    end)
+    local ok, player_slot = pcall(player_slot_by_level_marked, navigation_handler, level_index)
 
     if ok then
         return player_slot
@@ -2196,13 +2216,13 @@ local function _safe_navigation_handler_marked_by_slot(navigation_handler, level
 end
 
 local function _safe_navigation_handler_level_completed(navigation_handler, level_index)
-    if not navigation_handler or not navigation_handler.is_level_completed or level_index == nil then
+    local is_level_completed = navigation_handler and navigation_handler.is_level_completed
+
+    if not is_level_completed or level_index == nil then
         return false
     end
 
-    local ok, completed = pcall(function()
-        return navigation_handler:is_level_completed(level_index)
-    end)
+    local ok, completed = pcall(is_level_completed, navigation_handler, level_index)
 
     return ok and completed == true or false
 end
@@ -2240,16 +2260,12 @@ local function _safe_expedition_level_slot_position(level_data)
         return nil
     end
 
-    local ok_unit, level_slot_unit = pcall(function()
-        return Level.unit_by_id(parent_level, level_slot_id)
-    end)
+    local ok_unit, level_slot_unit = pcall(Level.unit_by_id, parent_level, level_slot_id)
     if not ok_unit or not level_slot_unit or not Unit or not Unit.world_position then
         return nil
     end
 
-    local ok_position, world_position = pcall(function()
-        return Unit.world_position(level_slot_unit, 1)
-    end)
+    local ok_position, world_position = pcall(Unit.world_position, level_slot_unit, 1)
     if ok_position and world_position then
         return _copy_vector3(world_position)
     end
@@ -2500,9 +2516,13 @@ local function _scan_interactees()
     end
 
     local player_unit = _player_unit()
+    local tracked_units = mod._tracked_units
+    local seen_interactees = {}
 
     for unit, extension in pairs(interactee_map) do
-        if _safe_unit_alive(unit) then
+        if _safe_unit_alive(unit) and extension then
+            seen_interactees[unit] = true
+
             local is_active = true
             local is_used = false
             local show_marker = true
@@ -2510,35 +2530,49 @@ local function _scan_interactees()
             local active = extension.active
             if active then
                 local ok_active, value = pcall(active, extension)
-                if ok_active then
-                    is_active = value
+                if not ok_active or value ~= true then
+                    is_active = false
                 end
             end
 
             local used = extension.used
             if used then
                 local ok_used, value = pcall(used, extension)
-                if ok_used then
-                    is_used = value
+                if not ok_used or value == true then
+                    is_used = true
                 end
             end
 
             local show_marker_fn = extension.show_marker
-            if player_unit and show_marker_fn then
-                local ok_show, value = pcall(show_marker_fn, extension, player_unit)
-                if ok_show then
-                    show_marker = value
+            if show_marker_fn then
+                if player_unit then
+                    local ok_show, value = pcall(show_marker_fn, extension, player_unit)
+                    if not ok_show or value ~= true then
+                        show_marker = false
+                    end
+                else
+                    show_marker = false
                 end
             end
 
             if is_active and not is_used and show_marker then
                 local kind, meta = _classify_interactee(extension, unit)
-                if kind then
-                    if kind ~= "expedition_loot_converter" or _is_in_expedition_safe_zone() then
-                        _track_unit(unit, kind, "interactee_system", meta)
-                    end
+                if kind and (kind ~= "expedition_loot_converter" or _is_in_expedition_safe_zone()) then
+                    _track_unit(unit, kind, "interactee_system", meta)
+                else
+                    _clear_tracked_unit_from_source(unit, "interactee_system")
                 end
+            else
+                _clear_tracked_unit_from_source(unit, "interactee_system")
             end
+        else
+            _clear_tracked_unit_from_source(unit, "interactee_system")
+        end
+    end
+
+    for unit, data in pairs(tracked_units) do
+        if data and data.source == "interactee_system" and not seen_interactees[unit] then
+            tracked_units[unit] = nil
         end
     end
 end
@@ -2549,8 +2583,13 @@ local function _scan_chests()
         return
     end
 
+    local tracked_units = mod._tracked_units
+    local seen_chests = {}
+
     for unit, extension in pairs(chest_map) do
         if _safe_unit_alive(unit) and extension then
+            seen_chests[unit] = true
+
             local is_open_fn = extension.is_open
 
             if is_open_fn then
@@ -2558,8 +2597,20 @@ local function _scan_chests()
 
                 if ok_open and not is_open then
                     _track_unit(unit, "crate_unknown", "chest_system")
+                else
+                    _clear_tracked_unit_from_source(unit, "chest_system")
                 end
+            else
+                _clear_tracked_unit_from_source(unit, "chest_system")
             end
+        else
+            _clear_tracked_unit_from_source(unit, "chest_system")
+        end
+    end
+
+    for unit, data in pairs(tracked_units) do
+        if data and data.source == "chest_system" and not seen_chests[unit] then
+            tracked_units[unit] = nil
         end
     end
 end
@@ -2596,19 +2647,27 @@ local function _scan_destructibles()
         return
     end
 
+    local tracked_units = mod._tracked_units
+    local seen_destructibles = {}
+
     for unit, extension in pairs(destructible_map) do
         if _safe_unit_alive(unit) and extension then
+            seen_destructibles[unit] = true
+
             local collectible_type = _safe_unit_collectible_type(unit)
             local collectible_data = _safe_destructible_collectible_data(extension)
             local collectible_id = collectible_data and collectible_data.id or nil
             local collectible_section_id = collectible_data and collectible_data.section_id or nil
             local collectible_name = collectible_data and collectible_data.name or nil
+            local collectible_key = _idol_collectible_key(collectible_section_id, collectible_id)
             local extension_visible = _safe_destructible_visible(extension)
             local unit_visible = _safe_unit_main_visible(unit)
             local health_alive = _safe_health_alive(unit)
             local has_active_collectible = collectible_id ~= nil and collectible_section_id ~= nil
+            local destroyed_by_event = mod._idol_destroyed_units[unit] ~= nil
+                or (collectible_key ~= nil and mod._idol_destroyed_collectible_keys[collectible_key] ~= nil)
 
-            if has_active_collectible and extension_visible == true and health_alive ~= false and unit_visible ~= false then
+            if not destroyed_by_event and has_active_collectible and extension_visible == true and health_alive ~= false and unit_visible ~= false then
                 _track_unit(unit, "pickup_heretic_idol", "destructible_system", {
                     collectible_type = collectible_type,
                     unit_name = _safe_lower_string(_safe_unit_name(unit)),
@@ -2619,9 +2678,21 @@ local function _scan_destructibles()
                     collectible_name = collectible_name,
                     collectible_section_id = collectible_section_id,
                 })
+            else
+                _clear_tracked_unit_from_source(unit, "destructible_system")
             end
+        else
+            _clear_tracked_unit_from_source(unit, "destructible_system")
         end
     end
+
+    for unit, data in pairs(tracked_units) do
+        if data and data.source == "destructible_system" and not seen_destructibles[unit] then
+            tracked_units[unit] = nil
+        end
+    end
+
+    _prune_destroyed_idol_state()
 end
 
 local function _scan_smart_tag_targets()
@@ -2668,29 +2739,6 @@ local function _prune_units()
             end
         end
     end
-end
-
-local function _distance_squared(a, b)
-    if not a or not b then
-        return math_huge
-    end
-
-    local ax, ay, az = a.x, a.y, a.z
-    local bx, by, bz = b.x, b.y, b.z
-
-    if not _is_finite_number(ax) or not _is_finite_number(ay) or not _is_finite_number(az) then
-        return math_huge
-    end
-
-    if not _is_finite_number(bx) or not _is_finite_number(by) or not _is_finite_number(bz) then
-        return math_huge
-    end
-
-    local dx = ax - bx
-    local dy = ay - by
-    local dz = az - bz
-
-    return dx * dx + dy * dy + dz * dz
 end
 
 local function _distance_squared_horizontal(a, b)
@@ -3006,19 +3054,23 @@ local function _collect_radar_targets()
     local target_count = 0
 
     local function append_target(unit, data)
-        if not data or not data.position or not data.kind or not _kind_enabled(data.kind) then
+        local position = data and data.position
+        local kind = data and data.kind
+
+        if not position or not kind or not _kind_enabled(kind) then
             return
         end
 
-        if data.kind == "pickup_heretic_idol" and data.source == "destructible_system" then
+        if kind == "pickup_heretic_idol" and data.source == "destructible_system" then
             local meta = data.meta
+
             if not meta or meta.collectible_id == nil then
                 return
             end
         end
 
-        local distance_sq_horizontal = _distance_squared_horizontal(player_pos, data.position)
-        local ignore_range = _ignore_radar_range_for_kind(data.kind)
+        local distance_sq_horizontal = _distance_squared_horizontal(player_pos, position)
+        local ignore_range = _ignore_radar_range_for_kind(kind)
 
         if distance_sq_horizontal > max_range_sq and not ignore_range then
             return
@@ -3027,8 +3079,8 @@ local function _collect_radar_targets()
         local vertical_delta = nil
         local vertical_state = nil
 
-        if _supports_vertical_item_marker(data.kind) then
-            vertical_delta = _vertical_delta(player_pos, data.position)
+        if _supports_vertical_item_marker(kind) then
+            vertical_delta = _vertical_delta(player_pos, position)
 
             if vertical_delta ~= nil then
                 local abs_vertical_delta = math_abs(vertical_delta)
@@ -3051,12 +3103,12 @@ local function _collect_radar_targets()
         target_count = target_count + 1
         targets[target_count] = {
             unit = unit,
-            kind = data.kind,
-            position = data.position,
+            kind = kind,
+            position = position,
             source = data.source,
             meta = data.meta,
             distance_sq = distance_sq_horizontal,
-            distance_sq_3d = _distance_squared(player_pos, data.position),
+            distance_sq_3d = _distance_squared(player_pos, position),
             vertical_delta = vertical_delta,
             vertical_state = vertical_state,
             ignore_radar_range = ignore_range,
@@ -3207,6 +3259,8 @@ local function _reset_runtime_state()
     mod._last_scan_signature = nil
     mod._last_block_signature = nil
     mod._last_state_gameplay = nil
+    mod._idol_destroyed_collectible_keys = {}
+    mod._idol_destroyed_units = {}
 end
 
 local function _debug_log_block(reason, gameplay_t, mission_name, activity, mechanism_name)
@@ -3340,6 +3394,28 @@ mod:hook_safe("StateGameplay", "update", function(self, dt, t, ...)
     mod._last_state_gameplay = self
     _update_internal(dt, t)
 end)
+
+mod:hook_safe("CollectiblesManager", "rpc_player_destroyed_destructible_collectible",
+    function(self, channel_id, peer_id, local_player_id, section_id, id)
+        _clear_tracked_idol_by_collectible(section_id, id)
+    end)
+
+mod:hook_safe("CollectiblesManager", "collectible_destroyed", function(self, data, attacking_unit)
+    if data then
+        _clear_tracked_idol_by_collectible(data.section_id, data.id)
+    end
+end)
+
+mod:hook_safe("DestructibleExtension", "rpc_destructible_last_destruction", function(self)
+    _mark_idol_unit_destroyed(self and self._unit or nil, self)
+end)
+
+mod:hook_safe("DestructibleExtension", "rpc_sync_destructible",
+    function(self, current_stage, visible, from_hot_join_sync)
+        if current_stage == 0 then
+            _mark_idol_unit_destroyed(self and self._unit or nil, self)
+        end
+    end)
 
 mod.update = function(dt)
     if not mod._gameplay_run then

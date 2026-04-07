@@ -301,7 +301,7 @@ local PRESENTATIONS = {
     },
     pickup_coordinates_paper = {
         icon = "content/ui/materials/icons/system/escape/credits",
-        color = _widget_color(255, 255, 255, 255),
+        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
     luggable_data_reliquary = {
@@ -351,7 +351,7 @@ local PRESENTATIONS = {
     },
     pickup_unknown = {
         icon = "content/ui/materials/icons/traits/empty",
-        color = _widget_color(255, 255, 255, 255),
+        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
     medicae_station = {
@@ -396,32 +396,32 @@ local PRESENTATIONS = {
     },
     crate_unknown = {
         icon = "content/ui/materials/icons/engrams/engram_rarity_04",
-        color = _widget_color(255, 255, 255, 255),
+        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
     material_diamantine = {
         icon = "content/ui/materials/icons/currencies/diamantine_big",
-        color = _widget_color(255, 255, 255, 255),
+        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
     material_plasteel = {
         icon = "content/ui/materials/icons/currencies/plasteel_big",
-        color = _widget_color(255, 255, 255, 255),
+        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
     material_expeditions_currency = {
         icon = "content/ui/materials/icons/currencies/salvage_big",
-        color = _widget_color(255, 255, 255, 255),
+        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
     material_expeditions_loot = {
         icon = "content/ui/materials/icons/currencies/tech_remnant_big",
-        color = _widget_color(255, 255, 255, 255),
+        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
     material_expeditions_loot_player_drop = {
         icon = "content/ui/materials/icons/notifications/tech_dropped",
-        color = _widget_color(255, 255, 255, 255),
+        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
     pocketable_ammo_crate = {
@@ -431,7 +431,7 @@ local PRESENTATIONS = {
     },
     pocketable_anti_rad_stimm = {
         icon = "content/ui/materials/hud/interactions/icons/time_syringe",
-        color = _widget_color(255, 255, 255, 255),
+        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
     pocketable_corrupted_auspex_scanner = {
@@ -441,17 +441,17 @@ local PRESENTATIONS = {
     },
     pocketable_airstrike = {
         icon = "content/ui/materials/icons/throwables/hud/valkyrie_payload",
-        color = _widget_color(255, 255, 255, 255),
+        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
     pocketable_artillery_strike = {
         icon = "content/ui/materials/icons/throwables/hud/artillery_strike",
-        color = _widget_color(255, 255, 255, 255),
+        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
     pocketable_big_grenade = {
         icon = "content/ui/materials/icons/throwables/hud/big_fn_grenade",
-        color = _widget_color(255, 255, 255, 255),
+        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
     pocketable_grimoire = {
@@ -461,17 +461,17 @@ local PRESENTATIONS = {
     },
     pocketable_landmine_explosive = {
         icon = "content/ui/materials/icons/pocketables/hud/landmine_explosive",
-        color = _widget_color(255, 255, 255, 255),
+        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
     pocketable_landmine_fire = {
         icon = "content/ui/materials/icons/pocketables/hud/landmine_fire",
-        color = _widget_color(255, 255, 255, 255),
+        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
     pocketable_landmine_shock = {
         icon = "content/ui/materials/icons/pocketables/hud/landmine_shock",
-        color = _widget_color(255, 255, 255, 255),
+        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
     pocketable_medical_crate = {
@@ -506,12 +506,12 @@ local PRESENTATIONS = {
     },
     pocketable_valkyrie_hover = {
         icon = "content/ui/materials/icons/throwables/hud/valkyrie_hover",
-        color = _widget_color(255, 255, 255, 255),
+        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
     pocketable_void_shield = {
         icon = "content/ui/materials/icons/pocketables/hud/void_shield",
-        color = _widget_color(255, 255, 255, 255),
+        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
 }
@@ -1678,7 +1678,7 @@ local function _target_visual(target, draw_cache)
 
         return _apply_target_specific_visual_overrides(target, {
             icon = meta.interaction_icon,
-            color = _widget_color(255, 255, 255, 255),
+            color = WHITE_WIDGET_COLOR,
             size = 14,
         }, draw_cache)
     end
