@@ -1,0 +1,1050 @@
+return function(env)
+    setfenv(1, env)
+
+    local mod = mod
+
+    local pcall = pcall
+    local pairs = pairs
+    local tonumber = tonumber
+    local tostring = tostring
+    local type = type
+    local rawget = rawget
+    local math_floor = math.floor
+    local string_find = string.find
+    local string_format = string.format
+    local string_lower = string.lower
+    local string_match = string.match
+    local table_sort = table.sort
+
+    function _is_expedition_runtime()
+        return _safe_game_mode_name() == "expedition"
+    end
+
+    function _expedition_loot_value_for_pickup_name(pickup_name)
+        if not pickup_name then
+            return nil
+        end
+
+        return EXPEDITION_LOOT_VALUE_BY_PICKUP_NAME[pickup_name]
+    end
+
+    function _safe_expedition_loot_handler()
+        if not _is_expedition_runtime() then
+            return nil
+        end
+
+        local game_mode = _safe_game_mode()
+
+        if not game_mode then
+            return nil
+        end
+
+        local logic = rawget(game_mode, "_game_mode_logic")
+
+        if logic and logic.loot_handler then
+            local ok_handler, handler = pcall(logic.loot_handler, logic)
+
+            if ok_handler and handler then
+                return handler
+            end
+        end
+
+        if logic then
+            local handler = rawget(logic, "_loot_handler")
+
+            if handler then
+                return handler
+            end
+        end
+
+        return nil
+    end
+
+    function _safe_expedition_player_drop_amount(unit)
+        if not unit then
+            return nil
+        end
+
+        local loot_handler = _safe_expedition_loot_handler()
+        local dropped_loot_by_pickup_unit = loot_handler and rawget(loot_handler, "_dropped_loot_by_pickup_unit")
+        local amount = dropped_loot_by_pickup_unit and dropped_loot_by_pickup_unit[unit] or nil
+        local numeric_amount = tonumber(amount)
+
+        if numeric_amount and numeric_amount > 0 then
+            return math_floor(numeric_amount + 0.5)
+        end
+
+        return nil
+    end
+
+    function _is_in_expedition_safe_zone()
+        if not _is_expedition_runtime() then
+            return false
+        end
+
+        local game_mode = _safe_game_mode()
+        local in_safe_zone = game_mode and game_mode.in_safe_zone
+
+        if not in_safe_zone then
+            return false
+        end
+
+        local ok, value = pcall(in_safe_zone, game_mode)
+
+        return ok and value == true or false
+    end
+
+    function _safe_vector3_unbox(value)
+        if not value then
+            return nil
+        end
+
+        if type(value) == "table" and value.x ~= nil and value.y ~= nil and value.z ~= nil then
+            return _copy_vector3(value)
+        end
+
+        if value.unbox then
+            local ok, vector = pcall(value.unbox, value)
+
+            if ok and vector then
+                return _copy_vector3(vector)
+            end
+        end
+
+        return _copy_vector3(value)
+    end
+
+    function _safe_expedition_level_index(level)
+        if not level or not Managers or not Managers.state or not Managers.state.unit_spawner then
+            return nil
+        end
+
+        local unit_spawner = Managers.state.unit_spawner
+        if not unit_spawner.index_by_level then
+            return nil
+        end
+
+        local ok, level_index = pcall(unit_spawner.index_by_level, unit_spawner, level)
+
+        if ok then
+            return level_index
+        end
+
+        return nil
+    end
+
+    function _safe_expedition_level_by_index(level_index, sub_level_index)
+        if level_index == nil or not Managers or not Managers.state or not Managers.state.unit_spawner then
+            return nil
+        end
+
+        local unit_spawner = Managers.state.unit_spawner
+        if not unit_spawner.level_by_index then
+            return nil
+        end
+
+        local ok, level = pcall(unit_spawner.level_by_index, unit_spawner, level_index, sub_level_index)
+
+        if ok then
+            return level
+        end
+
+        return nil
+    end
+
+    function _safe_expedition_level_data_by_index(game_mode, level_index, sub_level_index)
+        if not game_mode or not game_mode.get_level_data then
+            return nil
+        end
+
+        local level = _safe_expedition_level_by_index(level_index, sub_level_index)
+        if not level then
+            return nil
+        end
+
+        local ok, level_data = pcall(game_mode.get_level_data, game_mode, level)
+
+        if ok then
+            return level_data
+        end
+
+        return nil
+    end
+
+    function _safe_expedition_section_index_by_level_index(game_mode, level_index, sub_level_index)
+        local level_data = _safe_expedition_level_data_by_index(game_mode, level_index, sub_level_index)
+        local section = level_data and level_data.section or nil
+
+        return section and section.index or nil
+    end
+
+    function _safe_current_safe_zone_section_index(game_mode)
+        local logic = game_mode and game_mode._game_mode_logic or nil
+        local index = logic and logic._current_safe_zone_section_index or nil
+
+        return tonumber(index) or index
+    end
+
+    function _safe_expedition_active_section_index(game_mode)
+        if not game_mode then
+            return nil
+        end
+
+        local in_safe_zone = false
+        local in_safe_zone_fn = game_mode.in_safe_zone
+
+        if in_safe_zone_fn then
+            local ok, value = pcall(in_safe_zone_fn, game_mode)
+
+            if ok then
+                in_safe_zone = value == true
+            end
+        end
+
+        if in_safe_zone then
+            local safe_zone_section_index = _safe_current_safe_zone_section_index(game_mode)
+            if safe_zone_section_index ~= nil then
+                return safe_zone_section_index
+            end
+        end
+
+        local current_location_index = game_mode.current_location_index
+
+        if current_location_index then
+            local ok, value = pcall(current_location_index, game_mode)
+
+            if ok then
+                return value
+            end
+        end
+
+        return nil
+    end
+
+    function _is_expedition_level_in_active_section(game_mode, active_section_index, level_index, sub_level_index)
+        if active_section_index == nil or level_index == nil then
+            return true
+        end
+
+        local section_index = _safe_expedition_section_index_by_level_index(game_mode, level_index, sub_level_index)
+        if section_index == nil then
+            return true
+        end
+
+        return section_index == active_section_index
+    end
+
+    function _expedition_opportunity_icon(level_index)
+        local numeric_index = tonumber(level_index) or 0
+        local icon_index = 1 + numeric_index % 24
+
+        return string_format("content/ui/materials/backgrounds/scanner/scanner_map_greek_%02d", icon_index)
+    end
+
+    function _expedition_opportunity_title_icon(location_id)
+        local numeric_id = tonumber(location_id) or 0
+        return string_format("content/ui/materials/backgrounds/scanner/scanner_map_%d", numeric_id % 9)
+    end
+
+    function _safe_havoc_runtime_active()
+        local state_gameplay = mod._last_state_gameplay
+        local shared_state = state_gameplay and state_gameplay._shared_state
+        local havoc_data = shared_state and shared_state.havoc_data
+
+        if havoc_data ~= nil and havoc_data ~= "" then
+            return true
+        end
+
+        local difficulty_manager = Managers and Managers.state and Managers.state.difficulty
+        if difficulty_manager and difficulty_manager.get_parsed_havoc_data then
+            local ok_parsed, parsed_havoc_data = pcall(difficulty_manager.get_parsed_havoc_data, difficulty_manager)
+
+            if ok_parsed and parsed_havoc_data then
+                return true
+            end
+        end
+
+        local game_mode = _safe_game_mode()
+        if game_mode and game_mode.extension then
+            local ok_extension, havoc_extension = pcall(game_mode.extension, game_mode, "havoc")
+
+            if ok_extension and havoc_extension then
+                return true
+            end
+        end
+
+        return false
+    end
+
+    function _classify_radar_game_mode(mission_name, mechanism_name)
+        local game_mode_name = _safe_game_mode_name()
+
+        if game_mode_name == "expedition" or mechanism_name == "expedition" then
+            return "expeditions", game_mode_name
+        end
+
+        if game_mode_name == "survival" then
+            return "mortis_trials", game_mode_name
+        end
+
+        if _safe_havoc_runtime_active() then
+            return "havoc", game_mode_name
+        end
+
+        if game_mode_name == "coop_complete_objective"
+            or game_mode_name == "training_grounds"
+            or game_mode_name == "shooting_range"
+            or mechanism_name == "adventure"
+            or mission_name == "tg_shooting_range" then
+            return "regular_missions", game_mode_name
+        end
+
+        return nil, game_mode_name
+    end
+
+    function mod:is_radar_enabled_for_game_mode(game_mode_id)
+        local setting_id = RADAR_GAME_MODE_SETTING_BY_ID[game_mode_id]
+
+        if not setting_id then
+            return false
+        end
+
+        return self:get(setting_id) ~= false
+    end
+
+    function mod:get_current_radar_game_mode()
+        local mission_name = _safe_mission_name()
+        local mechanism_name = _safe_mechanism_name()
+
+        return _classify_radar_game_mode(mission_name, mechanism_name)
+    end
+
+    function _is_radar_enabled_for_current_mode(mission_name, mechanism_name)
+        local game_mode_id = _classify_radar_game_mode(mission_name, mechanism_name)
+
+        if not game_mode_id then
+            return false
+        end
+
+        return mod:is_radar_enabled_for_game_mode(game_mode_id)
+    end
+
+    function _get_runtime_state()
+        local gameplay_t = _safe_gameplay_time()
+        local mission_name = _safe_mission_name()
+        local activity = _safe_presence_activity()
+        local mechanism_name = _safe_mechanism_name()
+        local player_unit = _player_unit()
+        local player_pos = _safe_unit_position(player_unit)
+
+        if activity == "loading" then
+            return false, "loading", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+        end
+
+        if mechanism_name == "left_session" or mechanism_name == "hub" then
+            return false, "hub_mechanism", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+        end
+
+        if not mission_name then
+            return false, "no_mission", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+        end
+
+        if mission_name == "hub_ship" then
+            return false, "hub_mission", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+        end
+
+        if mechanism_name == "onboarding" and mission_name ~= "tg_shooting_range" then
+            return false, "onboarding_non_psykhanium", gameplay_t, mission_name, activity, mechanism_name, player_unit,
+                player_pos
+        end
+
+        if _is_hub_runtime(mission_name, activity, mechanism_name) then
+            return false, "hub_runtime", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+        end
+
+        if not _is_radar_enabled_for_current_mode(mission_name, mechanism_name) then
+            return false, "game_mode_disabled", gameplay_t, mission_name, activity, mechanism_name, player_unit,
+                player_pos
+        end
+
+        if not _is_player_unit_alive(player_unit) then
+            return false, "player_not_alive", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+        end
+
+        if _is_player_unit_captured(player_unit) then
+            return false, "player_captured", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+        end
+
+        if not player_pos then
+            return false, "no_player_position", gameplay_t, mission_name, activity, mechanism_name, player_unit,
+                player_pos
+        end
+
+        return true, "ok", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+    end
+
+    function _is_allowed_runtime()
+        local allowed = _get_runtime_state()
+        return allowed
+    end
+
+    function _is_expedition_marker_kind(kind)
+        return EXPEDITION_MARKER_KINDS[kind] == true
+    end
+
+    function _is_boss_marker_kind(kind)
+        return kind == "enemy_monstrosity"
+            or kind == "enemy_captain"
+            or kind == "enemy_karnak_twin"
+    end
+
+    function _ignore_radar_range_for_kind(kind)
+        if kind == "expedition_loot_converter" then
+            return false
+        end
+
+        if _is_boss_marker_kind(kind) and mod:get_boss_marker_range_mode() == "infinite" then
+            return true
+        end
+
+        return _is_expedition_marker_kind(kind) and mod:get("ignore_radar_range_for_expedition_markers") == true
+    end
+
+    function _kind_enabled(kind)
+        local enemy_display_mode = mod:get_enemy_marker_mode(kind)
+
+        if enemy_display_mode ~= nil then
+            return enemy_display_mode ~= "off"
+        end
+
+        local display_mode = mod:get_marker_display_mode(kind)
+        if display_mode ~= nil then
+            return display_mode ~= "off"
+        end
+
+        local setting_id = KIND_TO_SETTING[kind]
+        if not setting_id then
+            return true
+        end
+
+        return mod:get(setting_id) ~= false
+    end
+
+    function _pickup_meta(pickup_name, pickup_data, interaction_type, ui_interaction_type, interaction_icon,
+                          description, unit_name, marked_by_player_slot)
+        return {
+            pickup_name = pickup_name,
+            pickup_group = pickup_data and pickup_data.group or nil,
+            interaction_type = interaction_type,
+            ui_interaction_type = ui_interaction_type,
+            interaction_icon = interaction_icon,
+            description = description,
+            unit_name = unit_name,
+            marked_by_player_slot = marked_by_player_slot,
+        }
+    end
+
+    function _classify_pickup_like(interaction_type, ui_interaction_type, icon, description, unit_name, pickup_name,
+                                   pickup_data, marked_by_player_slot)
+        local meta = _pickup_meta(pickup_name, pickup_data, interaction_type, ui_interaction_type, icon, description,
+            unit_name,
+            marked_by_player_slot)
+
+        -- default items
+        if interaction_type == "chest" then
+            return "crate_unknown", meta
+        end
+
+        if interaction_type == "expedition_loot_converter"
+            or (ui_interaction_type == "point_of_interest" and pickup_name == "expedition_loot_converter") then
+            meta.objective_icon = EXPEDITION_OBJECTIVE_ICON_DEFAULTS.expedition_loot_converter
+            return "expedition_loot_converter", meta
+        end
+
+        if interaction_type == "health_station" or pickup_name == "health_station" then
+            return "medicae_station", meta
+        end
+
+        if (interaction_type == "health" or pickup_name == "health")
+            and pickup_name ~= "medical_crate_deployable"
+            and icon == "content/ui/materials/hud/interactions/icons/respawn" then
+            return "medicae_station", meta
+        end
+
+        if interaction_type == "luggable_socket" or pickup_name == "luggable_socket" then
+            return "luggable_socket", meta
+        end
+
+        if pickup_name ~= nil then
+            local exact_kind = EXACT_PICKUP_KIND_BY_NAME[pickup_name]
+
+            if exact_kind then
+                return exact_kind, meta
+            end
+
+            if PAPER_PICKUP_NAMES[pickup_name] then
+                return "pickup_coordinates_paper", meta
+            end
+
+            if SAINTS_PICKUP_NAMES[pickup_name] then
+                return "pickup_saints", meta
+            end
+
+            if _string_starts_with(pickup_name, "expedition_currency_") then
+                return "material_expeditions_currency", meta
+            end
+
+            if _string_starts_with(pickup_name, "expedition_loot_small_") then
+                return "material_expeditions_loot", meta
+            end
+        end
+
+        local key = string_format("%s|%s|%s|%s|%s|%s",
+            tostring(pickup_name or ""),
+            tostring(interaction_type or ""),
+            tostring(icon or ""),
+            tostring(description or ""),
+            tostring(unit_name or ""),
+            tostring(pickup_data and pickup_data.group or ""))
+        key = string_lower(key)
+
+        if string_find(key, "grimoire", 1, true)
+            or string_find(key, "scripture", 1, true)
+            or string_find(key, "side_mission", 1, true)
+            or string_find(key, "objective_side", 1, true)
+            or string_find(key, "objective_pickup", 1, true)
+            or string_find(key, "luggable", 1, true)
+            or string_find(key, "forge_material", 1, true)
+            or string_find(key, "tainted_skull", 1, true)
+            or string_find(key, "saints_pickup", 1, true)
+            or string_find(key, "stolen_rations", 1, true)
+            or string_find(key, "penance_collectible", 1, true) then
+            _log_once(key, "Unknown pickup: " .. key)
+            return "pickup_unknown", meta
+        end
+
+        return nil, meta
+    end
+
+    function _safe_player_slot(player)
+        local slot_fn = player and player.slot
+
+        if not slot_fn then
+            return nil
+        end
+
+        local ok_slot, slot = pcall(slot_fn, player)
+
+        if ok_slot then
+            return slot
+        end
+
+        return nil
+    end
+
+    _marked_by_player_slot_for_unit = function(unit)
+        if not _safe_unit_alive(unit) then
+            return nil
+        end
+
+        local smart_tag_system = _safe_extension_system("smart_tag_system")
+        local unit_tag = smart_tag_system and smart_tag_system.unit_tag
+
+        if not unit_tag then
+            return nil
+        end
+
+        local ok_tag, tag = pcall(unit_tag, smart_tag_system, unit)
+        local tagger_player = tag and tag.tagger_player
+
+        if not ok_tag or not tagger_player then
+            return nil
+        end
+
+        local ok_player, player = pcall(tagger_player, tag)
+
+        if not ok_player or not player then
+            return nil
+        end
+
+        return _safe_player_slot(player)
+    end
+
+    function _classify_interactee(extension, unit)
+        if not extension then
+            return nil, nil
+        end
+
+        local interaction_type = nil
+        local ui_interaction_type = nil
+        local icon = nil
+        local description = nil
+
+        local ok_interaction_type, interaction_type_value = pcall(extension.interaction_type, extension)
+        if ok_interaction_type then
+            interaction_type = _safe_lower_string(interaction_type_value)
+        end
+
+        local ok_ui_interaction_type, ui_interaction_type_value = pcall(extension.ui_interaction_type, extension)
+        if ok_ui_interaction_type then
+            ui_interaction_type = _safe_lower_string(ui_interaction_type_value)
+        end
+
+        local ok_icon, icon_value = pcall(extension.interaction_icon, extension)
+        if ok_icon then
+            icon = _safe_lower_string(icon_value)
+        end
+
+        local ok_description, description_value = pcall(extension.description, extension)
+        if ok_description then
+            description = _safe_lower_string(description_value)
+        end
+
+        local unit_name = _safe_lower_string(_safe_unit_name(unit))
+        local pickup_name = _safe_unit_pickup_name(unit)
+        local pickup_data = pickup_name and Pickups and Pickups.by_name and Pickups.by_name[pickup_name] or nil
+        local marked_by_player_slot = _marked_by_player_slot_for_unit(unit)
+
+        local kind, meta = _classify_pickup_like(interaction_type, ui_interaction_type, icon, description, unit_name,
+            pickup_name, pickup_data, marked_by_player_slot)
+
+        if kind == "material_expeditions_loot" then
+            meta.remnant_value = _expedition_loot_value_for_pickup_name(pickup_name)
+            meta.remnant_tier = pickup_name and string_match(pickup_name, "tier_(%d+)$") or nil
+            meta.is_player_drop = false
+        elseif kind == "material_expeditions_loot_player_drop" then
+            meta.remnant_value = _safe_expedition_player_drop_amount(unit)
+            meta.is_player_drop = true
+        end
+
+        return kind, meta
+    end
+
+    function _classify_enemy_from_breed(breed_name)
+        local key = string_lower(breed_name or "")
+
+        if key == "chaos_daemonhost" or key == "chaos_mutator_daemonhost" or string_find(key, "daemonhost", 1, true) then
+            return "enemy_daemonhost"
+        end
+
+        if TWIN_BREEDS[key] or string_find(key, "twin_captain", 1, true) then
+            return "enemy_karnak_twin"
+        end
+
+        if CAPTAIN_BREEDS[key] or string_find(key, "captain", 1, true) then
+            return "enemy_captain"
+        end
+
+        if MONSTROSITY_BREEDS[key]
+            or string_find(key, "beast_of_nurgle", 1, true)
+            or string_find(key, "plague_ogryn", 1, true)
+            or string_find(key, "chaos_spawn", 1, true)
+            or string_find(key, "houndmaster", 1, true) then
+            return "enemy_monstrosity"
+        end
+
+        local definition = ENEMY_RADAR_DEFINITIONS_BY_BREED[key]
+
+        if definition then
+            return definition.kind
+        end
+
+        return nil
+    end
+
+    function _track_unit(unit, kind, source, meta)
+        if not kind or not _is_trackable_unit_alive(unit, kind) then
+            return
+        end
+
+        local tracked_units = mod._tracked_units
+        local existing = tracked_units[unit]
+        local now = _safe_gameplay_time() or 0
+        local position = _safe_unit_position(unit)
+
+        if existing then
+            existing.kind = kind
+            existing.source = source or existing.source
+            existing.last_seen_t = now
+            existing.position = position or existing.position
+
+            if meta ~= nil then
+                existing.meta = meta
+            end
+        else
+            tracked_units[unit] = {
+                kind = kind,
+                source = source,
+                last_seen_t = now,
+                position = position,
+                meta = meta,
+            }
+        end
+    end
+
+    function _clear_tracked_unit_from_source(unit, source)
+        local tracked_units = mod._tracked_units
+        local tracked = tracked_units and tracked_units[unit]
+
+        if tracked and tracked.source == source then
+            tracked_units[unit] = nil
+        end
+    end
+
+    function _idol_collectible_key(section_id, id)
+        if section_id == nil or id == nil then
+            return nil
+        end
+
+        return tostring(section_id) .. ":" .. tostring(id)
+    end
+
+    function _remember_destroyed_idol_collectible(section_id, id)
+        local collectible_key = _idol_collectible_key(section_id, id)
+
+        if collectible_key ~= nil then
+            mod._idol_destroyed_collectible_keys[collectible_key] = _safe_gameplay_time() or 0
+        end
+    end
+
+    function _remember_destroyed_idol_unit(unit)
+        if unit ~= nil then
+            mod._idol_destroyed_units[unit] = _safe_gameplay_time() or 0
+        end
+    end
+
+    function _clear_tracked_idol_by_collectible(section_id, id)
+        local collectible_key = _idol_collectible_key(section_id, id)
+
+        if collectible_key == nil then
+            return
+        end
+
+        local now = _safe_gameplay_time() or 0
+        mod._idol_destroyed_collectible_keys[collectible_key] = now
+
+        for unit, data in pairs(mod._tracked_units) do
+            local meta = data and data.meta or nil
+
+            if data and data.source == "destructible_system" and data.kind == "pickup_heretic_idol"
+                and meta and meta.collectible_section_id == section_id and meta.collectible_id == id then
+                mod._tracked_units[unit] = nil
+                mod._idol_destroyed_units[unit] = now
+            end
+        end
+    end
+
+    function _mark_idol_unit_destroyed(unit, extension)
+        if unit == nil or _safe_unit_collectible_type(unit) ~= "heretic_idol" then
+            return
+        end
+
+        local collectible_data = _safe_destructible_collectible_data(extension)
+
+        if collectible_data then
+            _remember_destroyed_idol_collectible(collectible_data.section_id, collectible_data.id)
+        end
+
+        _remember_destroyed_idol_unit(unit)
+        _clear_tracked_unit_from_source(unit, "destructible_system")
+    end
+
+    function _prune_destroyed_idol_state()
+        local now = _safe_gameplay_time() or 0
+
+        for collectible_key, destroyed_t in pairs(mod._idol_destroyed_collectible_keys) do
+            if now - (destroyed_t or 0) > 60 then
+                mod._idol_destroyed_collectible_keys[collectible_key] = nil
+            end
+        end
+
+        for unit, destroyed_t in pairs(mod._idol_destroyed_units) do
+            if now - (destroyed_t or 0) > 60 or not _safe_unit_alive(unit) then
+                mod._idol_destroyed_units[unit] = nil
+            end
+        end
+    end
+
+    function _track_point(id, kind, position, source, meta)
+        if not id or not kind or not position then
+            return
+        end
+
+        mod._tracked_points[id] = {
+            kind = kind,
+            source = source,
+            position = position,
+            meta = meta,
+        }
+    end
+
+    function _safe_navigation_handler_marked_by_slot(navigation_handler, level_index)
+        local player_slot_by_level_marked = navigation_handler and navigation_handler.player_slot_by_level_marked
+
+        if not player_slot_by_level_marked or level_index == nil then
+            return nil
+        end
+
+        local ok, player_slot = pcall(player_slot_by_level_marked, navigation_handler, level_index)
+
+        if ok then
+            return player_slot
+        end
+
+        return nil
+    end
+
+    function _safe_navigation_handler_level_completed(navigation_handler, level_index)
+        local is_level_completed = navigation_handler and navigation_handler.is_level_completed
+
+        if not is_level_completed or level_index == nil then
+            return false
+        end
+
+        local ok, completed = pcall(is_level_completed, navigation_handler, level_index)
+
+        return ok and completed == true or false
+    end
+
+    function _safe_expedition_parent_level_data(section, parent_level_reference_name)
+        if not section or not section.levels_data then
+            return nil
+        end
+
+        local wanted_reference_name = parent_level_reference_name or "level"
+
+        for i = 1, #section.levels_data do
+            local level_data = section.levels_data[i]
+            if level_data and level_data.reference_name == wanted_reference_name then
+                return level_data
+            end
+        end
+
+        return nil
+    end
+
+    function _safe_expedition_level_slot_position(level_data)
+        if not level_data then
+            return nil
+        end
+
+        local section = level_data.section
+        local custom_data = level_data.custom_data
+        local level_slot_id = custom_data and custom_data.level_slot_id
+        local parent_level_reference_name = level_data.parent_level_reference_name or "level"
+        local parent_level_data = _safe_expedition_parent_level_data(section, parent_level_reference_name)
+        local parent_level = parent_level_data and parent_level_data.level or nil
+
+        if not parent_level or not level_slot_id or not Level or not Level.unit_by_id then
+            return nil
+        end
+
+        local ok_unit, level_slot_unit = pcall(Level.unit_by_id, parent_level, level_slot_id)
+        if not ok_unit or not level_slot_unit or not Unit or not Unit.world_position then
+            return nil
+        end
+
+        local ok_position, world_position = pcall(Unit.world_position, level_slot_unit, 1)
+        if ok_position and world_position then
+            return _copy_vector3(world_position)
+        end
+
+        return nil
+    end
+
+    function _track_expedition_registered_points(game_mode, navigation_handler, active_section_index, points, kind,
+                                                 objective_tag)
+        if type(points) ~= "table" then
+            return
+        end
+
+        if kind == "expedition_objective_opportunity" then
+            local location_id = 1
+
+            for level_index, boxed_position in pairs(points) do
+                local position = _safe_vector3_unbox(boxed_position)
+                local is_active_section = _is_expedition_level_in_active_section(game_mode, active_section_index,
+                    level_index)
+                local is_completed = _safe_navigation_handler_level_completed(navigation_handler, level_index)
+                local section_index = is_active_section and
+                    _safe_expedition_section_index_by_level_index(game_mode, level_index) or nil
+
+                if position and is_active_section and not is_completed then
+                    _track_point(
+                        string_format("%s:%s", tostring(kind), tostring(level_index)),
+                        kind,
+                        position,
+                        "expedition_navigation",
+                        {
+                            objective_icon = _expedition_opportunity_icon(level_index),
+                            objective_title_icon = _expedition_opportunity_title_icon(location_id),
+                            marked_by_player_slot = _safe_navigation_handler_marked_by_slot(navigation_handler,
+                                level_index),
+                            expedition_level_index = level_index,
+                            expedition_section_index = section_index,
+                            objective_location_id = location_id,
+                            objective_tag = objective_tag,
+                        }
+                    )
+                end
+
+                if position and is_active_section then
+                    location_id = location_id + 1
+                end
+            end
+
+            return
+        end
+
+        local entries = {}
+
+        for level_index, boxed_position in pairs(points) do
+            local position = _safe_vector3_unbox(boxed_position)
+
+            if position and _is_expedition_level_in_active_section(game_mode, active_section_index, level_index) then
+                entries[#entries + 1] = {
+                    level_index = level_index,
+                    position = position,
+                    section_index = _safe_expedition_section_index_by_level_index(game_mode, level_index),
+                }
+            end
+        end
+
+        table_sort(entries, function(a, b)
+            local a_level_index = tonumber(a.level_index)
+            local b_level_index = tonumber(b.level_index)
+
+            if a_level_index ~= nil and b_level_index ~= nil and a_level_index ~= b_level_index then
+                return a_level_index < b_level_index
+            end
+
+            if a_level_index ~= nil and b_level_index == nil then
+                return true
+            end
+
+            if a_level_index == nil and b_level_index ~= nil then
+                return false
+            end
+
+            return tostring(a.level_index) < tostring(b.level_index)
+        end)
+
+        for index = 1, #entries do
+            local entry = entries[index]
+            local level_index = entry.level_index
+            local position = entry.position
+
+            _track_point(
+                string_format("%s:%s", tostring(kind), tostring(level_index)),
+                kind,
+                position,
+                "expedition_navigation",
+                {
+                    objective_icon = EXPEDITION_OBJECTIVE_ICON_DEFAULTS[kind],
+                    marked_by_player_slot = _safe_navigation_handler_marked_by_slot(navigation_handler, level_index),
+                    expedition_level_index = level_index,
+                    expedition_section_index = entry.section_index,
+                    objective_location_id = index,
+                    objective_tag = objective_tag,
+                }
+            )
+        end
+    end
+
+    function _track_expedition_tagged_levels(game_mode, navigation_handler, current_location_index, level_tag, kind)
+        if not game_mode or not game_mode.get_all_levels_of_specified_tag or current_location_index == nil then
+            return
+        end
+
+        local ok_levels, levels = pcall(game_mode.get_all_levels_of_specified_tag, game_mode, current_location_index,
+            { [level_tag] = true })
+        if not ok_levels or type(levels) ~= "table" then
+            return
+        end
+
+        for i = 1, #levels do
+            local level_data = levels[i]
+            local position = _safe_expedition_level_slot_position(level_data)
+
+            if position then
+                local level_index = _safe_expedition_level_index(level_data and level_data.level or nil)
+
+                _track_point(
+                    string_format("%s:%s:%s", tostring(kind), tostring(level_index or i),
+                        tostring(level_data and level_data.reference_name or i)),
+                    kind,
+                    position,
+                    "expedition_level_tag",
+                    {
+                        objective_icon = EXPEDITION_OBJECTIVE_ICON_DEFAULTS[kind],
+                        marked_by_player_slot = _safe_navigation_handler_marked_by_slot(navigation_handler, level_index),
+                        expedition_level_index = level_index,
+                        objective_tag = level_tag,
+                        reference_name = level_data and level_data.reference_name or nil,
+                        level_name = level_data and level_data.level_name or nil,
+                    }
+                )
+            end
+        end
+    end
+
+    function _scan_expedition_objectives()
+        mod._tracked_points = {}
+
+        if not _is_expedition_runtime() then
+            return
+        end
+
+        local game_mode = _safe_game_mode()
+        if not game_mode then
+            return
+        end
+
+        local navigation_handler = nil
+        if game_mode.get_navigation_handler then
+            local ok_navigation, value = pcall(game_mode.get_navigation_handler, game_mode)
+            if ok_navigation then
+                navigation_handler = value
+            end
+        end
+
+        local current_location_index = nil
+        if game_mode.current_location_index then
+            local ok_location, value = pcall(game_mode.current_location_index, game_mode)
+            if ok_location then
+                current_location_index = value
+            end
+        end
+
+        local active_section_index = _safe_expedition_active_section_index(game_mode) or current_location_index
+
+        if navigation_handler and navigation_handler.get_registered_opportunities then
+            local ok, opportunities = pcall(navigation_handler.get_registered_opportunities, navigation_handler)
+            if ok then
+                _track_expedition_registered_points(game_mode, navigation_handler, active_section_index, opportunities,
+                    "expedition_objective_opportunity", "type_opportunity")
+            end
+        end
+
+        if navigation_handler and navigation_handler.get_registered_exits then
+            local ok, exits = pcall(navigation_handler.get_registered_exits, navigation_handler)
+            if ok then
+                _track_expedition_registered_points(game_mode, navigation_handler, active_section_index, exits,
+                    "expedition_objective_transition", "type_transition")
+            end
+        end
+
+        if navigation_handler and navigation_handler.get_registered_extractions then
+            local ok, extractions = pcall(navigation_handler.get_registered_extractions, navigation_handler)
+            if ok then
+                _track_expedition_registered_points(game_mode, navigation_handler, active_section_index, extractions,
+                    "expedition_objective_extraction", "type_extraction")
+            end
+        end
+
+        _track_expedition_tagged_levels(game_mode, navigation_handler, current_location_index, "type_main_objective",
+            "expedition_objective_main_objective")
+        _track_expedition_tagged_levels(game_mode, navigation_handler, current_location_index, "type_arrival",
+            "expedition_objective_arrival")
+    end
+end

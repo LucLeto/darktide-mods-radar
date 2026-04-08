@@ -434,19 +434,36 @@ return {
         ["zh-cn"] = "关闭",
         ["zh-tw"] = "關閉",
     },
-    enemy_display_style = {
-        en = "Enemy marker style",
-        fr = "Style des marqueurs d'ennemis",
-        de = "Gegnermarkierungsstil",
-        it = "Stile indicatori nemici",
-        es = "Estilo de marcador de enemigos",
-        pl = "Styl znaczników wrogów",
-        ["pt-br"] = "Estilo dos marcadores de inimigos",
-        ["ru"] = "Стиль меток врагов",
-        ja = "敵マーカーのスタイル",
-        ko = "적 마커 스타일",
-        ["zh-cn"] = "敌人标记样式",
-        ["zh-tw"] = "敵人標記樣式",
+    boss_display_style = {
+        en = "Boss marker style",
+    },
+    enemies_icon_scale = {
+        en = "All enemy icon size",
+        de = "Alle Gegnersymbolgrößen",
+    },
+    enemy_special_icon_scale = {
+        en = "Special enemy icon size",
+        de = "Spezialgegner-Symbolgröße",
+    },
+    enemy_elite_icon_scale = {
+        en = "Elite enemy icon size",
+        de = "Elitegegner-Symbolgröße",
+    },
+    enemy_shooter_icon_scale = {
+        en = "Shooter enemy icon size",
+        de = "Schützen-Symbolgröße",
+    },
+    enemy_common_icon_scale = {
+        en = "Common enemy icon size",
+        de = "Normale Gegner-Symbolgröße",
+    },
+    enemy_horde_icon_scale = {
+        en = "Horde enemy icon size",
+        de = "Hordengegner-Symbolgröße",
+    },
+    enemy_misc_icon_scale = {
+        en = "Misc enemy icon size",
+        de = "Sonstige Gegner-Symbolgröße",
     },
     player_display_style = {
         en = "Player marker style",
@@ -2038,5 +2055,89 @@ return {
         ko = "알 수 없는 픽업 표시",
         ["zh-cn"] = "显示未知拾取物",
         ["zh-tw"] = "顯示未知拾取物",
+    },
+    show_enemy_shooter = {
+        en = "Shooters",
+    },
+    shooter_enemies_tooltip = {
+        en = "like Scab Shooter, Dreg and Scab Stalker",
+    },
+    show_enemy_common = {
+        en = "Common enemies",
+    },
+    common_tooltip = {
+        en = "like Dreg and Scab Bruiser",
+    },
+    show_enemy_horde = {
+        en = "Horde enemies",
+    },
+    horde_tooltip = {
+        en = "like Groaner, Moebian 21st, Poxwalkers (regular, lesser mutated and mutated)",
+    },
+    show_enemy_renegade_grenadier = {
+        en = "Scab Bomber",
+    },
+    show_enemy_cultist_grenadier = {
+        en = "Dreg Tox Bomber",
+    },
+    show_enemy_cultist_gunner = {
+        en = "Dreg Gunner",
+    },
+    show_enemy_renegade_gunner = {
+        en = "Scab Gunner",
+    },
+    show_enemy_renegade_plasma_gunner = {
+        en = "Scab Plasma Gunner",
+    },
+    show_enemy_chaos_ogryn_gunner = {
+        en = "Ogryn - Reaper",
+    },
+    show_enemy_chaos_hound = {
+        en = "Pox Hound",
+    },
+    show_enemy_chaos_armored_hound = {
+        en = "Armored Pox Hound",
+    },
+    show_enemy_chaos_poxwalker_bomber = {
+        en = "Poxburster",
+    },
+    show_enemy_renegade_executor = {
+        en = "Scab Mauler",
+    },
+    show_enemy_cultist_berzerker = {
+        en = "Dreg Rager",
+    },
+    show_enemy_renegade_berzerker = {
+        en = "Scab Rager",
+    },
+    show_enemy_cultist_shocktrooper = {
+        en = "Dreg Shotgunner",
+    },
+    show_enemy_renegade_shocktrooper = {
+        en = "Scab Shotgunner",
+    },
+    show_enemy_renegade_sniper = {
+        en = "Sniper",
+    },
+    show_enemy_cultist_flamer = {
+        en = "Dreg Tox Flamer",
+    },
+    show_enemy_renegade_flamer = {
+        en = "Scab Flamer",
+    },
+    show_enemy_cultist_mutant = {
+        en = "Mutant",
+    },
+    show_enemy_chaos_ogryn_executor = {
+        en = "Ogryn - Crusher",
+    },
+    show_enemy_chaos_ogryn_bulwark = {
+        en = "Ogryn - Bulwark",
+    },
+    show_enemy_renegade_netgunner = {
+        en = "Trapper",
+    },
+    show_enemy_cultist_ritualist = {
+        en = "Ritualist",
     },
 }

@@ -34,15 +34,48 @@ local function _artwork_icon_off_dropdown(setting_id)
     }
 end
 
-local function _icon_scale_slider(setting_id)
+local function _icon_scale_slider(setting_id, title_key)
     return {
         setting_id = setting_id,
-        title = "icon_size_percent",
+        title = title_key or "icon_size_percent",
         type = "numeric",
         default_value = 100,
         range = { 50, 300 },
         decimals_number = 0,
         step_size_value = 5,
+    }
+end
+
+local function _icon_marked_off_dropdown(setting_id, default_value)
+    local tooltip = nil
+
+    if setting_id == "show_enemy_common" then
+        tooltip = "common_tooltip"
+    end
+
+    if setting_id == "show_enemy_shooter" then
+        tooltip = "shooter_enemies_tooltip"
+    end
+
+    return {
+        setting_id = setting_id,
+        type = "dropdown",
+        default_value = default_value,
+        tooltip = tooltip,
+        options = {
+            {
+                text = "display_style_icon_only",
+                value = "icon_only",
+            },
+            {
+                text = "display_style_marked_icon",
+                value = "marked_icon",
+            },
+            {
+                text = "radar_outline_off",
+                value = "off",
+            },
+        },
     }
 end
 
@@ -367,7 +400,7 @@ return {
                 setting_id = "common_pickups_group",
                 type = "group",
                 sub_widgets = {
-                    _icon_scale_slider("common_pickups_icon_scale"),
+                    _icon_scale_slider("common_pickups_icon_scale", nil),
                     {
                         setting_id = "nearby_highlight_common_pickups",
                         type = "checkbox",
@@ -425,7 +458,7 @@ return {
                 setting_id = "materials_group",
                 type = "group",
                 sub_widgets = {
-                    _icon_scale_slider("materials_icon_scale"),
+                    _icon_scale_slider("materials_icon_scale", nil),
                     {
                         setting_id = "nearby_highlight_materials",
                         type = "checkbox",
@@ -439,7 +472,7 @@ return {
                 setting_id = "primary_objective_group",
                 type = "group",
                 sub_widgets = {
-                    _icon_scale_slider("primary_objective_icon_scale"),
+                    _icon_scale_slider("primary_objective_icon_scale", nil),
                     {
                         setting_id = "nearby_highlight_primary_objective",
                         type = "checkbox",
@@ -491,7 +524,7 @@ return {
                 setting_id = "secondary_objective_group",
                 type = "group",
                 sub_widgets = {
-                    _icon_scale_slider("secondary_objective_icon_scale"),
+                    _icon_scale_slider("secondary_objective_icon_scale", nil),
                     {
                         setting_id = "nearby_highlight_secondary_objective",
                         type = "checkbox",
@@ -513,7 +546,7 @@ return {
                 setting_id = "expeditions_location_group",
                 type = "group",
                 sub_widgets = {
-                    _icon_scale_slider("expeditions_location_icon_scale"),
+                    _icon_scale_slider("expeditions_location_icon_scale", nil),
                     {
                         setting_id = "ignore_radar_range_for_expedition_markers",
                         type = "checkbox",
@@ -555,7 +588,7 @@ return {
                 setting_id = "expeditions_specific_group",
                 type = "group",
                 sub_widgets = {
-                    _icon_scale_slider("expeditions_specific_icon_scale"),
+                    _icon_scale_slider("expeditions_specific_icon_scale", nil),
                     {
                         setting_id = "nearby_highlight_expeditions_specific",
                         type = "checkbox",
@@ -620,7 +653,7 @@ return {
                 setting_id = "martyr_s_skull_group",
                 type = "group",
                 sub_widgets = {
-                    _icon_scale_slider("martyr_s_skull_icon_scale"),
+                    _icon_scale_slider("martyr_s_skull_icon_scale", nil),
                     {
                         setting_id = "nearby_highlight_martyr_s_skull",
                         type = "checkbox",
@@ -642,7 +675,7 @@ return {
                 setting_id = "environment_group",
                 type = "group",
                 sub_widgets = {
-                    _icon_scale_slider("environment_icon_scale"),
+                    _icon_scale_slider("environment_icon_scale", nil),
                     {
                         setting_id = "nearby_highlight_environment",
                         type = "checkbox",
@@ -686,9 +719,9 @@ return {
                 setting_id = "enemies_group",
                 type = "group",
                 sub_widgets = {
-                    _icon_scale_slider("enemies_icon_scale"),
+                    _icon_scale_slider("enemies_icon_scale", "enemies_icon_scale"),
                     {
-                        setting_id = "enemy_display_style",
+                        setting_id = "boss_display_style",
                         type = "dropdown",
                         default_value = "marked_icon",
                         options = {
@@ -738,13 +771,49 @@ return {
                         type = "checkbox",
                         default_value = true,
                     },
+                    _icon_scale_slider("enemy_horde_icon_scale", "enemy_horde_icon_scale"),
+                    {
+                        setting_id = "show_enemy_horde",
+                        type = "checkbox",
+                        default_value = false,
+                        tooltip = "horde_tooltip",
+                    },
+                    _icon_scale_slider("enemy_common_icon_scale", "enemy_common_icon_scale"),
+                    _icon_marked_off_dropdown("show_enemy_common", "icon_only"),
+                    _icon_scale_slider("enemy_shooter_icon_scale", "enemy_shooter_icon_scale"),
+                    _icon_marked_off_dropdown("show_enemy_shooter", "icon_only"),
+                    _icon_scale_slider("enemy_elite_icon_scale", "enemy_elite_icon_scale"),
+                    _icon_marked_off_dropdown("show_enemy_cultist_gunner", "icon_only"),
+                    _icon_marked_off_dropdown("show_enemy_cultist_berzerker", "icon_only"),
+                    _icon_marked_off_dropdown("show_enemy_cultist_shocktrooper", "icon_only"),
+                    _icon_marked_off_dropdown("show_enemy_renegade_gunner", "icon_only"),
+                    _icon_marked_off_dropdown("show_enemy_renegade_executor", "icon_only"),
+                    _icon_marked_off_dropdown("show_enemy_renegade_plasma_gunner", "icon_only"),
+                    _icon_marked_off_dropdown("show_enemy_renegade_berzerker", "icon_only"),
+                    _icon_marked_off_dropdown("show_enemy_renegade_shocktrooper", "icon_only"),
+                    _icon_marked_off_dropdown("show_enemy_chaos_ogryn_bulwark", "icon_only"),
+                    _icon_marked_off_dropdown("show_enemy_chaos_ogryn_executor", "icon_only"),
+                    _icon_marked_off_dropdown("show_enemy_chaos_ogryn_gunner", "icon_only"),
+                    _icon_scale_slider("enemy_special_icon_scale", "enemy_special_icon_scale"),
+                    _icon_marked_off_dropdown("show_enemy_renegade_grenadier", "icon_only"),
+                    _icon_marked_off_dropdown("show_enemy_cultist_grenadier", "icon_only"),
+                    _icon_marked_off_dropdown("show_enemy_renegade_flamer", "icon_only"),
+                    _icon_marked_off_dropdown("show_enemy_cultist_flamer", "icon_only"),
+                    _icon_marked_off_dropdown("show_enemy_cultist_mutant", "icon_only"),
+                    _icon_marked_off_dropdown("show_enemy_chaos_poxwalker_bomber", "marked_icon"),
+                    _icon_marked_off_dropdown("show_enemy_chaos_armored_hound", "icon_only"),
+                    _icon_marked_off_dropdown("show_enemy_chaos_hound", "icon_only"),
+                    _icon_marked_off_dropdown("show_enemy_renegade_sniper", "icon_only"),
+                    _icon_marked_off_dropdown("show_enemy_renegade_netgunner", "marked_icon"),
+                    _icon_scale_slider("enemy_misc_icon_scale", "enemy_misc_icon_scale"),
+                    _icon_marked_off_dropdown("show_enemy_cultist_ritualist", "icon_only"),
                 },
             },
             {
                 setting_id = "players_group",
                 type = "group",
                 sub_widgets = {
-                    _icon_scale_slider("players_icon_scale"),
+                    _icon_scale_slider("players_icon_scale", nil),
                     {
                         setting_id = "show_teammates",
                         type = "checkbox",
@@ -779,7 +848,7 @@ return {
                 setting_id = "event_group",
                 type = "group",
                 sub_widgets = {
-                    _icon_scale_slider("event_icon_scale"),
+                    _icon_scale_slider("event_icon_scale", nil),
                     {
                         setting_id = "nearby_highlight_event",
                         type = "checkbox",
@@ -811,7 +880,7 @@ return {
                 setting_id = "debug_group",
                 type = "group",
                 sub_widgets = {
-                    _icon_scale_slider("debug_icon_scale"),
+                    _icon_scale_slider("debug_icon_scale", nil),
                     {
                         setting_id = "debug_mode",
                         type = "checkbox",
