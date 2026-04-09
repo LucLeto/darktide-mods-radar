@@ -1223,6 +1223,7 @@ local _draw_cache = {
     marker_scale_by_group = {},
     enemy_scale_by_kind = {},
     enemy_visual_by_kind = {},
+    show_boss_distance_text = false,
 }
 
 local function _build_draw_cache()
@@ -1241,6 +1242,7 @@ local function _build_draw_cache()
         mod:get_expedition_loot_marker_mode() or "default"
     draw_cache.show_expedition_loot_value_text = mod.get_show_expedition_loot_value_text and
         mod:get_show_expedition_loot_value_text() or false
+    draw_cache.show_boss_distance_text = mod:get("show_boss_distance_text") == true
     draw_cache.slot_colors = UISettings and UISettings.player_slot_colors or nil
     draw_cache.debug_mode = mod:get("debug_mode") == true
 
@@ -1515,7 +1517,8 @@ local function _marker_value_font_size(icon_size, digits)
     return font_size
 end
 
-local function _draw_marker_value_text(ui_renderer, value_text, x, y, z, icon_size, has_arrow)
+local function _draw_marker_value_text(ui_renderer, value_text, x, y, z, icon_size, has_arrow, value_text_color,
+                                       value_text_anchor, value_text_offset_x, value_text_offset_y)
     if value_text == nil or value_text == "" then
         return
     end
@@ -1530,22 +1533,39 @@ local function _draw_marker_value_text(ui_renderer, value_text, x, y, z, icon_si
     local arrow_size = math_max(6, math_floor(icon_size * 0.45 + 1))
     local text_box_width = math_max(font_size + 2, math_floor(font_size * (digits * 0.62 + 0.45) + 0.5))
     local text_box_height = font_size + 2
-    local text_x = math_floor((x or 0) + icon_size - text_box_width + 0.5)
-    local text_y = math_floor((y or 0) + icon_size - text_box_height + 0.5)
+    local anchor = value_text_anchor or "bottom_right"
+    local text_x
+    local text_y
 
-    if has_arrow then
-        text_x = text_x - math_floor(arrow_size * 0.8 + 0.5)
+    if anchor == "top_center" then
+        text_x = math_floor((x or 0) + icon_size * 0.5 - text_box_width * 0.5 + 0.5)
+        text_y = math_floor((y or 0) - text_box_height - 2 + 0.5)
+    elseif anchor == "bottom_center" then
+        text_x = math_floor((x or 0) + icon_size * 0.5 - text_box_width * 0.5 + 0.5)
+        text_y = math_floor((y or 0) + icon_size + 2 + 0.5)
+    else
+        text_x = math_floor((x or 0) + icon_size - text_box_width + 0.5)
+        text_y = math_floor((y or 0) + icon_size - text_box_height + 0.5)
+
+        if has_arrow then
+            text_x = text_x - math_floor(arrow_size * 0.8 + 0.5)
+        end
     end
+
+    text_x = text_x + (value_text_offset_x or 0)
+    text_y = text_y + (value_text_offset_y or 0)
 
     _marker_value_text_position[1] = text_x
     _marker_value_text_position[2] = text_y
     _marker_value_text_position[3] = math_floor((z or 0) + 4 + 0.5)
     _marker_value_text_size[1] = text_box_width
     _marker_value_text_size[2] = text_box_height
-    _marker_value_text_color[1] = 255
-    _marker_value_text_color[2] = 255
-    _marker_value_text_color[3] = 225
-    _marker_value_text_color[4] = 0
+    local text_color = value_text_color or _marker_value_text_color
+
+    _marker_value_text_color[1] = text_color[1] or 255
+    _marker_value_text_color[2] = text_color[2] or 255
+    _marker_value_text_color[3] = text_color[3] or 225
+    _marker_value_text_color[4] = text_color[4] or 0
 
     table_clear(_marker_value_text_options)
     UIFonts.get_font_options_by_style(MARKER_VALUE_TEXT_STYLE, _marker_value_text_options)
@@ -1747,35 +1767,75 @@ local function _tech_remnant_value_text(target, draw_cache)
     return tostring(math_floor(value + 0.5))
 end
 
+local function _is_boss_distance_text_kind(kind)
+    return kind == "enemy_monstrosity"
+        or kind == "enemy_captain"
+        or kind == "enemy_karnak_twin"
+end
+
+local function _boss_distance_text(target, draw_cache)
+    local show_distance_text = draw_cache and draw_cache.show_boss_distance_text or
+        (mod:get("show_boss_distance_text") == true)
+
+    if not show_distance_text or not _is_boss_distance_text_kind(target and target.kind) then
+        return nil
+    end
+
+    local distance_sq_3d = target and tonumber(target.distance_sq_3d) or nil
+
+    if not distance_sq_3d or distance_sq_3d < 0 then
+        return nil
+    end
+
+    return math_floor(math_sqrt(distance_sq_3d) + 0.5) .. " m"
+end
+
+local BOSS_DISTANCE_TEXT_WIDGET_COLOR = { 255, 255, 225, 0 }
+
 local function _apply_target_specific_visual_overrides(target, visual, draw_cache)
     if not visual then
         return nil
     end
 
-    if not _is_tech_remnant_kind(target and target.kind) then
-        return visual
+    local kind = target and target.kind
+
+    if _is_tech_remnant_kind(kind) then
+        local mode = draw_cache and draw_cache.expedition_loot_marker_mode or
+            (mod.get_expedition_loot_marker_mode and mod:get_expedition_loot_marker_mode() or "default")
+        local meta = target and target.meta or nil
+        local base_size = visual.size or 14
+        local should_scale = mode == "scaled" or (meta and meta.is_tech_remnant_cluster == true) or false
+        local scaled_size = should_scale and _tech_remnant_scaled_size(base_size, _tech_remnant_target_value(target)) or
+            base_size
+        local value_text = _tech_remnant_value_text(target, draw_cache)
+
+        if scaled_size == base_size and value_text == nil and visual.value_text == nil then
+            return visual
+        end
+
+        local result = _copy_visual(visual)
+
+        if should_scale then
+            result.size = scaled_size
+        end
+
+        result.value_text = value_text
+
+        return result
     end
 
-    local mode = draw_cache and draw_cache.expedition_loot_marker_mode or
-        (mod.get_expedition_loot_marker_mode and mod:get_expedition_loot_marker_mode() or "default")
-    local meta = target and target.meta or nil
-    local base_size = visual.size or 14
-    local should_scale = mode == "scaled" or (meta and meta.is_tech_remnant_cluster == true) or false
-    local scaled_size = should_scale and _tech_remnant_scaled_size(base_size, _tech_remnant_target_value(target)) or
-        base_size
-    local value_text = _tech_remnant_value_text(target, draw_cache)
+    local boss_distance_text = _boss_distance_text(target, draw_cache)
 
-    if scaled_size == base_size and value_text == nil and visual.value_text == nil then
+    if boss_distance_text == nil then
         return visual
     end
 
     local result = _copy_visual(visual)
-
-    if should_scale then
-        result.size = scaled_size
-    end
-
-    result.value_text = value_text
+    result.value_text = boss_distance_text
+    result.value_text_color = BOSS_DISTANCE_TEXT_WIDGET_COLOR
+    result.value_text_anchor = "bottom_center"
+    result.value_text_offset_x = 3
+    result.value_text_offset_y = -3
 
     return result
 end
@@ -1927,7 +1987,7 @@ local function _target_visual(target, draw_cache)
     local enemy_visual = _enemy_radar_visual(target, draw_cache)
 
     if enemy_visual then
-        return enemy_visual
+        return _apply_target_specific_visual_overrides(target, enemy_visual, draw_cache)
     end
 
     local debug_mode = draw_cache and draw_cache.debug_mode or mod:get("debug_mode")
@@ -2627,9 +2687,19 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
                         _widget_to_color(visual and visual.color or nil))
                 end
 
-                draw_marker_value_text(ui_renderer, visual and visual.value_text or nil, draw_x, draw_y, z + 5,
+                draw_marker_value_text(
+                    ui_renderer,
+                    visual and visual.value_text or nil,
+                    draw_x,
+                    draw_y,
+                    z + 5,
                     marker_size,
-                    target and target.vertical_state ~= nil)
+                    target and target.vertical_state ~= nil,
+                    visual and visual.value_text_color or nil,
+                    visual and visual.value_text_anchor or nil,
+                    visual and visual.value_text_offset_x or nil,
+                    visual and visual.value_text_offset_y or nil
+                )
 
                 next_widget_index = next_widget_index + 1
             end

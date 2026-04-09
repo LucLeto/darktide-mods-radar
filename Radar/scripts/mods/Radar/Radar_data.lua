@@ -756,6 +756,11 @@ return {
                             mod:set("boss_marker_range_mode", new_value)
                         end,
                     },
+                    {
+                        setting_id = "show_boss_distance_text",
+                        type = "checkbox",
+                        default_value = true,
+                    },
                     _icon_scale_slider("enemy_boss_icon_scale", "enemy_boss_icon_scale"),
                     {
                         setting_id = "show_monstrosities",
