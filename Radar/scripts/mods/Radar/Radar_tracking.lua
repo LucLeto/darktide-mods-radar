@@ -17,7 +17,7 @@ return function(env)
     local table_concat = table.concat
     local table_sort = table.sort
 
-    function _refresh_player_units()
+    local function _refresh_player_units()
         local player_manager = _player_manager()
         if not player_manager or not player_manager.players then
             return
@@ -59,7 +59,7 @@ return function(env)
         end
     end
 
-    function _scan_interactees()
+    local function _scan_interactees()
         local interactee_map = _safe_unit_to_extension_map("interactee_system")
         if not interactee_map then
             return
@@ -127,7 +127,7 @@ return function(env)
         end
     end
 
-    function _scan_chests()
+    local function _scan_chests()
         local chest_map = _safe_unit_to_extension_map("chest_system")
         if not chest_map then
             return
@@ -165,7 +165,7 @@ return function(env)
         end
     end
 
-    function _scan_minions()
+    local function _scan_minions()
         local unit_data_map = _safe_unit_to_extension_map("unit_data_system")
         if not unit_data_map then
             return
@@ -191,7 +191,7 @@ return function(env)
         end
     end
 
-    function _scan_destructibles()
+    local function _scan_destructibles()
         local destructible_map = _safe_unit_to_extension_map("destructible_system")
         if not destructible_map then
             return
@@ -245,7 +245,7 @@ return function(env)
         _prune_destroyed_idol_state()
     end
 
-    function _scan_smart_tag_targets()
+    local function _scan_smart_tag_targets()
         local smart_tag_map = _safe_unit_to_extension_map("smart_tag_system")
         if not smart_tag_map then
             return
@@ -266,7 +266,7 @@ return function(env)
         end
     end
 
-    function _prune_units()
+    local function _prune_units()
         local now = _safe_gameplay_time() or 0
         local tracked_units = mod._tracked_units
 
@@ -291,7 +291,7 @@ return function(env)
         end
     end
 
-    function _distance_squared_horizontal(a, b)
+    local function _distance_squared_horizontal(a, b)
         if not a or not b then
             return math_huge
         end
@@ -313,7 +313,7 @@ return function(env)
         return dx * dx + dy * dy
     end
 
-    function _vertical_delta(a, b)
+    local function _vertical_delta(a, b)
         if not a or not b then
             return nil
         end
@@ -328,9 +328,9 @@ return function(env)
         return bz - az
     end
 
-    ITEM_VERTICAL_ARROW_Z_DEADZONE = 2
+    local ITEM_VERTICAL_ARROW_Z_DEADZONE = 2
 
-    function _supports_vertical_item_marker(kind)
+    local function _supports_vertical_item_marker(kind)
         if not kind then
             return false
         end
@@ -350,7 +350,7 @@ return function(env)
         return true
     end
 
-    function _expedition_loot_target_value(target)
+    local function _expedition_loot_target_value(target)
         local meta = target and target.meta or nil
         local value = meta and tonumber(meta.remnant_value or meta.remnant_cluster_value) or nil
 
@@ -363,11 +363,11 @@ return function(env)
         return _expedition_loot_value_for_pickup_name(pickup_name) or 0
     end
 
-    function _should_cluster_expedition_loot_target(target)
+    local function _should_cluster_expedition_loot_target(target)
         return target ~= nil and target.kind == "material_expeditions_loot" and target.position ~= nil
     end
 
-    function _expedition_loot_cluster_center(cluster_members)
+    local function _expedition_loot_cluster_center(cluster_members)
         local total_weight = 0
         local sum_x = 0
         local sum_y = 0
@@ -403,8 +403,8 @@ return function(env)
         }
     end
 
-    function _expedition_loot_vertical_state(player_pos, position, item_vertical_arrow_threshold_sq,
-                                             item_vertical_hide_threshold)
+    local function _expedition_loot_vertical_state(player_pos, position, item_vertical_arrow_threshold_sq,
+                                                   item_vertical_hide_threshold)
         local vertical_delta = _vertical_delta(player_pos, position)
         local vertical_state = nil
 
@@ -429,8 +429,8 @@ return function(env)
         return vertical_delta, vertical_state, false
     end
 
-    function _create_expedition_loot_cluster_target(cluster_members, player_pos, item_vertical_arrow_threshold_sq,
-                                                    item_vertical_hide_threshold)
+    local function _create_expedition_loot_cluster_target(cluster_members, player_pos, item_vertical_arrow_threshold_sq,
+                                                          item_vertical_hide_threshold)
         local position = _expedition_loot_cluster_center(cluster_members)
 
         if not position then
@@ -482,8 +482,8 @@ return function(env)
         }
     end
 
-    function _cluster_expedition_loot_targets(targets, player_pos, item_vertical_arrow_threshold_sq,
-                                              item_vertical_hide_threshold)
+    local function _cluster_expedition_loot_targets(targets, player_pos, item_vertical_arrow_threshold_sq,
+                                                    item_vertical_hide_threshold)
         if mod:get_expedition_loot_marker_mode() ~= "clustered" then
             return targets
         end
@@ -566,11 +566,11 @@ return function(env)
         return pass_through_targets
     end
 
-    function _compare_radar_targets_by_distance(a, b)
+    local function _compare_radar_targets_by_distance(a, b)
         return (a.distance_sq or math_huge) < (b.distance_sq or math_huge)
     end
 
-    function _compare_radar_targets_boss_first(a, b)
+    local function _compare_radar_targets_boss_first(a, b)
         local a_is_boss = _is_boss_marker_kind(a.kind)
         local b_is_boss = _is_boss_marker_kind(b.kind)
 
@@ -581,7 +581,7 @@ return function(env)
         return (a.distance_sq or math_huge) < (b.distance_sq or math_huge)
     end
 
-    function _compare_radar_targets_for_display(a, b)
+    local function _compare_radar_targets_for_display(a, b)
         local a_priority = a and a.selection_priority or 0
         local b_priority = b and b.selection_priority or 0
 
@@ -599,7 +599,7 @@ return function(env)
         return tostring(a.kind) < tostring(b.kind)
     end
 
-    function _collect_radar_targets()
+    local function _collect_radar_targets()
         local player_unit = _player_unit()
         if not _safe_unit_alive(player_unit) then
             return {}
@@ -620,25 +620,101 @@ return function(env)
         local tracked_points = mod._tracked_points
         local targets = {}
         local target_count = 0
+        local kind_enabled_cache = {}
+        local ignore_range_cache = {}
+        local supports_vertical_cache = {}
+        local render_layer_cache = {}
+        local selection_priority_cache = {}
+        local priority_target_cache = {}
+        local get_target_render_layer = mod.get_target_render_layer
+        local get_target_selection_priority = mod.get_target_selection_priority
+
+        local function _cached_kind_enabled(kind)
+            local enabled = kind_enabled_cache[kind]
+
+            if enabled == nil then
+                enabled = _kind_enabled(kind)
+                kind_enabled_cache[kind] = enabled
+            end
+
+            return enabled
+        end
+
+        local function _cached_ignore_radar_range(kind)
+            local ignore_range = ignore_range_cache[kind]
+
+            if ignore_range == nil then
+                ignore_range = _ignore_radar_range_for_kind(kind)
+                ignore_range_cache[kind] = ignore_range
+            end
+
+            return ignore_range
+        end
+
+        local function _cached_supports_vertical_item_marker(kind)
+            local supports_vertical = supports_vertical_cache[kind]
+
+            if supports_vertical == nil then
+                supports_vertical = _supports_vertical_item_marker(kind)
+                supports_vertical_cache[kind] = supports_vertical
+            end
+
+            return supports_vertical
+        end
+
+        local function _cached_priority_target(kind)
+            local is_priority_target = priority_target_cache[kind]
+
+            if is_priority_target == nil then
+                is_priority_target = kind == "enemy_daemonhost" or _is_boss_marker_kind(kind) or
+                    ENEMY_RADAR_DEFINITION_BY_KIND[kind] ~= nil
+                priority_target_cache[kind] = is_priority_target
+            end
+
+            return is_priority_target
+        end
+
+        local function _cached_render_layer(kind)
+            local render_layer = render_layer_cache[kind]
+
+            if render_layer == nil then
+                render_layer = get_target_render_layer(mod, kind)
+                render_layer_cache[kind] = render_layer
+            end
+
+            return render_layer
+        end
+
+        local function _cached_selection_priority(kind)
+            local selection_priority = selection_priority_cache[kind]
+
+            if selection_priority == nil then
+                selection_priority = get_target_selection_priority(mod, kind)
+                selection_priority_cache[kind] = selection_priority
+            end
+
+            return selection_priority
+        end
 
         local function append_target(unit, data)
             local position = data and data.position
             local kind = data and data.kind
 
-            if not position or not kind or not _kind_enabled(kind) then
+            if not position or not kind or not _cached_kind_enabled(kind) then
                 return
             end
 
-            if kind == "pickup_heretic_idol" and data.source == "destructible_system" then
-                local meta = data.meta
+            local source = data.source
+            local meta = data.meta
 
+            if kind == "pickup_heretic_idol" and source == "destructible_system" then
                 if not meta or meta.collectible_id == nil then
                     return
                 end
             end
 
             local distance_sq_horizontal = _distance_squared_horizontal(player_pos, position)
-            local ignore_range = _ignore_radar_range_for_kind(kind)
+            local ignore_range = _cached_ignore_radar_range(kind)
 
             if distance_sq_horizontal > max_range_sq and not ignore_range then
                 return
@@ -647,7 +723,7 @@ return function(env)
             local vertical_delta = nil
             local vertical_state = nil
 
-            if _supports_vertical_item_marker(kind) then
+            if _cached_supports_vertical_item_marker(kind) then
                 vertical_delta = _vertical_delta(player_pos, position)
 
                 if vertical_delta ~= nil then
@@ -671,9 +747,9 @@ return function(env)
             local render_layer = 0
             local selection_priority = 0
 
-            if kind == "enemy_daemonhost" or _is_boss_marker_kind(kind) or ENEMY_RADAR_DEFINITION_BY_KIND[kind] then
-                render_layer = mod:get_target_render_layer(kind)
-                selection_priority = mod:get_target_selection_priority(kind)
+            if _cached_priority_target(kind) then
+                render_layer = _cached_render_layer(kind)
+                selection_priority = _cached_selection_priority(kind)
             end
 
             target_count = target_count + 1
@@ -681,8 +757,8 @@ return function(env)
                 unit = unit,
                 kind = kind,
                 position = position,
-                source = data.source,
-                meta = data.meta,
+                source = source,
+                meta = meta,
                 distance_sq = distance_sq_horizontal,
                 distance_sq_3d = _distance_squared(player_pos, position),
                 vertical_delta = vertical_delta,
@@ -722,7 +798,7 @@ return function(env)
         return targets
     end
 
-    function _collect_radar_snapshot()
+    local function _collect_radar_snapshot()
         local player_unit = _player_unit()
         if not _safe_unit_alive(player_unit) then
             return nil
@@ -745,7 +821,7 @@ return function(env)
         }
     end
 
-    function _debug_log_scan()
+    local function _debug_log_scan()
         if mod:get("debug_mode") ~= true then
             return
         end
@@ -819,7 +895,7 @@ return function(env)
         ))
     end
 
-    function _reset_runtime_state()
+    local function _reset_runtime_state()
         mod._screen_highlight_targets = {}
         mod._unclustered_radar_targets = {}
         mod._highlight_source_radar_targets = {}
@@ -837,7 +913,7 @@ return function(env)
         mod._idol_destroyed_units = {}
     end
 
-    function _debug_log_block(reason, gameplay_t, mission_name, activity, mechanism_name)
+    local function _debug_log_block(reason, gameplay_t, mission_name, activity, mechanism_name)
         if mod:get("debug_mode") ~= true then
             return
         end
@@ -865,7 +941,7 @@ return function(env)
         ))
     end
 
-    function _update_internal(dt, t)
+    local function _update_internal(dt, t)
         if mod:get("enable_radar") == false then
             mod._tracked_points = {}
             mod._radar_targets = {}

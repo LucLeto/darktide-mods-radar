@@ -91,7 +91,7 @@ local function _color(a, r, g, b)
     return Color(a, r, g, b)
 end
 
-local WHITE_WIDGET_COLOR = _widget_color(255, 255, 255, 255)
+local WHITE_WIDGET_COLOR = { 255, 255, 255, 255 }
 local OCCLUSION_RAYCAST_FILTERS = {
     "filter_player_character_shooting",
     "filter_ray_projectile",
@@ -154,8 +154,8 @@ local function _vector3_components(vec)
 end
 
 local function _ui_space_size()
-    local width = 1920
-    local height = 1080
+    local width = 1920.0
+    local height = 1080.0
 
     if RESOLUTION_LOOKUP and RESOLUTION_LOOKUP.width and RESOLUTION_LOOKUP.height then
         local inverse_scale = RESOLUTION_LOOKUP.inverse_scale or 1
@@ -1120,7 +1120,7 @@ local function _marker_definition()
                 horizontal_alignment = "left",
                 offset = { 0, 0, 10 },
                 size = { 16, 16 },
-                color = { 255, 255, 255, 255 },
+                color = WHITE_WIDGET_COLOR,
             },
             visibility_function = _has_icon,
         },
@@ -1133,7 +1133,7 @@ local function _marker_definition()
                 horizontal_alignment = "left",
                 offset = { 0, 0, 11 },
                 size = { 10, 10 },
-                color = { 255, 255, 255, 255 },
+                color = WHITE_WIDGET_COLOR,
             },
             visibility_function = _has_overlay_icon,
         },
@@ -1146,7 +1146,7 @@ local function _marker_definition()
                 horizontal_alignment = "left",
                 offset = { 0, 0, 12 },
                 size = { 16, 16 },
-                color = { 255, 255, 255, 255 },
+                color = WHITE_WIDGET_COLOR,
             },
             visibility_function = _has_title_icon,
         },
@@ -1159,7 +1159,7 @@ local function _marker_definition()
                 horizontal_alignment = "left",
                 offset = { 2, 2, 16 },
                 size = { 4, 4 },
-                color = { 255, 255, 255, 255 },
+                color = WHITE_WIDGET_COLOR,
             },
             visibility_function = _has_arrow_icon,
         },
@@ -1191,8 +1191,10 @@ local function _ensure_marker_widgets(self)
         self._marker_widgets[i] = _create_marker_widget(i)
     end
 
-    _log_once(_logged_draws, "widget_pool_init",
-        string_format("[Radar] widget pool created | count=%d", MAX_RADAR_MARKERS))
+    if mod:get("debug_mode") == true then
+        _log_once(_logged_draws, "widget_pool_init",
+            string_format("[Radar] widget pool created | count=%d", MAX_RADAR_MARKERS))
+    end
 end
 
 local function _normalized_player_display_style(value)
@@ -1219,6 +1221,7 @@ local _draw_cache = {
     enemy_marker_mode_by_kind = {},
     marker_scale_by_group = {},
     enemy_scale_by_kind = {},
+    enemy_visual_by_kind = {},
 }
 
 local function _build_draw_cache()
@@ -1228,6 +1231,7 @@ local function _build_draw_cache()
     table_clear(draw_cache.enemy_marker_mode_by_kind)
     table_clear(draw_cache.marker_scale_by_group)
     table_clear(draw_cache.enemy_scale_by_kind)
+    table_clear(draw_cache.enemy_visual_by_kind)
 
     draw_cache.icon_scale = _icon_scale_factor()
     draw_cache.player_display_style = _normalized_player_display_style(mod:get("player_display_style"))
@@ -1247,13 +1251,13 @@ _icon_scale_factor = function()
         return 1
     end
 
-    local radar_size = tonumber(mod:get("radar_size")) or 180
-    local scale = radar_size / 180
+    local radar_size = tonumber(mod:get("radar_size")) or 300
+    local scale = radar_size / 300
 
-    if scale < 0.6 then
-        scale = 0.6
-    elseif scale > 2.0 then
-        scale = 2.0
+    if scale < 0.5 then
+        scale = 0.5
+    elseif scale > 3.0 then
+        scale = 3.0
     end
 
     return scale
@@ -1753,9 +1757,9 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
 
     local mode = draw_cache and draw_cache.expedition_loot_marker_mode or
         (mod.get_expedition_loot_marker_mode and mod:get_expedition_loot_marker_mode() or "default")
-    local meta = target and target.meta or {}
+    local meta = target and target.meta or nil
     local base_size = visual.size or 14
-    local should_scale = mode == "scaled" or meta.is_tech_remnant_cluster == true
+    local should_scale = mode == "scaled" or (meta and meta.is_tech_remnant_cluster == true) or false
     local scaled_size = should_scale and _tech_remnant_scaled_size(base_size, _tech_remnant_target_value(target)) or
         base_size
     local value_text = _tech_remnant_value_text(target, draw_cache)
@@ -1797,8 +1801,9 @@ local function _artwork_mode_icon_visual(kind, draw_cache)
 end
 
 local function _expedition_objective_visual(target, draw_cache)
-    local meta = target and target.meta or {}
-    local player_slot = tonumber(meta.marked_by_player_slot)
+    local meta = target and target.meta or nil
+    local marked_by_player_slot = meta and meta.marked_by_player_slot or nil
+    local player_slot = tonumber(marked_by_player_slot)
     local slot_colors = draw_cache and draw_cache.slot_colors or (UISettings and UISettings.player_slot_colors)
     local player_color = player_slot and slot_colors and slot_colors[player_slot] or nil
     local default_color = _expedition_unmarked_color(target)
@@ -1808,13 +1813,13 @@ local function _expedition_objective_visual(target, draw_cache)
     local icon = nil
 
     if target and target.kind == "expedition_loot_converter" then
-        icon = meta.objective_icon or DEFAULT_INTERACTION_ICON
+        icon = meta and meta.objective_icon or DEFAULT_INTERACTION_ICON
     else
-        local interaction_icon = meta.interaction_icon
+        local interaction_icon = meta and meta.interaction_icon or nil
         icon = interaction_icon
 
         if icon == nil or icon == DEFAULT_INTERACTION_ICON then
-            icon = meta.objective_icon or DEFAULT_INTERACTION_ICON
+            icon = meta and meta.objective_icon or DEFAULT_INTERACTION_ICON
         end
     end
 
@@ -1824,7 +1829,7 @@ local function _expedition_objective_visual(target, draw_cache)
 
     return {
         icon = icon,
-        title_icon = meta.objective_title_icon,
+        title_icon = meta and meta.objective_title_icon or nil,
         color = widget_color,
         accent_color = accent_color,
         size = 15,
@@ -1846,8 +1851,19 @@ local function _same_widget_color(a, b)
         and a[4] == b[4]
 end
 
-local function _enemy_radar_visual(target)
-    local definition = mod.get_enemy_radar_definition and mod:get_enemy_radar_definition(target and target.kind)
+local function _enemy_radar_visual(target, draw_cache)
+    local kind = target and target.kind
+    local cache = draw_cache and draw_cache.enemy_visual_by_kind or nil
+
+    if cache and kind ~= nil then
+        local cached = cache[kind]
+
+        if cached ~= nil then
+            return cached
+        end
+    end
+
+    local definition = mod.get_enemy_radar_definition and mod:get_enemy_radar_definition(kind)
 
     if not definition then
         return nil
@@ -1863,6 +1879,7 @@ local function _enemy_radar_visual(target)
         and background_icon ~= nil
         and background_color ~= nil
         and icon ~= nil
+    local visual = nil
 
     if should_compose
         and background_icon == icon
@@ -1872,7 +1889,7 @@ local function _enemy_radar_visual(target)
     end
 
     if should_compose then
-        return {
+        visual = {
             icon = background_icon,
             color = background_color,
             overlay_icon = icon,
@@ -1883,15 +1900,21 @@ local function _enemy_radar_visual(target)
             accent_color = _with_alpha_widget(background_color, 180),
             size = background_size,
         }
+    else
+        visual = {
+            icon = icon or background_icon or DEFAULT_INTERACTION_ICON,
+            color = icon_color or background_color or WHITE_WIDGET_COLOR,
+            accent_color = background_color and _with_alpha_widget(background_color, 180) or nil,
+            bracket_base_size = tonumber(definition.bracket_size) or icon_size,
+            size = icon_size,
+        }
     end
 
-    return {
-        icon = icon or background_icon or DEFAULT_INTERACTION_ICON,
-        color = icon_color or background_color or WHITE_WIDGET_COLOR,
-        accent_color = background_color and _with_alpha_widget(background_color, 180) or nil,
-        bracket_base_size = tonumber(definition.bracket_size) or icon_size,
-        size = icon_size,
-    }
+    if cache and kind ~= nil then
+        cache[kind] = visual
+    end
+
+    return visual
 end
 
 local function _target_visual(target, draw_cache)
@@ -1899,18 +1922,19 @@ local function _target_visual(target, draw_cache)
         return nil
     end
 
-    local enemy_visual = _enemy_radar_visual(target)
+    local target_kind = target.kind
+    local enemy_visual = _enemy_radar_visual(target, draw_cache)
 
     if enemy_visual then
         return enemy_visual
     end
 
     local debug_mode = draw_cache and draw_cache.debug_mode or mod:get("debug_mode")
+    local meta = target.meta or nil
 
-    if target.kind == "player_teammate" then
-        local meta = target.meta or {}
-        local archetype_name = meta.archetype_name and string_lower(tostring(meta.archetype_name)) or nil
-        local player_slot = tonumber(meta.player_slot)
+    if target_kind == "player_teammate" then
+        local archetype_name = meta and meta.archetype_name and string_lower(tostring(meta.archetype_name)) or nil
+        local player_slot = meta and tonumber(meta.player_slot) or nil
         local slot_colors = draw_cache and draw_cache.slot_colors or (UISettings and UISettings.player_slot_colors)
         local player_color = player_slot and slot_colors and slot_colors[player_slot] or nil
         local display_style = draw_cache and draw_cache.player_display_style or mod:get_player_display_style()
@@ -1936,33 +1960,36 @@ local function _target_visual(target, draw_cache)
         }
     end
 
-    if _is_expedition_objective_kind(target.kind) then
+    if _is_expedition_objective_kind(target_kind) then
         if debug_mode then
+            local interaction_icon = meta and meta.interaction_icon or nil
+            local objective_icon = meta and meta.objective_icon or nil
+            local objective_title_icon = meta and meta.objective_title_icon or nil
+            local marked_by_player_slot = meta and meta.marked_by_player_slot or nil
+
             _log_once(
                 _logged_visuals,
-                "expedition:" ..
-                tostring(target.kind) ..
-                ":" ..
-                tostring((target.meta or {}).interaction_icon or (target.meta or {}).objective_icon) ..
-                ":" .. tostring((target.meta or {}).objective_title_icon),
+                "expedition:" .. tostring(target_kind) .. ":" .. tostring(interaction_icon or objective_icon) .. ":" ..
+                tostring(objective_title_icon),
                 string_format("[Radar] visual expedition | kind=%s icon=%s title_icon=%s marked_by=%s",
-                    tostring(target.kind),
-                    tostring((target.meta or {}).interaction_icon or (target.meta or {}).objective_icon),
-                    tostring((target.meta or {}).objective_title_icon),
-                    tostring((target.meta or {}).marked_by_player_slot))
+                    tostring(target_kind),
+                    tostring(interaction_icon or objective_icon),
+                    tostring(objective_title_icon),
+                    tostring(marked_by_player_slot))
             )
         end
 
         return _expedition_objective_visual(target, draw_cache)
     end
 
-    local icon_visual = _artwork_mode_icon_visual(target.kind, draw_cache)
+    local icon_visual = _artwork_mode_icon_visual(target_kind, draw_cache)
+
     if icon_visual then
         if debug_mode then
             _log_once(
                 _logged_visuals,
-                "icon_mode:" .. tostring(target.kind),
-                string_format("[Radar] visual icon mode | kind=%s icon=%s", tostring(target.kind),
+                "icon_mode:" .. tostring(target_kind),
+                string_format("[Radar] visual icon mode | kind=%s icon=%s", tostring(target_kind),
                     tostring(icon_visual.icon))
             )
         end
@@ -1970,13 +1997,14 @@ local function _target_visual(target, draw_cache)
         return _apply_target_specific_visual_overrides(target, icon_visual, draw_cache)
     end
 
-    local presentation = PRESENTATIONS[target.kind]
-    if presentation then
+    local presentation = rawget(PRESENTATIONS, target_kind)
+
+    if presentation ~= nil then
         if debug_mode then
             _log_once(
                 _logged_visuals,
-                "kind:" .. tostring(target.kind),
-                string_format("[Radar] visual presentation | kind=%s icon=%s", tostring(target.kind),
+                "kind:" .. tostring(target_kind),
+                string_format("[Radar] visual presentation | kind=%s icon=%s", tostring(target_kind),
                     tostring(presentation.icon))
             )
         end
@@ -1984,19 +2012,20 @@ local function _target_visual(target, draw_cache)
         return _apply_target_specific_visual_overrides(target, presentation, draw_cache)
     end
 
-    local meta = target.meta or {}
-    if meta.interaction_icon and meta.interaction_icon ~= "" then
+    local interaction_icon = meta and meta.interaction_icon or nil
+
+    if interaction_icon and interaction_icon ~= "" then
         if debug_mode then
             _log_once(
                 _logged_visuals,
-                "interaction:" .. tostring(meta.interaction_icon),
-                string_format("[Radar] visual interaction_icon | kind=%s icon=%s", tostring(target.kind),
-                    tostring(meta.interaction_icon))
+                "interaction:" .. tostring(interaction_icon),
+                string_format("[Radar] visual interaction_icon | kind=%s icon=%s", tostring(target_kind),
+                    tostring(interaction_icon))
             )
         end
 
         return _apply_target_specific_visual_overrides(target, {
-            icon = meta.interaction_icon,
+            icon = interaction_icon,
             color = WHITE_WIDGET_COLOR,
             size = 14,
         }, draw_cache)
@@ -2005,8 +2034,8 @@ local function _target_visual(target, draw_cache)
     if debug_mode then
         _log_once(
             _logged_visuals,
-            "fallback_kind:" .. tostring(target.kind),
-            string_format("[Radar] visual fallback | kind=%s icon=%s", tostring(target.kind),
+            "fallback_kind:" .. tostring(target_kind),
+            string_format("[Radar] visual fallback | kind=%s icon=%s", tostring(target_kind),
                 tostring(PRESENTATIONS.pickup_unknown.icon))
         )
     end
@@ -2485,6 +2514,17 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
     local x, y, z, radius = mod:get_radar_origin(size)
     local center_x = x + radius
     local center_y = y + radius
+    local debug_mode = draw_cache.debug_mode
+    local UIWidget_draw = UIWidget.draw
+    local apply_marker_widget = _apply_marker_widget
+    local target_visual = _target_visual
+    local target_icon_size = _target_icon_size
+    local target_bracket_size = _target_bracket_size
+    local should_draw_marker_brackets = _should_draw_marker_brackets
+    local draw_marker_brackets = _draw_marker_brackets
+    local draw_marker_value_text = _draw_marker_value_text
+    local snap_center = _snap_center
+    local top_left_from_center = _top_left_from_center
 
     _draw_radar_frame(ui_renderer, x, y, z + 1, size)
 
@@ -2513,12 +2553,12 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
         local self_draw_y = center_y - self_icon_size / 2
         local self_widget = marker_widgets[next_widget_index]
 
-        _apply_marker_widget(self_widget, self_visual, self_draw_x, self_draw_y, z + 5, nil, self_icon_size)
-        UIWidget.draw(self_widget, ui_renderer)
+        apply_marker_widget(self_widget, self_visual, self_draw_x, self_draw_y, z + 5, nil, self_icon_size)
+        UIWidget_draw(self_widget, ui_renderer)
 
         next_widget_index = next_widget_index + 1
 
-        if target_count > max_markers then
+        if debug_mode and target_count > max_markers then
             _log_once(
                 _logged_draws,
                 "marker_pool_overflow:" .. tostring(max_markers),
@@ -2538,51 +2578,55 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
                 range, target.ignore_radar_range)
 
             if px and py then
-                local visual = _target_visual(target, draw_cache)
-                local marker_size = _target_icon_size(target, visual, draw_cache)
-                local bracket_size = _target_bracket_size(target, visual, draw_cache, marker_size)
-                local marker_center_x = _snap_center(center_x + px)
-                local marker_center_y = _snap_center(center_y + py)
+                local visual = target_visual(target, draw_cache)
+                local marker_size = target_icon_size(target, visual, draw_cache)
+                local bracket_size = target_bracket_size(target, visual, draw_cache, marker_size)
+                local marker_center_x = snap_center(center_x + px)
+                local marker_center_y = snap_center(center_y + py)
 
-                local draw_x = _top_left_from_center(marker_center_x, marker_size)
-                local draw_y = _top_left_from_center(marker_center_y, marker_size)
-                local bracket_x = _top_left_from_center(marker_center_x, bracket_size)
-                local bracket_y = _top_left_from_center(marker_center_y, bracket_size)
+                local draw_x = top_left_from_center(marker_center_x, marker_size)
+                local draw_y = top_left_from_center(marker_center_y, marker_size)
+                local bracket_x = top_left_from_center(marker_center_x, bracket_size)
+                local bracket_y = top_left_from_center(marker_center_y, bracket_size)
 
                 local widget = marker_widgets[next_widget_index]
                 local render_layer = target and tonumber(target.render_layer) or 0
                 local bracket_z = z + 4 + render_layer
                 local icon_z = z + 5 + render_layer
 
-                if visual and visual.accent_color and _should_draw_marker_brackets(target, draw_cache) then
-                    _draw_marker_brackets(ui_renderer, bracket_x, bracket_y, bracket_z, bracket_size, visual
-                        .accent_color)
+                if visual and visual.accent_color and should_draw_marker_brackets(target, draw_cache) then
+                    draw_marker_brackets(ui_renderer, bracket_x, bracket_y, bracket_z, bracket_size, visual.accent_color)
                 end
 
-                _apply_marker_widget(widget, visual, draw_x, draw_y, icon_z, target, marker_size)
+                apply_marker_widget(widget, visual, draw_x, draw_y, icon_z, target, marker_size)
 
-                _log_once(
-                    _logged_draws,
-                    "widget_material:" .. tostring(visual and visual.icon),
-                    string_format("[Radar] widget material scheduled | material=%s title_material=%s",
-                        tostring(visual and visual.icon),
-                        tostring(visual and visual.title_icon))
-                )
-
-                local widget_ok, widget_err = pcall(UIWidget.draw, widget, ui_renderer)
-
-                if not widget_ok then
+                if debug_mode then
                     _log_once(
                         _logged_draws,
-                        "widget_draw_fail:" .. tostring(visual and visual.icon),
-                        string_format("[Radar] widget draw failed | material=%s err=%s",
-                            tostring(visual and visual.icon), tostring(widget_err))
+                        "widget_material:" .. tostring(visual and visual.icon),
+                        string_format("[Radar] widget material scheduled | material=%s title_material=%s",
+                            tostring(visual and visual.icon),
+                            tostring(visual and visual.title_icon))
                     )
+                end
+
+                local widget_ok, widget_err = pcall(UIWidget_draw, widget, ui_renderer)
+
+                if not widget_ok then
+                    if debug_mode then
+                        _log_once(
+                            _logged_draws,
+                            "widget_draw_fail:" .. tostring(visual and visual.icon),
+                            string_format("[Radar] widget draw failed | material=%s err=%s",
+                                tostring(visual and visual.icon), tostring(widget_err))
+                        )
+                    end
+
                     _draw_box(ui_renderer, draw_x, draw_y, z + 5, marker_size, marker_size,
                         _widget_to_color(visual and visual.color or nil))
                 end
 
-                _draw_marker_value_text(ui_renderer, visual and visual.value_text or nil, draw_x, draw_y, z + 5,
+                draw_marker_value_text(ui_renderer, visual and visual.value_text or nil, draw_x, draw_y, z + 5,
                     marker_size,
                     target and target.vertical_state ~= nil)
 

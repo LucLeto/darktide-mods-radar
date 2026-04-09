@@ -756,6 +756,7 @@ return {
                             mod:set("boss_marker_range_mode", new_value)
                         end,
                     },
+                    _icon_scale_slider("enemy_boss_icon_scale", "enemy_boss_icon_scale"),
                     {
                         setting_id = "show_monstrosities",
                         type = "checkbox",

@@ -8,6 +8,7 @@ return function(env)
     local ipairs = ipairs
     local tonumber = tonumber
     local tostring = tostring
+    local rawget = rawget
     local string_format = string.format
     local string_sub = string.sub
 
@@ -36,7 +37,7 @@ return function(env)
         luggable_special_issue_ammo = { 255, 95, 125, 70 },
         luggable_prismata_crystal_repository = { 255, 255, 70, 90 },
         pickup_mortis_relic = { 255, 110, 95, 125 },
-        pickup_coordinates_paper = { 255, 255, 255, 255 },
+        pickup_coordinates_paper = DEFAULT_COLOR_ARRAY_WHITE,
         pocketable_grimoire = { 255, 150, 190, 60 },
         pocketable_scripture = { 255, 192, 160, 0 },
         material_expeditions_currency = { 255, 120, 160, 140 },
@@ -45,7 +46,7 @@ return function(env)
         luggable_data_reliquary = { 255, 192, 160, 0 },
         pickup_large_ammunition_crate = { 255, 240, 210, 80 },
         luggable_promethium_barrel = { 255, 255, 110, 0 },
-        pocketable_anti_rad_stimm = { 255, 255, 255, 255 },
+        pocketable_anti_rad_stimm = DEFAULT_COLOR_ARRAY_WHITE,
         pocketable_airstrike = { 255, 95, 125, 70 },
         pocketable_artillery_strike = { 255, 95, 125, 70 },
         pocketable_big_grenade = { 255, 205, 156, 77 },
@@ -188,7 +189,7 @@ return function(env)
         pocketable_void_shield = "show_pocketable_void_shield",
     }
 
-    MARKER_SCALE_GROUP_BY_KIND = {
+    local MARKER_SCALE_GROUP_BY_KIND = {
         crate_unknown = "common_pickups_group",
         pickup_ammo = "common_pickups_group",
         pickup_ammo_small = "common_pickups_group",
@@ -250,7 +251,7 @@ return function(env)
         pickup_unknown = "debug_group",
     }
 
-    ICON_SCALE_SETTING_BY_GROUP = {
+    local ICON_SCALE_SETTING_BY_GROUP = {
         common_pickups_group = "common_pickups_icon_scale",
         materials_group = "materials_icon_scale",
         primary_objective_group = "primary_objective_icon_scale",
@@ -266,22 +267,28 @@ return function(env)
         debug_group = "debug_icon_scale",
     }
 
+    local ENEMY_RADAR_SCALE_SETTING_BY_KIND = {
+        enemy_daemonhost = "enemy_boss_icon_scale",
+        enemy_monstrosity = "enemy_boss_icon_scale",
+        enemy_captain = "enemy_boss_icon_scale",
+        enemy_karnak_twin = "enemy_boss_icon_scale",
+    }
 
-    ENEMY_RADAR_DEFAULT_COLOR = { 220, 255, 0, 0 }
-    ENEMY_RADAR_DEFAULT_DREG_COLOR = { 255, 255, 255, 0 }
-    ENEMY_RADAR_DEFAULT_SCAB_COLOR = { 255, 255, 255, 255 }
-    ENEMY_RADAR_DEFAULT_TOX_COLOR = { 255, 0, 255, 0 }
-    ENEMY_RADAR_DEFAULT_MUTATOR_COLOR = { 255, 150, 190, 60 }
+    local ENEMY_RADAR_DEFAULT_COLOR = { 220, 255, 0, 0 }
+    local ENEMY_RADAR_DEFAULT_DREG_COLOR = { 255, 255, 255, 0 }
+    local ENEMY_RADAR_DEFAULT_SCAB_COLOR = DEFAULT_COLOR_ARRAY_WHITE
+    local ENEMY_RADAR_DEFAULT_TOX_COLOR = { 255, 0, 255, 0 }
+    local ENEMY_RADAR_DEFAULT_MUTATOR_COLOR = { 255, 150, 190, 60 }
 
-    ENEMY_RADAR_BACKGROUND_ICON = "content/ui/materials/hud/interactions/icons/default"
+    local ENEMY_RADAR_BACKGROUND_ICON = "content/ui/materials/hud/interactions/icons/default"
 
-    ENEMY_RADAR_GROUP_SETTING_IDS = {
+    local ENEMY_RADAR_GROUP_SETTING_IDS = {
         shooter = "show_enemy_shooter",
         common = "show_enemy_common",
         horde = "show_enemy_horde",
     }
 
-    ENEMY_RADAR_SCALE_SETTING_BY_CATEGORY = {
+    local ENEMY_RADAR_SCALE_SETTING_BY_CATEGORY = {
         special = "enemy_special_icon_scale",
         elite = "enemy_elite_icon_scale",
         shooter = "enemy_shooter_icon_scale",
@@ -290,7 +297,7 @@ return function(env)
         misc = "enemy_misc_icon_scale",
     }
 
-    ENEMY_RADAR_SELECTION_PRIORITY = {
+    local ENEMY_RADAR_SELECTION_PRIORITY = {
         boss = 500,
         special = 400,
         elite = 350,
@@ -300,7 +307,7 @@ return function(env)
         horde = 50,
     }
 
-    ENEMY_RADAR_RENDER_LAYER = {
+    local ENEMY_RADAR_RENDER_LAYER = {
         boss = 5,
         special = 4,
         elite = 4,
@@ -310,7 +317,7 @@ return function(env)
         horde = 0,
     }
 
-    function _enemy_radar_default_icon_size(category)
+    local function _enemy_radar_default_icon_size(category)
         if category == "horde" then
             return 8
         end
@@ -326,7 +333,7 @@ return function(env)
         return 10
     end
 
-    function _enemy_radar_default_background_size(category)
+    local function _enemy_radar_default_background_size(category)
         if category == "horde" then
             return nil
         end
@@ -342,7 +349,7 @@ return function(env)
         return 14
     end
 
-    function _enemy_radar_default_size(category)
+    local function _enemy_radar_default_size(category)
         return _enemy_radar_default_background_size(category) or _enemy_radar_default_icon_size(category)
     end
 
@@ -394,45 +401,45 @@ return function(env)
         ),
         cultist_gunner = _enemy_radar_def(
             "elite",
-            "content/ui/materials/icons/circumstances/assault_01",
+            "content/ui/materials/icons/weapons/actions/full_auto",
             ENEMY_RADAR_DEFAULT_DREG_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_cultist_gunner",
             {
-                icon_size = 10,
+                icon_size = 8,
                 background_size = 30,
                 bracket_size = 13,
             }
         ),
         renegade_gunner = _enemy_radar_def(
             "elite",
-            "content/ui/materials/icons/circumstances/assault_01",
+            "content/ui/materials/icons/weapons/actions/full_auto",
             ENEMY_RADAR_DEFAULT_SCAB_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_renegade_gunner",
             {
-                icon_size = 10,
+                icon_size = 8,
                 background_size = 30,
                 bracket_size = 13,
             }
         ),
         renegade_radio_operator = _enemy_radar_def(
             "elite",
-            "content/ui/materials/icons/circumstances/assault_01",
-            ENEMY_RADAR_DEFAULT_SCAB_COLOR,
+            "content/ui/materials/icons/weapons/actions/full_auto",
+            ENEMY_RADAR_DEFAULT_MUTATOR_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_renegade_gunner",
             {
                 toggle_with = "renegade_gunner",
-                icon_size = 10,
+                icon_size = 8,
                 background_size = 30,
                 bracket_size = 13,
             }
         ),
         renegade_plasma_gunner = _enemy_radar_def(
             "elite",
-            "content/ui/materials/icons/circumstances/assault_01",
-            { 255, 255, 102, 0 },
+            "content/ui/materials/icons/weapons/actions/charge",
+            ENEMY_RADAR_DEFAULT_SCAB_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_renegade_plasma_gunner",
             {
@@ -443,12 +450,12 @@ return function(env)
         ),
         chaos_ogryn_gunner = _enemy_radar_def(
             "elite",
-            "content/ui/materials/icons/circumstances/assault_01",
+            "content/ui/materials/icons/weapons/actions/hipfire",
             ENEMY_RADAR_DEFAULT_SCAB_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_chaos_ogryn_gunner",
             {
-                icon_size = 12,
+                icon_size = 10,
                 background_size = 36,
                 bracket_size = 15,
             }
@@ -460,7 +467,7 @@ return function(env)
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_chaos_hound",
             {
-                icon_size = 12,
+                icon_size = 10,
                 background_size = 36,
                 bracket_size = 15,
             }
@@ -473,7 +480,7 @@ return function(env)
             "show_enemy_chaos_hound",
             {
                 toggle_with = "chaos_hound",
-                icon_size = 12,
+                icon_size = 10,
                 background_size = 36,
                 bracket_size = 15,
             }
@@ -485,7 +492,7 @@ return function(env)
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_chaos_armored_hound",
             {
-                icon_size = 12,
+                icon_size = 10,
                 background_size = 36,
                 bracket_size = 15,
             }
@@ -568,36 +575,36 @@ return function(env)
         ),
         cultist_assault = _enemy_radar_def(
             "shooter",
-            "content/ui/materials/icons/item_types/ranged_weapons",
+            "content/ui/materials/icons/item_types/weapons",
             ENEMY_RADAR_DEFAULT_DREG_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_shooter",
             {
-                icon_size = 8,
+                icon_size = 7,
                 background_size = 24,
                 bracket_size = 11,
             }
         ),
         cultist_shocktrooper = _enemy_radar_def(
             "elite",
-            "content/ui/materials/icons/item_types/ranged_weapons",
+            "content/ui/materials/icons/weapons/actions/shotgun",
             ENEMY_RADAR_DEFAULT_DREG_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_cultist_shocktrooper",
             {
-                icon_size = 10,
+                icon_size = 8,
                 background_size = 30,
                 bracket_size = 13,
             }
         ),
         renegade_assault = _enemy_radar_def(
             "shooter",
-            "content/ui/materials/icons/item_types/ranged_weapons",
+            "content/ui/materials/icons/item_types/weapons",
             ENEMY_RADAR_DEFAULT_SCAB_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_shooter",
             {
-                icon_size = 8,
+                icon_size = 7,
                 background_size = 24,
                 bracket_size = 11,
             }
@@ -609,19 +616,19 @@ return function(env)
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_shooter",
             {
-                icon_size = 8,
+                icon_size = 7,
                 background_size = 24,
                 bracket_size = 11,
             }
         ),
         renegade_shocktrooper = _enemy_radar_def(
             "elite",
-            "content/ui/materials/icons/item_types/ranged_weapons",
+            "content/ui/materials/icons/weapons/actions/shotgun",
             ENEMY_RADAR_DEFAULT_SCAB_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_renegade_shocktrooper",
             {
-                icon_size = 10,
+                icon_size = 8,
                 background_size = 30,
                 bracket_size = 13,
             }
@@ -677,32 +684,32 @@ return function(env)
         ),
         cultist_mutant = _enemy_radar_def(
             "special",
-            "content/ui/materials/icons/player_states/incapacitated",
+            "content/ui/materials/icons/weapons/actions/melee_hand",
             ENEMY_RADAR_DEFAULT_DREG_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_cultist_mutant",
             {
-                icon_size = 12,
+                icon_size = 10,
                 background_size = 36,
                 bracket_size = 15,
             }
         ),
         cultist_mutant_mutator = _enemy_radar_def(
             "special",
-            "content/ui/materials/icons/player_states/incapacitated",
+            "content/ui/materials/icons/weapons/actions/melee_hand",
             ENEMY_RADAR_DEFAULT_MUTATOR_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_cultist_mutant",
             {
                 toggle_with = "cultist_mutant",
-                icon_size = 12,
+                icon_size = 10,
                 background_size = 36,
                 bracket_size = 15,
             }
         ),
         chaos_ogryn_executor = _enemy_radar_def(
             "elite",
-            "content/ui/materials/icons/item_types/melee_weapons",
+            "content/ui/materials/icons/difficulty/flat/difficulty_skull_auric",
             ENEMY_RADAR_DEFAULT_SCAB_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_chaos_ogryn_executor",
@@ -714,7 +721,7 @@ return function(env)
         ),
         chaos_ogryn_executor_gibbing_rotten_armor = _enemy_radar_def(
             "elite",
-            "content/ui/materials/icons/item_types/melee_weapons",
+            "content/ui/materials/icons/difficulty/flat/difficulty_skull_auric",
             ENEMY_RADAR_DEFAULT_MUTATOR_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_chaos_ogryn_executor",
@@ -728,19 +735,19 @@ return function(env)
         ),
         chaos_ogryn_bulwark = _enemy_radar_def(
             "elite",
-            "content/ui/materials/icons/presets/preset_04",
+            "content/ui/materials/icons/weapons/actions/defence",
             ENEMY_RADAR_DEFAULT_SCAB_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_chaos_ogryn_bulwark",
             {
-                icon_size = 12,
+                icon_size = 8,
                 background_size = 36,
                 bracket_size = 15,
             }
         ),
         renegade_netgunner = _enemy_radar_def(
             "special",
-            "content/ui/materials/icons/player_states/incapacitated",
+            "content/ui/materials/icons/presets/preset_17",
             ENEMY_RADAR_DEFAULT_SCAB_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_renegade_netgunner",
@@ -911,7 +918,7 @@ return function(env)
     }
 
 
-    DEFAULT_COLOR_ARRAY = { 255, 255, 255, 255 }
+    DEFAULT_COLOR_ARRAY_WHITE = { 255, 255, 255, 255 }
 
     EXACT_PICKUP_KIND_BY_NAME = {
         small_clip = "pickup_ammo_small",
@@ -975,7 +982,7 @@ return function(env)
         consumable = true,
     }
 
-    function _normalize_marker_display_mode(value)
+    local function _normalize_marker_display_mode(value)
         if value == false or value == "off" then
             return "off"
         end
@@ -999,9 +1006,7 @@ return function(env)
         return MARKER_SCALE_GROUP_BY_KIND[kind]
     end
 
-    function mod:get_marker_scale_factor(group_name)
-        local setting_id = ICON_SCALE_SETTING_BY_GROUP[group_name]
-
+    local function _percent_scale_from_setting(self, setting_id)
         if not setting_id then
             return 1
         end
@@ -1015,6 +1020,12 @@ return function(env)
         end
 
         return value / 100
+    end
+
+    function mod:get_marker_scale_factor(group_name)
+        local setting_id = ICON_SCALE_SETTING_BY_GROUP[group_name]
+
+        return _percent_scale_from_setting(self, setting_id)
     end
 
     function mod:get_enemy_radar_definition(kind_or_breed)
@@ -1052,6 +1063,12 @@ return function(env)
     end
 
     function mod:get_enemy_category_scale_factor(kind_or_breed)
+        local direct_setting_id = rawget(ENEMY_RADAR_SCALE_SETTING_BY_KIND, kind_or_breed)
+
+        if direct_setting_id ~= nil then
+            return _percent_scale_from_setting(self, direct_setting_id)
+        end
+
         local definition = self:get_enemy_radar_definition(kind_or_breed)
 
         if not definition then
@@ -1061,23 +1078,11 @@ return function(env)
         local category = definition.scale_category or definition.category
         local setting_id = category and ENEMY_RADAR_SCALE_SETTING_BY_CATEGORY[category] or nil
 
-        if not setting_id then
-            return 1
-        end
-
-        local value = tonumber(self:get(setting_id)) or 100
-
-        if value < 50 then
-            value = 50
-        elseif value > 300 then
-            value = 300
-        end
-
-        return value / 100
+        return _percent_scale_from_setting(self, setting_id)
     end
 
     function mod:get_target_icon_scale_factor(kind)
-        local scale = 1
+        local scale = 1.0
         local group_name = self:get_marker_scale_group(kind)
 
         if group_name then
@@ -1099,9 +1104,9 @@ return function(env)
             return ENEMY_RADAR_SELECTION_PRIORITY.boss
         end
 
-        local definition = ENEMY_RADAR_DEFINITION_BY_KIND[kind]
+        local definition = rawget(ENEMY_RADAR_DEFINITION_BY_KIND, kind)
 
-        if definition then
+        if definition ~= nil then
             return ENEMY_RADAR_SELECTION_PRIORITY[definition.priority_group] or 0
         end
 
@@ -1116,9 +1121,9 @@ return function(env)
             return ENEMY_RADAR_RENDER_LAYER.boss
         end
 
-        local definition = ENEMY_RADAR_DEFINITION_BY_KIND[kind]
+        local definition = rawget(ENEMY_RADAR_DEFINITION_BY_KIND, kind)
 
-        if definition then
+        if definition ~= nil then
             return ENEMY_RADAR_RENDER_LAYER[definition.priority_group] or 0
         end
 
@@ -1134,7 +1139,7 @@ return function(env)
         return _normalize_marker_display_mode(mod:get(setting_id))
     end
 
-    function _migrate_marker_display_mode_settings()
+    local function _migrate_marker_display_mode_settings()
         for _, setting_id in ipairs(ARTWORK_MODE_SETTING_IDS) do
             local value = mod:get(setting_id)
 

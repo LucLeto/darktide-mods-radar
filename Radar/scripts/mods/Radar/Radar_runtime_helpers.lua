@@ -58,13 +58,16 @@ return function(env)
             return nil, nil, nil
         end
 
-        if type(vec) == "table" then
+        local vec_type = type(vec)
+
+        if vec_type == "table" then
             return vec.x, vec.y, vec.z
         end
 
-        local ok_x, x = pcall(Vector3.x, vec)
-        local ok_y, y = pcall(Vector3.y, vec)
-        local ok_z, z = pcall(Vector3.z, vec)
+        local vector3 = Vector3
+        local ok_x, x = pcall(vector3.x, vec)
+        local ok_y, y = pcall(vector3.y, vec)
+        local ok_z, z = pcall(vector3.z, vec)
 
         if ok_x and ok_y and ok_z then
             return x, y, z
@@ -100,16 +103,18 @@ return function(env)
     end
 
     function _safe_unit_data_string(unit, field_name)
-        if not unit or not field_name or not Unit or not Unit.has_data or not Unit.get_data then
+        local unit_api = Unit
+
+        if not unit or not field_name or not unit_api or not unit_api.has_data or not unit_api.get_data then
             return nil
         end
 
-        local ok_has_data, has_data = pcall(Unit.has_data, unit, field_name)
+        local ok_has_data, has_data = pcall(unit_api.has_data, unit, field_name)
         if not ok_has_data or not has_data then
             return nil
         end
 
-        local ok_value, value = pcall(Unit.get_data, unit, field_name)
+        local ok_value, value = pcall(unit_api.get_data, unit, field_name)
         if ok_value and value ~= nil then
             return _safe_lower_string(value)
         end
@@ -160,20 +165,23 @@ return function(env)
     end
 
     function _safe_unit_main_visible(unit)
-        if not unit or not Unit or not Unit.is_visible then
+        local unit_api = Unit
+
+        if not unit or not unit_api or not unit_api.is_visible then
             return nil
         end
 
-        local ok_visible, is_visible = pcall(Unit.is_visible, unit, "main")
+        local is_visible = unit_api.is_visible
+        local ok_visible, visible = pcall(is_visible, unit, "main")
 
         if ok_visible then
-            return is_visible == true
+            return visible == true
         end
 
-        local ok_visible_2, is_visible_2 = pcall(Unit.is_visible, unit)
+        local ok_visible_2, visible_2 = pcall(is_visible, unit)
 
         if ok_visible_2 then
-            return is_visible_2 == true
+            return visible_2 == true
         end
 
         return nil
@@ -303,11 +311,13 @@ return function(env)
     end
 
     function _position_lookup(unit)
-        if not unit or not POSITION_LOOKUP then
+        local position_lookup = POSITION_LOOKUP
+
+        if not unit or not position_lookup then
             return nil
         end
 
-        return _copy_vector3(POSITION_LOOKUP[unit])
+        return _copy_vector3(position_lookup[unit])
     end
 
     function _safe_unit_position(unit)
@@ -320,7 +330,12 @@ return function(env)
             return position
         end
 
-        local ok, world_position = pcall(Unit.world_position, unit, 1)
+        local unit_api = Unit
+        if not unit_api or not unit_api.world_position then
+            return nil
+        end
+
+        local ok, world_position = pcall(unit_api.world_position, unit, 1)
         if ok and world_position then
             return _copy_vector3(world_position)
         end
@@ -333,11 +348,14 @@ return function(env)
     end
 
     function _safe_health_alive(unit)
-        if not unit or not ScriptUnit or not ScriptUnit.has_extension then
+        local script_unit = ScriptUnit
+        local has_extension = script_unit and script_unit.has_extension
+
+        if not unit or not has_extension then
             return nil
         end
 
-        local health_extension = ScriptUnit.has_extension(unit, "health_system")
+        local health_extension = has_extension(unit, "health_system")
         if not health_extension or not health_extension.is_alive then
             return nil
         end
@@ -352,11 +370,14 @@ return function(env)
     end
 
     function _is_owned_by_death_manager(unit)
-        if not unit or not ScriptUnit or not ScriptUnit.has_extension then
+        local script_unit = ScriptUnit
+        local has_extension = script_unit and script_unit.has_extension
+
+        if not unit or not has_extension then
             return false
         end
 
-        local unit_data_extension = ScriptUnit.has_extension(unit, "unit_data_system")
+        local unit_data_extension = has_extension(unit, "unit_data_system")
         if not unit_data_extension or not unit_data_extension.is_owned_by_death_manager then
             return false
         end
@@ -637,19 +658,22 @@ return function(env)
             return nil
         end
 
-        if camera_manager.has_camera then
-            local ok_has_camera, has_camera = pcall(camera_manager.has_camera, camera_manager, viewport_name)
+        local has_camera = camera_manager.has_camera
 
-            if ok_has_camera and not has_camera then
+        if has_camera then
+            local ok_has_camera, visible_camera = pcall(has_camera, camera_manager, viewport_name)
+
+            if ok_has_camera and not visible_camera then
                 return nil
             end
         end
 
-        if not camera_manager.camera_rotation then
+        local camera_rotation = camera_manager.camera_rotation
+        if not camera_rotation then
             return nil
         end
 
-        local ok_rotation, rotation = pcall(camera_manager.camera_rotation, camera_manager, viewport_name)
+        local ok_rotation, rotation = pcall(camera_rotation, camera_manager, viewport_name)
 
         if ok_rotation and rotation then
             return rotation
@@ -668,8 +692,10 @@ return function(env)
             return nil
         end
 
-        local unit_data_extension = ScriptUnit and ScriptUnit.has_extension and
-            ScriptUnit.has_extension(player_unit, "unit_data_system")
+        local script_unit = ScriptUnit
+        local has_extension = script_unit and script_unit.has_extension
+        local unit_data_extension = has_extension and has_extension(player_unit, "unit_data_system") or nil
+
         if unit_data_extension and unit_data_extension.read_component then
             local ok_component, first_person_component = pcall(unit_data_extension.read_component, unit_data_extension,
                 "first_person")
@@ -679,8 +705,7 @@ return function(env)
             end
         end
 
-        local first_person_extension = ScriptUnit and ScriptUnit.has_extension and
-            ScriptUnit.has_extension(player_unit, "first_person_system")
+        local first_person_extension = has_extension and has_extension(player_unit, "first_person_system") or nil
         if first_person_extension and first_person_extension.extrapolated_rotation then
             local ok_rotation, rotation = pcall(first_person_extension.extrapolated_rotation, first_person_extension)
 
@@ -694,11 +719,13 @@ return function(env)
 
     function _safe_extension_system(system_name)
         local extension_manager = Managers and Managers.state and Managers.state.extension
-        if not extension_manager or not extension_manager.system then
+        local system_getter = extension_manager and extension_manager.system
+
+        if not system_getter then
             return nil
         end
 
-        local ok, system = pcall(extension_manager.system, extension_manager, system_name)
+        local ok, system = pcall(system_getter, extension_manager, system_name)
 
         if ok then
             return system
@@ -721,7 +748,7 @@ return function(env)
     end
 
     function _darkened_color_array(color, multiplier)
-        local src = color or DEFAULT_COLOR_ARRAY
+        local src = color or DEFAULT_COLOR_ARRAY_WHITE
         local mul = multiplier or 1
 
         return {
@@ -733,7 +760,7 @@ return function(env)
     end
 
     function _outline_color_vector3(color)
-        local src = color or DEFAULT_COLOR_ARRAY
+        local src = color or DEFAULT_COLOR_ARRAY_WHITE
 
         return Vector3(
             (src[2] or 255) / 255,
@@ -743,7 +770,7 @@ return function(env)
     end
 
     function _nearby_outline_color_signature(color)
-        local src = color or DEFAULT_COLOR_ARRAY
+        local src = color or DEFAULT_COLOR_ARRAY_WHITE
 
         return string_format(
             "%d:%d:%d",
@@ -880,16 +907,20 @@ return function(env)
         local get_setting = mod.get
         local get_marker_scale_group = mod.get_marker_scale_group
         local highlight_setting_by_group = NEARBY_HIGHLIGHT_SETTING_BY_GROUP
+        local screen_highlight_color_for_kind = _screen_highlight_color_for_kind
+        local screen_highlight_anchor_position = _screen_highlight_anchor_position
+        local darkened_color_array = _darkened_color_array
+        local distance_squared = _distance_squared
         local max_distance = mod:get_nearby_highlight_range()
         local max_distance_sq = max_distance * max_distance
         local highlights = {}
         local highlight_count = 0
         local highlight_enabled_by_kind = {}
         local source_targets = mod._highlight_source_radar_targets or mod._unclustered_radar_targets or
-            mod._radar_targets or
-            {}
+        mod._radar_targets
+        local source_target_count = source_targets and #source_targets or 0
 
-        for i = 1, #source_targets do
+        for i = 1, source_target_count do
             local target = source_targets[i]
             local kind = target and target.kind
 
@@ -909,12 +940,12 @@ return function(env)
                     local distance_sq = target.distance_sq_3d
 
                     if distance_sq == nil and position then
-                        distance_sq = _distance_squared(player_pos, position)
+                        distance_sq = distance_squared(player_pos, position)
                     end
 
                     if distance_sq ~= nil and distance_sq <= max_distance_sq then
-                        local color = _screen_highlight_color_for_kind(kind)
-                        local world_position = _screen_highlight_anchor_position(target)
+                        local color = screen_highlight_color_for_kind(kind)
+                        local world_position = screen_highlight_anchor_position(target)
 
                         if color and world_position then
                             highlight_count = highlight_count + 1
@@ -923,7 +954,7 @@ return function(env)
                                 kind = kind,
                                 world_position = world_position,
                                 color = color,
-                                occluded_color = _darkened_color_array(color, NEARBY_OUTLINE_OCCLUDED_MULTIPLIER),
+                                occluded_color = darkened_color_array(color, NEARBY_OUTLINE_OCCLUDED_MULTIPLIER),
                                 distance_sq_3d = distance_sq,
                             }
                         end
