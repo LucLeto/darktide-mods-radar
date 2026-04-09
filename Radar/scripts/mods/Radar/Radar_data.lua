@@ -186,7 +186,7 @@ return {
                         setting_id = "max_radar_markers",
                         type = "numeric",
                         default_value = 64,
-                        range = { 10, 100 },
+                        range = { 10, 200 },
                     },
                     {
                         setting_id = "scale_icons_with_radar_size",

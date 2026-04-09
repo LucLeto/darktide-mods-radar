@@ -1166,7 +1166,7 @@ local function _marker_definition()
     }, "screen")
 end
 
-local MAX_RADAR_MARKERS = 100
+local MAX_RADAR_MARKERS = 200
 
 local function _create_marker_widget(index)
     return UIWidget.init("RadarMarker_" .. index, _marker_definition())
@@ -1186,6 +1186,7 @@ local function _ensure_marker_widgets(self)
     end
 
     self._marker_widgets = {}
+    self._last_active_marker_widget_index = 0
 
     for i = 1, MAX_RADAR_MARKERS do
         self._marker_widgets[i] = _create_marker_widget(i)
@@ -2637,9 +2638,16 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
 
     _draw_screen_highlights(self, ui_renderer, snapshot, z + 40)
 
-    for i = next_widget_index, #marker_widgets do
-        _clear_marker_widget(marker_widgets[i])
+    local last_active_marker_widget_index = next_widget_index - 1
+    local previous_active_marker_widget_index = self._last_active_marker_widget_index or 0
+
+    if previous_active_marker_widget_index > last_active_marker_widget_index then
+        for i = last_active_marker_widget_index + 1, previous_active_marker_widget_index do
+            _clear_marker_widget(marker_widgets[i])
+        end
     end
+
+    self._last_active_marker_widget_index = last_active_marker_widget_index
 end
 
 HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input_service)

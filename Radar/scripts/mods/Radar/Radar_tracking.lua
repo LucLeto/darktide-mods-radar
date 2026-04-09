@@ -1133,8 +1133,8 @@ return function(env)
 
         if value < 10 then
             value = 10
-        elseif value > 100 then
-            value = 100
+        elseif value > 200 then
+            value = 200
         end
 
         return math_floor(value)
