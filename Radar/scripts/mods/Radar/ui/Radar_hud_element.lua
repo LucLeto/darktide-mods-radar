@@ -98,6 +98,11 @@ local OCCLUSION_RAYCAST_FILTERS = {
     "filter_minion_shooting",
     "filter_cover",
 }
+local FULL_CIRCLE = math_pi * 2
+local OCCLUSION_EPSILON = 0.05
+local OCCLUSION_RAYCAST_MODE = "closest"
+local OCCLUSION_COLLISION_FILTER = "collision_filter"
+local OCCLUSION_RAYCAST_FILTER_COUNT = #OCCLUSION_RAYCAST_FILTERS
 
 local function _widget_to_color(color)
     if not color then
@@ -603,9 +608,10 @@ end
 
 local function _draw_circle_fill(ui_renderer, center_x, center_y, z, radius, color)
     local integer_radius = math_max(1, math_floor((radius or 0) + 0.5))
+    local radius_sq = integer_radius * integer_radius
 
     for dy = -integer_radius, integer_radius do
-        local span = math_floor(math_sqrt(math_max(0, integer_radius * integer_radius - dy * dy)))
+        local span = math_floor(math_sqrt(math_max(0, radius_sq - dy * dy)))
         _draw_box(ui_renderer, center_x - span, center_y + dy, z, span * 2 + 1, 1, color)
     end
 end
@@ -778,9 +784,10 @@ end
 local function _draw_circle_outline_dotted(ui_renderer, center_x, center_y, z, radius, color)
     local point_size = radius >= 90 and 2 or 1
     local steps = 64
+    local step_angle = FULL_CIRCLE / steps
 
     for i = 0, steps - 1 do
-        local angle = (math_pi * 2 * i) / steps
+        local angle = step_angle * i
         local px = center_x + math_cos(angle) * radius
         local py = center_y + math_sin(angle) * radius
         _draw_dot(ui_renderer, px, py, z, point_size, color)
@@ -797,6 +804,23 @@ local function _draw_square_outline(ui_renderer, x, y, z, size, thickness, color
     _draw_box(ui_renderer, x, y + size - thickness, z, size, thickness, color)
     _draw_box(ui_renderer, x, y, z, thickness, size, color)
     _draw_box(ui_renderer, x + size - thickness, y, z, thickness, size, color)
+end
+
+local function _draw_square_fill_soft(ui_renderer, x, y, z, size, color)
+    size = math_max(1, _round(size))
+
+    if size <= 2 then
+        _draw_box(ui_renderer, x, y, z, size, size, color)
+        return
+    end
+
+    local feather_color = _color_with_alpha_scale(color, 0.45)
+
+    _draw_box(ui_renderer, x + 1, y + 1, z, size - 2, size - 2, color)
+    _draw_box(ui_renderer, x, y, z, size, 1, feather_color)
+    _draw_box(ui_renderer, x, y + size - 1, z, size, 1, feather_color)
+    _draw_box(ui_renderer, x, y + 1, z, 1, size - 2, feather_color)
+    _draw_box(ui_renderer, x + size - 1, y + 1, z, 1, size - 2, feather_color)
 end
 
 local function _draw_screen_pixel(ui_renderer, screen_x, screen_y, z, color)
@@ -1047,7 +1071,7 @@ local function _draw_radar_frame_square(ui_renderer, x, y, z, size, outline_styl
     local fill_color = _color(fill_alpha, 0, 0, 0)
     local outline_color = _color(255, 213, 226, 206)
 
-    _draw_box(ui_renderer, x, y, z, size, size, fill_color)
+    _draw_square_fill_soft(ui_renderer, x, y, z, size, fill_color)
 
     if outline_style == "solid" then
         _draw_box(ui_renderer, x, y, z + 1, size, thickness, outline_color)
@@ -1529,6 +1553,10 @@ local function _draw_marker_value_text(ui_renderer, value_text, x, y, z, icon_si
         return
     end
 
+    local x0 = x or 0
+    local y0 = y or 0
+    local z0 = z or 0
+    local half_icon_size = icon_size * 0.5
     local font_size = _marker_value_font_size(icon_size, digits)
     local arrow_size = math_max(6, math_floor(icon_size * 0.45 + 1))
     local text_box_width = math_max(font_size + 2, math_floor(font_size * (digits * 0.62 + 0.45) + 0.5))
@@ -1538,14 +1566,14 @@ local function _draw_marker_value_text(ui_renderer, value_text, x, y, z, icon_si
     local text_y
 
     if anchor == "top_center" then
-        text_x = math_floor((x or 0) + icon_size * 0.5 - text_box_width * 0.5 + 0.5)
-        text_y = math_floor((y or 0) - text_box_height - 2 + 0.5)
+        text_x = math_floor(x0 + half_icon_size - text_box_width * 0.5 + 0.5)
+        text_y = math_floor(y0 - text_box_height - 2 + 0.5)
     elseif anchor == "bottom_center" then
-        text_x = math_floor((x or 0) + icon_size * 0.5 - text_box_width * 0.5 + 0.5)
-        text_y = math_floor((y or 0) + icon_size + 2 + 0.5)
+        text_x = math_floor(x0 + half_icon_size - text_box_width * 0.5 + 0.5)
+        text_y = math_floor(y0 + icon_size + 2 + 0.5)
     else
-        text_x = math_floor((x or 0) + icon_size - text_box_width + 0.5)
-        text_y = math_floor((y or 0) + icon_size - text_box_height + 0.5)
+        text_x = math_floor(x0 + icon_size - text_box_width + 0.5)
+        text_y = math_floor(y0 + icon_size - text_box_height + 0.5)
 
         if has_arrow then
             text_x = text_x - math_floor(arrow_size * 0.8 + 0.5)
@@ -1555,17 +1583,22 @@ local function _draw_marker_value_text(ui_renderer, value_text, x, y, z, icon_si
     text_x = text_x + (value_text_offset_x or 0)
     text_y = text_y + (value_text_offset_y or 0)
 
-    _marker_value_text_position[1] = text_x
-    _marker_value_text_position[2] = text_y
-    _marker_value_text_position[3] = math_floor((z or 0) + 4 + 0.5)
-    _marker_value_text_size[1] = text_box_width
-    _marker_value_text_size[2] = text_box_height
-    local text_color = value_text_color or _marker_value_text_color
+    local position = _marker_value_text_position
+    local size = _marker_value_text_size
+    local color = _marker_value_text_color
+    local source_color = value_text_color or color
 
-    _marker_value_text_color[1] = text_color[1] or 255
-    _marker_value_text_color[2] = text_color[2] or 255
-    _marker_value_text_color[3] = text_color[3] or 225
-    _marker_value_text_color[4] = text_color[4] or 0
+    position[1] = text_x
+    position[2] = text_y
+    position[3] = math_floor(z0 + 4 + 0.5)
+
+    size[1] = text_box_width
+    size[2] = text_box_height
+
+    color[1] = source_color[1] or 255
+    color[2] = source_color[2] or 255
+    color[3] = source_color[3] or 225
+    color[4] = source_color[4] or 0
 
     table_clear(_marker_value_text_options)
     UIFonts.get_font_options_by_style(MARKER_VALUE_TEXT_STYLE, _marker_value_text_options)
@@ -1575,9 +1608,9 @@ local function _draw_marker_value_text(ui_renderer, value_text, x, y, z, icon_si
         value_text,
         font_size,
         MARKER_VALUE_TEXT_STYLE.font_type,
-        Vector3(_marker_value_text_position[1], _marker_value_text_position[2], _marker_value_text_position[3]),
-        _marker_value_text_size,
-        _marker_value_text_color,
+        Vector3(position[1], position[2], position[3]),
+        size,
+        color,
         _marker_value_text_options
     )
 end
@@ -1608,11 +1641,15 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size)
     widget.content.arrow_icon = arrow_icon
     widget.content.value_text = visual and visual.value_text or ""
 
-    icon_style.offset[1] = math_floor((x or 0) + 0.5)
-    icon_style.offset[2] = math_floor((y or 0) + 0.5)
-    icon_style.offset[3] = math_floor((z or 0) + 0.5)
-    icon_style.size[1] = size
-    icon_style.size[2] = size
+    local icon_offset = icon_style.offset
+    local icon_size_tbl = icon_style.size
+    local icon_z = math_floor((z or 0) + 0.5)
+
+    icon_offset[1] = math_floor((x or 0) + 0.5)
+    icon_offset[2] = math_floor((y or 0) + 0.5)
+    icon_offset[3] = icon_z
+    icon_size_tbl[1] = size
+    icon_size_tbl[2] = size
     icon_style.color = color
 
     if overlay_icon_style then
@@ -1628,35 +1665,42 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size)
 
         overlay_size = math_max(4, overlay_size)
 
-        local icon_center_x = icon_style.offset[1] + math_floor(size * 0.5)
-        local icon_center_y = icon_style.offset[2] + math_floor(size * 0.5)
+        local overlay_offset = overlay_icon_style.offset
+        local overlay_size_tbl = overlay_icon_style.size
+        local icon_center_x = icon_offset[1] + math_floor(size * 0.5)
+        local icon_center_y = icon_offset[2] + math_floor(size * 0.5)
 
-        overlay_icon_style.offset[1] = icon_center_x - math_floor(overlay_size * 0.5)
-        overlay_icon_style.offset[2] = icon_center_y - math_floor(overlay_size * 0.5)
-        overlay_icon_style.offset[3] = (icon_style.offset[3] or 0) + 1
-        overlay_icon_style.size[1] = overlay_size
-        overlay_icon_style.size[2] = overlay_size
+        overlay_offset[1] = icon_center_x - math_floor(overlay_size * 0.5)
+        overlay_offset[2] = icon_center_y - math_floor(overlay_size * 0.5)
+        overlay_offset[3] = icon_z + 1
+        overlay_size_tbl[1] = overlay_size
+        overlay_size_tbl[2] = overlay_size
         overlay_icon_style.color = overlay_color
     end
 
     if title_icon_style then
-        title_icon_style.offset[1] = icon_style.offset[1]
-        title_icon_style.offset[2] = icon_style.offset[2]
-        title_icon_style.offset[3] = (icon_style.offset[3] or 0) + 2
-        title_icon_style.size[1] = size
-        title_icon_style.size[2] = size
+        local title_offset = title_icon_style.offset
+        local title_size = title_icon_style.size
+
+        title_offset[1] = icon_offset[1]
+        title_offset[2] = icon_offset[2]
+        title_offset[3] = icon_z + 2
+        title_size[1] = size
+        title_size[2] = size
         title_icon_style.color = color
     end
 
     if arrow_icon_style then
+        local arrow_offset = arrow_icon_style.offset
+        local arrow_size_tbl = arrow_icon_style.size
         local arrow_size = math_max(6, math_floor(size * 0.45 + 1))
         local overlap = math_floor(arrow_size * 0.5 + 1) + 2
 
-        arrow_icon_style.offset[1] = icon_style.offset[1] + size - overlap
-        arrow_icon_style.offset[2] = icon_style.offset[2] + size - overlap
-        arrow_icon_style.offset[3] = (icon_style.offset[3] or 0) + 3
-        arrow_icon_style.size[1] = arrow_size
-        arrow_icon_style.size[2] = arrow_size
+        arrow_offset[1] = icon_offset[1] + size - overlap
+        arrow_offset[2] = icon_offset[2] + size - overlap
+        arrow_offset[3] = icon_z + 3
+        arrow_size_tbl[1] = arrow_size
+        arrow_size_tbl[2] = arrow_size
         arrow_icon_style.color = WHITE_WIDGET_COLOR
     end
 end
@@ -1930,8 +1974,10 @@ local function _enemy_radar_visual(target, draw_cache)
         return nil
     end
 
-    local background_size = tonumber(definition.background_size) or tonumber(definition.size) or 10
-    local icon_size = tonumber(definition.icon_size) or tonumber(definition.size) or background_size
+    local definition_size = tonumber(definition.size)
+    local background_size = tonumber(definition.background_size) or definition_size or 10
+    local icon_size = tonumber(definition.icon_size) or definition_size or background_size
+    local bracket_size = tonumber(definition.bracket_size)
     local icon = definition.icon
     local icon_color = _any_to_widget_color(definition.icon_color)
     local background_icon = definition.background_icon
@@ -1957,7 +2003,7 @@ local function _enemy_radar_visual(target, draw_cache)
             overlay_color = icon_color,
             background_base_size = background_size,
             overlay_base_size = icon_size,
-            bracket_base_size = tonumber(definition.bracket_size) or background_size,
+            bracket_base_size = bracket_size or background_size,
             accent_color = _with_alpha_widget(background_color, 180),
             size = background_size,
         }
@@ -1966,7 +2012,7 @@ local function _enemy_radar_visual(target, draw_cache)
             icon = icon or background_icon or DEFAULT_INTERACTION_ICON,
             color = icon_color or background_color or WHITE_WIDGET_COLOR,
             accent_color = background_color and _with_alpha_widget(background_color, 180) or nil,
-            bracket_base_size = tonumber(definition.bracket_size) or icon_size,
+            bracket_base_size = bracket_size or icon_size,
             size = icon_size,
         }
     end
@@ -2017,7 +2063,7 @@ local function _target_visual(target, draw_cache)
             icon = icon,
             color = widget_color,
             accent_color = _with_alpha_widget(widget_color, 180),
-            size = use_dot or 15,
+            size = use_dot and 14 or 15,
         }
     end
 
@@ -2331,8 +2377,9 @@ end
 
 local function _is_world_position_occluded(camera_position, world_position)
     local physics_world = _safe_physics_world()
+    local immediate_raycast = PhysicsWorld and PhysicsWorld.immediate_raycast
 
-    if not physics_world or not PhysicsWorld or not PhysicsWorld.immediate_raycast then
+    if not physics_world or not immediate_raycast then
         return false
     end
 
@@ -2341,22 +2388,23 @@ local function _is_world_position_occluded(camera_position, world_position)
     local dz = world_position.z - camera_position.z
     local distance = math_sqrt(dx * dx + dy * dy + dz * dz)
 
-    if not _is_finite_number(distance) or distance <= 0.05 then
+    if not _is_finite_number(distance) or distance <= OCCLUSION_EPSILON then
         return false
     end
 
     local origin = Vector3(camera_position.x, camera_position.y, camera_position.z)
     local direction = Vector3(dx / distance, dy / distance, dz / distance)
+    local threshold = distance - OCCLUSION_EPSILON
 
-    for i = 1, #OCCLUSION_RAYCAST_FILTERS do
+    for i = 1, OCCLUSION_RAYCAST_FILTER_COUNT do
         local ok, a, b, c, d = pcall(
-            PhysicsWorld.immediate_raycast,
+            immediate_raycast,
             physics_world,
             origin,
             direction,
             distance,
-            "closest",
-            "collision_filter",
+            OCCLUSION_RAYCAST_MODE,
+            OCCLUSION_COLLISION_FILTER,
             OCCLUSION_RAYCAST_FILTERS[i]
         )
 
@@ -2364,7 +2412,7 @@ local function _is_world_position_occluded(camera_position, world_position)
             local hit_distance = _extract_raycast_distance(a, b, c, d)
 
             if hit_distance ~= nil then
-                return hit_distance < distance - 0.05
+                return hit_distance < threshold
             end
         end
     end
@@ -2586,6 +2634,8 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
     local draw_marker_value_text = _draw_marker_value_text
     local snap_center = _snap_center
     local top_left_from_center = _top_left_from_center
+    local base_icon_z = z + 5
+    local projection_radius = radius - 8
 
     _draw_radar_frame(ui_renderer, x, y, z + 1, size)
 
@@ -2614,7 +2664,7 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
         local self_draw_y = center_y - self_icon_size / 2
         local self_widget = marker_widgets[next_widget_index]
 
-        apply_marker_widget(self_widget, self_visual, self_draw_x, self_draw_y, z + 5, nil, self_icon_size)
+        apply_marker_widget(self_widget, self_visual, self_draw_x, self_draw_y, base_icon_z, nil, self_icon_size)
         UIWidget_draw(self_widget, ui_renderer)
 
         next_widget_index = next_widget_index + 1
@@ -2635,8 +2685,15 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
             end
 
             local target = targets[i]
-            local px, py = project_target_to_radar(mod, player_pos, projection_rotation, target.position, radius - 8,
-                range, target.ignore_radar_range)
+            local px, py = project_target_to_radar(
+                mod,
+                player_pos,
+                projection_rotation,
+                target.position,
+                projection_radius,
+                range,
+                target.ignore_radar_range
+            )
 
             if px and py then
                 local visual = target_visual(target, draw_cache)
@@ -2651,12 +2708,20 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
                 local bracket_y = top_left_from_center(marker_center_y, bracket_size)
 
                 local widget = marker_widgets[next_widget_index]
-                local render_layer = target and tonumber(target.render_layer) or 0
+                local render_layer = tonumber(target.render_layer) or 0
                 local bracket_z = z + 4 + render_layer
-                local icon_z = z + 5 + render_layer
+                local icon_z = base_icon_z + render_layer
+                local accent_color = visual and visual.accent_color or nil
+                local visual_icon = visual and visual.icon or nil
+                local visual_title_icon = visual and visual.title_icon or nil
+                local value_text = visual and visual.value_text or nil
+                local value_text_color = visual and visual.value_text_color or nil
+                local value_text_anchor = visual and visual.value_text_anchor or nil
+                local value_text_offset_x = visual and visual.value_text_offset_x or nil
+                local value_text_offset_y = visual and visual.value_text_offset_y or nil
 
-                if visual and visual.accent_color and should_draw_marker_brackets(target, draw_cache) then
-                    draw_marker_brackets(ui_renderer, bracket_x, bracket_y, bracket_z, bracket_size, visual.accent_color)
+                if accent_color and should_draw_marker_brackets(target, draw_cache) then
+                    draw_marker_brackets(ui_renderer, bracket_x, bracket_y, bracket_z, bracket_size, accent_color)
                 end
 
                 apply_marker_widget(widget, visual, draw_x, draw_y, icon_z, target, marker_size)
@@ -2664,10 +2729,10 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
                 if debug_mode then
                     _log_once(
                         _logged_draws,
-                        "widget_material:" .. tostring(visual and visual.icon),
+                        "widget_material:" .. tostring(visual_icon),
                         string_format("[Radar] widget material scheduled | material=%s title_material=%s",
-                            tostring(visual and visual.icon),
-                            tostring(visual and visual.title_icon))
+                            tostring(visual_icon),
+                            tostring(visual_title_icon))
                     )
                 end
 
@@ -2677,28 +2742,28 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
                     if debug_mode then
                         _log_once(
                             _logged_draws,
-                            "widget_draw_fail:" .. tostring(visual and visual.icon),
+                            "widget_draw_fail:" .. tostring(visual_icon),
                             string_format("[Radar] widget draw failed | material=%s err=%s",
-                                tostring(visual and visual.icon), tostring(widget_err))
+                                tostring(visual_icon), tostring(widget_err))
                         )
                     end
 
-                    _draw_box(ui_renderer, draw_x, draw_y, z + 5, marker_size, marker_size,
+                    _draw_box(ui_renderer, draw_x, draw_y, base_icon_z, marker_size, marker_size,
                         _widget_to_color(visual and visual.color or nil))
                 end
 
                 draw_marker_value_text(
                     ui_renderer,
-                    visual and visual.value_text or nil,
+                    value_text,
                     draw_x,
                     draw_y,
-                    z + 5,
+                    base_icon_z,
                     marker_size,
-                    target and target.vertical_state ~= nil,
-                    visual and visual.value_text_color or nil,
-                    visual and visual.value_text_anchor or nil,
-                    visual and visual.value_text_offset_x or nil,
-                    visual and visual.value_text_offset_y or nil
+                    target.vertical_state ~= nil,
+                    value_text_color,
+                    value_text_anchor,
+                    value_text_offset_x,
+                    value_text_offset_y
                 )
 
                 next_widget_index = next_widget_index + 1
