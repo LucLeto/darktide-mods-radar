@@ -620,6 +620,47 @@ return function(env)
         return local_player and local_player.player_unit
     end
 
+    local function _player_for_unit(player_unit)
+        if not player_unit then
+            return nil
+        end
+
+        local player_manager = _player_manager()
+        local players_getter = player_manager and player_manager.players
+
+        if not players_getter then
+            return nil
+        end
+
+        local ok_players, players = pcall(players_getter, player_manager)
+
+        if not ok_players or type(players) ~= "table" then
+            return nil
+        end
+
+        for _, player in pairs(players) do
+            if player and player.player_unit == player_unit then
+                return player
+            end
+        end
+
+        return nil
+    end
+
+    function _is_local_player_using_foreign_unit(player_unit)
+        local local_player = _local_player()
+
+        if not local_player or not player_unit then
+            return false
+        end
+
+        -- Spectating can repoint `local_player.player_unit` to a living teammate.
+        -- Treat that as unavailable for radar visibility and scan gating.
+        local owning_player = _player_for_unit(player_unit)
+
+        return owning_player ~= nil and owning_player ~= local_player
+    end
+
     function _is_player_unit_alive(player_unit)
         return _safe_unit_alive(player_unit)
     end
@@ -635,11 +676,23 @@ return function(env)
     end
 
     function _is_local_player_alive()
-        return _is_player_unit_alive(_player_unit())
+        local player_unit = _player_unit()
+
+        if _is_local_player_using_foreign_unit(player_unit) then
+            return false
+        end
+
+        return _is_player_unit_alive(player_unit)
     end
 
     function _is_local_player_captured()
-        return _is_player_unit_captured(_player_unit())
+        local player_unit = _player_unit()
+
+        if _is_local_player_using_foreign_unit(player_unit) then
+            return false
+        end
+
+        return _is_player_unit_captured(player_unit)
     end
 
     function _safe_camera_rotation()

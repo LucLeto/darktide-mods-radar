@@ -962,7 +962,10 @@ return function(env)
         mod._last_update_t = scan_clock
 
         if not allowed then
-            if reason == "player_not_alive" or reason == "player_captured" or reason == "no_player_unit" then
+            if reason == "player_not_alive"
+                or reason == "player_captured"
+                or reason == "no_player_unit"
+                or reason == "spectating_teammate" then
                 mod._tracked_units = {}
             end
 

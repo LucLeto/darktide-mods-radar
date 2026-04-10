@@ -367,6 +367,11 @@ return function(env)
                 player_pos
         end
 
+        if _is_local_player_using_foreign_unit(player_unit) then
+            return false, "spectating_teammate", gameplay_t, mission_name, activity, mechanism_name, player_unit,
+                player_pos
+        end
+
         if not _is_player_unit_alive(player_unit) then
             return false, "player_not_alive", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
         end
