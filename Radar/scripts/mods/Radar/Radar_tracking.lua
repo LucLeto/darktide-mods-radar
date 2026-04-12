@@ -870,6 +870,7 @@ return function(env)
             tostring(_safe_mission_name()),
             tostring(_safe_presence_activity()),
             tostring(_safe_mechanism_name()),
+            tostring(_safe_player_character_state_name(_player_unit())),
         }, "|")
 
         if signature == mod._last_scan_signature then
@@ -879,7 +880,7 @@ return function(env)
         mod._last_scan_signature = signature
 
         mod:echo(string_format(
-            "Radar scan | enemies=%d players=%d ammo=%d crates=%d pocketables=%d materials=%d generic=%d tracked=%d radar_targets=%d mission=%s activity=%s mechanism=%s",
+            "Radar scan | enemies=%d players=%d ammo=%d crates=%d pocketables=%d materials=%d generic=%d tracked=%d radar_targets=%d mission=%s activity=%s mechanism=%s player_state=%s",
             counts.enemies,
             counts.players,
             counts.ammo,
@@ -891,7 +892,8 @@ return function(env)
             #mod._radar_targets,
             tostring(_safe_mission_name()),
             tostring(_safe_presence_activity()),
-            tostring(_safe_mechanism_name())
+            tostring(_safe_mechanism_name()),
+            tostring(_safe_player_character_state_name(_player_unit()))
         ))
     end
 
@@ -918,12 +920,16 @@ return function(env)
             return
         end
 
+        local player_unit = _player_unit()
+        local player_state = _safe_player_character_state_name(player_unit)
+
         local signature = table_concat({
             tostring(reason),
             tostring(mission_name),
             tostring(activity),
             tostring(mechanism_name),
             tostring(gameplay_t),
+            tostring(player_state),
         }, "|")
 
         if signature == mod._last_block_signature then
@@ -932,12 +938,13 @@ return function(env)
 
         mod._last_block_signature = signature
         mod:echo(string_format(
-            "Radar blocked | reason=%s mission=%s activity=%s mechanism=%s gameplay_t=%s",
+            "Radar blocked | reason=%s mission=%s activity=%s mechanism=%s gameplay_t=%s player_state=%s",
             tostring(reason),
             tostring(mission_name),
             tostring(activity),
             tostring(mechanism_name),
-            tostring(gameplay_t)
+            tostring(gameplay_t),
+            tostring(player_state)
         ))
     end
 
