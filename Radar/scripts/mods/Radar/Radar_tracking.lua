@@ -17,6 +17,24 @@ return function(env)
     local table_concat = table.concat
     local table_sort = table.sort
 
+    local ROTTEN_ARMOR_BREED_ALIAS_BY_BASE_BREED = {
+        chaos_ogryn_executor = "chaos_ogryn_executor_gibbing_rotten_armor",
+        renegade_executor = "renegade_executor_gibbing_rotten_armor",
+        renegade_berzerker = "renegade_berzerker_gibbing_rotten_armor",
+    }
+
+    local function _resolve_enemy_breed_name(unit, breed_name)
+        local rotten_armor_breed_name = ROTTEN_ARMOR_BREED_ALIAS_BY_BASE_BREED[breed_name]
+
+        if rotten_armor_breed_name
+            and (_safe_unit_has_keyword(unit, "rotten_armor")
+                or _safe_unit_has_buff_template(unit, "mutator_rotten_armor")) then
+            return rotten_armor_breed_name
+        end
+
+        return breed_name
+    end
+
     local function _refresh_player_units()
         local player_manager = _player_manager()
         if not player_manager or not player_manager.players then
@@ -179,10 +197,12 @@ return function(env)
                     local ok_breed, breed_name = pcall(breed_name_fn, extension)
 
                     if ok_breed and breed_name then
-                        local kind = _classify_enemy_from_breed(breed_name)
+                        local resolved_breed_name = _resolve_enemy_breed_name(unit, breed_name)
+                        local kind = _classify_enemy_from_breed(resolved_breed_name)
                         if kind and _is_trackable_unit_alive(unit, kind) then
                             _track_unit(unit, kind, "unit_data_system", {
                                 breed_name = breed_name,
+                                resolved_breed_name = resolved_breed_name,
                             })
                         end
                     end

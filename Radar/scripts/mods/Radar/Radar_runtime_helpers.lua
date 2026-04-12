@@ -369,6 +369,46 @@ return function(env)
         return nil
     end
 
+    function _safe_unit_has_keyword(unit, keyword)
+        local script_unit = ScriptUnit
+        local has_extension = script_unit and script_unit.has_extension
+
+        if not unit or not keyword or not has_extension then
+            return false
+        end
+
+        local buff_extension = has_extension(unit, "buff_system")
+        if not buff_extension or not buff_extension.has_keyword then
+            return false
+        end
+
+        local ok_has_keyword, has_keyword = pcall(buff_extension.has_keyword, buff_extension, keyword)
+
+        return ok_has_keyword and has_keyword or false
+    end
+
+    function _safe_unit_has_buff_template(unit, buff_template_name)
+        local script_unit = ScriptUnit
+        local has_extension = script_unit and script_unit.has_extension
+
+        if not unit or not buff_template_name or not has_extension then
+            return false
+        end
+
+        local buff_extension = has_extension(unit, "buff_system")
+        if not buff_extension or not buff_extension.has_buff_using_buff_template then
+            return false
+        end
+
+        local ok_has_buff, has_buff = pcall(
+            buff_extension.has_buff_using_buff_template,
+            buff_extension,
+            buff_template_name
+        )
+
+        return ok_has_buff and has_buff or false
+    end
+
     function _is_owned_by_death_manager(unit)
         local script_unit = ScriptUnit
         local has_extension = script_unit and script_unit.has_extension
@@ -619,6 +659,7 @@ return function(env)
         local local_player = _local_player()
         return local_player and local_player.player_unit
     end
+
     function _safe_player_character_state_component(player_unit)
         local script_unit = ScriptUnit
         local has_extension = script_unit and script_unit.has_extension
@@ -1018,7 +1059,7 @@ return function(env)
         local highlight_count = 0
         local highlight_enabled_by_kind = {}
         local source_targets = mod._highlight_source_radar_targets or mod._unclustered_radar_targets or
-        mod._radar_targets
+            mod._radar_targets
         local source_target_count = source_targets and #source_targets or 0
 
         for i = 1, source_target_count do
