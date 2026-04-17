@@ -1066,7 +1066,11 @@ return function(env)
     mod:register_hud_element({
         class_name = "HudElementRadar",
         filename = "Radar/scripts/mods/Radar/ui/Radar_hud_element",
-        visibility_groups = { "alive" },
+        visibility_groups = {
+            "communication_wheel",
+            "emote_wheel",
+            "alive",
+        },
         use_hud_scale = true,
     })
 
