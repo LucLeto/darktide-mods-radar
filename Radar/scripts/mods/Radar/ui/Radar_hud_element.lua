@@ -169,6 +169,21 @@ local function _current_radar_style()
     return _normalized_radar_style(value)
 end
 
+local function _safe_yaw(rotation)
+    if not rotation or not Quaternion or not Quaternion.yaw then
+        return nil
+    end
+
+    local ok, yaw = pcall(Quaternion.yaw, rotation)
+    yaw = ok and tonumber(yaw) or nil
+
+    if type(yaw) ~= "number" or yaw ~= yaw or yaw == math_huge or yaw == -math_huge then
+        return nil
+    end
+
+    return yaw
+end
+
 local function _is_finite_number(v)
     return type(v) == "number" and v == v and v ~= math_huge and v ~= -math_huge
 end
@@ -1159,7 +1174,7 @@ local function _apply_frame_layer_style(style, x, y, z, size, color)
     style.color = color or WHITE_WIDGET_COLOR
 end
 
-local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size)
+local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera_rotation)
     local frame_widget = self._frame_widget
     if not frame_widget then
         return
@@ -1167,6 +1182,7 @@ local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size)
 
     local fill_alpha = mod.get_background_opacity and mod:get_background_opacity() or 90
     local animated_sweep_enabled = mod:get("auspex_animated_sweep") ~= false
+    local camera_yaw = _safe_yaw(camera_rotation)
     local fill_color = _color(fill_alpha, 0, 0, 0)
 
     _draw_square_fill_soft(ui_renderer, x, y, z - 1, size, fill_color)
@@ -1184,6 +1200,7 @@ local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size)
         size,
         AUSPEX_BACKGROUND_WIDGET_COLOR
     )
+    frame_widget.style.background.angle = camera_yaw and -camera_yaw or 0
     _apply_frame_layer_style(
         frame_widget.style.noise,
         x,
@@ -1212,11 +1229,11 @@ local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size)
     UIWidget.draw(frame_widget, ui_renderer)
 end
 
-local function _draw_radar_frame(self, ui_renderer, x, y, z, size)
+local function _draw_radar_frame(self, ui_renderer, x, y, z, size, camera_rotation)
     local radar_style = _current_radar_style()
 
     if radar_style == "auspex" then
-        _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size)
+        _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera_rotation)
 
         return
     end
@@ -2851,8 +2868,10 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
     local top_left_from_center = _top_left_from_center
     local base_icon_z = z + 5
     local projection_radius = radius - 8
+    local live_camera_rotation = _safe_player_camera_rotation(self)
+    local projection_rotation = live_camera_rotation or (snapshot and snapshot.player_rotation) or nil
 
-    _draw_radar_frame(self, ui_renderer, x, y, z + 1, size)
+    _draw_radar_frame(self, ui_renderer, x, y, z + 1, size, projection_rotation)
 
     local next_widget_index = 1
     local max_markers = mod:get_max_radar_markers()
@@ -2862,8 +2881,6 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
         local player_pos = snapshot.player_position
         local targets = snapshot.targets or {}
         local target_count = #targets
-        local live_camera_rotation = _safe_player_camera_rotation(self)
-        local projection_rotation = live_camera_rotation or snapshot.player_rotation
         local project_target_to_radar = mod.project_target_to_radar
 
         local player_slot = tonumber(snapshot.player_slot)
