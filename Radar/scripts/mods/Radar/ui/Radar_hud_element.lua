@@ -810,24 +810,131 @@ local function _draw_circle_outline(ui_renderer, center_x, center_y, z, radius, 
 end
 
 local function _draw_hline_dotted(ui_renderer, x, y, z, length, thickness, color, dash, gap)
-    local step = dash + gap
-    local i = 0
+    length = math_max(0, _round(length))
+    dash = math_max(1, _round(dash or 1))
+    gap = math_max(0, _round(gap or 0))
 
-    while i < length do
-        local segment = math_min(dash, length - i)
-        _draw_box(ui_renderer, x + i, y, z, segment, thickness, color)
-        i = i + step
+    if length <= 0 then
+        return
+    end
+
+    if length <= dash then
+        local offset = math_floor((length - math_min(dash, length)) * 0.5 + 0.5)
+        _draw_box(ui_renderer, x + offset, y, z, math_min(dash, length), thickness, color)
+
+        return
+    end
+
+    local dash_count = math_max(1, math_floor((length + gap) / (dash + gap)))
+
+    if dash_count <= 1 then
+        local offset = math_floor((length - dash) * 0.5 + 0.5)
+        _draw_box(ui_renderer, x + offset, y, z, dash, thickness, color)
+
+        return
+    end
+
+    local total_dash_length = dash_count * dash
+    local total_gap_length = math_max(0, length - total_dash_length)
+    local gap_count = dash_count - 1
+    local base_gap = math_floor(total_gap_length / gap_count)
+    local gap_remainder = total_gap_length - base_gap * gap_count
+    local cursor = x
+
+    for i = 1, dash_count do
+        _draw_box(ui_renderer, cursor, y, z, dash, thickness, color)
+        cursor = cursor + dash
+
+        if i < dash_count then
+            local current_gap = base_gap + (i <= gap_remainder and 1 or 0)
+            cursor = cursor + current_gap
+        end
     end
 end
 
 local function _draw_vline_dotted(ui_renderer, x, y, z, thickness, length, color, dash, gap)
-    local step = dash + gap
-    local i = 0
+    length = math_max(0, _round(length))
+    dash = math_max(1, _round(dash or 1))
+    gap = math_max(0, _round(gap or 0))
 
-    while i < length do
-        local segment = math_min(dash, length - i)
-        _draw_box(ui_renderer, x, y + i, z, thickness, segment, color)
-        i = i + step
+    if length <= 0 then
+        return
+    end
+
+    if length <= dash then
+        local offset = math_floor((length - math_min(dash, length)) * 0.5 + 0.5)
+        _draw_box(ui_renderer, x, y + offset, z, thickness, math_min(dash, length), color)
+
+        return
+    end
+
+    local dash_count = math_max(1, math_floor((length + gap) / (dash + gap)))
+
+    if dash_count <= 1 then
+        local offset = math_floor((length - dash) * 0.5 + 0.5)
+        _draw_box(ui_renderer, x, y + offset, z, thickness, dash, color)
+
+        return
+    end
+
+    local total_dash_length = dash_count * dash
+    local total_gap_length = math_max(0, length - total_dash_length)
+    local gap_count = dash_count - 1
+    local base_gap = math_floor(total_gap_length / gap_count)
+    local gap_remainder = total_gap_length - base_gap * gap_count
+    local cursor = y
+
+    for i = 1, dash_count do
+        _draw_box(ui_renderer, x, cursor, z, thickness, dash, color)
+        cursor = cursor + dash
+
+        if i < dash_count then
+            local current_gap = base_gap + (i <= gap_remainder and 1 or 0)
+            cursor = cursor + current_gap
+        end
+    end
+end
+
+local function _draw_square_outline_dotted_cornered(ui_renderer, x, y, z, size, thickness, color, dash, gap)
+    x = _round(x)
+    y = _round(y)
+    size = math_max(1, _round(size))
+    thickness = math_max(1, _round(thickness))
+    dash = math_max(1, _round(dash or 1))
+    gap = math_max(0, _round(gap or 0))
+
+    local max_corner_length = math_max(thickness, math_floor(size / 3))
+    local corner_length = math_min(max_corner_length, math_max(dash, thickness * 2))
+    local vertical_arm_length = math_max(0, corner_length - thickness)
+
+    _draw_box(ui_renderer, x, y, z, corner_length, thickness, color)
+    if vertical_arm_length > 0 then
+        _draw_box(ui_renderer, x, y + thickness, z, thickness, vertical_arm_length, color)
+    end
+
+    _draw_box(ui_renderer, x + size - corner_length, y, z, corner_length, thickness, color)
+    if vertical_arm_length > 0 then
+        _draw_box(ui_renderer, x + size - thickness, y + thickness, z, thickness, vertical_arm_length, color)
+    end
+
+    _draw_box(ui_renderer, x, y + size - thickness, z, corner_length, thickness, color)
+    if vertical_arm_length > 0 then
+        _draw_box(ui_renderer, x, y + size - corner_length, z, thickness, vertical_arm_length, color)
+    end
+
+    _draw_box(ui_renderer, x + size - corner_length, y + size - thickness, z, corner_length, thickness, color)
+    if vertical_arm_length > 0 then
+        _draw_box(ui_renderer, x + size - thickness, y + size - corner_length, z, thickness, vertical_arm_length, color)
+    end
+
+    local edge_start = corner_length + gap
+    local edge_length = size - edge_start * 2
+
+    if edge_length > 0 then
+        _draw_hline_dotted(ui_renderer, x + edge_start, y, z, edge_length, thickness, color, dash, gap)
+        _draw_hline_dotted(ui_renderer, x + edge_start, y + size - thickness, z, edge_length, thickness, color, dash, gap)
+        _draw_vline_dotted(ui_renderer, x, y + edge_start, z, thickness, edge_length, color, dash, gap)
+        _draw_vline_dotted(ui_renderer, x + size - thickness, y + edge_start, z, thickness, edge_length, color, dash, gap)
     end
 end
 
@@ -850,10 +957,16 @@ local function _draw_square_outline(ui_renderer, x, y, z, size, thickness, color
     size = math_max(1, _round(size))
     thickness = math_max(1, _round(thickness))
 
+    if size <= thickness * 2 then
+        _draw_box(ui_renderer, x, y, z, size, size, color)
+
+        return
+    end
+
     _draw_box(ui_renderer, x, y, z, size, thickness, color)
     _draw_box(ui_renderer, x, y + size - thickness, z, size, thickness, color)
-    _draw_box(ui_renderer, x, y, z, thickness, size, color)
-    _draw_box(ui_renderer, x + size - thickness, y, z, thickness, size, color)
+    _draw_box(ui_renderer, x, y + thickness, z, thickness, size - thickness * 2, color)
+    _draw_box(ui_renderer, x + size - thickness, y + thickness, z, thickness, size - thickness * 2, color)
 end
 
 local function _draw_square_fill_soft(ui_renderer, x, y, z, size, color)
@@ -898,7 +1011,6 @@ local function _draw_diagonal_line(ui_renderer, x1, y1, x2, y2, z, color)
     local sy = _round(y1 * scale)
     local ex = _round(x2 * scale)
     local ey = _round(y2 * scale)
-
     local dx = math_abs(ex - sx)
     local dy = math_abs(ey - sy)
     local step_x = sx < ex and 1 or -1
@@ -1124,18 +1236,12 @@ local function _draw_radar_frame_square(ui_renderer, x, y, z, size, outline_styl
     _draw_square_fill_soft(ui_renderer, x, y, z, size, fill_color)
 
     if outline_style == "solid" then
-        _draw_box(ui_renderer, x, y, z + 1, size, thickness, outline_color)
-        _draw_box(ui_renderer, x, y + size - thickness, z + 1, size, thickness, outline_color)
-        _draw_box(ui_renderer, x, y, z + 1, thickness, size, outline_color)
-        _draw_box(ui_renderer, x + size - thickness, y, z + 1, thickness, size, outline_color)
+        _draw_square_outline(ui_renderer, x, y, z + 1, size, thickness, outline_color)
     elseif outline_style == "dotted" then
         local dash = 8
         local gap = 5
 
-        _draw_hline_dotted(ui_renderer, x, y, z + 1, size, thickness, outline_color, dash, gap)
-        _draw_hline_dotted(ui_renderer, x, y + size - thickness, z + 1, size, thickness, outline_color, dash, gap)
-        _draw_vline_dotted(ui_renderer, x, y, z + 1, thickness, size, outline_color, dash, gap)
-        _draw_vline_dotted(ui_renderer, x + size - thickness, y, z + 1, thickness, size, outline_color, dash, gap)
+        _draw_square_outline_dotted_cornered(ui_renderer, x, y, z + 1, size, thickness, outline_color, dash, gap)
     end
 end
 
@@ -1182,8 +1288,13 @@ local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera
 
     local fill_alpha = mod.get_background_opacity and mod:get_background_opacity() or 90
     local animated_sweep_enabled = mod:get("auspex_animated_sweep") ~= false
+    local outline_style = mod.get_radar_outline and mod:get_radar_outline() or "solid"
     local camera_yaw = _safe_yaw(camera_rotation)
     local fill_color = _color(fill_alpha, 0, 0, 0)
+    local background_inset = outline_style ~= "off" and 5 or 0
+    local background_size = math_max(1, size - background_inset * 2)
+    local background_x = x + background_inset
+    local background_y = y + background_inset
 
     _draw_square_fill_soft(ui_renderer, x, y, z - 1, size, fill_color)
 
@@ -1194,13 +1305,31 @@ local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera
 
     _apply_frame_layer_style(
         frame_widget.style.background,
-        x,
-        y,
+        background_x,
+        background_y,
         z,
-        size,
+        background_size,
         AUSPEX_BACKGROUND_WIDGET_COLOR
     )
-    frame_widget.style.background.angle = camera_yaw and -camera_yaw or 0
+    do
+        local background_style = frame_widget.style.background
+        local background_size = background_style and background_style.size
+        local background_pivot = background_style and background_style.pivot
+
+        if background_style and not background_pivot then
+            background_pivot = { 0, 0 }
+            background_style.pivot = background_pivot
+        end
+
+        if background_pivot and background_size then
+            background_pivot[1] = (background_size[1] or 0) * 0.5
+            background_pivot[2] = (background_size[2] or 0) * 0.5
+        end
+
+        if background_style then
+            background_style.angle = camera_yaw and -camera_yaw or 0
+        end
+    end
     _apply_frame_layer_style(
         frame_widget.style.noise,
         x,
@@ -1219,14 +1348,34 @@ local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera
     )
     _apply_frame_layer_style(
         frame_widget.style.sweep,
-        x,
-        y,
+        background_x,
+        background_y,
         z + 3,
-        size,
+        background_size,
         animated_sweep_enabled and AUSPEX_SWEEP_WIDGET_COLOR or WHITE_WIDGET_COLOR
     )
 
     UIWidget.draw(frame_widget, ui_renderer)
+
+    if outline_style == "solid" then
+        local thickness = math_max(1, math_floor(size * 0.012 + 0.5))
+        local inset = thickness + 2
+        local frame_color = _color(210, 0, 255, 0)
+        local inner_glow_color = _color(80, 0, 255, 0)
+
+        _draw_square_outline(ui_renderer, x, y, z + 4, size, thickness, frame_color)
+
+        if size > inset * 2 + 2 then
+            _draw_square_outline(ui_renderer, x + inset, y + inset, z + 3, size - inset * 2, 1, inner_glow_color)
+        end
+    elseif outline_style == "dotted" then
+        local thickness = math_max(1, math_floor(size * 0.01 + 0.5))
+        local dash = math_max(6, math_floor(size * 0.06 + 0.5))
+        local gap = math_max(4, math_floor(size * 0.04 + 0.5))
+        local frame_color = _color(190, 0, 255, 0)
+
+        _draw_square_outline_dotted_cornered(ui_renderer, x, y, z + 4, size, thickness, frame_color, dash, gap)
+    end
 end
 
 local function _draw_radar_frame(self, ui_renderer, x, y, z, size, camera_rotation)
