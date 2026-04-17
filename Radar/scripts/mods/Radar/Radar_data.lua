@@ -206,7 +206,26 @@ return {
                                 text = "radar_style_circle",
                                 value = "circle",
                             },
+                            {
+                                text = "radar_style_auspex",
+                                value = "auspex",
+                            },
                         },
+                        get = function()
+                            local value = mod:get("radar_style")
+
+                            if value == "circle" or value == "auspex" then
+                                return value
+                            end
+
+                            return "square"
+                        end,
+                    },
+                    {
+                        setting_id = "auspex_animated_sweep",
+                        type = "checkbox",
+                        default_value = true,
+                        tooltip = "auspex_animated_sweep_tooltip",
                     },
                     {
                         setting_id = "radar_outline",

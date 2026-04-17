@@ -92,6 +92,14 @@ local function _color(a, r, g, b)
 end
 
 local WHITE_WIDGET_COLOR = { 255, 255, 255, 255 }
+local AUSPEX_BACKGROUND_MATERIAL = "content/ui/materials/backgrounds/scanner/scanner_map_background"
+local AUSPEX_BACKGROUND_NOISE_MATERIAL = "content/ui/materials/backgrounds/scanner/scanner_background_noise"
+local AUSPEX_SCAN_NOISE_MATERIAL = "content/ui/materials/backgrounds/scanner/scanner_noise"
+local AUSPEX_SWEEP_MATERIAL = "content/ui/materials/backgrounds/scanner/scanner_map_radar"
+local AUSPEX_BACKGROUND_WIDGET_COLOR = _widget_color(255, 0, 255, 0)
+local AUSPEX_BACKGROUND_NOISE_WIDGET_COLOR = _widget_color(255, 0, 255, 0)
+local AUSPEX_SCAN_NOISE_WIDGET_COLOR = _widget_color(90, 0, 255, 0)
+local AUSPEX_SWEEP_WIDGET_COLOR = _widget_color(128, 0, 255, 0)
 local OCCLUSION_RAYCAST_FILTERS = {
     "filter_player_character_shooting",
     "filter_ray_projectile",
@@ -132,6 +140,33 @@ local function _with_alpha_widget(color, alpha)
     local c = _any_to_widget_color(color)
     c[1] = alpha or c[1] or 255
     return c
+end
+
+local function _scaled_alpha(alpha, scale)
+    local base_alpha = tonumber(alpha) or 0
+    local alpha_scale = tonumber(scale) or 1
+
+    return math_max(0, math_min(255, math_floor(base_alpha * alpha_scale + 0.5)))
+end
+
+local function _normalized_radar_style(value)
+    value = tostring(value or "square")
+
+    if value ~= "circle" and value ~= "auspex" then
+        value = "square"
+    end
+
+    return value
+end
+
+local function _current_radar_style()
+    local value = mod:get("radar_style")
+
+    if value == nil and mod.get_radar_style then
+        value = mod:get_radar_style()
+    end
+
+    return _normalized_radar_style(value)
 end
 
 local function _is_finite_number(v)
@@ -1104,9 +1139,90 @@ local function _draw_radar_frame_circle(ui_renderer, x, y, z, size, outline_styl
     end
 end
 
-local function _draw_radar_frame(ui_renderer, x, y, z, size)
+local function _apply_frame_layer_style(style, x, y, z, size, color)
+    if not style then
+        return
+    end
+
+    local layer_offset = style.offset
+    local layer_size = style.size
+    local rounded_x = math_floor((tonumber(x) or 0) + 0.5)
+    local rounded_y = math_floor((tonumber(y) or 0) + 0.5)
+    local rounded_z = math_floor((tonumber(z) or 0) + 0.5)
+    local rounded_size = math_max(1, math_floor((tonumber(size) or 0) + 0.5))
+
+    layer_offset[1] = rounded_x
+    layer_offset[2] = rounded_y
+    layer_offset[3] = rounded_z
+    layer_size[1] = rounded_size
+    layer_size[2] = rounded_size
+    style.color = color or WHITE_WIDGET_COLOR
+end
+
+local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size)
+    local frame_widget = self._frame_widget
+    if not frame_widget then
+        return
+    end
+
+    local fill_alpha = mod.get_background_opacity and mod:get_background_opacity() or 90
+    local animated_sweep_enabled = mod:get("auspex_animated_sweep") ~= false
+    local fill_color = _color(fill_alpha, 0, 0, 0)
+
+    _draw_square_fill_soft(ui_renderer, x, y, z - 1, size, fill_color)
+
+    frame_widget.content.background_material = AUSPEX_BACKGROUND_MATERIAL
+    frame_widget.content.noise_material = AUSPEX_BACKGROUND_NOISE_MATERIAL
+    frame_widget.content.scan_noise_material = AUSPEX_SCAN_NOISE_MATERIAL
+    frame_widget.content.sweep_material = animated_sweep_enabled and AUSPEX_SWEEP_MATERIAL or nil
+
+    _apply_frame_layer_style(
+        frame_widget.style.background,
+        x,
+        y,
+        z,
+        size,
+        AUSPEX_BACKGROUND_WIDGET_COLOR
+    )
+    _apply_frame_layer_style(
+        frame_widget.style.noise,
+        x,
+        y,
+        z + 1,
+        size,
+        AUSPEX_BACKGROUND_NOISE_WIDGET_COLOR
+    )
+    _apply_frame_layer_style(
+        frame_widget.style.scan_noise,
+        x,
+        y,
+        z + 2,
+        size,
+        AUSPEX_SCAN_NOISE_WIDGET_COLOR
+    )
+    _apply_frame_layer_style(
+        frame_widget.style.sweep,
+        x,
+        y,
+        z + 3,
+        size,
+        animated_sweep_enabled and AUSPEX_SWEEP_WIDGET_COLOR or WHITE_WIDGET_COLOR
+    )
+
+    UIWidget.draw(frame_widget, ui_renderer)
+end
+
+local function _draw_radar_frame(self, ui_renderer, x, y, z, size)
+    local radar_style = _current_radar_style()
+
+    if radar_style == "auspex" then
+        _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size)
+
+        return
+    end
+
     local outline_style = mod.get_radar_outline and mod:get_radar_outline() or "solid"
-    local is_circle = mod:get_radar_style() == "circle"
+    local is_circle = radar_style == "circle"
 
     if is_circle then
         _draw_radar_frame_circle(ui_renderer, x, y, z, size, outline_style)
@@ -1131,6 +1247,84 @@ end
 
 local function _has_arrow_icon(content)
     return content.arrow_icon ~= nil and content.arrow_icon ~= ""
+end
+
+local function _has_background_material(content)
+    return content.background_material ~= nil and content.background_material ~= ""
+end
+
+local function _has_noise_material(content)
+    return content.noise_material ~= nil and content.noise_material ~= ""
+end
+
+local function _has_scan_noise_material(content)
+    return content.scan_noise_material ~= nil and content.scan_noise_material ~= ""
+end
+
+local function _has_sweep_material(content)
+    return content.sweep_material ~= nil and content.sweep_material ~= ""
+end
+
+local function _frame_definition()
+    return UIWidget.create_definition({
+        {
+            pass_type = "rotated_texture",
+            value_id = "background_material",
+            style_id = "background",
+            style = {
+                angle = 0,
+                hdr = true,
+                vertical_alignment = "top",
+                horizontal_alignment = "left",
+                offset = { 0, 0, 1 },
+                size = { 16, 16 },
+                color = WHITE_WIDGET_COLOR,
+            },
+            visibility_function = _has_background_material,
+        },
+        {
+            pass_type = "texture",
+            value_id = "noise_material",
+            style_id = "noise",
+            style = {
+                hdr = true,
+                vertical_alignment = "top",
+                horizontal_alignment = "left",
+                offset = { 0, 0, 2 },
+                size = { 16, 16 },
+                color = WHITE_WIDGET_COLOR,
+            },
+            visibility_function = _has_noise_material,
+        },
+        {
+            pass_type = "texture",
+            value_id = "scan_noise_material",
+            style_id = "scan_noise",
+            style = {
+                hdr = true,
+                vertical_alignment = "top",
+                horizontal_alignment = "left",
+                offset = { 0, 0, 3 },
+                size = { 16, 16 },
+                color = WHITE_WIDGET_COLOR,
+            },
+            visibility_function = _has_scan_noise_material,
+        },
+        {
+            pass_type = "texture",
+            value_id = "sweep_material",
+            style_id = "sweep",
+            style = {
+                hdr = true,
+                vertical_alignment = "top",
+                horizontal_alignment = "left",
+                offset = { 0, 0, 4 },
+                size = { 16, 16 },
+                color = WHITE_WIDGET_COLOR,
+            },
+            visibility_function = _has_sweep_material,
+        },
+    }, "screen")
 end
 
 local function _marker_definition()
@@ -1192,8 +1386,19 @@ end
 
 local MAX_RADAR_MARKERS = 200
 
+local function _create_frame_widget()
+    return UIWidget.init("RadarFrame_Auspex", _frame_definition())
+end
+
 local function _create_marker_widget(index)
     return UIWidget.init("RadarMarker_" .. index, _marker_definition())
+end
+
+local function _clear_frame_widget(widget)
+    widget.content.background_material = nil
+    widget.content.noise_material = nil
+    widget.content.scan_noise_material = nil
+    widget.content.sweep_material = nil
 end
 
 local function _clear_marker_widget(widget)
@@ -1202,6 +1407,15 @@ local function _clear_marker_widget(widget)
     widget.content.title_icon = nil
     widget.content.arrow_icon = nil
     widget.content.value_text = ""
+end
+
+local function _ensure_frame_widget(self)
+    if self._frame_widget then
+        return
+    end
+
+    self._frame_widget = _create_frame_widget()
+    _clear_frame_widget(self._frame_widget)
 end
 
 local function _ensure_marker_widgets(self)
@@ -2595,6 +2809,7 @@ end
 HudElementRadar.init = function(self, parent, draw_layer, start_scale, optional_context)
     HudElementRadar.super.init(self, parent, draw_layer, start_scale, Definitions)
     _sync_screen_scenegraph(self)
+    _ensure_frame_widget(self)
     _ensure_marker_widgets(self)
 end
 
@@ -2637,7 +2852,7 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
     local base_icon_z = z + 5
     local projection_radius = radius - 8
 
-    _draw_radar_frame(ui_renderer, x, y, z + 1, size)
+    _draw_radar_frame(self, ui_renderer, x, y, z + 1, size)
 
     local next_widget_index = 1
     local max_markers = mod:get_max_radar_markers()
