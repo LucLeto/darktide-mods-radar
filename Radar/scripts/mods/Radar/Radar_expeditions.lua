@@ -421,6 +421,14 @@ return function(env)
         local get_setting = mod.get
         local enemy_display_mode = get_enemy_marker_mode(mod, kind)
 
+        if kind == "player_teammate" then
+            if mod.get_show_players then
+                return mod:get_show_players()
+            end
+
+            return get_setting(mod, "show_players") ~= false
+        end
+
         if enemy_display_mode ~= nil then
             return enemy_display_mode ~= "off"
         end

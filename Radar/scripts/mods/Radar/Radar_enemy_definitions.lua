@@ -116,7 +116,7 @@ return function(env)
         enemy_monstrosity = "show_monstrosities",
         enemy_captain = "show_captains",
         enemy_karnak_twin = "show_karnak_twins",
-        player_teammate = "show_teammates",
+        player_teammate = "show_players",
         material_diamantine = "show_diamantine",
         material_plasteel = "show_plasteel",
         material_expeditions_currency = "show_expeditions_currency",
@@ -1151,8 +1151,20 @@ return function(env)
         end
     end
 
+    local function _migrate_player_visibility_settings()
+        if mod:get("show_players") ~= nil then
+            return
+        end
+
+        local legacy_value = mod:get("show_teammates")
+        if legacy_value ~= nil then
+            mod:set("show_players", legacy_value ~= false)
+        end
+    end
+
     function mod.on_all_mods_loaded()
         _migrate_marker_display_mode_settings()
+        _migrate_player_visibility_settings()
 
         -- Preload icon packages
         local function load_package(package_name)

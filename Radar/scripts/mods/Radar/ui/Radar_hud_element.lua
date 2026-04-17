@@ -1641,6 +1641,8 @@ local function _build_draw_cache()
 
     draw_cache.icon_scale = _icon_scale_factor()
     draw_cache.player_display_style = _normalized_player_display_style(mod:get("player_display_style"))
+    draw_cache.show_player_center_dot = mod.get_show_player_center_dot and mod:get_show_player_center_dot() or
+        mod:get("show_player_center_dot") ~= false
     draw_cache.boss_display_style = _normalized_enemy_display_style(mod:get("boss_display_style"))
     draw_cache.expedition_loot_marker_mode = mod.get_expedition_loot_marker_mode and
         mod:get_expedition_loot_marker_mode() or "default"
@@ -3032,23 +3034,25 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
         local target_count = #targets
         local project_target_to_radar = mod.project_target_to_radar
 
-        local player_slot = tonumber(snapshot.player_slot)
-        local slot_colors = draw_cache.slot_colors
-        local player_color = player_slot and slot_colors and slot_colors[player_slot] or nil
+        if draw_cache.show_player_center_dot then
+            local player_slot = tonumber(snapshot.player_slot)
+            local slot_colors = draw_cache.slot_colors
+            local player_color = player_slot and slot_colors and slot_colors[player_slot] or nil
 
-        local self_visual = _self_visual
-        self_visual.color = _any_to_widget_color(player_color, WHITE_WIDGET_COLOR)
+            local self_visual = _self_visual
+            self_visual.color = _any_to_widget_color(player_color, WHITE_WIDGET_COLOR)
 
-        local self_scale = (draw_cache.icon_scale or 1) * _cached_group_icon_scale("player_teammate", draw_cache)
-        local self_icon_size = _scaled_icon_size(self_visual.size, self_scale, 10, 40)
-        local self_draw_x = center_x - self_icon_size / 2
-        local self_draw_y = center_y - self_icon_size / 2
-        local self_widget = marker_widgets[next_widget_index]
+            local self_scale = (draw_cache.icon_scale or 1) * _cached_group_icon_scale("player_teammate", draw_cache)
+            local self_icon_size = _scaled_icon_size(self_visual.size, self_scale, 10, 40)
+            local self_draw_x = center_x - self_icon_size / 2
+            local self_draw_y = center_y - self_icon_size / 2
+            local self_widget = marker_widgets[next_widget_index]
 
-        apply_marker_widget(self_widget, self_visual, self_draw_x, self_draw_y, base_icon_z, nil, self_icon_size)
-        UIWidget_draw(self_widget, ui_renderer)
+            apply_marker_widget(self_widget, self_visual, self_draw_x, self_draw_y, base_icon_z, nil, self_icon_size)
+            UIWidget_draw(self_widget, ui_renderer)
 
-        next_widget_index = next_widget_index + 1
+            next_widget_index = next_widget_index + 1
+        end
 
         if debug_mode and target_count > max_markers then
             _log_once(

@@ -1122,6 +1122,20 @@ return function(env)
         return value
     end
 
+    function mod:get_show_players()
+        local value = self:get("show_players")
+
+        if value == nil then
+            value = self:get("show_teammates")
+        end
+
+        return value ~= false
+    end
+
+    function mod:get_show_player_center_dot()
+        return self:get("show_player_center_dot") ~= false
+    end
+
     function mod:get_radar_snapshot()
         return self._radar_snapshot
     end

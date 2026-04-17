@@ -854,7 +854,30 @@ return {
                     sub_widgets = {
                         _icon_scale_slider("players_icon_scale", nil),
                         {
-                            setting_id = "show_teammates",
+                            setting_id = "show_players",
+                            title = "show_teammates",
+                            tooltip = "show_teammates_tooltip",
+                            type = "checkbox",
+                            default_value = true,
+                            get = function()
+                                if mod.get_show_players then
+                                    return mod:get_show_players()
+                                end
+
+                                local value = mod:get("show_players")
+                                if value == nil then
+                                    value = mod:get("show_teammates")
+                                end
+
+                                return value ~= false
+                            end,
+                            change = function(new_value)
+                                mod:set("show_players", new_value)
+                            end,
+                        },
+                        {
+                            setting_id = "show_player_center_dot",
+                            tooltip = "show_player_center_dot_tooltip",
                             type = "checkbox",
                             default_value = true,
                         },
