@@ -366,7 +366,7 @@ return function(env)
         end
 
         if _is_player_smart_tag_kind(kind) then
-            return mod:get("show_player_tag_elevation") == true
+            return false
         end
 
         if _is_enemy_kind(kind) then

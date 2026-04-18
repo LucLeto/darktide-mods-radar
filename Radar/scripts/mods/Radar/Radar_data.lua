@@ -910,11 +910,6 @@ return {
                             default_value = true,
                         },
                         {
-                            setting_id = "show_player_tag_elevation",
-                            type = "checkbox",
-                            default_value = false,
-                        },
-                        {
                             setting_id = "show_player_tag_distance_text",
                             type = "checkbox",
                             default_value = true,
