@@ -156,6 +156,7 @@ return function(env)
 
         local tracked_units = mod._tracked_units
         local seen_chests = {}
+        local track_item_tags = mod:get_show_only_tagged_items()
 
         for unit, extension in pairs(chest_map) do
             if _safe_unit_alive(unit) and extension then
@@ -167,7 +168,15 @@ return function(env)
                     local ok_open, is_open = pcall(is_open_fn, extension)
 
                     if ok_open and not is_open then
-                        _track_unit(unit, "crate_unknown", "chest_system")
+                        local meta = nil
+
+                        if track_item_tags then
+                            meta = {
+                                marked_by_player_slot = _marked_by_player_slot_for_unit(unit),
+                            }
+                        end
+
+                        _track_unit(unit, "crate_unknown", "chest_system", meta)
                     else
                         _clear_tracked_unit_from_source(unit, "chest_system")
                     end
@@ -192,6 +201,8 @@ return function(env)
             return
         end
 
+        local track_enemy_tags = mod:get_show_only_tagged_enemies()
+
         for unit, extension in pairs(unit_data_map) do
             if _safe_unit_alive(unit) and extension then
                 local breed_name_fn = extension.breed_name
@@ -206,6 +217,7 @@ return function(env)
                             _track_unit(unit, kind, "unit_data_system", {
                                 breed_name = breed_name,
                                 resolved_breed_name = resolved_breed_name,
+                                marked_by_player_slot = track_enemy_tags and _marked_by_player_slot_for_unit(unit) or nil,
                             })
                         end
                     end
@@ -222,6 +234,7 @@ return function(env)
 
         local tracked_units = mod._tracked_units
         local seen_destructibles = {}
+        local track_item_tags = mod:get_show_only_tagged_items()
 
         for unit, extension in pairs(destructible_map) do
             if _safe_unit_alive(unit) and extension then
@@ -250,6 +263,7 @@ return function(env)
                         collectible_id = collectible_id,
                         collectible_name = collectible_name,
                         collectible_section_id = collectible_section_id,
+                        marked_by_player_slot = track_item_tags and _marked_by_player_slot_for_unit(unit) or nil,
                     })
                 else
                     _clear_tracked_unit_from_source(unit, "destructible_system")
@@ -359,7 +373,7 @@ return function(env)
             or kind == "location_threat"
     end
 
-    local function _supports_vertical_item_marker(kind)
+    local function _is_item_kind(kind)
         if not kind then
             return false
         end
@@ -381,6 +395,30 @@ return function(env)
         end
 
         return true
+    end
+
+    local function _target_has_explicit_tag(source, meta)
+        if source == "smart_tag_system" then
+            return true
+        end
+
+        return meta ~= nil and meta.marked_by_player_slot ~= nil
+    end
+
+    local function _passes_tag_visibility_filter(kind, source, meta, only_tagged_enemies, only_tagged_items)
+        if only_tagged_enemies and _is_enemy_kind(kind) then
+            return _target_has_explicit_tag(source, meta)
+        end
+
+        if only_tagged_items and _is_item_kind(kind) then
+            return _target_has_explicit_tag(source, meta)
+        end
+
+        return true
+    end
+
+    local function _supports_vertical_item_marker(kind)
+        return _is_item_kind(kind)
     end
 
     local function _expedition_loot_target_value(target)
@@ -649,6 +687,8 @@ return function(env)
         local item_vertical_arrow_threshold = mod:get_item_vertical_arrow_threshold()
         local item_vertical_hide_threshold = mod:get_item_vertical_hide_threshold()
         local item_vertical_arrow_threshold_sq = item_vertical_arrow_threshold * item_vertical_arrow_threshold
+        local only_tagged_enemies = mod:get_show_only_tagged_enemies()
+        local only_tagged_items = mod:get_show_only_tagged_items()
         local tracked_units = mod._tracked_units
         local tracked_points = mod._tracked_points
         local targets = {}
@@ -743,6 +783,10 @@ return function(env)
             local source = data.source
             local meta = data.meta
 
+            if not _passes_tag_visibility_filter(kind, source, meta, only_tagged_enemies, only_tagged_items) then
+                return
+            end
+
             if kind == "pickup_heretic_idol" and source == "destructible_system" then
                 if not meta or meta.collectible_id == nil then
                     return
@@ -751,6 +795,14 @@ return function(env)
 
             local distance_sq_horizontal = _distance_squared_horizontal(player_pos, position)
             local ignore_range = _cached_ignore_radar_range(kind)
+
+            if only_tagged_enemies and _is_enemy_kind(kind) and _target_has_explicit_tag(source, meta) then
+                ignore_range = true
+            end
+
+            if only_tagged_items and _is_item_kind(kind) and _target_has_explicit_tag(source, meta) then
+                ignore_range = true
+            end
 
             if distance_sq_horizontal > max_range_sq and not ignore_range then
                 return
@@ -1160,6 +1212,14 @@ return function(env)
 
     function mod:get_screen_highlight_targets()
         return self._screen_highlight_targets or {}
+    end
+
+    function mod:get_show_only_tagged_enemies()
+        return self:get("show_only_tagged_enemies") == true
+    end
+
+    function mod:get_show_only_tagged_items()
+        return self:get("show_only_tagged_items") == true
     end
 
     function mod:should_draw_radar()

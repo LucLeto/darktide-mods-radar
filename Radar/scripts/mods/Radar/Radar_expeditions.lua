@@ -568,7 +568,7 @@ return function(env)
         return nil
     end
 
-    local _marked_by_player_slot_for_unit = function(unit)
+    function _marked_by_player_slot_for_unit(unit)
         if not _safe_unit_alive(unit) then
             return nil
         end

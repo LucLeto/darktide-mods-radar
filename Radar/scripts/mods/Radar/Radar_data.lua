@@ -203,6 +203,16 @@ return {
                             range = { 10, 200 },
                         },
                         {
+                            setting_id = "show_only_tagged_enemies",
+                            type = "checkbox",
+                            default_value = false,
+                        },
+                        {
+                            setting_id = "show_only_tagged_items",
+                            type = "checkbox",
+                            default_value = false,
+                        },
+                        {
                             setting_id = "scale_icons_with_radar_size",
                             type = "checkbox",
                             default_value = false,

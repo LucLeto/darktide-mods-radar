@@ -5096,5 +5096,79 @@ return {
         ko = "레이더에서 사수 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上射手标记的显示方式: 仅图标、已标记图标或禁用。",
         ["zh-tw"] = "選擇雷達上射手標記的顯示方式: 僅圖示、已標記圖示或停用。",
+    },
+    show_only_tagged_enemies = {
+        en = "Tagged enemies only",
+        fr = "Ennemis marqués uniquement",
+        de = "Nur markierte Gegner",
+        it = "Solo nemici contrassegnati",
+        es = "Solo enemigos marcados",
+        pl = "Tylko oznaczeni wrogowie",
+        ["pt-br"] = "Apenas inimigos marcados",
+        ["ru"] = "Только отмеченные враги",
+        ja = "タグ付きの敵のみ",
+        ko = "태그된 적만",
+        ["zh-cn"] = "仅显示已标记的敌人",
+        ["zh-tw"] = "僅顯示已標記的敵人",
+    },
+    show_only_tagged_items = {
+        en = "Tagged items only",
+        fr = "Objets marqués uniquement",
+        de = "Nur markierte Gegenstände",
+        it = "Solo oggetti contrassegnati",
+        es = "Solo objetos marcados",
+        pl = "Tylko oznaczone przedmioty",
+        ["pt-br"] = "Apenas itens marcados",
+        ["ru"] = "Только отмеченные предметы",
+        ja = "タグ付きのアイテムのみ",
+        ko = "태그된 아이템만",
+        ["zh-cn"] = "仅显示已标记的物品",
+        ["zh-tw"] = "僅顯示已標記的物品",
+    },
+    show_only_tagged_enemies_tooltip = {
+        en =
+        "Only show enemy radar markers while the enemy has an active in-game tag. Tagged enemies also ignore the radar range limit while tagged. Existing enemy visibility settings still apply.",
+        fr =
+        "Affiche les marqueurs radar des ennemis uniquement lorsqu'un ennemi a un marquage actif en jeu. Les ennemis marqués ignorent également la limite de portée du radar tant qu'ils sont marqués. Les paramètres de visibilité des ennemis existants s'appliquent toujours.",
+        de =
+        "Zeigt Radar-Markierungen für Gegner nur an, solange der Gegner im Spiel aktiv markiert ist. Markierte Gegner ignorieren während der Markierung außerdem die Radar-Reichweitenbegrenzung. Bereits vorhandene Sichtbarkeitseinstellungen für Gegner gelten weiterhin.",
+        it =
+        "Mostra gli indicatori radar dei nemici solo quando il nemico ha un contrassegno attivo nel gioco. I nemici contrassegnati ignorano anche il limite di portata del radar finché restano contrassegnati. Le impostazioni di visibilità dei nemici già esistenti continuano comunque ad applicarsi.",
+        es =
+        "Muestra los marcadores de radar de enemigos solo mientras el enemigo tenga una marca activa en el juego. Los enemigos marcados también ignoran el límite de alcance del radar mientras estén marcados. Los ajustes de visibilidad de enemigos existentes siguen aplicándose.",
+        pl =
+        "Pokazuje znaczniki radarowe wrogów tylko wtedy, gdy wróg ma aktywne oznaczenie w grze. Oznaczeni wrogowie ignorują także limit zasięgu radaru, dopóki są oznaczeni. Dotychczasowe ustawienia widoczności wrogów nadal mają zastosowanie.",
+        ["pt-br"] =
+        "Mostra os marcadores de radar dos inimigos apenas enquanto o inimigo tiver uma marcação ativa no jogo. Inimigos marcados também ignoram o limite de alcance do radar enquanto estiverem marcados. As configurações de visibilidade de inimigos existentes continuam valendo.",
+        ["ru"] =
+        "Показывает отметки врагов на радаре только пока на враге есть активная метка в игре. Отмеченные враги также игнорируют ограничение дальности радара, пока метка активна. Существующие настройки видимости врагов продолжают применяться.",
+        ja = "敵にゲーム内で有効なタグが付いている間だけ、敵のレーダーマーカーを表示します。タグ付きの敵は、タグが付いている間はレーダーの距離制限も無視します。既存の敵表示設定は引き続き適用されます。",
+        ko = "적에게 게임 내 활성 태그가 있을 때만 적 레이더 마커를 표시합니다. 태그된 적은 태그가 유지되는 동안 레이더 거리 제한도 무시합니다. 기존 적 표시 설정은 그대로 적용됩니다.",
+        ["zh-cn"] = "仅当敌人在游戏中具有有效标记时才显示敌人雷达标记。被标记的敌人在被标记期间也会无视雷达距离限制。现有的敌人可见性设置仍然适用。",
+        ["zh-tw"] = "僅當敵人在遊戲中具有有效標記時才顯示敵人雷達標記。被標記的敵人在被標記期間也會無視雷達距離限制。現有的敵人可見性設定仍然適用。",
+    },
+    show_only_tagged_items_tooltip = {
+        en =
+        "Only show item radar markers while the item has an active in-game tag. Tagged items also ignore the radar range limit while tagged. This affects pickups, materials, crates, deployables, luggables, and similar item markers, but not players or expedition objective locations.",
+        fr =
+        "Affiche les marqueurs radar des objets uniquement lorsqu'un objet a un marquage actif en jeu. Les objets marqués ignorent également la limite de portée du radar tant qu'ils sont marqués. Cela affecte les objets à ramasser, matériaux, caisses, objets déployables, objets transportables et marqueurs d'objets similaires, mais pas les joueurs ni les emplacements d'objectifs d'expédition.",
+        de =
+        "Zeigt Radar-Markierungen für Gegenstände nur an, solange der Gegenstand im Spiel aktiv markiert ist. Markierte Gegenstände ignorieren während der Markierung außerdem die Radar-Reichweitenbegrenzung. Das betrifft Aufhebbares, Materialien, Kisten, platzierbare Gegenstände, tragbare Objekte und ähnliche Gegenstandsmarkierungen, aber nicht Spieler oder Orte von Expeditionszielen.",
+        it =
+        "Mostra gli indicatori radar degli oggetti solo quando l'oggetto ha un contrassegno attivo nel gioco. Gli oggetti contrassegnati ignorano anche il limite di portata del radar finché restano contrassegnati. Questo influisce su raccolte, materiali, casse, oggetti schierabili, trasportabili e indicatori di oggetti simili, ma non sui giocatori o sulle posizioni degli obiettivi di spedizione.",
+        es =
+        "Muestra los marcadores de radar de objetos solo mientras el objeto tenga una marca activa en el juego. Los objetos marcados también ignoran el límite de alcance del radar mientras estén marcados. Esto afecta a recogibles, materiales, cajas, desplegables, objetos transportables y marcadores de objetos similares, pero no a los jugadores ni a las ubicaciones de objetivos de expedición.",
+        pl =
+        "Pokazuje znaczniki radarowe przedmiotów tylko wtedy, gdy przedmiot ma aktywne oznaczenie w grze. Oznaczone przedmioty również ignorują limit zasięgu radaru, dopóki są oznaczone. Dotyczy to podnoszonych przedmiotów, materiałów, skrzyń, obiektów rozstawianych, przenoszonych i podobnych znaczników przedmiotów, ale nie graczy ani lokalizacji celów ekspedycji.",
+        ["pt-br"] =
+        "Mostra os marcadores de radar dos itens apenas enquanto o item tiver uma marcação ativa no jogo. Itens marcados também ignoram o limite de alcance do radar enquanto estiverem marcados. Isso afeta itens coletáveis, materiais, caixas, itens posicionáveis, carregáveis e marcadores semelhantes, mas não jogadores nem locais de objetivos da expedição.",
+        ["ru"] =
+        "Показывает отметки предметов на радаре только пока на предмете есть активная метка в игре. Отмеченные предметы также игнорируют ограничение дальности радара, пока метка активна. Это влияет на подбираемые предметы, материалы, ящики, размещаемые объекты, переносимые объекты и похожие отметки предметов, но не на игроков и не на местоположения целей экспедиции.",
+        ja =
+        "アイテムにゲーム内で有効なタグが付いている間だけ、アイテムのレーダーマーカーを表示します。タグ付きのアイテムは、タグが付いている間はレーダーの距離制限も無視します。これは拾得物、素材、クレート、設置物、運搬物などの類似アイテムマーカーに適用されますが、プレイヤーや遠征目標の位置には適用されません。",
+        ko =
+        "아이템에 게임 내 활성 태그가 있을 때만 아이템 레이더 마커를 표시합니다. 태그된 아이템은 태그가 유지되는 동안 레이더 거리 제한도 무시합니다. 이는 픽업 아이템, 재료, 상자, 설치물, 운반물 및 유사한 아이템 마커에 적용되지만, 플레이어나 원정 목표 위치에는 적용되지 않습니다.",
+        ["zh-cn"] = "仅当物品在游戏中具有有效标记时才显示物品雷达标记。被标记的物品在被标记期间也会无视雷达距离限制。这会影响拾取物、材料、箱子、可部署物、搬运物以及类似的物品标记，但不影响玩家或远征目标位置。",
+        ["zh-tw"] = "僅當物品在遊戲中具有有效標記時才顯示物品雷達標記。被標記的物品在被標記期間也會無視雷達距離限制。這會影響拾取物、材料、箱子、可部署物、搬運物以及類似的物品標記，但不影響玩家或遠征目標位置。",
     }
 }
