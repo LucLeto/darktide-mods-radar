@@ -350,6 +350,12 @@ return function(env)
 
     local ITEM_VERTICAL_ARROW_Z_DEADZONE = 2
 
+    local function _is_player_smart_tag_kind(kind)
+        return kind == "location_attention"
+            or kind == "location_ping"
+            or kind == "location_threat"
+    end
+
     local function _supports_vertical_item_marker(kind)
         if not kind then
             return false
@@ -357,6 +363,10 @@ return function(env)
 
         if kind == "player_teammate" then
             return false
+        end
+
+        if _is_player_smart_tag_kind(kind) then
+            return mod:get("show_player_tag_elevation") == true
         end
 
         if _is_enemy_kind(kind) then
@@ -687,7 +697,10 @@ return function(env)
 
             if is_priority_target == nil then
                 is_priority_target = kind == "enemy_daemonhost" or _is_boss_marker_kind(kind) or
-                    ENEMY_RADAR_DEFINITION_BY_KIND[kind] ~= nil
+                    ENEMY_RADAR_DEFINITION_BY_KIND[kind] ~= nil or
+                    kind == "location_attention" or
+                    kind == "location_ping" or
+                    kind == "location_threat"
                 priority_target_cache[kind] = is_priority_target
             end
 
@@ -1028,6 +1041,7 @@ return function(env)
         _scan_smart_tag_targets()
         _refresh_player_units()
         _scan_expedition_objectives()
+        _scan_player_tag_points()
         _prune_units()
 
         mod._radar_targets = _collect_radar_targets()

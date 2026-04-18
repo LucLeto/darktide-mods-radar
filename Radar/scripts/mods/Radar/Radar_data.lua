@@ -904,6 +904,37 @@ return {
                                 },
                             },
                         },
+                        {
+                            setting_id = "show_player_tags",
+                            type = "checkbox",
+                            default_value = true,
+                        },
+                        {
+                            setting_id = "show_player_tag_elevation",
+                            type = "checkbox",
+                            default_value = false,
+                        },
+                        {
+                            setting_id = "show_player_tag_distance_text",
+                            type = "checkbox",
+                            default_value = true,
+                        },
+                        {
+                            setting_id = "player_tag_display_style",
+                            tooltip = "player_tag_display_style_tooltip",
+                            type = "dropdown",
+                            default_value = "marked_icon",
+                            options = {
+                                {
+                                    text = "display_style_icon_only",
+                                    value = "icon_only",
+                                },
+                                {
+                                    text = "display_style_marked_icon",
+                                    value = "marked_icon",
+                                },
+                            },
+                        },
                     },
                 },
                 {

@@ -61,6 +61,25 @@ local PLAYER_CLASS_ICONS = {
     broker = "content/ui/materials/icons/classes/broker",
 }
 
+local PLAYER_SMART_TAG_PRESENTATIONS = {
+    location_attention = {
+        icon = "content/ui/materials/hud/interactions/icons/attention",
+        size = 15,
+        use_player_color = true,
+    },
+    location_ping = {
+        icon = "content/ui/materials/hud/interactions/icons/location",
+        size = 15,
+        use_player_color = true,
+    },
+    location_threat = {
+        icon = "content/ui/materials/hud/interactions/icons/enemy",
+        color = { 255, 255, 64, 64 },
+        accent_color = { 220, 255, 0, 0 },
+        size = 15,
+    },
+}
+
 local EXPEDITION_OBJECTIVE_KINDS = {
     expedition_loot_converter = true,
     expedition_objective_opportunity = true,
@@ -1627,6 +1646,7 @@ local _draw_cache = {
     marker_scale_by_group = {},
     enemy_scale_by_kind = {},
     enemy_visual_by_kind = {},
+    show_player_tag_distance_text = false,
     show_boss_distance_text = false,
 }
 
@@ -1641,8 +1661,10 @@ local function _build_draw_cache()
 
     draw_cache.icon_scale = _icon_scale_factor()
     draw_cache.player_display_style = _normalized_player_display_style(mod:get("player_display_style"))
+    draw_cache.player_tag_display_style = _normalized_enemy_display_style(mod:get("player_tag_display_style"))
     draw_cache.show_player_center_dot = mod.get_show_player_center_dot and mod:get_show_player_center_dot() or
         mod:get("show_player_center_dot") ~= false
+    draw_cache.show_player_tag_distance_text = mod:get("show_player_tag_distance_text") == true
     draw_cache.boss_display_style = _normalized_enemy_display_style(mod:get("boss_display_style"))
     draw_cache.expedition_loot_marker_mode = mod.get_expedition_loot_marker_mode and
         mod:get_expedition_loot_marker_mode() or "default"
@@ -1868,6 +1890,11 @@ local function _display_style_for_kind(kind, draw_cache)
     if kind == "player_teammate" then
         return draw_cache and draw_cache.player_display_style or
             _normalized_player_display_style(mod:get("player_display_style"))
+    end
+
+    if PLAYER_SMART_TAG_PRESENTATIONS[kind] ~= nil then
+        return draw_cache and draw_cache.player_tag_display_style or
+            _normalized_enemy_display_style(mod:get("player_tag_display_style"))
     end
 
     if _is_enemy_kind(kind) then
@@ -2218,6 +2245,24 @@ end
 
 local BOSS_DISTANCE_TEXT_WIDGET_COLOR = { 255, 255, 225, 0 }
 
+local function _player_smart_tag_distance_text(target, draw_cache)
+    local show_distance_text = draw_cache and draw_cache.show_player_tag_distance_text or
+        (mod:get("show_player_tag_distance_text") == true)
+    local kind = target and target.kind or nil
+
+    if not show_distance_text or PLAYER_SMART_TAG_PRESENTATIONS[kind] == nil then
+        return nil
+    end
+
+    local distance_sq_3d = target and tonumber(target.distance_sq_3d) or nil
+
+    if not distance_sq_3d or distance_sq_3d < 0 then
+        return nil
+    end
+
+    return math_floor(math_sqrt(distance_sq_3d) + 0.5) .. " m"
+end
+
 local function _apply_target_specific_visual_overrides(target, visual, draw_cache)
     if not visual then
         return nil
@@ -2246,6 +2291,19 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
         end
 
         result.value_text = value_text
+
+        return result
+    end
+
+    local player_smart_tag_distance_text = _player_smart_tag_distance_text(target, draw_cache)
+
+    if player_smart_tag_distance_text ~= nil then
+        local result = _copy_visual(visual)
+        result.value_text = player_smart_tag_distance_text
+        result.value_text_color = BOSS_DISTANCE_TEXT_WIDGET_COLOR
+        result.value_text_anchor = "bottom_center"
+        result.value_text_offset_x = 3
+        result.value_text_offset_y = -3
 
         return result
     end
@@ -2406,6 +2464,38 @@ local function _enemy_radar_visual(target, draw_cache)
     return visual
 end
 
+local function _player_smart_tag_visual(target, draw_cache)
+    local kind = target and target.kind
+    local presentation = kind and PLAYER_SMART_TAG_PRESENTATIONS[kind] or nil
+
+    if not presentation then
+        return nil
+    end
+
+    local widget_color = presentation.color
+    local accent_color = presentation.accent_color
+
+    if presentation.use_player_color then
+        local meta = target and target.meta or nil
+        local player_slot = tonumber(meta and (meta.marked_by_player_slot or meta.player_slot) or nil)
+        local slot_colors = draw_cache and draw_cache.slot_colors or (UISettings and UISettings.player_slot_colors)
+        local player_color = player_slot and slot_colors and slot_colors[player_slot] or nil
+
+        widget_color = _any_to_widget_color(player_color, WHITE_WIDGET_COLOR)
+        accent_color = _with_alpha_widget(player_color or widget_color, 180)
+    else
+        widget_color = _any_to_widget_color(widget_color, WHITE_WIDGET_COLOR)
+        accent_color = accent_color and _any_to_widget_color(accent_color) or nil
+    end
+
+    return {
+        icon = presentation.icon,
+        color = widget_color,
+        accent_color = accent_color,
+        size = presentation.size or 14,
+    }
+end
+
 local function _target_visual(target, draw_cache)
     if not target then
         return nil
@@ -2420,6 +2510,11 @@ local function _target_visual(target, draw_cache)
 
     local debug_mode = draw_cache and draw_cache.debug_mode or mod:get("debug_mode")
     local meta = target.meta or nil
+    local player_smart_tag_visual = _player_smart_tag_visual(target, draw_cache)
+
+    if player_smart_tag_visual then
+        return _apply_target_specific_visual_overrides(target, player_smart_tag_visual, draw_cache)
+    end
 
     if target_kind == "player_teammate" then
         local archetype_name = meta and meta.archetype_name and string_lower(tostring(meta.archetype_name)) or nil

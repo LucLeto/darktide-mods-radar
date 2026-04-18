@@ -403,9 +403,19 @@ return function(env)
             or kind == "enemy_karnak_twin"
     end
 
+    function _is_player_smart_tag_kind(kind)
+        return kind == "location_attention"
+            or kind == "location_ping"
+            or kind == "location_threat"
+    end
+
     function _ignore_radar_range_for_kind(kind)
         if kind == "expedition_loot_converter" then
             return false
+        end
+
+        if _is_player_smart_tag_kind(kind) then
+            return true
         end
 
         if _is_boss_marker_kind(kind) and mod:get_boss_marker_range_mode() == "infinite" then
@@ -803,6 +813,123 @@ return function(env)
             position = position,
             meta = meta,
         }
+    end
+
+    local PLAYER_SMART_TAG_KINDS = {
+        location_attention = true,
+        location_ping = true,
+        location_threat = true,
+    }
+
+    local PLAYER_SMART_TAG_CALLOUT_TEXT = {
+        location_attention = "Attention",
+        location_ping = "Over there!",
+        location_threat = "Heretic!",
+    }
+
+    local function _safe_smart_tag_template_name(tag)
+        local template_fn = tag and tag.template
+
+        if not template_fn then
+            return nil, nil
+        end
+
+        local ok_template, template = pcall(template_fn, tag)
+        if not ok_template or not template then
+            return nil, nil
+        end
+
+        local template_name = template.name or template.marker_type or nil
+
+        return _safe_lower_string(template_name), template
+    end
+
+    local function _safe_smart_tag_target_position(tag)
+        local target_location_fn = tag and tag.target_location
+
+        if target_location_fn then
+            local ok_location, target_location = pcall(target_location_fn, tag)
+            local copied_location = ok_location and _copy_vector3(target_location) or nil
+
+            if copied_location then
+                return copied_location
+            end
+        end
+
+        local target_unit_fn = tag and tag.target_unit
+
+        if target_unit_fn then
+            local ok_unit, target_unit = pcall(target_unit_fn, tag)
+
+            if ok_unit and target_unit then
+                return _safe_unit_position(target_unit)
+            end
+        end
+
+        return nil
+    end
+
+    local function _safe_smart_tag_tagger_player(tag)
+        local tagger_player_fn = tag and tag.tagger_player
+
+        if not tagger_player_fn then
+            return nil
+        end
+
+        local ok_player, player = pcall(tagger_player_fn, tag)
+
+        if ok_player then
+            return player
+        end
+
+        return nil
+    end
+
+    function _scan_player_tag_points()
+        local smart_tag_system = _safe_extension_system("smart_tag_system")
+        local all_tags = type(smart_tag_system) == "table" and rawget(smart_tag_system, "_all_tags") or nil
+
+        if type(all_tags) ~= "table" then
+            return
+        end
+
+        for tag_id, tag in pairs(all_tags) do
+            local template_name, template = _safe_smart_tag_template_name(tag)
+
+            if template_name and PLAYER_SMART_TAG_KINDS[template_name] then
+                local position = _safe_smart_tag_target_position(tag)
+
+                if position then
+                    local tagger_player = _safe_smart_tag_tagger_player(tag)
+                    local player_slot = _safe_player_slot(tagger_player)
+                    local player_name = nil
+
+                    if tagger_player and tagger_player.name then
+                        local ok_name, resolved_name = pcall(tagger_player.name, tagger_player)
+
+                        if ok_name then
+                            player_name = resolved_name
+                        end
+                    end
+
+                    _track_point(
+                        string_format("player_smart_tag:%s", tostring(tag_id)),
+                        template_name,
+                        position,
+                        "smart_tag_location",
+                        {
+                            callout_text = PLAYER_SMART_TAG_CALLOUT_TEXT[template_name],
+                            marked_by_player_slot = player_slot,
+                            player = player_name,
+                            player_slot = player_slot,
+                            smart_tag_id = tag_id,
+                            smart_tag_marker_type = template and template.marker_type or template_name,
+                            smart_tag_template_name = template_name,
+                        }
+                    )
+                end
+            end
+        end
     end
 
     local function _safe_navigation_handler_marked_by_slot(navigation_handler, level_index)

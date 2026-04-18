@@ -117,6 +117,9 @@ return function(env)
         enemy_captain = "show_captains",
         enemy_karnak_twin = "show_karnak_twins",
         player_teammate = "show_players",
+        location_attention = "show_player_tags",
+        location_ping = "show_player_tags",
+        location_threat = "show_player_tags",
         material_diamantine = "show_diamantine",
         material_plasteel = "show_plasteel",
         material_expeditions_currency = "show_expeditions_currency",
@@ -244,6 +247,9 @@ return function(env)
         pickup_ammo_cache_deployable = "deployables_group",
         medical_crate_deployable = "deployables_group",
         player_teammate = "players_group",
+        location_attention = "players_group",
+        location_ping = "players_group",
+        location_threat = "players_group",
         pickup_tainted_skull = "event_group",
         pocketable_corrupted_auspex_scanner = "event_group",
         pickup_saints = "event_group",
@@ -316,6 +322,8 @@ return function(env)
         common = 1,
         horde = 0,
     }
+    local PLAYER_SMART_TAG_SELECTION_PRIORITY = 300
+    local PLAYER_SMART_TAG_RENDER_LAYER = 3
 
     local function _enemy_radar_default_icon_size(category)
         if category == "horde" then
@@ -1097,6 +1105,10 @@ return function(env)
     end
 
     function mod:get_target_selection_priority(kind)
+        if kind == "location_attention" or kind == "location_ping" or kind == "location_threat" then
+            return PLAYER_SMART_TAG_SELECTION_PRIORITY
+        end
+
         if kind == "enemy_daemonhost"
             or kind == "enemy_monstrosity"
             or kind == "enemy_captain"
@@ -1114,6 +1126,10 @@ return function(env)
     end
 
     function mod:get_target_render_layer(kind)
+        if kind == "location_attention" or kind == "location_ping" or kind == "location_threat" then
+            return PLAYER_SMART_TAG_RENDER_LAYER
+        end
+
         if kind == "enemy_daemonhost"
             or kind == "enemy_monstrosity"
             or kind == "enemy_captain"
