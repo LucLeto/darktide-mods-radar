@@ -77,10 +77,25 @@ return function(env)
         return SUPPORTED_ABILITY_OUTLINE_CONFIG_BY_NAME[tostring(outline_name)]
     end
 
+    -- `special_target` is shared, so only honor it when the local player is in a
+    -- positively identified owning state.
+    local function _special_target_local_context(player_unit)
+        if not _safe_unit_alive(player_unit) then
+            return nil
+        end
+
+        if _safe_unit_has_keyword(player_unit, "veteran_combat_ability_stance") then
+            return "veteran_executioners_stance"
+        end
+
+        return nil
+    end
+
     local function _special_target_fallback_bracket_color()
         local player_unit = _player_unit()
+        local local_context = _special_target_local_context(player_unit)
 
-        if _safe_unit_alive(player_unit) and _safe_unit_has_keyword(player_unit, "veteran_combat_ability_stance") then
+        if local_context == "veteran_executioners_stance" then
             return VETERAN_SPECIAL_TARGET_BRACKET_COLOR
         end
 
@@ -197,7 +212,7 @@ return function(env)
         return priority or 0
     end
 
-    local function _supported_ability_outline_state_for_unit(unit, outline_extension_map)
+    local function _supported_ability_outline_state_for_unit(unit, outline_extension_map, local_player_unit)
         local outline_extension = _safe_unit_outline_extension(unit, outline_extension_map)
 
         if type(outline_extension) ~= "table" then
@@ -216,12 +231,15 @@ return function(env)
         local primary_outline_name = nil
         local primary_outline_priority = -math_huge
         local bracket_outline_priority = -math_huge
+        local special_target_allowed = _special_target_local_context(local_player_unit) ~= nil
 
         for i = 1, #outlines do
             local outline = outlines[i]
             local outline_name = outline and outline.name and tostring(outline.name) or nil
 
-            if outline_name ~= nil and _supported_ability_outline_config(outline_name) ~= nil then
+            if outline_name ~= nil
+                and _supported_ability_outline_config(outline_name) ~= nil
+                and (outline_name ~= "special_target" or special_target_allowed) then
                 if seen_outline_names == nil or not seen_outline_names[outline_name] then
                     seen_outline_names = seen_outline_names or {}
                     seen_outline_names[outline_name] = true
@@ -254,9 +272,9 @@ return function(env)
             or _safe_unit_has_buff_template(unit, "taunted_short")
     end
 
-    local function _supported_ability_marker_state_for_unit(unit, outline_extension_map, local_combat_ability_name)
+    local function _supported_ability_marker_state_for_unit(unit, outline_extension_map, local_player_unit, local_combat_ability_name)
         local marker_names, bracket_color, primary_marker_name, primary_marker_priority =
-            _supported_ability_outline_state_for_unit(unit, outline_extension_map)
+            _supported_ability_outline_state_for_unit(unit, outline_extension_map, local_player_unit)
 
         if marker_names ~= nil then
             return marker_names, bracket_color, primary_marker_name, primary_marker_priority
@@ -441,8 +459,9 @@ return function(env)
         local track_enemy_tags = mod:get_show_only_tagged_enemies()
         local show_ability_marked_enemies = mod:get_show_ability_marked_enemies()
         local outline_extension_map = show_ability_marked_enemies and _safe_outline_extension_data_map() or nil
+        local local_player_unit = show_ability_marked_enemies and _player_unit() or nil
         local local_combat_ability_name = show_ability_marked_enemies
-            and _safe_unit_ability_name(_player_unit(), "combat_ability")
+            and _safe_unit_ability_name(local_player_unit, "combat_ability")
             or nil
 
         for unit, extension in pairs(unit_data_map) do
@@ -469,6 +488,7 @@ return function(env)
                                     _supported_ability_marker_state_for_unit(
                                         unit,
                                         outline_extension_map,
+                                        local_player_unit,
                                         local_combat_ability_name
                                     )
                             end
