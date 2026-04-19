@@ -428,6 +428,44 @@ return function(env)
         return ok_has_buff and has_buff or false
     end
 
+    function _safe_unit_ability_name(unit, ability_type)
+        local script_unit = ScriptUnit
+        local has_extension = script_unit and script_unit.has_extension
+
+        if not unit or not has_extension then
+            return nil
+        end
+
+        local ability_extension = has_extension(unit, "ability_system")
+
+        if not ability_extension then
+            return nil
+        end
+
+        if ability_type ~= nil and ability_extension.ability_name then
+            local ok_ability_name, ability_name = pcall(ability_extension.ability_name, ability_extension, ability_type)
+
+            if ok_ability_name and ability_name ~= nil and ability_name ~= "none" and ability_name ~= "not_equipped" then
+                return ability_name
+            end
+        end
+
+        if (ability_type == nil or ability_type == "combat_ability")
+            and ability_extension.get_current_ability_name then
+            local ok_current_ability_name, current_ability_name =
+                pcall(ability_extension.get_current_ability_name, ability_extension)
+
+            if ok_current_ability_name
+                and current_ability_name ~= nil
+                and current_ability_name ~= "none"
+                and current_ability_name ~= "not_equipped" then
+                return current_ability_name
+            end
+        end
+
+        return nil
+    end
+
     function _is_owned_by_death_manager(unit)
         local script_unit = ScriptUnit
         local has_extension = script_unit and script_unit.has_extension
@@ -1152,6 +1190,64 @@ return function(env)
         end
 
         return nil
+    end
+
+    function _safe_outline_extension_data_map()
+        local outline_system = _safe_extension_system("outline_system")
+        local unit_extension_data = outline_system and rawget(outline_system, "_unit_extension_data")
+
+        if type(unit_extension_data) == "table" then
+            return unit_extension_data
+        end
+
+        return nil
+    end
+
+    function _safe_unit_outline_extension(unit, outline_extension_map)
+        if not unit then
+            return nil
+        end
+
+        local unit_extension_data = outline_extension_map or _safe_outline_extension_data_map()
+
+        if type(unit_extension_data) ~= "table" then
+            return nil
+        end
+
+        local extension = unit_extension_data[unit]
+
+        if type(extension) == "table" then
+            return extension
+        end
+
+        return nil
+    end
+
+    function _safe_unit_outline_lookup(unit, outline_extension_map)
+        local extension = _safe_unit_outline_extension(unit, outline_extension_map)
+
+        if not extension then
+            return nil
+        end
+
+        local outlines = rawget(extension, "outlines")
+
+        if type(outlines) ~= "table" then
+            return nil
+        end
+
+        local outline_lookup = nil
+
+        for _, outline in pairs(outlines) do
+            local outline_name = outline and outline.name
+
+            if outline_name ~= nil then
+                outline_lookup = outline_lookup or {}
+                outline_lookup[tostring(outline_name)] = true
+            end
+        end
+
+        return outline_lookup
     end
 
     function _safe_game_mode_manager()

@@ -1652,6 +1652,7 @@ local _draw_cache = {
     enemy_visual_by_kind = {},
     show_player_tag_distance_text = false,
     show_boss_distance_text = false,
+    show_ability_marked_enemies = false,
 }
 
 local function _build_draw_cache()
@@ -1671,6 +1672,8 @@ local function _build_draw_cache()
         get(mod, "show_player_center_dot") ~= false
     draw_cache.show_player_tag_distance_text = get(mod, "show_player_tag_distance_text") == true
     draw_cache.boss_display_style = _normalized_enemy_display_style(get(mod, "boss_display_style"))
+    draw_cache.show_ability_marked_enemies = mod.get_show_ability_marked_enemies and
+        mod:get_show_ability_marked_enemies() or false
     draw_cache.expedition_loot_marker_mode = mod.get_expedition_loot_marker_mode and
         mod:get_expedition_loot_marker_mode() or "default"
     draw_cache.show_expedition_loot_value_text = mod.get_show_expedition_loot_value_text and
@@ -1919,7 +1922,31 @@ local function _display_style_for_kind(kind, draw_cache)
     return "icon_only"
 end
 
+local function _target_has_ability_outline_mark(target)
+    local meta = target and target.meta or nil
+
+    return meta ~= nil and meta.ability_marked == true
+end
+
+local function _target_bracket_color(target, visual)
+    local meta = target and target.meta or nil
+    local ability_outline_bracket_color = meta and meta.ability_outline_bracket_color or nil
+
+    if ability_outline_bracket_color ~= nil then
+        return ability_outline_bracket_color
+    end
+
+    return visual and visual.accent_color or nil
+end
+
 local function _should_draw_marker_brackets(target, draw_cache)
+    local show_ability_marked_enemies = draw_cache and draw_cache.show_ability_marked_enemies or
+        (mod.get_show_ability_marked_enemies and mod:get_show_ability_marked_enemies() or false)
+
+    if show_ability_marked_enemies and _target_has_ability_outline_mark(target) then
+        return true
+    end
+
     local style = _display_style_for_kind(target and target.kind, draw_cache)
     return style == "marked_icon" or style == "marked_dot"
 end
@@ -3205,7 +3232,7 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
                 local render_layer = tonumber(target.render_layer) or 0
                 local bracket_z = z + 4 + render_layer
                 local icon_z = base_icon_z + render_layer
-                local accent_color = visual and visual.accent_color or nil
+                local bracket_color = _target_bracket_color(target, visual)
                 local visual_icon = visual and visual.icon or nil
                 local visual_title_icon = visual and visual.title_icon or nil
                 local value_text = visual and visual.value_text or nil
@@ -3214,8 +3241,8 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
                 local value_text_offset_x = visual and visual.value_text_offset_x or nil
                 local value_text_offset_y = visual and visual.value_text_offset_y or nil
 
-                if accent_color and should_draw_marker_brackets(target, draw_cache) then
-                    draw_marker_brackets(ui_renderer, bracket_x, bracket_y, bracket_z, bracket_size, accent_color)
+                if bracket_color and should_draw_marker_brackets(target, draw_cache) then
+                    draw_marker_brackets(ui_renderer, bracket_x, bracket_y, bracket_z, bracket_size, bracket_color)
                 end
 
                 apply_marker_widget(widget, visual, draw_x, draw_y, icon_z, target, marker_size)

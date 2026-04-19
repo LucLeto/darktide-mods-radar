@@ -5,8 +5,10 @@ return function(env)
 
     local pcall = pcall
     local pairs = pairs
+    local rawget = rawget
     local tonumber = tonumber
     local tostring = tostring
+    local type = type
     local math_abs = math.abs
     local math_floor = math.floor
     local math_huge = math.huge
@@ -33,6 +35,241 @@ return function(env)
         end
 
         return breed_name
+    end
+
+    local ABILITY_OUTLINE_BRACKET_ALPHA = 220
+    local SUPPORTED_ABILITY_OUTLINE_CONFIG_BY_NAME = {
+        psyker_marked_target = {
+            default_color = { 255, 80, 160, 255 },
+            default_priority = 1,
+        },
+        veteran_smart_tag = {
+            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 255, 204, 102 },
+            default_priority = 1,
+        },
+        adamant_mark_target = {
+            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 128, 102, 255 },
+            default_priority = 2,
+        },
+        adamant_smart_tag = {
+            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 255, 64, 64 },
+            default_priority = 2,
+        },
+        broker_proximity_target = {
+            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 122, 204, 245 },
+            default_priority = 2,
+        },
+        -- `special_target` is shared by multiple abilities. Only apply the fallback color when the
+        -- local veteran stance is active so we do not miscolor Adamant Verispex.
+        special_target = {
+            default_priority = 3,
+        },
+    }
+    local VETERAN_SPECIAL_TARGET_BRACKET_COLOR = { 255, 220, 120, 26 }
+    local CACHED_ABILITY_OUTLINE_BRACKET_COLORS = {}
+    local OGRYN_TAUNT_SHOUT_ABILITY_NAME = "ogryn_taunt_shout"
+
+    local function _supported_ability_outline_config(outline_name)
+        if outline_name == nil then
+            return nil
+        end
+
+        return SUPPORTED_ABILITY_OUTLINE_CONFIG_BY_NAME[tostring(outline_name)]
+    end
+
+    local function _special_target_fallback_bracket_color()
+        local player_unit = _player_unit()
+
+        if _safe_unit_alive(player_unit) and _safe_unit_has_keyword(player_unit, "veteran_combat_ability_stance") then
+            return VETERAN_SPECIAL_TARGET_BRACKET_COLOR
+        end
+
+        return nil
+    end
+
+    local function _default_ability_outline_bracket_color(outline_name)
+        local config = _supported_ability_outline_config(outline_name)
+
+        if not config then
+            return nil
+        end
+
+        if outline_name == "special_target" then
+            return _special_target_fallback_bracket_color()
+        end
+
+        return config.default_color
+    end
+
+    local function _cached_ability_outline_bracket_color(outline_name, color)
+        if type(color) ~= "table" then
+            return _default_ability_outline_bracket_color(outline_name)
+        end
+
+        local alpha = tonumber(color.a)
+        local red = tonumber(color.r)
+        local green = tonumber(color.g)
+        local blue = tonumber(color.b)
+
+        if red == nil and green == nil and blue == nil then
+            local fourth = tonumber(color[4])
+
+            if fourth ~= nil then
+                alpha = tonumber(color[1])
+                red = tonumber(color[2])
+                green = tonumber(color[3])
+                blue = fourth
+            else
+                red = tonumber(color[1])
+                green = tonumber(color[2])
+                blue = tonumber(color[3])
+            end
+        end
+
+        if not red or not green or not blue then
+            return _default_ability_outline_bracket_color(outline_name)
+        end
+
+        if red <= 1 and green <= 1 and blue <= 1 then
+            red = red * 255
+            green = green * 255
+            blue = blue * 255
+        end
+
+        if alpha == nil then
+            alpha = ABILITY_OUTLINE_BRACKET_ALPHA
+        elseif alpha <= 1 then
+            alpha = alpha * 255
+        end
+
+        alpha = _clamp(math_floor(alpha + 0.5), 0, 255)
+        red = _clamp(math_floor(red + 0.5), 0, 255)
+        green = _clamp(math_floor(green + 0.5), 0, 255)
+        blue = _clamp(math_floor(blue + 0.5), 0, 255)
+
+        local cache_key = tostring(outline_name) .. ":" .. tostring(alpha) .. ":" .. tostring(red) .. ":" ..
+            tostring(green) .. ":" .. tostring(blue)
+        local cached_color = CACHED_ABILITY_OUTLINE_BRACKET_COLORS[cache_key]
+
+        if cached_color == nil then
+            cached_color = {
+                alpha,
+                red,
+                green,
+                blue,
+            }
+            CACHED_ABILITY_OUTLINE_BRACKET_COLORS[cache_key] = cached_color
+        end
+
+        return cached_color
+    end
+
+    local function _outline_setting_bracket_color(outline_extension, outline_name)
+        if type(outline_extension) ~= "table" or outline_name == nil then
+            return nil
+        end
+
+        local settings = rawget(outline_extension, "settings")
+        local outline_settings = type(settings) == "table" and settings[outline_name] or nil
+        local color = type(outline_settings) == "table" and rawget(outline_settings, "color") or nil
+
+        return _cached_ability_outline_bracket_color(outline_name, color)
+    end
+
+    local function _outline_setting_priority(outline_extension, outline_name)
+        if outline_name == nil then
+            return 0
+        end
+
+        local priority = nil
+
+        if type(outline_extension) == "table" then
+            local settings = rawget(outline_extension, "settings")
+            local outline_settings = type(settings) == "table" and settings[outline_name] or nil
+            priority = type(outline_settings) == "table" and tonumber(rawget(outline_settings, "priority")) or nil
+        end
+
+        if priority == nil then
+            local config = _supported_ability_outline_config(outline_name)
+            priority = config and config.default_priority or 0
+        end
+
+        return priority or 0
+    end
+
+    local function _supported_ability_outline_state_for_unit(unit, outline_extension_map)
+        local outline_extension = _safe_unit_outline_extension(unit, outline_extension_map)
+
+        if type(outline_extension) ~= "table" then
+            return nil, nil
+        end
+
+        local outlines = rawget(outline_extension, "outlines")
+
+        if type(outlines) ~= "table" or #outlines == 0 then
+            return nil, nil
+        end
+
+        local outline_names = nil
+        local seen_outline_names = nil
+        local bracket_color = nil
+        local primary_outline_name = nil
+        local primary_outline_priority = -math_huge
+        local bracket_outline_priority = -math_huge
+
+        for i = 1, #outlines do
+            local outline = outlines[i]
+            local outline_name = outline and outline.name and tostring(outline.name) or nil
+
+            if outline_name ~= nil and _supported_ability_outline_config(outline_name) ~= nil then
+                if seen_outline_names == nil or not seen_outline_names[outline_name] then
+                    seen_outline_names = seen_outline_names or {}
+                    seen_outline_names[outline_name] = true
+                    outline_names = outline_names or {}
+                    outline_names[#outline_names + 1] = outline_name
+                end
+
+                local outline_priority = _outline_setting_priority(outline_extension, outline_name)
+
+                if outline_priority > primary_outline_priority then
+                    primary_outline_name = outline_name
+                    primary_outline_priority = outline_priority
+                end
+
+                local outline_bracket_color = _outline_setting_bracket_color(outline_extension, outline_name)
+
+                if outline_bracket_color ~= nil and outline_priority > bracket_outline_priority then
+                    bracket_color = outline_bracket_color
+                    bracket_outline_priority = outline_priority
+                end
+            end
+        end
+
+        return outline_names, bracket_color, primary_outline_name, primary_outline_priority
+    end
+
+    local function _unit_has_supported_ogryn_taunt_marker(unit)
+        return _safe_unit_has_keyword(unit, "taunted")
+            or _safe_unit_has_buff_template(unit, "taunted")
+            or _safe_unit_has_buff_template(unit, "taunted_short")
+    end
+
+    local function _supported_ability_marker_state_for_unit(unit, outline_extension_map, local_combat_ability_name)
+        local marker_names, bracket_color, primary_marker_name, primary_marker_priority =
+            _supported_ability_outline_state_for_unit(unit, outline_extension_map)
+
+        if marker_names ~= nil then
+            return marker_names, bracket_color, primary_marker_name, primary_marker_priority
+        end
+
+        -- Ogryn taunt is buff-driven rather than outline-driven, so only honor it for local players
+        -- who actually have the taunt combat ability equipped.
+        if local_combat_ability_name == OGRYN_TAUNT_SHOUT_ABILITY_NAME
+            and _unit_has_supported_ogryn_taunt_marker(unit) then
+            return { OGRYN_TAUNT_SHOUT_ABILITY_NAME }, nil, OGRYN_TAUNT_SHOUT_ABILITY_NAME, 0
+        end
+
+        return nil, nil, nil, nil
     end
 
     local function _refresh_player_units()
@@ -202,6 +439,11 @@ return function(env)
         end
 
         local track_enemy_tags = mod:get_show_only_tagged_enemies()
+        local show_ability_marked_enemies = mod:get_show_ability_marked_enemies()
+        local outline_extension_map = show_ability_marked_enemies and _safe_outline_extension_data_map() or nil
+        local local_combat_ability_name = show_ability_marked_enemies
+            and _safe_unit_ability_name(_player_unit(), "combat_ability")
+            or nil
 
         for unit, extension in pairs(unit_data_map) do
             if _safe_unit_alive(unit) and extension then
@@ -214,10 +456,32 @@ return function(env)
                         local resolved_breed_name = _resolve_enemy_breed_name(unit, breed_name)
                         local kind = _classify_enemy_from_breed(resolved_breed_name)
                         if kind and _is_trackable_unit_alive(unit, kind) then
+                            local ability_marker_names = nil
+                            local ability_marker_bracket_color = nil
+                            local ability_marker_primary_name = nil
+                            local ability_marker_priority = nil
+
+                            if show_ability_marked_enemies then
+                                ability_marker_names,
+                                ability_marker_bracket_color,
+                                ability_marker_primary_name,
+                                ability_marker_priority =
+                                    _supported_ability_marker_state_for_unit(
+                                        unit,
+                                        outline_extension_map,
+                                        local_combat_ability_name
+                                    )
+                            end
+
                             _track_unit(unit, kind, "unit_data_system", {
                                 breed_name = breed_name,
                                 resolved_breed_name = resolved_breed_name,
                                 marked_by_player_slot = track_enemy_tags and _marked_by_player_slot_for_unit(unit) or nil,
+                                ability_marked = ability_marker_names ~= nil,
+                                ability_outline_names = ability_marker_names,
+                                ability_outline_primary_name = ability_marker_primary_name,
+                                ability_outline_priority = ability_marker_priority,
+                                ability_outline_bracket_color = ability_marker_bracket_color,
                             })
                         end
                     end
@@ -405,9 +669,13 @@ return function(env)
         return meta ~= nil and meta.marked_by_player_slot ~= nil
     end
 
+    local function _target_has_ability_outline_mark(meta)
+        return meta ~= nil and meta.ability_marked == true
+    end
+
     local function _passes_tag_visibility_filter(kind, source, meta, only_tagged_enemies, only_tagged_items)
         if only_tagged_enemies and _is_enemy_kind(kind) then
-            return _target_has_explicit_tag(source, meta)
+            return _target_has_explicit_tag(source, meta) or _target_has_ability_outline_mark(meta)
         end
 
         if only_tagged_items and _is_item_kind(kind) then
@@ -689,6 +957,7 @@ return function(env)
         local item_vertical_arrow_threshold_sq = item_vertical_arrow_threshold * item_vertical_arrow_threshold
         local only_tagged_enemies = mod:get_show_only_tagged_enemies()
         local only_tagged_items = mod:get_show_only_tagged_items()
+        local show_ability_marked_enemies = mod:get_show_ability_marked_enemies()
         local tracked_units = mod._tracked_units
         local tracked_points = mod._tracked_points
         local targets = {}
@@ -775,13 +1044,16 @@ return function(env)
         local function append_target(unit, data)
             local position = data and data.position
             local kind = data and data.kind
+            local source = data and data.source
+            local meta = data and data.meta
+            local explicitly_tagged_target = _target_has_explicit_tag(source, meta)
+            local ability_marked_enemy = show_ability_marked_enemies
+                and _is_enemy_kind(kind)
+                and _target_has_ability_outline_mark(meta)
 
-            if not position or not kind or not _cached_kind_enabled(kind) then
+            if not position or not kind or (not _cached_kind_enabled(kind) and not ability_marked_enemy) then
                 return
             end
-
-            local source = data.source
-            local meta = data.meta
 
             if not _passes_tag_visibility_filter(kind, source, meta, only_tagged_enemies, only_tagged_items) then
                 return
@@ -796,11 +1068,15 @@ return function(env)
             local distance_sq_horizontal = _distance_squared_horizontal(player_pos, position)
             local ignore_range = _cached_ignore_radar_range(kind)
 
-            if only_tagged_enemies and _is_enemy_kind(kind) and _target_has_explicit_tag(source, meta) then
+            if explicitly_tagged_target or ability_marked_enemy then
                 ignore_range = true
             end
 
-            if only_tagged_items and _is_item_kind(kind) and _target_has_explicit_tag(source, meta) then
+            if only_tagged_enemies and _is_enemy_kind(kind) and explicitly_tagged_target then
+                ignore_range = true
+            end
+
+            if only_tagged_items and _is_item_kind(kind) and explicitly_tagged_target then
                 ignore_range = true
             end
 
@@ -1216,6 +1492,10 @@ return function(env)
 
     function mod:get_show_only_tagged_enemies()
         return self:get("show_only_tagged_enemies") == true
+    end
+
+    function mod:get_show_ability_marked_enemies()
+        return self:get("show_ability_marked_enemies") == true
     end
 
     function mod:get_show_only_tagged_items()

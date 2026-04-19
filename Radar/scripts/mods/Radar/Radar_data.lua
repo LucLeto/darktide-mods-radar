@@ -208,6 +208,11 @@ return {
                             default_value = false,
                         },
                         {
+                            setting_id = "show_ability_marked_enemies",
+                            type = "checkbox",
+                            default_value = false,
+                        },
+                        {
                             setting_id = "show_only_tagged_items",
                             type = "checkbox",
                             default_value = false,
