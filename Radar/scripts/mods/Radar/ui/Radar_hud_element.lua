@@ -7,7 +7,6 @@ local UIWidget = require("scripts/managers/ui/ui_widget")
 
 local Color = Color
 local Gui = Gui
-local PhysicsWorld = PhysicsWorld
 local Quaternion = Quaternion
 local Vector2 = Vector2
 local Vector3 = Vector3
@@ -119,17 +118,7 @@ local AUSPEX_BACKGROUND_WIDGET_COLOR = _widget_color(255, 0, 255, 0)
 local AUSPEX_BACKGROUND_NOISE_WIDGET_COLOR = _widget_color(255, 0, 255, 0)
 local AUSPEX_SCAN_NOISE_WIDGET_COLOR = _widget_color(90, 0, 255, 0)
 local AUSPEX_SWEEP_WIDGET_COLOR = _widget_color(128, 0, 255, 0)
-local OCCLUSION_RAYCAST_FILTERS = {
-    "filter_player_character_shooting",
-    "filter_ray_projectile",
-    "filter_minion_shooting",
-    "filter_cover",
-}
 local FULL_CIRCLE = math_pi * 2
-local OCCLUSION_EPSILON = 0.05
-local OCCLUSION_RAYCAST_MODE = "closest"
-local OCCLUSION_COLLISION_FILTER = "collision_filter"
-local OCCLUSION_RAYCAST_FILTER_COUNT = #OCCLUSION_RAYCAST_FILTERS
 
 local function _widget_to_color(color)
     if not color then
@@ -2829,404 +2818,6 @@ local function _target_visual(target, draw_cache)
     return _apply_target_specific_visual_overrides(target, PRESENTATIONS.pickup_unknown, draw_cache)
 end
 
-local function _safe_player_camera(self)
-    local parent = self and self._parent
-
-    if not parent or not parent.player_camera then
-        return nil
-    end
-
-    local ok_camera, camera = pcall(parent.player_camera, parent)
-
-    if ok_camera and camera then
-        return camera
-    end
-
-    return nil
-end
-
-local function _safe_player_camera_position(self)
-    local camera = _safe_player_camera(self)
-
-    if not camera or not Camera or not Camera.local_position then
-        return nil
-    end
-
-    local ok_position, position = pcall(Camera.local_position, camera)
-
-    if ok_position and position then
-        local x, y, z = _vector3_components(position)
-
-        if _is_finite_number(x) and _is_finite_number(y) and _is_finite_number(z) then
-            return { x = x, y = y, z = z }
-        end
-    end
-
-    return nil
-end
-
-local function _safe_player_vertical_fov()
-    local local_player = _safe_local_player()
-
-    if not local_player then
-        return nil
-    end
-
-    local viewport_name = local_player.viewport_name
-    local camera_manager = Managers and Managers.state and Managers.state.camera
-
-    if not viewport_name or not camera_manager or type(camera_manager.fov) ~= "function" then
-        return nil
-    end
-
-    if type(camera_manager.has_camera) == "function" then
-        local ok_has_camera, has_camera = pcall(camera_manager.has_camera, camera_manager, viewport_name)
-
-        if ok_has_camera and not has_camera then
-            return nil
-        end
-    end
-
-    local ok_fov, vertical_fov = pcall(camera_manager.fov, camera_manager, viewport_name)
-
-    vertical_fov = ok_fov and tonumber(vertical_fov) or nil
-
-    if vertical_fov and vertical_fov > 0 then
-        return vertical_fov
-    end
-
-    return nil
-end
-
-local function _rotation_basis(rotation)
-    if not rotation then
-        return nil
-    end
-
-    local ok_forward, forward = pcall(Quaternion.forward, rotation)
-    local ok_right, right = pcall(Quaternion.right, rotation)
-    local ok_up, up = pcall(Quaternion.up, rotation)
-
-    if not ok_forward or not ok_right or not ok_up or not forward or not right or not up then
-        return nil
-    end
-
-    local fx, fy, fz = _vector3_components(forward)
-    local rx, ry, rz = _vector3_components(right)
-    local ux, uy, uz = _vector3_components(up)
-
-    if not (_is_finite_number(fx) and _is_finite_number(fy) and _is_finite_number(fz)) then
-        return nil
-    end
-
-    if not (_is_finite_number(rx) and _is_finite_number(ry) and _is_finite_number(rz)) then
-        return nil
-    end
-
-    if not (_is_finite_number(ux) and _is_finite_number(uy) and _is_finite_number(uz)) then
-        return nil
-    end
-
-    return {
-        forward = { x = fx, y = fy, z = fz },
-        right = { x = rx, y = ry, z = rz },
-        up = { x = ux, y = uy, z = uz },
-    }
-end
-
-local function _safe_physics_world()
-    local physics_manager = Managers and Managers.state and Managers.state.physics
-
-    if physics_manager and type(physics_manager.physics_world) == "function" then
-        local ok, physics_world = pcall(physics_manager.physics_world, physics_manager)
-
-        if ok and physics_world then
-            return physics_world
-        end
-    end
-
-    if World and World.physics_world then
-        local state_world_manager = Managers and Managers.state and Managers.state.world
-
-        if state_world_manager and type(state_world_manager.world) == "function" then
-            local ok_world, world = pcall(state_world_manager.world, state_world_manager, "level_world")
-
-            if ok_world and world then
-                local ok_physics_world, physics_world = pcall(World.physics_world, world)
-
-                if ok_physics_world and physics_world then
-                    return physics_world
-                end
-            end
-        end
-
-        local world_manager = Managers and Managers.world
-
-        if world_manager and type(world_manager.world) == "function" then
-            local ok_world, world = pcall(world_manager.world, world_manager, "level_world")
-
-            if ok_world and world then
-                local ok_physics_world, physics_world = pcall(World.physics_world, world)
-
-                if ok_physics_world and physics_world then
-                    return physics_world
-                end
-            end
-        end
-    end
-
-    return nil
-end
-
-local function _extract_raycast_distance(a, b, c, d)
-    local value = a
-
-    if type(value) == "number" and _is_finite_number(value) then
-        return value
-    end
-
-    if type(value) == "table" then
-        if _is_finite_number(value.distance) then
-            return value.distance
-        end
-
-        local first = value[1]
-
-        if type(first) == "table" and _is_finite_number(first.distance) then
-            return first.distance
-        end
-    end
-
-    value = b
-
-    if type(value) == "number" and _is_finite_number(value) then
-        return value
-    end
-
-    if type(value) == "table" then
-        if _is_finite_number(value.distance) then
-            return value.distance
-        end
-
-        local first = value[1]
-
-        if type(first) == "table" and _is_finite_number(first.distance) then
-            return first.distance
-        end
-    end
-
-    value = c
-
-    if type(value) == "number" and _is_finite_number(value) then
-        return value
-    end
-
-    if type(value) == "table" then
-        if _is_finite_number(value.distance) then
-            return value.distance
-        end
-
-        local first = value[1]
-
-        if type(first) == "table" and _is_finite_number(first.distance) then
-            return first.distance
-        end
-    end
-
-    value = d
-
-    if type(value) == "number" and _is_finite_number(value) then
-        return value
-    end
-
-    if type(value) == "table" then
-        if _is_finite_number(value.distance) then
-            return value.distance
-        end
-
-        local first = value[1]
-
-        if type(first) == "table" and _is_finite_number(first.distance) then
-            return first.distance
-        end
-    end
-
-    return nil
-end
-
-local function _is_world_position_occluded(camera_position, world_position)
-    local physics_world = _safe_physics_world()
-    local immediate_raycast = PhysicsWorld and PhysicsWorld.immediate_raycast
-
-    if not physics_world or not immediate_raycast then
-        return false
-    end
-
-    local dx = world_position.x - camera_position.x
-    local dy = world_position.y - camera_position.y
-    local dz = world_position.z - camera_position.z
-    local distance = math_sqrt(dx * dx + dy * dy + dz * dz)
-
-    if not _is_finite_number(distance) or distance <= OCCLUSION_EPSILON then
-        return false
-    end
-
-    local origin = Vector3(camera_position.x, camera_position.y, camera_position.z)
-    local direction = Vector3(dx / distance, dy / distance, dz / distance)
-    local threshold = distance - OCCLUSION_EPSILON
-
-    for i = 1, OCCLUSION_RAYCAST_FILTER_COUNT do
-        local ok, a, b, c, d = pcall(
-            immediate_raycast,
-            physics_world,
-            origin,
-            direction,
-            distance,
-            OCCLUSION_RAYCAST_MODE,
-            OCCLUSION_COLLISION_FILTER,
-            OCCLUSION_RAYCAST_FILTERS[i]
-        )
-
-        if ok then
-            local hit_distance = _extract_raycast_distance(a, b, c, d)
-
-            if hit_distance ~= nil then
-                return hit_distance < threshold
-            end
-        end
-    end
-
-    return false
-end
-
-local _safe_player_camera_rotation = function(self)
-    local parent = self and self._parent
-    if not parent or not parent.player_camera then
-        return nil
-    end
-
-    local ok_camera, camera = pcall(parent.player_camera, parent)
-
-    if not ok_camera or not camera then
-        return nil
-    end
-
-    local ok_rotation, rotation = pcall(Camera.local_rotation, camera)
-
-    if ok_rotation and rotation then
-        return rotation
-    end
-
-    return nil
-end
-
-local function _build_projection_context(self, fallback_camera_position, fallback_rotation)
-    local camera_position = _safe_player_camera_position(self) or fallback_camera_position
-    local camera_rotation = _safe_player_camera_rotation(self) or fallback_rotation
-    local basis = _rotation_basis(camera_rotation)
-
-    if not camera_position or not basis then
-        return nil
-    end
-
-    local ui_width, ui_height = _ui_space_size()
-    local vertical_fov = _safe_player_vertical_fov() or math_rad(65)
-    local tan_half_vertical = math_tan(vertical_fov * 0.5)
-    local aspect_ratio = ui_width / math_max(ui_height, 1)
-    local tan_half_horizontal = tan_half_vertical * aspect_ratio
-
-    if tan_half_vertical <= 0 or tan_half_horizontal <= 0 then
-        return nil
-    end
-
-    return {
-        camera_position = camera_position,
-        basis = basis,
-        ui_width = ui_width,
-        ui_height = ui_height,
-        tan_half_vertical = tan_half_vertical,
-        tan_half_horizontal = tan_half_horizontal,
-    }
-end
-
-local function _project_world_to_screen_with_context(world_position, projection_context)
-    if not world_position or not projection_context then
-        return nil, nil, nil
-    end
-
-    local camera_position = projection_context.camera_position
-    local basis = projection_context.basis
-
-    local dx = world_position.x - camera_position.x
-    local dy = world_position.y - camera_position.y
-    local dz = world_position.z - camera_position.z
-
-    local view_x = dx * basis.right.x + dy * basis.right.y + dz * basis.right.z
-    local view_y = dx * basis.up.x + dy * basis.up.y + dz * basis.up.z
-    local view_z = dx * basis.forward.x + dy * basis.forward.y + dz * basis.forward.z
-
-    if not (_is_finite_number(view_x) and _is_finite_number(view_y) and _is_finite_number(view_z)) then
-        return nil, nil, nil
-    end
-
-    if view_z <= 0.05 then
-        return nil, nil, nil
-    end
-
-    local ndc_x = view_x / (view_z * projection_context.tan_half_horizontal)
-    local ndc_y = view_y / (view_z * projection_context.tan_half_vertical)
-
-    if not (_is_finite_number(ndc_x) and _is_finite_number(ndc_y)) then
-        return nil, nil, nil
-    end
-
-    if math_abs(ndc_x) > 1 or math_abs(ndc_y) > 1 then
-        return nil, nil, nil
-    end
-
-    local screen_x = (ndc_x * 0.5 + 0.5) * projection_context.ui_width
-    local screen_y = (0.5 - ndc_y * 0.5) * projection_context.ui_height
-
-    if not (_is_finite_number(screen_x) and _is_finite_number(screen_y)) then
-        return nil, nil, nil
-    end
-
-    return screen_x, screen_y, camera_position
-end
-
-local function _project_world_to_screen(self, world_position, fallback_camera_position, fallback_rotation)
-    if not world_position then
-        return nil, nil, nil
-    end
-
-    local projection_context = _build_projection_context(self, fallback_camera_position, fallback_rotation)
-
-    if not projection_context then
-        return nil, nil, nil
-    end
-
-    return _project_world_to_screen_with_context(world_position, projection_context)
-end
-
-local function _screen_highlight_bracket_size(distance_sq)
-    local distance = math_sqrt(math_max(distance_sq or 0, 0))
-    local min_distance = 5
-    local max_distance = 20
-    local near_size = 24
-    local far_size = 18
-
-    if distance <= min_distance then
-        return near_size
-    end
-
-    if distance >= max_distance then
-        return far_size
-    end
-
-    local t = (distance - min_distance) / (max_distance - min_distance)
-    return near_size + (far_size - near_size) * t
-end
-
 local function _draw_screen_highlights(self, ui_renderer, snapshot, z, draw_cache)
     local highlights = snapshot and snapshot.screen_highlights or nil
     local highlight_count = highlights and #highlights or 0
@@ -3238,29 +2829,49 @@ local function _draw_screen_highlights(self, ui_renderer, snapshot, z, draw_cach
 
     local fallback_camera_position = snapshot and snapshot.player_position or nil
     local fallback_rotation = snapshot and snapshot.player_rotation or nil
-    local projection_context = _build_projection_context(self, fallback_camera_position, fallback_rotation)
+    local projection_context = mod.get_hud_projection_context and
+        mod:get_hud_projection_context(self, fallback_camera_position, fallback_rotation) or nil
 
     for i = 1, highlight_count do
         local highlight = highlights[i]
         local world_position = highlight.world_position
-        local screen_x, screen_y, camera_position
+        local fallback_world_position = highlight.fallback_world_position or world_position
+        local screen_x, screen_y, camera_position, marker_draw_size
 
-        if projection_context then
-            screen_x, screen_y, camera_position = _project_world_to_screen_with_context(world_position,
-                projection_context)
+        if mod.get_interaction_world_marker_draw_data then
+            screen_x, screen_y, marker_draw_size = mod:get_interaction_world_marker_draw_data(highlight.unit)
+        end
+
+        if not (screen_x and screen_y) then
+            if projection_context then
+                screen_x, screen_y, camera_position = mod:project_hud_world_to_screen_with_context(
+                    fallback_world_position,
+                    projection_context)
+            else
+                screen_x, screen_y, camera_position = mod:project_hud_world_to_screen(self, fallback_world_position,
+                    fallback_camera_position, fallback_rotation)
+            end
         else
-            screen_x, screen_y, camera_position = _project_world_to_screen(self, world_position,
-                fallback_camera_position, fallback_rotation)
+            camera_position = mod.get_hud_player_camera_position and mod:get_hud_player_camera_position(self)
+                or fallback_camera_position
         end
 
         if screen_x and screen_y then
-            local bracket_size = _screen_highlight_bracket_size(highlight.distance_sq_3d)
+            local bracket_size = mod.get_screen_highlight_bracket_size and
+                mod:get_screen_highlight_bracket_size(highlight.distance_sq_3d) or 24
+
+            if _is_finite_number(marker_draw_size) and marker_draw_size > 0 then
+                bracket_size = math_max(bracket_size, math_floor(marker_draw_size + 0.5))
+            end
+
             local draw_x = screen_x - bracket_size * 0.5
             local draw_y = screen_y - bracket_size * 0.5
             local draw_color = highlight.color
+            local occlusion_world_position = marker_draw_size ~= nil and world_position or fallback_world_position
 
-            if camera_position and world_position then
-                local ok_occluded, occluded = pcall(_is_world_position_occluded, camera_position, world_position)
+            if camera_position and occlusion_world_position then
+                local ok_occluded, occluded = pcall(mod.is_hud_world_position_occluded, mod, camera_position,
+                    occlusion_world_position)
 
                 if ok_occluded and occluded == true then
                     draw_color = highlight.occluded_color or highlight.color
@@ -3335,7 +2946,7 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
     local top_left_from_center = _top_left_from_center
     local base_icon_z = z + 5
     local projection_radius = radius - 8
-    local live_camera_rotation = _safe_player_camera_rotation(self)
+    local live_camera_rotation = mod.get_hud_player_camera_rotation and mod:get_hud_player_camera_rotation(self)
     local projection_rotation = live_camera_rotation or (snapshot and snapshot.player_rotation) or nil
 
     _draw_radar_frame(self, ui_renderer, x, y, z + 1, size, projection_rotation)
