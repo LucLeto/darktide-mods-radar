@@ -1774,6 +1774,84 @@ return function(env)
         return value
     end
 
+    function mod:show_nearby_highlight_distance_text_on_screen()
+        local value = self:get("nearby_highlight_distance_text")
+
+        return value == true or value == "screen" or value == "both"
+    end
+
+    function mod:get_nearby_highlight_thickness()
+        local value = tonumber(self:get("nearby_highlight_thickness")) or 0
+
+        if value < 0 then
+            value = 0
+        elseif value > 6 then
+            value = 6
+        end
+
+        return math_floor(value + 0.5)
+    end
+
+    function mod:get_nearby_highlight_opacity()
+        local value = tonumber(self:get("nearby_highlight_opacity")) or 255
+
+        if value < 25 then
+            value = 25
+        elseif value > 255 then
+            value = 255
+        end
+
+        return math_floor(value + 0.5)
+    end
+
+    function mod:get_nearby_highlight_custom_color()
+        if self:get("nearby_highlight_use_custom_color") ~= true then
+            return nil
+        end
+
+        local red = tonumber(self:get("nearby_highlight_color_red")) or 255
+        local green = tonumber(self:get("nearby_highlight_color_green")) or 255
+        local blue = tonumber(self:get("nearby_highlight_color_blue")) or 255
+
+        return {
+            255,
+            math_floor(_clamp(red, 0, 255) + 0.5),
+            math_floor(_clamp(green, 0, 255) + 0.5),
+            math_floor(_clamp(blue, 0, 255) + 0.5),
+        }
+    end
+
+    function mod:get_nearby_highlight_color(kind)
+        local fallback_white = DEFAULT_COLOR_ARRAY_WHITE or { 255, 255, 255, 255 }
+        local custom_color = self:get_nearby_highlight_custom_color()
+        local color = _copy_color_array(custom_color) or
+            _copy_color_array(NEARBY_OUTLINE_COLOR_BY_KIND[kind]) or
+            _copy_color_array(fallback_white)
+
+        if not color then
+            return nil
+        end
+
+        color[1] = self:get_nearby_highlight_opacity()
+
+        return color
+    end
+
+    function mod:is_nearby_highlight_distance_text_enabled_for_kind(kind)
+        if not kind or not _kind_enabled(kind) then
+            return false
+        end
+
+        local group_name = self:get_marker_scale_group(kind)
+        local setting_id = group_name and NEARBY_HIGHLIGHT_DISTANCE_TEXT_SETTING_BY_GROUP[group_name] or nil
+
+        if not setting_id then
+            return false
+        end
+
+        return self:get(setting_id) == true
+    end
+
     function mod:is_nearby_highlight_enabled_for_kind(kind)
         if not kind or not _kind_enabled(kind) then
             return false

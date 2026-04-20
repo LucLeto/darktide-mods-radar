@@ -924,6 +924,16 @@ return function(env)
         event_group = "nearby_highlight_event",
     }
 
+    NEARBY_HIGHLIGHT_DISTANCE_TEXT_SETTING_BY_GROUP = {
+        common_pickups_group = "nearby_highlight_distance_text_common_pickups",
+        materials_group = "nearby_highlight_distance_text_materials",
+        primary_objective_group = "nearby_highlight_distance_text_primary_objective",
+        secondary_objective_group = "nearby_highlight_distance_text_secondary_objective",
+        expeditions_specific_group = "nearby_highlight_distance_text_expeditions_specific",
+        martyr_s_skull_group = "nearby_highlight_distance_text_martyr_s_skull",
+        environment_group = "nearby_highlight_distance_text_environment",
+        event_group = "nearby_highlight_distance_text_event",
+    }
 
     DEFAULT_COLOR_ARRAY_WHITE = { 255, 255, 255, 255 }
 

@@ -1040,6 +1040,10 @@ return function(env)
     }
 
     function _screen_highlight_color_for_kind(kind)
+        if mod.get_nearby_highlight_color then
+            return mod:get_nearby_highlight_color(kind)
+        end
+
         return _copy_color_array(NEARBY_OUTLINE_COLOR_BY_KIND[kind])
     end
 

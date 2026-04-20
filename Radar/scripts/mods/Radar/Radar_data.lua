@@ -46,6 +46,27 @@ local function _icon_scale_slider(setting_id, title_key)
     }
 end
 
+local function _color_channel_slider(setting_id)
+    return {
+        setting_id = setting_id,
+        type = "numeric",
+        default_value = 255,
+        range = { 0, 255 },
+        decimals_number = 0,
+        step_size_value = 1,
+    }
+end
+
+local function _nearby_highlight_radar_distance_text_checkbox(setting_id)
+    return {
+        setting_id = setting_id,
+        title = "nearby_highlight_radar_distance_text",
+        tooltip = "nearby_highlight_radar_distance_text_tooltip",
+        type = "checkbox",
+        default_value = false,
+    }
+end
+
 local function _icon_marked_off_dropdown(setting_id, default_value)
     local tooltip = nil
 
@@ -309,17 +330,6 @@ return {
                                 return mod:get_background_opacity()
                             end,
                         },
-                        {
-                            setting_id = "highlight_distance",
-                            type = "numeric",
-                            default_value = 10,
-                            range = { 5, 20 },
-                            decimals_number = 0,
-                            step_size_value = 1,
-                            get = function()
-                                return mod:get_nearby_outline_range()
-                            end,
-                        },
                     },
                 },
                 {
@@ -445,6 +455,53 @@ return {
                     },
                 },
                 {
+                    setting_id = "nearby_highlight_group",
+                    type = "group",
+                    sub_widgets = {
+                        {
+                            setting_id = "highlight_distance",
+                            type = "numeric",
+                            default_value = 10,
+                            range = { 5, 20 },
+                            decimals_number = 0,
+                            step_size_value = 1,
+                            get = function()
+                                return mod:get_nearby_highlight_range()
+                            end,
+                        },
+                        {
+                            setting_id = "nearby_highlight_distance_text",
+                            tooltip = "nearby_highlight_screen_distance_text_tooltip",
+                            type = "checkbox",
+                            default_value = false,
+                        },
+                        {
+                            setting_id = "nearby_highlight_thickness",
+                            type = "numeric",
+                            default_value = 0,
+                            range = { 0, 6 },
+                            decimals_number = 0,
+                            step_size_value = 1,
+                        },
+                        {
+                            setting_id = "nearby_highlight_opacity",
+                            type = "numeric",
+                            default_value = 255,
+                            range = { 25, 255 },
+                            decimals_number = 0,
+                            step_size_value = 5,
+                        },
+                        {
+                            setting_id = "nearby_highlight_use_custom_color",
+                            type = "checkbox",
+                            default_value = false,
+                        },
+                        _color_channel_slider("nearby_highlight_color_red"),
+                        _color_channel_slider("nearby_highlight_color_green"),
+                        _color_channel_slider("nearby_highlight_color_blue"),
+                    },
+                },
+                {
                     setting_id = "common_pickups_group",
                     type = "group",
                     sub_widgets = {
@@ -454,6 +511,7 @@ return {
                             type = "checkbox",
                             default_value = false,
                         },
+                        _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_common_pickups"),
                         _artwork_icon_off_dropdown("show_crates"),
                         {
                             setting_id = "show_ammo_small",
@@ -512,6 +570,7 @@ return {
                             type = "checkbox",
                             default_value = false,
                         },
+                        _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_materials"),
                         _artwork_icon_off_dropdown("show_diamantine"),
                         _artwork_icon_off_dropdown("show_plasteel"),
                     },
@@ -526,6 +585,8 @@ return {
                             type = "checkbox",
                             default_value = false,
                         },
+                        _nearby_highlight_radar_distance_text_checkbox(
+                            "nearby_highlight_distance_text_primary_objective"),
                         {
                             setting_id = "show_power_cell_teal",
                             type = "checkbox",
@@ -578,6 +639,8 @@ return {
                             type = "checkbox",
                             default_value = false,
                         },
+                        _nearby_highlight_radar_distance_text_checkbox(
+                            "nearby_highlight_distance_text_secondary_objective"),
                         {
                             setting_id = "show_pocketable_grimoire",
                             type = "checkbox",
@@ -642,6 +705,8 @@ return {
                             type = "checkbox",
                             default_value = false,
                         },
+                        _nearby_highlight_radar_distance_text_checkbox(
+                            "nearby_highlight_distance_text_expeditions_specific"),
                         _artwork_icon_off_dropdown("show_expeditions_currency"),
                         _artwork_icon_off_dropdown("show_expeditions_loot"),
                         _artwork_icon_off_dropdown("show_expeditions_dropped_loot"),
@@ -707,6 +772,7 @@ return {
                             type = "checkbox",
                             default_value = false,
                         },
+                        _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_martyr_s_skull"),
                         {
                             setting_id = "show_martyr_skull",
                             type = "checkbox",
@@ -729,6 +795,7 @@ return {
                             type = "checkbox",
                             default_value = false,
                         },
+                        _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_environment"),
                         {
                             setting_id = "show_medicae_station",
                             type = "checkbox",
@@ -957,6 +1024,7 @@ return {
                             type = "checkbox",
                             default_value = false,
                         },
+                        _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_event"),
                         {
                             setting_id = "show_tainted_skull",
                             type = "checkbox",

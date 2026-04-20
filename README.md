@@ -60,7 +60,7 @@ The new **Auspex** style provides a more diegetic scanner look. It supports the 
 
 ### Nearby highlight example
 
-Nearby highlights add small screen-space brackets for supported non-enemy markers when they are close enough to matter. They reuse the marker family color and darken when the target is occluded.
+Nearby highlights add small screen-space brackets for supported non-enemy markers when they are close enough to matter. You can now tune their thickness and opacity, optionally override them with a custom color, and show item distance text on the screen highlight, the radar marker, or both.
 
 <p>
   <img src="doc/img/highlight_example.png" width="70%" alt="Nearby highlight example" />

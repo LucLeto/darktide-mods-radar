@@ -280,7 +280,7 @@ local ARTWORK_MODE_ICON_PRESENTATIONS = {
     crate_unknown = {
         icon = "content/ui/materials/icons/generic/loot",
         color = _widget_color(255, 225, 200, 136),
-        size = 14,
+        size = 20,
     },
     material_diamantine = {
         icon = "content/ui/materials/hud/interactions/icons/environment_generic",
@@ -467,7 +467,7 @@ local PRESENTATIONS = {
     medicae_station = {
         icon = "content/ui/materials/hud/interactions/icons/respawn",
         color = _widget_color(255, 38, 205, 26),
-        size = 14,
+        size = 20,
     },
     luggable_socket = {
         icon = "content/ui/materials/icons/presets/preset_11",
@@ -507,7 +507,7 @@ local PRESENTATIONS = {
     crate_unknown = {
         icon = "content/ui/materials/icons/engrams/engram_rarity_04",
         color = WHITE_WIDGET_COLOR,
-        size = 14,
+        size = 20,
     },
     material_diamantine = {
         icon = "content/ui/materials/icons/currencies/diamantine_big",
@@ -652,12 +652,19 @@ local function _draw_box(ui_renderer, x, y, z, w, h, color)
     Gui.rect(gui, position, size, color)
 end
 
-local function _draw_marker_brackets(ui_renderer, x, y, z, size, color)
+local function _draw_marker_brackets(ui_renderer, x, y, z, size, color, thickness_override)
     x = math_floor((tonumber(x) or 0) + 0.5)
     y = math_floor((tonumber(y) or 0) + 0.5)
     size = math_max(1, math_floor((tonumber(size) or 0) + 0.5))
 
-    local thickness = size >= 16 and 2 or 1
+    local thickness = tonumber(thickness_override)
+
+    if thickness and thickness > 0 then
+        thickness = math_max(1, math_floor(thickness + 0.5))
+    else
+        thickness = size >= 16 and 2 or 1
+    end
+
     local length = math_max(4, math_floor(size * 0.35))
     local pad = 1
     local left = x - pad
@@ -1650,9 +1657,15 @@ local _draw_cache = {
     marker_scale_by_group = {},
     enemy_scale_by_kind = {},
     enemy_visual_by_kind = {},
+    nearby_highlight_enabled_by_kind = {},
+    nearby_highlight_color_by_kind = {},
+    nearby_highlight_distance_text_enabled_by_kind = {},
     show_player_tag_distance_text = false,
     show_boss_distance_text = false,
     show_ability_marked_enemies = false,
+    show_nearby_highlight_distance_text_on_screen = false,
+    nearby_highlight_range_sq = 0,
+    nearby_highlight_thickness = 0,
 }
 
 local function _build_draw_cache()
@@ -1664,6 +1677,9 @@ local function _build_draw_cache()
     table_clear(draw_cache.marker_scale_by_group)
     table_clear(draw_cache.enemy_scale_by_kind)
     table_clear(draw_cache.enemy_visual_by_kind)
+    table_clear(draw_cache.nearby_highlight_enabled_by_kind)
+    table_clear(draw_cache.nearby_highlight_color_by_kind)
+    table_clear(draw_cache.nearby_highlight_distance_text_enabled_by_kind)
 
     draw_cache.icon_scale = _icon_scale_factor()
     draw_cache.player_display_style = _normalized_player_display_style(get(mod, "player_display_style"))
@@ -1679,6 +1695,12 @@ local function _build_draw_cache()
     draw_cache.show_expedition_loot_value_text = mod.get_show_expedition_loot_value_text and
         mod:get_show_expedition_loot_value_text() or false
     draw_cache.show_boss_distance_text = get(mod, "show_boss_distance_text") == true
+    draw_cache.show_nearby_highlight_distance_text_on_screen = mod.show_nearby_highlight_distance_text_on_screen and
+        mod:show_nearby_highlight_distance_text_on_screen() or false
+    local nearby_highlight_range = mod.get_nearby_highlight_range and mod:get_nearby_highlight_range() or 10
+    draw_cache.nearby_highlight_range_sq = nearby_highlight_range * nearby_highlight_range
+    draw_cache.nearby_highlight_thickness = mod.get_nearby_highlight_thickness and
+        mod:get_nearby_highlight_thickness() or 0
     draw_cache.slot_colors = UISettings and UISettings.player_slot_colors or nil
     draw_cache.debug_mode = get(mod, "debug_mode") == true
 
@@ -2033,7 +2055,6 @@ local function _draw_marker_value_text(ui_renderer, value_text, x, y, z, icon_si
     local position = _marker_value_text_position
     local size = _marker_value_text_size
     local color = _marker_value_text_color
-    local source_color = value_text_color or color
 
     position[1] = text_x
     position[2] = text_y
@@ -2042,10 +2063,17 @@ local function _draw_marker_value_text(ui_renderer, value_text, x, y, z, icon_si
     size[1] = text_box_width
     size[2] = text_box_height
 
-    color[1] = source_color[1] or 255
-    color[2] = source_color[2] or 255
-    color[3] = source_color[3] or 225
-    color[4] = source_color[4] or 0
+    if value_text_color ~= nil then
+        color[1] = value_text_color[1] or 255
+        color[2] = value_text_color[2] or 255
+        color[3] = value_text_color[3] or 225
+        color[4] = value_text_color[4] or 0
+    else
+        color[1] = 255
+        color[2] = 255
+        color[3] = 225
+        color[4] = 0
+    end
 
     table_clear(_marker_value_text_options)
     UIFonts.get_font_options_by_style(MARKER_VALUE_TEXT_STYLE, _marker_value_text_options)
@@ -2258,6 +2286,126 @@ local function _tech_remnant_value_text(target, draw_cache)
     return tostring(math_floor(value + 0.5))
 end
 
+local function _distance_text_from_squared_distance(distance_sq_3d, suffix)
+    distance_sq_3d = tonumber(distance_sq_3d)
+
+    if not distance_sq_3d or distance_sq_3d < 0 then
+        return nil
+    end
+
+    return math_floor(math_sqrt(distance_sq_3d) + 0.5) .. (suffix or " m")
+end
+
+local function _cached_nearby_highlight_enabled(kind, draw_cache)
+    if kind == nil then
+        return false
+    end
+
+    local cache = draw_cache and draw_cache.nearby_highlight_enabled_by_kind or nil
+
+    if cache then
+        local cached = cache[kind]
+
+        if cached ~= nil then
+            return cached
+        end
+    end
+
+    local enabled = mod.is_nearby_highlight_enabled_for_kind and mod:is_nearby_highlight_enabled_for_kind(kind) or false
+
+    if cache then
+        cache[kind] = enabled
+    end
+
+    return enabled
+end
+
+local function _cached_nearby_highlight_color(kind, draw_cache)
+    if kind == nil then
+        return nil
+    end
+
+    local cache = draw_cache and draw_cache.nearby_highlight_color_by_kind or nil
+
+    if cache then
+        local cached = cache[kind]
+
+        if cached ~= nil then
+            return cached ~= false and cached or nil
+        end
+    end
+
+    local color = mod.get_nearby_highlight_color and mod:get_nearby_highlight_color(kind) or nil
+
+    if cache then
+        cache[kind] = color or false
+    end
+
+    return color
+end
+
+local function _cached_nearby_highlight_distance_text_enabled(kind, draw_cache)
+    if kind == nil then
+        return false
+    end
+
+    local cache = draw_cache and draw_cache.nearby_highlight_distance_text_enabled_by_kind or nil
+
+    if cache then
+        local cached = cache[kind]
+
+        if cached ~= nil then
+            return cached
+        end
+    end
+
+    local enabled = mod.is_nearby_highlight_distance_text_enabled_for_kind and
+        mod:is_nearby_highlight_distance_text_enabled_for_kind(kind) or false
+
+    if cache then
+        cache[kind] = enabled
+    end
+
+    return enabled
+end
+
+local function _screen_nearby_highlight_item_distance_text(target, draw_cache)
+    local show_distance_text = draw_cache and draw_cache.show_nearby_highlight_distance_text_on_screen or false
+
+    if not show_distance_text then
+        return nil
+    end
+
+    local kind = target and target.kind or nil
+
+    if not _cached_nearby_highlight_enabled(kind, draw_cache) then
+        return nil
+    end
+
+    local distance_sq_3d = target and tonumber(target.distance_sq_3d) or nil
+    local max_distance_sq = draw_cache and tonumber(draw_cache.nearby_highlight_range_sq) or nil
+
+    if not distance_sq_3d or distance_sq_3d < 0 then
+        return nil
+    end
+
+    if max_distance_sq and distance_sq_3d > max_distance_sq then
+        return nil
+    end
+
+    return _distance_text_from_squared_distance(distance_sq_3d, "m")
+end
+
+local function _radar_nearby_highlight_item_distance_text(target, draw_cache)
+    local kind = target and target.kind or nil
+
+    if not _cached_nearby_highlight_distance_text_enabled(kind, draw_cache) then
+        return nil
+    end
+
+    return _distance_text_from_squared_distance(target and target.distance_sq_3d, "m")
+end
+
 local function _is_boss_distance_text_kind(kind)
     return kind == "enemy_monstrosity"
         or kind == "enemy_captain"
@@ -2272,13 +2420,7 @@ local function _boss_distance_text(target, draw_cache)
         return nil
     end
 
-    local distance_sq_3d = target and tonumber(target.distance_sq_3d) or nil
-
-    if not distance_sq_3d or distance_sq_3d < 0 then
-        return nil
-    end
-
-    return math_floor(math_sqrt(distance_sq_3d) + 0.5) .. " m"
+    return _distance_text_from_squared_distance(target and target.distance_sq_3d, " m")
 end
 
 local BOSS_DISTANCE_TEXT_WIDGET_COLOR = { 255, 255, 225, 0 }
@@ -2292,13 +2434,7 @@ local function _player_smart_tag_distance_text(target, draw_cache)
         return nil
     end
 
-    local distance_sq_3d = target and tonumber(target.distance_sq_3d) or nil
-
-    if not distance_sq_3d or distance_sq_3d < 0 then
-        return nil
-    end
-
-    return math_floor(math_sqrt(distance_sq_3d) + 0.5) .. " m"
+    return _distance_text_from_squared_distance(target and target.distance_sq_3d, " m")
 end
 
 local function _apply_target_specific_visual_overrides(target, visual, draw_cache)
@@ -2317,8 +2453,9 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
         local scaled_size = should_scale and _tech_remnant_scaled_size(base_size, _tech_remnant_target_value(target)) or
             base_size
         local value_text = _tech_remnant_value_text(target, draw_cache)
+        local radar_distance_text = _radar_nearby_highlight_item_distance_text(target, draw_cache)
 
-        if scaled_size == base_size and value_text == nil and visual.value_text == nil then
+        if scaled_size == base_size and value_text == nil and visual.value_text == nil and radar_distance_text == nil then
             return visual
         end
 
@@ -2329,6 +2466,14 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
         end
 
         result.value_text = value_text
+        result.value_text_color = value_text ~= nil and { 255, 255, 225, 0 } or nil
+
+        if radar_distance_text ~= nil then
+            result.secondary_value_text = radar_distance_text
+            result.secondary_value_text_color = BOSS_DISTANCE_TEXT_WIDGET_COLOR
+            result.secondary_value_text_anchor = "bottom_center"
+            result.secondary_value_text_offset_y = -3
+        end
 
         return result
     end
@@ -2348,15 +2493,31 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
 
     local boss_distance_text = _boss_distance_text(target, draw_cache)
 
-    if boss_distance_text == nil then
+    if boss_distance_text ~= nil then
+        local result = _copy_visual(visual)
+        result.value_text = boss_distance_text
+        result.value_text_color = BOSS_DISTANCE_TEXT_WIDGET_COLOR
+        result.value_text_anchor = "bottom_center"
+        result.value_text_offset_x = 3
+        result.value_text_offset_y = -3
+
+        return result
+    end
+
+    if visual.value_text ~= nil then
+        return visual
+    end
+
+    local nearby_highlight_distance_text = _radar_nearby_highlight_item_distance_text(target, draw_cache)
+
+    if nearby_highlight_distance_text == nil then
         return visual
     end
 
     local result = _copy_visual(visual)
-    result.value_text = boss_distance_text
+    result.value_text = nearby_highlight_distance_text
     result.value_text_color = BOSS_DISTANCE_TEXT_WIDGET_COLOR
     result.value_text_anchor = "bottom_center"
-    result.value_text_offset_x = 3
     result.value_text_offset_y = -3
 
     return result
@@ -3066,9 +3227,10 @@ local function _screen_highlight_bracket_size(distance_sq)
     return near_size + (far_size - near_size) * t
 end
 
-local function _draw_screen_highlights(self, ui_renderer, snapshot, z)
+local function _draw_screen_highlights(self, ui_renderer, snapshot, z, draw_cache)
     local highlights = snapshot and snapshot.screen_highlights or nil
     local highlight_count = highlights and #highlights or 0
+    local highlight_thickness = draw_cache and draw_cache.nearby_highlight_thickness or 0
 
     if highlight_count == 0 then
         return
@@ -3105,7 +3267,25 @@ local function _draw_screen_highlights(self, ui_renderer, snapshot, z)
                 end
             end
 
-            _draw_marker_brackets(ui_renderer, draw_x, draw_y, z, bracket_size, draw_color)
+            _draw_marker_brackets(ui_renderer, draw_x, draw_y, z, bracket_size, draw_color, highlight_thickness)
+
+            local distance_text = _screen_nearby_highlight_item_distance_text(highlight, draw_cache)
+
+            if distance_text ~= nil then
+                _draw_marker_value_text(
+                    ui_renderer,
+                    distance_text,
+                    draw_x,
+                    draw_y,
+                    z,
+                    bracket_size,
+                    false,
+                    draw_color,
+                    "top_center",
+                    0,
+                    -4
+                )
+            end
         end
     end
 end
@@ -3240,6 +3420,11 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
                 local value_text_anchor = visual and visual.value_text_anchor or nil
                 local value_text_offset_x = visual and visual.value_text_offset_x or nil
                 local value_text_offset_y = visual and visual.value_text_offset_y or nil
+                local secondary_value_text = visual and visual.secondary_value_text or nil
+                local secondary_value_text_color = visual and visual.secondary_value_text_color or nil
+                local secondary_value_text_anchor = visual and visual.secondary_value_text_anchor or nil
+                local secondary_value_text_offset_x = visual and visual.secondary_value_text_offset_x or nil
+                local secondary_value_text_offset_y = visual and visual.secondary_value_text_offset_y or nil
 
                 if bracket_color and should_draw_marker_brackets(target, draw_cache) then
                     draw_marker_brackets(ui_renderer, bracket_x, bracket_y, bracket_z, bracket_size, bracket_color)
@@ -3287,12 +3472,26 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
                     value_text_offset_y
                 )
 
+                draw_marker_value_text(
+                    ui_renderer,
+                    secondary_value_text,
+                    draw_x,
+                    draw_y,
+                    base_icon_z,
+                    marker_size,
+                    target.vertical_state ~= nil,
+                    secondary_value_text_color,
+                    secondary_value_text_anchor,
+                    secondary_value_text_offset_x,
+                    secondary_value_text_offset_y
+                )
+
                 next_widget_index = next_widget_index + 1
             end
         end
     end
 
-    _draw_screen_highlights(self, ui_renderer, snapshot, z + 40)
+    _draw_screen_highlights(self, ui_renderer, snapshot, z + 40, draw_cache)
 
     local last_active_marker_widget_index = next_widget_index - 1
     local previous_active_marker_widget_index = self._last_active_marker_widget_index or 0
