@@ -80,6 +80,10 @@ return function(env)
     mod._highlight_source_radar_targets = {}
     mod._idol_destroyed_collectible_keys = {}
     mod._idol_destroyed_units = {}
+    mod._last_safe_zone_section_index = nil
+    mod._last_expedition_in_safe_zone = nil
+    mod._player_smart_tag_generation = 0
+    mod._player_smart_tag_state_by_id = {}
 
     MONSTROSITY_BREEDS = {
         chaos_daemonhost = true,
@@ -1210,17 +1214,17 @@ return function(env)
                 if not package_manager:has_loaded(package_name) then
                     package_manager:load(package_name, "Radar", nil, true)
                     if debug_mode then
-                        mod:echo(string_format("[Radar] package load requested | %s", tostring(package_name)))
+                        mod:info(string_format("[Radar] package load requested | %s", tostring(package_name)))
                     end
                 else
                     if debug_mode then
-                        mod:echo(string_format("[Radar] package already loaded | %s", tostring(package_name)))
+                        mod:info(string_format("[Radar] package already loaded | %s", tostring(package_name)))
                     end
                 end
             end)
 
             if not ok and debug_mode then
-                mod:echo(string_format("[Radar] package load failed | %s | %s", tostring(package_name), tostring(err)))
+                mod:error(string_format("[Radar] package load failed | %s | %s", tostring(package_name), tostring(err)))
             end
         end
 
@@ -1240,7 +1244,7 @@ return function(env)
         load_package("packages/ui/material_sets/circumstances")
 
         if debug_mode then
-            mod:echo("Packages loaded")
+            mod:info("Packages loaded")
         end
     end
 end

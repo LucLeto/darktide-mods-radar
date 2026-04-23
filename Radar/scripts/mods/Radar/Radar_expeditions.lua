@@ -77,6 +77,17 @@ return function(env)
         return nil
     end
 
+    function _has_active_expedition_player_drop(unit)
+        if not unit then
+            return false
+        end
+
+        local loot_handler = _safe_expedition_loot_handler()
+        local dropped_loot_by_pickup_unit = loot_handler and rawget(loot_handler, "_dropped_loot_by_pickup_unit")
+
+        return dropped_loot_by_pickup_unit ~= nil and dropped_loot_by_pickup_unit[unit] ~= nil
+    end
+
     function _is_in_expedition_safe_zone()
         if not _is_expedition_runtime() then
             return false
@@ -114,32 +125,200 @@ return function(env)
         return _copy_vector3(value)
     end
 
-    local function _safe_expedition_level_index(level)
-        if not level or not Managers or not Managers.state or not Managers.state.unit_spawner then
+    local UNIT_LEVEL_METHOD_NAMES = {
+        "level_by_unit",
+        "get_level_by_unit",
+        "unit_level",
+        "unit_level_by_unit",
+        "get_unit_level",
+        "owner_level",
+        "unit_owner_level",
+    }
+
+    local UNIT_LEVEL_INDEX_METHOD_NAMES = {
+        "level_index_by_unit",
+        "get_level_index_by_unit",
+        "unit_level_index",
+        "unit_level_index_by_unit",
+        "get_unit_level_index",
+        "unit_to_level_index",
+    }
+
+    local UNIT_LEVEL_LOOKUP_TABLE_NAMES = {
+        "_unit_to_level",
+        "_level_by_unit",
+        "_unit_to_level_lookup",
+        "_unit_to_level_map",
+    }
+
+    local UNIT_LEVEL_INDEX_LOOKUP_TABLE_NAMES = {
+        "_unit_to_level_index",
+        "_level_index_by_unit",
+        "_unit_to_level_index_lookup",
+        "_unit_to_level_index_map",
+    }
+
+    local UNIT_SECTION_DATA_FIELDS = {
+        "expedition_section_index",
+        "section_index",
+    }
+
+    local UNIT_LEVEL_INDEX_DATA_FIELDS = {
+        "expedition_level_index",
+        "level_index",
+    }
+
+    local function _safe_unit_spawner()
+        return Managers and Managers.state and Managers.state.unit_spawner or nil
+    end
+
+    local function _normalized_expedition_index(index)
+        return tonumber(index) or index
+    end
+
+    local function _safe_unit_data_value(unit, field_name)
+        local unit_api = Unit
+        local has_data = unit_api and unit_api.has_data
+        local get_data = unit_api and unit_api.get_data
+
+        if not unit or not field_name or type(has_data) ~= "function" or type(get_data) ~= "function" then
             return nil
         end
 
-        local unit_spawner = Managers.state.unit_spawner
-        if not unit_spawner.index_by_level then
+        local ok_has_data, has_value = pcall(has_data, unit, field_name)
+        if not ok_has_data or not has_value then
+            return nil
+        end
+
+        local ok_value, value = pcall(get_data, unit, field_name)
+        if ok_value then
+            return value
+        end
+
+        return nil
+    end
+
+    local function _safe_unit_data_index(unit, field_names)
+        for i = 1, #field_names do
+            local value = _safe_unit_data_value(unit, field_names[i])
+
+            if value ~= nil then
+                return _normalized_expedition_index(value)
+            end
+        end
+
+        return nil
+    end
+
+    local function _safe_unit_spawner_method_lookup(unit_spawner, unit, method_names)
+        if not unit_spawner or not unit then
+            return nil
+        end
+
+        for i = 1, #method_names do
+            local method = unit_spawner[method_names[i]]
+
+            if type(method) == "function" then
+                local ok, value = pcall(method, unit_spawner, unit)
+
+                if ok and value ~= nil then
+                    return value
+                end
+            end
+        end
+
+        return nil
+    end
+
+    local function _safe_unit_spawner_table_lookup(unit_spawner, unit, table_names)
+        if type(unit_spawner) ~= "table" or not unit then
+            return nil
+        end
+
+        for i = 1, #table_names do
+            local lookup = rawget(unit_spawner, table_names[i])
+
+            if type(lookup) == "table" then
+                local value = lookup[unit]
+
+                if value ~= nil then
+                    return value
+                end
+            end
+        end
+
+        return nil
+    end
+
+    local function _safe_unit_level(unit)
+        local unit_api = Unit
+        local level_fn = unit_api and unit_api.level
+
+        if unit and type(level_fn) == "function" then
+            local ok, level = pcall(level_fn, unit)
+
+            if ok and level ~= nil then
+                return level
+            end
+        end
+
+        local unit_spawner = _safe_unit_spawner()
+        local level = _safe_unit_spawner_method_lookup(unit_spawner, unit, UNIT_LEVEL_METHOD_NAMES)
+
+        if level ~= nil then
+            return level
+        end
+
+        return _safe_unit_spawner_table_lookup(unit_spawner, unit, UNIT_LEVEL_LOOKUP_TABLE_NAMES)
+    end
+
+    local function _safe_unit_level_index(unit)
+        local data_index = _safe_unit_data_index(unit, UNIT_LEVEL_INDEX_DATA_FIELDS)
+
+        if data_index ~= nil then
+            return data_index
+        end
+
+        local unit_spawner = _safe_unit_spawner()
+        local level_index = _safe_unit_spawner_method_lookup(unit_spawner, unit, UNIT_LEVEL_INDEX_METHOD_NAMES)
+
+        if level_index ~= nil then
+            return _normalized_expedition_index(level_index)
+        end
+
+        level_index = _safe_unit_spawner_table_lookup(unit_spawner, unit, UNIT_LEVEL_INDEX_LOOKUP_TABLE_NAMES)
+
+        return _normalized_expedition_index(level_index)
+    end
+
+    local function _safe_expedition_level_index(level)
+        local unit_spawner = _safe_unit_spawner()
+
+        if not level or not unit_spawner then
+            return nil
+        end
+
+        if type(unit_spawner.index_by_level) ~= "function" then
             return nil
         end
 
         local ok, level_index = pcall(unit_spawner.index_by_level, unit_spawner, level)
 
         if ok then
-            return level_index
+            return _normalized_expedition_index(level_index)
         end
 
         return nil
     end
 
     local function _safe_expedition_level_by_index(level_index, sub_level_index)
-        if level_index == nil or not Managers or not Managers.state or not Managers.state.unit_spawner then
+        local unit_spawner = _safe_unit_spawner()
+
+        if level_index == nil or not unit_spawner then
             return nil
         end
 
-        local unit_spawner = Managers.state.unit_spawner
-        if not unit_spawner.level_by_index then
+        if type(unit_spawner.level_by_index) ~= "function" then
             return nil
         end
 
@@ -152,13 +331,8 @@ return function(env)
         return nil
     end
 
-    local function _safe_expedition_level_data_by_index(game_mode, level_index, sub_level_index)
-        if not game_mode or not game_mode.get_level_data then
-            return nil
-        end
-
-        local level = _safe_expedition_level_by_index(level_index, sub_level_index)
-        if not level then
+    local function _safe_expedition_level_data_by_level(game_mode, level)
+        if not game_mode or not level or type(game_mode.get_level_data) ~= "function" then
             return nil
         end
 
@@ -171,18 +345,66 @@ return function(env)
         return nil
     end
 
+    local function _safe_expedition_level_data_by_index(game_mode, level_index, sub_level_index)
+        if not game_mode or type(game_mode.get_level_data) ~= "function" then
+            return nil
+        end
+
+        local level = _safe_expedition_level_by_index(level_index, sub_level_index)
+        if not level then
+            return nil
+        end
+
+        return _safe_expedition_level_data_by_level(game_mode, level)
+    end
+
+    local function _safe_expedition_section_index_from_level_data(level_data)
+        local section = level_data and level_data.section or nil
+        local section_index = section and section.index or nil
+
+        return _normalized_expedition_index(section_index)
+    end
+
+    local function _safe_expedition_section_index_by_level(game_mode, level)
+        local level_data = _safe_expedition_level_data_by_level(game_mode, level)
+
+        return _safe_expedition_section_index_from_level_data(level_data)
+    end
+
     local function _safe_expedition_section_index_by_level_index(game_mode, level_index, sub_level_index)
         local level_data = _safe_expedition_level_data_by_index(game_mode, level_index, sub_level_index)
-        local section = level_data and level_data.section or nil
 
-        return section and section.index or nil
+        return _safe_expedition_section_index_from_level_data(level_data)
+    end
+
+    local function _safe_unit_expedition_section_index(game_mode, unit)
+        local section_index = _safe_unit_data_index(unit, UNIT_SECTION_DATA_FIELDS)
+
+        if section_index ~= nil then
+            return section_index
+        end
+
+        local level = _safe_unit_level(unit)
+        section_index = _safe_expedition_section_index_by_level(game_mode, level)
+
+        if section_index ~= nil then
+            return section_index
+        end
+
+        local level_index = _safe_unit_level_index(unit)
+
+        if level_index ~= nil then
+            return _safe_expedition_section_index_by_level_index(game_mode, level_index)
+        end
+
+        return nil
     end
 
     local function _safe_current_safe_zone_section_index(game_mode)
         local logic = game_mode and game_mode._game_mode_logic or nil
         local index = logic and logic._current_safe_zone_section_index or nil
 
-        return tonumber(index) or index
+        return _normalized_expedition_index(index)
     end
 
     local function _safe_expedition_active_section_index(game_mode)
@@ -214,7 +436,7 @@ return function(env)
             local ok, value = pcall(current_location_index, game_mode)
 
             if ok then
-                return value
+                return _normalized_expedition_index(value)
             end
         end
 
@@ -231,7 +453,7 @@ return function(env)
             return true
         end
 
-        return section_index == active_section_index
+        return section_index == _normalized_expedition_index(active_section_index)
     end
 
     local function _expedition_opportunity_icon(level_index)
@@ -414,6 +636,10 @@ return function(env)
             return false
         end
 
+        if kind == "material_expeditions_loot_player_drop" then
+            return true
+        end
+
         if _is_player_smart_tag_kind(kind) then
             return true
         end
@@ -454,6 +680,55 @@ return function(env)
         end
 
         return get_setting(mod, setting_id) ~= false
+    end
+
+    local function _is_expedition_section_filtered_item_kind(kind)
+        if not kind then
+            return false
+        end
+
+        if kind == "player_teammate" then
+            return false
+        end
+
+        if _is_player_smart_tag_kind(kind) or _is_enemy_kind(kind) or _is_expedition_marker_kind(kind) then
+            return false
+        end
+
+        return true
+    end
+
+    function _is_valid_expedition_item_for_current_section(kind, unit)
+        if not _is_expedition_runtime() then
+            return true
+        end
+
+        if not _is_expedition_section_filtered_item_kind(kind) then
+            return true
+        end
+
+        if kind == "material_expeditions_loot_player_drop" then
+            if not _has_active_expedition_player_drop(unit) then
+                return false
+            end
+        end
+
+        local game_mode = _safe_game_mode()
+        local active_section_index = _safe_expedition_active_section_index(game_mode)
+
+        if active_section_index == nil then
+            return true
+        end
+
+        local unit_section_index = _safe_unit_expedition_section_index(game_mode, unit)
+
+        if unit_section_index == nil then
+            _log_once("expedition_item_section_unknown:" .. tostring(kind),
+                "Unable to resolve expedition section for item kind: " .. tostring(kind))
+            return true
+        end
+
+        return unit_section_index == active_section_index
     end
 
     local function _pickup_meta(pickup_name, pickup_data, interaction_type, ui_interaction_type, interaction_icon,
@@ -689,6 +964,12 @@ return function(env)
         end
 
         local tracked_units = mod._tracked_units
+
+        if not _is_valid_expedition_item_for_current_section(kind, unit) then
+            tracked_units[unit] = nil
+            return
+        end
+
         local existing = tracked_units[unit]
         local now = _safe_gameplay_time() or 0
         local position = _safe_unit_position(unit)
@@ -720,6 +1001,67 @@ return function(env)
         if tracked and tracked.source == source then
             tracked_units[unit] = nil
         end
+    end
+
+    local function _clear_invalid_expedition_item_units()
+        local tracked_units = mod._tracked_units
+
+        for unit, data in pairs(tracked_units) do
+            if data and not _is_valid_expedition_item_for_current_section(data.kind, unit) then
+                tracked_units[unit] = nil
+            end
+        end
+    end
+
+    local function _reset_expedition_player_smart_tag_state()
+        mod._last_expedition_in_safe_zone = nil
+        mod._player_smart_tag_generation = 0
+        mod._player_smart_tag_state_by_id = {}
+    end
+
+    local function _advance_expedition_player_smart_tag_generation()
+        mod._player_smart_tag_generation = (tonumber(mod._player_smart_tag_generation) or 0) + 1
+    end
+
+    function _sync_expedition_item_state()
+        if not _is_expedition_runtime() then
+            mod._last_safe_zone_section_index = nil
+            _reset_expedition_player_smart_tag_state()
+            return
+        end
+
+        local game_mode = _safe_game_mode()
+        if not game_mode then
+            return
+        end
+
+        local current_in_safe_zone = _is_in_expedition_safe_zone()
+        local previous_in_safe_zone = mod._last_expedition_in_safe_zone
+        local current_safe_zone_section_index = _safe_current_safe_zone_section_index(game_mode)
+        local previous_safe_zone_section_index = mod._last_safe_zone_section_index
+        local sanctuary_transition = false
+
+        if previous_in_safe_zone ~= nil and previous_in_safe_zone ~= current_in_safe_zone then
+            sanctuary_transition = true
+        end
+
+        if current_safe_zone_section_index ~= nil then
+            if previous_safe_zone_section_index ~= nil
+                and previous_safe_zone_section_index ~= current_safe_zone_section_index then
+                sanctuary_transition = true
+                _clear_invalid_expedition_item_units()
+            end
+
+            mod._last_safe_zone_section_index = current_safe_zone_section_index
+        end
+
+        if sanctuary_transition then
+            _advance_expedition_player_smart_tag_generation()
+        end
+
+        mod._last_expedition_in_safe_zone = current_in_safe_zone
+
+        _clear_invalid_expedition_item_units()
     end
 
     function _idol_collectible_key(section_id, id)
@@ -845,6 +1187,17 @@ return function(env)
     end
 
     local function _safe_smart_tag_target_position(tag)
+        local target_unit = nil
+        local target_unit_fn = tag and tag.target_unit
+
+        if target_unit_fn then
+            local ok_unit, resolved_target_unit = pcall(target_unit_fn, tag)
+
+            if ok_unit then
+                target_unit = resolved_target_unit
+            end
+        end
+
         local target_location_fn = tag and tag.target_location
 
         if target_location_fn then
@@ -852,21 +1205,93 @@ return function(env)
             local copied_location = ok_location and _copy_vector3(target_location) or nil
 
             if copied_location then
-                return copied_location
+                return copied_location, target_unit
             end
         end
 
-        local target_unit_fn = tag and tag.target_unit
+        if target_unit then
+            return _safe_unit_position(target_unit), target_unit
+        end
 
-        if target_unit_fn then
-            local ok_unit, target_unit = pcall(target_unit_fn, tag)
+        return nil, nil
+    end
 
-            if ok_unit and target_unit then
-                return _safe_unit_position(target_unit)
+    local function _smart_tag_state_by_id()
+        local state_by_id = mod._player_smart_tag_state_by_id
+
+        if type(state_by_id) ~= "table" then
+            state_by_id = {}
+            mod._player_smart_tag_state_by_id = state_by_id
+        end
+
+        return state_by_id
+    end
+
+    local function _current_player_smart_tag_generation()
+        return tonumber(mod._player_smart_tag_generation) or 0
+    end
+
+    local function _is_valid_expedition_player_smart_tag_for_current_section(tag_id, target_unit)
+        if not _is_expedition_runtime() then
+            return true
+        end
+
+        local game_mode = _safe_game_mode()
+        local active_section_index = _safe_expedition_active_section_index(game_mode)
+        local current_generation = _current_player_smart_tag_generation()
+        local state_by_id = _smart_tag_state_by_id()
+        local tag_state = state_by_id[tag_id]
+
+        if type(tag_state) ~= "table" then
+            tag_state = {
+                generation = current_generation,
+                section_index = active_section_index,
+            }
+            state_by_id[tag_id] = tag_state
+        end
+
+        if tonumber(tag_state.generation) ~= current_generation then
+            return false
+        end
+
+        if target_unit then
+            local target_section_index = _safe_unit_expedition_section_index(game_mode, target_unit)
+
+            if target_section_index ~= nil then
+                if active_section_index ~= nil and target_section_index ~= active_section_index then
+                    return false
+                end
+
+                if tag_state.section_index == nil then
+                    tag_state.section_index = target_section_index
+                end
             end
         end
 
-        return nil
+        if active_section_index == nil then
+            return true
+        end
+
+        if tag_state.section_index == nil then
+            tag_state.section_index = active_section_index
+            return true
+        end
+
+        return tag_state.section_index == active_section_index
+    end
+
+    local function _prune_player_smart_tag_states(seen_tag_ids)
+        local state_by_id = mod._player_smart_tag_state_by_id
+
+        if type(state_by_id) ~= "table" then
+            return
+        end
+
+        for tag_id in pairs(state_by_id) do
+            if not seen_tag_ids[tag_id] then
+                state_by_id[tag_id] = nil
+            end
+        end
     end
 
     local function _safe_smart_tag_tagger_player(tag)
@@ -890,16 +1315,21 @@ return function(env)
         local all_tags = type(smart_tag_system) == "table" and rawget(smart_tag_system, "_all_tags") or nil
 
         if type(all_tags) ~= "table" then
+            mod._player_smart_tag_state_by_id = {}
             return
         end
+
+        local seen_tag_ids = {}
 
         for tag_id, tag in pairs(all_tags) do
             local template_name, template = _safe_smart_tag_template_name(tag)
 
             if template_name and PLAYER_SMART_TAG_KINDS[template_name] then
-                local position = _safe_smart_tag_target_position(tag)
+                seen_tag_ids[tag_id] = true
 
-                if position then
+                local position, target_unit = _safe_smart_tag_target_position(tag)
+
+                if position and _is_valid_expedition_player_smart_tag_for_current_section(tag_id, target_unit) then
                     local tagger_player = _safe_smart_tag_tagger_player(tag)
                     local player_slot = _safe_player_slot(tagger_player)
                     local player_name = nil
@@ -930,6 +1360,8 @@ return function(env)
                 end
             end
         end
+
+        _prune_player_smart_tag_states(seen_tag_ids)
     end
 
     local function _safe_navigation_handler_marked_by_slot(navigation_handler, level_index)

@@ -18,6 +18,50 @@ return function(env)
     local string_format = string.format
     local table_concat = table.concat
     local table_sort = table.sort
+    local table_clear = table.clear or function(t)
+        for k in pairs(t) do
+            t[k] = nil
+        end
+    end
+
+
+    local function _reuse_or_new_table(t)
+        if t then
+            table_clear(t)
+            return t
+        end
+
+        return {}
+    end
+
+    local function _reset_runtime_output_tables()
+        mod._tracked_points = _reuse_or_new_table(mod._tracked_points)
+        mod._radar_targets = _reuse_or_new_table(mod._radar_targets)
+        mod._screen_highlight_targets = _reuse_or_new_table(mod._screen_highlight_targets)
+        mod._unclustered_radar_targets = _reuse_or_new_table(mod._unclustered_radar_targets)
+        mod._highlight_source_radar_targets = _reuse_or_new_table(mod._highlight_source_radar_targets)
+        mod._radar_snapshot = nil
+    end
+
+    local function _reset_tracked_units_table()
+        mod._tracked_units = _reuse_or_new_table(mod._tracked_units)
+    end
+
+    local _scratch_kind_enabled_cache = {}
+    local _scratch_ignore_range_cache = {}
+    local _scratch_supports_vertical_cache = {}
+    local _scratch_render_layer_cache = {}
+    local _scratch_selection_priority_cache = {}
+    local _scratch_priority_target_cache = {}
+
+    local function _clear_scratch_radar_caches()
+        table_clear(_scratch_kind_enabled_cache)
+        table_clear(_scratch_ignore_range_cache)
+        table_clear(_scratch_supports_vertical_cache)
+        table_clear(_scratch_render_layer_cache)
+        table_clear(_scratch_selection_priority_cache)
+        table_clear(_scratch_priority_target_cache)
+    end
 
     local ROTTEN_ARMOR_BREED_ALIAS_BY_BASE_BREED = {
         chaos_ogryn_executor = "chaos_ogryn_executor_gibbing_rotten_armor",
@@ -383,6 +427,7 @@ return function(env)
 
                 if is_active and not is_used and show_marker then
                     local kind, meta = _classify_interactee(extension, unit)
+
                     if kind and (kind ~= "expedition_loot_converter" or _is_in_expedition_safe_zone()) then
                         _track_unit(unit, kind, "interactee_system", meta)
                     else
@@ -982,12 +1027,15 @@ return function(env)
         local tracked_points = mod._tracked_points
         local targets = {}
         local target_count = 0
-        local kind_enabled_cache = {}
-        local ignore_range_cache = {}
-        local supports_vertical_cache = {}
-        local render_layer_cache = {}
-        local selection_priority_cache = {}
-        local priority_target_cache = {}
+
+        _clear_scratch_radar_caches()
+
+        local kind_enabled_cache = _scratch_kind_enabled_cache
+        local ignore_range_cache = _scratch_ignore_range_cache
+        local supports_vertical_cache = _scratch_supports_vertical_cache
+        local render_layer_cache = _scratch_render_layer_cache
+        local selection_priority_cache = _scratch_selection_priority_cache
+        local priority_target_cache = _scratch_priority_target_cache
         local get_target_render_layer = mod.get_target_render_layer
         local get_target_selection_priority = mod.get_target_selection_priority
 
@@ -1263,7 +1311,7 @@ return function(env)
 
         mod._last_scan_signature = signature
 
-        mod:echo(string_format(
+        mod:info(string_format(
             "Radar scan | enemies=%d players=%d ammo=%d crates=%d pocketables=%d materials=%d generic=%d tracked=%d radar_targets=%d mission=%s activity=%s mechanism=%s player_state=%s",
             counts.enemies,
             counts.players,
@@ -1297,6 +1345,10 @@ return function(env)
         mod._last_state_gameplay = nil
         mod._idol_destroyed_collectible_keys = {}
         mod._idol_destroyed_units = {}
+        mod._last_safe_zone_section_index = nil
+        mod._last_expedition_in_safe_zone = nil
+        mod._player_smart_tag_generation = 0
+        mod._player_smart_tag_state_by_id = {}
     end
 
     local function _debug_log_block(reason, gameplay_t, mission_name, activity, mechanism_name)
@@ -1322,7 +1374,7 @@ return function(env)
         end
 
         mod._last_block_signature = signature
-        mod:echo(string_format(
+        mod:info(string_format(
             "Radar blocked | reason=%s mission=%s activity=%s mechanism=%s gameplay_t=%s player_state=%s",
             tostring(reason),
             tostring(mission_name),
@@ -1335,12 +1387,7 @@ return function(env)
 
     local function _update_internal(dt, t)
         if mod:get("enable_radar") == false then
-            mod._tracked_points = {}
-            mod._radar_targets = {}
-            mod._screen_highlight_targets = {}
-            mod._unclustered_radar_targets = {}
-            mod._highlight_source_radar_targets = {}
-            mod._radar_snapshot = nil
+            _reset_runtime_output_tables()
             return
         end
 
@@ -1358,15 +1405,10 @@ return function(env)
                 or reason == "player_captured"
                 or reason == "no_player_unit"
                 or reason == "spectating_teammate" then
-                mod._tracked_units = {}
+                _reset_tracked_units_table()
             end
 
-            mod._tracked_points = {}
-            mod._radar_targets = {}
-            mod._screen_highlight_targets = {}
-            mod._unclustered_radar_targets = {}
-            mod._highlight_source_radar_targets = {}
-            mod._radar_snapshot = nil
+            _reset_runtime_output_tables()
             _debug_log_block(reason, gameplay_t, mission_name, activity, mechanism_name)
             return
         end
@@ -1386,6 +1428,7 @@ return function(env)
 
         mod._next_scan_t = scan_clock + SCAN_INTERVAL
 
+        _sync_expedition_item_state()
         _scan_interactees()
         _scan_chests()
         _scan_minions()

@@ -18,7 +18,13 @@ return function(env)
     local string_len = string.len
     local string_lower = string.lower
     local string_sub = string.sub
-    local table_clear = table.clear
+    local table_clear = table.clear or function(t)
+        for k in pairs(t) do
+            t[k] = nil
+        end
+    end
+    local _scratch_highlight_enabled_by_kind = {}
+
     local HUD_OCCLUSION_RAYCAST_FILTERS = {
         "filter_player_character_shooting",
         "filter_ray_projectile",
@@ -336,7 +342,7 @@ return function(env)
         end
 
         mod._logged_units[key] = true
-        mod:echo(text)
+        mod:info(text)
     end
 
     function _position_lookup(unit)
@@ -1729,7 +1735,10 @@ return function(env)
         local max_distance_sq = max_distance * max_distance
         local highlights = {}
         local highlight_count = 0
-        local highlight_enabled_by_kind = {}
+
+        table_clear(_scratch_highlight_enabled_by_kind)
+
+        local highlight_enabled_by_kind = _scratch_highlight_enabled_by_kind
         local source_targets = mod._highlight_source_radar_targets or mod._unclustered_radar_targets or
             mod._radar_targets
         local source_target_count = source_targets and #source_targets or 0

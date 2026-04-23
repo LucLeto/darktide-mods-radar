@@ -33,7 +33,11 @@ local string_format = string.format
 local string_len = string.len
 local string_lower = string.lower
 local string_sub = string.sub
-local table_clear = table.clear
+local table_clear = table.clear or function(t)
+    for k in pairs(t) do
+        t[k] = nil
+    end
+end
 
 local HudElementRadar = class("HudElementRadar", "HudElementBase")
 
@@ -98,7 +102,7 @@ local function _log_once(bucket, key, message)
     end
 
     bucket[key] = true
-    mod:echo(message)
+    mod:info(message)
 end
 
 local function _widget_color(a, r, g, b)
@@ -1762,8 +1766,20 @@ local function _cached_group_icon_scale(kind, draw_cache)
     return get_marker_scale_factor and get_marker_scale_factor(mod, group_name) or 1
 end
 
+local function _has_enemy_prefix(kind)
+    if kind == nil then
+        return false
+    end
+
+    if type(kind) == "string" then
+        return string_sub(kind, 1, 6) == "enemy_"
+    end
+
+    return string_sub(tostring(kind), 1, 6) == "enemy_"
+end
+
 local function _cached_enemy_category_icon_scale(kind, draw_cache)
-    if not kind or string_sub(tostring(kind), 1, 6) ~= "enemy_" then
+    if not _has_enemy_prefix(kind) then
         return 1
     end
 
@@ -1794,7 +1810,7 @@ local function _resolved_icon_scale_for_target(target, draw_cache)
     if kind then
         scale = scale * _cached_group_icon_scale(kind, draw_cache)
 
-        if string_sub(tostring(kind), 1, 6) == "enemy_" then
+        if _has_enemy_prefix(kind) then
             scale = scale * _cached_enemy_category_icon_scale(kind, draw_cache)
         end
     end
@@ -1830,7 +1846,7 @@ local function _target_icon_size(target, visual, draw_cache)
     local base_size = visual and visual.size or 14
     local icon_scale = _resolved_icon_scale_for_target(target, draw_cache)
 
-    if target and target.kind and string_sub(tostring(target.kind), 1, 6) == "enemy_" then
+    if target and _has_enemy_prefix(target.kind) then
         local min_size, max_size = _enemy_icon_size_limits(target.kind)
         return _scaled_icon_size(base_size, icon_scale, min_size, max_size)
     end
@@ -1841,7 +1857,7 @@ end
 local function _target_bracket_size(target, visual, draw_cache, marker_size)
     local base_size = visual and (visual.bracket_base_size or visual.size) or 14
 
-    if target and target.kind and string_sub(tostring(target.kind), 1, 6) == "enemy_" then
+    if target and _has_enemy_prefix(target.kind) then
         local base_marker_size = tonumber(visual and visual.size) or base_size
         local actual_marker_size = tonumber(marker_size) or _target_icon_size(target, visual, draw_cache)
         local actual_marker_scale = actual_marker_size / math_max(1, base_marker_size)
@@ -1857,13 +1873,7 @@ local function _target_bracket_size(target, visual, draw_cache, marker_size)
 end
 
 local function _is_enemy_kind(kind)
-    if kind == nil then
-        return false
-    end
-
-    kind = type(kind) == "string" and kind or tostring(kind)
-
-    return string_sub(kind, 1, 6) == "enemy_"
+    return _has_enemy_prefix(kind)
 end
 
 local function _is_expedition_objective_kind(kind)
@@ -3117,7 +3127,7 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
 end
 
 HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input_service)
-    if not mod:is_enabled() or mod:get("enable_radar") == false or not mod:should_draw_radar() then
+    if not mod:is_enabled() or not mod:should_draw_radar() then
         return
     end
 
