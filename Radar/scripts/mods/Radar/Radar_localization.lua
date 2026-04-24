@@ -2959,20 +2959,16 @@ return {
         en = "Keybind to toggle the centered overview mode on or off during a mission.",
     },
     radar_zoom_modifier_key_tooltip = {
-        en =
-        "Hold this key to let the radar zoom keybinds control the normal radar. While held, shared zoom inputs such as mouse wheel are captured for radar zoom only.",
+        en = "Hold this key to let the radar zoom keybinds control the normal radar. While held, shared zoom inputs such as mouse wheel are captured for radar zoom only.",
     },
     overview_zoom_in_key_tooltip = {
-        en =
-        "Keybind to zoom the radar in. Works in overview mode, or on the normal radar while the radar zoom modifier is held.",
+        en = "Keybind to zoom the radar in. Works in overview mode, or on the normal radar while the radar zoom modifier is held.",
     },
     overview_zoom_out_key_tooltip = {
-        en =
-        "Keybind to zoom the radar out. Works in overview mode, or on the normal radar while the radar zoom modifier is held.",
+        en = "Keybind to zoom the radar out. Works in overview mode, or on the normal radar while the radar zoom modifier is held.",
     },
     radar_zoom_reset_key_tooltip = {
-        en =
-        "In overview mode, fits the zoom scale to the currently rendered normal-range markers. On the normal radar, hold the radar zoom modifier and press this key to reset to 10 m / 2.0x.",
+        en = "In overview mode, fits the zoom scale to the currently rendered normal-range markers. On the normal radar, hold the radar zoom modifier and press this key to reset to 10 m / 2.0x.",
     },
     show_scale_legends_tooltip = {
         en = "Show the overview scale legends next to the radar while overview mode is active.",

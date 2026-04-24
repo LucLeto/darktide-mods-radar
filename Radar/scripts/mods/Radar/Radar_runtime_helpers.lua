@@ -10,10 +10,13 @@ return function(env)
     local tostring = tostring
     local type = type
     local rawget = rawget
+    local math_abs = math.abs
     local math_floor = math.floor
     local math_huge = math.huge
     local math_max = math.max
+    local math_rad = math.rad
     local math_sqrt = math.sqrt
+    local math_tan = math.tan
     local string_format = string.format
     local string_len = string.len
     local string_lower = string.lower
@@ -24,6 +27,20 @@ return function(env)
         end
     end
     local _scratch_highlight_enabled_by_kind = {}
+
+    local function _reuse_screen_highlight_output()
+        local highlights = mod._screen_highlight_targets
+
+        if type(highlights) == "table" then
+            table_clear(highlights)
+            return highlights
+        end
+
+        highlights = {}
+        mod._screen_highlight_targets = highlights
+
+        return highlights
+    end
 
     local HUD_OCCLUSION_RAYCAST_FILTERS = {
         "filter_player_character_shooting",
@@ -1513,8 +1530,8 @@ return function(env)
         end
 
         local ui_width, ui_height = _get_ui_space_size()
-        local vertical_fov = self:get_hud_player_vertical_fov() or math.rad(65)
-        local tan_half_vertical = math.tan(vertical_fov * 0.5)
+        local vertical_fov = self:get_hud_player_vertical_fov() or math_rad(65)
+        local tan_half_vertical = math_tan(vertical_fov * 0.5)
         local aspect_ratio = ui_width / math_max(ui_height, 1)
         local tan_half_horizontal = tan_half_vertical * aspect_ratio
 
@@ -1563,7 +1580,7 @@ return function(env)
             return nil, nil, nil
         end
 
-        if math.abs(ndc_x) > 1 or math.abs(ndc_y) > 1 then
+        if math_abs(ndc_x) > 1 or math_abs(ndc_y) > 1 then
             return nil, nil, nil
         end
 
@@ -1707,20 +1724,22 @@ return function(env)
     end
 
     function _collect_screen_highlight_targets()
+        local highlights = _reuse_screen_highlight_output()
+
         if not mod:has_any_nearby_highlight_enabled() then
-            return {}
+            return highlights
         end
 
         local player_unit = _player_unit()
 
         if not _safe_unit_alive(player_unit) then
-            return {}
+            return highlights
         end
 
         local player_pos = _safe_unit_position(player_unit)
 
         if not player_pos then
-            return {}
+            return highlights
         end
 
         local get_setting = mod.get
@@ -1734,7 +1753,6 @@ return function(env)
         local interactee_extension_map = _safe_unit_to_extension_map("interactee_system")
         local max_distance = mod:get_nearby_highlight_range()
         local max_distance_sq = max_distance * max_distance
-        local highlights = {}
         local highlight_count = 0
 
         table_clear(_scratch_highlight_enabled_by_kind)

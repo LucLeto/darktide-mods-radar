@@ -17,8 +17,10 @@ return function(env)
     local math_sqrt = math.sqrt
     local string_find = string.find
     local string_format = string.format
+    local string_gmatch = string.gmatch
     local string_gsub = string.gsub
     local string_lower = string.lower
+    local string_sub = string.sub
     local table_concat = table.concat
     local table_sort = table.sort
     local table_clear = table.clear or function(t)
@@ -183,9 +185,9 @@ return function(env)
         raw_name = string_gsub(raw_name, "%s+$", "")
 
         if string_find(raw_name, "keyboard_", 1, true) == 1 then
-            return _raw_device_button_held(Keyboard, string.sub(raw_name, 10))
+            return _raw_device_button_held(Keyboard, string_sub(raw_name, 10))
         elseif string_find(raw_name, "mouse_", 1, true) == 1 then
-            return _raw_device_button_held(Mouse, string.sub(raw_name, 7))
+            return _raw_device_button_held(Mouse, string_sub(raw_name, 7))
         end
 
         return _raw_device_button_held(Keyboard, raw_name)
@@ -202,10 +204,10 @@ return function(env)
         local entry = tostring(binding_entry)
         local has_required_input = false
 
-        for enabled_part in string.gmatch(entry, "([^+]+)") do
+        for enabled_part in string_gmatch(entry, "([^+]+)") do
             local first = true
 
-            for disabled_part in string.gmatch(enabled_part, "([^-]+)") do
+            for disabled_part in string_gmatch(enabled_part, "([^-]+)") do
                 if first then
                     first = false
                     has_required_input = true
@@ -718,8 +720,7 @@ return function(env)
             or _safe_unit_has_buff_template(unit, "taunted_short")
     end
 
-    local function _supported_ability_marker_state_for_unit(unit, outline_extension_map, local_player_unit,
-                                                            local_combat_ability_name)
+    local function _supported_ability_marker_state_for_unit(unit, outline_extension_map, local_player_unit, local_combat_ability_name)
         local marker_names, bracket_color, primary_marker_name, primary_marker_priority =
             _supported_ability_outline_state_for_unit(unit, outline_extension_map, local_player_unit)
 
@@ -2371,8 +2372,7 @@ return function(env)
         return self:get_normal_radar_zoom_factor_text(self:get_configured_radar_range()), alpha_scale
     end
 
-    function mod:log_overview_marker_draw_counts(collected_count, drawn_count, configured_cap, widget_cap,
-                                                 center_dot_drawn)
+    function mod:log_overview_marker_draw_counts(collected_count, drawn_count, configured_cap, widget_cap, center_dot_drawn)
         if self:get("debug_mode") ~= true or not self:is_overview_mode_active() then
             return
         end

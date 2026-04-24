@@ -15,6 +15,14 @@ return function(env)
     local string_lower = string.lower
     local string_match = string.match
     local table_sort = table.sort
+    local table_clear = table.clear or function(t)
+        for k in pairs(t) do
+            t[k] = nil
+        end
+    end
+
+    local _scratch_seen_player_tag_ids = {}
+    local _scratch_expedition_registered_entries = {}
 
     local function _is_expedition_runtime()
         return _safe_game_mode_name() == "expedition"
@@ -1379,7 +1387,8 @@ return function(env)
             return
         end
 
-        local seen_tag_ids = {}
+        local seen_tag_ids = _scratch_seen_player_tag_ids
+        table_clear(seen_tag_ids)
 
         for tag_id, tag in pairs(all_tags) do
             local template_name, template = _safe_smart_tag_template_name(tag)
@@ -1549,7 +1558,7 @@ return function(env)
             return
         end
 
-        local entries = {}
+        local entries = _scratch_expedition_registered_entries
         local entry_count = 0
 
         for level_index, boxed_position in pairs(points) do
@@ -1557,12 +1566,21 @@ return function(env)
 
             if position and is_expedition_level_in_active_section(game_mode, active_section_index, level_index) then
                 entry_count = entry_count + 1
-                entries[entry_count] = {
-                    level_index = level_index,
-                    position = position,
-                    section_index = safe_expedition_section_index_by_level_index(game_mode, level_index),
-                }
+                local entry = entries[entry_count]
+
+                if not entry then
+                    entry = {}
+                    entries[entry_count] = entry
+                end
+
+                entry.level_index = level_index
+                entry.position = position
+                entry.section_index = safe_expedition_section_index_by_level_index(game_mode, level_index)
             end
+        end
+
+        for i = entry_count + 1, #entries do
+            entries[i] = nil
         end
 
         table_sort(entries, function(a, b)
@@ -1584,7 +1602,7 @@ return function(env)
             return tostring(a.level_index) < tostring(b.level_index)
         end)
 
-        for index = 1, #entries do
+        for index = 1, entry_count do
             local entry = entries[index]
             local level_index = entry.level_index
             local position = entry.position
@@ -1603,6 +1621,13 @@ return function(env)
                     objective_tag = objective_tag,
                 }
             )
+        end
+
+        for i = 1, entry_count do
+            local entry = entries[i]
+            entry.level_index = nil
+            entry.position = nil
+            entry.section_index = nil
         end
     end
 

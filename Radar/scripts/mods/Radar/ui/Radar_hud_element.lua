@@ -1786,6 +1786,13 @@ local _draw_cache = {
 local function _build_draw_cache()
     local draw_cache = _draw_cache
     local get = mod.get
+    local get_show_player_center_dot = mod.get_show_player_center_dot
+    local get_show_ability_marked_enemies = mod.get_show_ability_marked_enemies
+    local get_expedition_loot_marker_mode = mod.get_expedition_loot_marker_mode
+    local get_show_expedition_loot_value_text = mod.get_show_expedition_loot_value_text
+    local show_nearby_highlight_distance_text_on_screen = mod.show_nearby_highlight_distance_text_on_screen
+    local get_nearby_highlight_range = mod.get_nearby_highlight_range
+    local get_nearby_highlight_thickness = mod.get_nearby_highlight_thickness
 
     table_clear(draw_cache.marker_display_mode_by_kind)
     table_clear(draw_cache.enemy_marker_mode_by_kind)
@@ -1799,23 +1806,23 @@ local function _build_draw_cache()
     draw_cache.icon_scale = _icon_scale_factor()
     draw_cache.player_display_style = _normalized_player_display_style(get(mod, "player_display_style"))
     draw_cache.player_tag_display_style = _normalized_enemy_display_style(get(mod, "player_tag_display_style"))
-    draw_cache.show_player_center_dot = mod.get_show_player_center_dot and mod:get_show_player_center_dot() or
+    draw_cache.show_player_center_dot = get_show_player_center_dot and get_show_player_center_dot(mod) or
         get(mod, "show_player_center_dot") ~= false
     draw_cache.show_player_tag_distance_text = get(mod, "show_player_tag_distance_text") == true
     draw_cache.boss_display_style = _normalized_enemy_display_style(get(mod, "boss_display_style"))
-    draw_cache.show_ability_marked_enemies = mod.get_show_ability_marked_enemies and
-        mod:get_show_ability_marked_enemies() or false
-    draw_cache.expedition_loot_marker_mode = mod.get_expedition_loot_marker_mode and
-        mod:get_expedition_loot_marker_mode() or "default"
-    draw_cache.show_expedition_loot_value_text = mod.get_show_expedition_loot_value_text and
-        mod:get_show_expedition_loot_value_text() or false
+    draw_cache.show_ability_marked_enemies = get_show_ability_marked_enemies and
+        get_show_ability_marked_enemies(mod) or false
+    draw_cache.expedition_loot_marker_mode = get_expedition_loot_marker_mode and
+        get_expedition_loot_marker_mode(mod) or "default"
+    draw_cache.show_expedition_loot_value_text = get_show_expedition_loot_value_text and
+        get_show_expedition_loot_value_text(mod) or false
     draw_cache.show_boss_distance_text = get(mod, "show_boss_distance_text") == true
-    draw_cache.show_nearby_highlight_distance_text_on_screen = mod.show_nearby_highlight_distance_text_on_screen and
-        mod:show_nearby_highlight_distance_text_on_screen() or false
-    local nearby_highlight_range = mod.get_nearby_highlight_range and mod:get_nearby_highlight_range() or 10
+    draw_cache.show_nearby_highlight_distance_text_on_screen = show_nearby_highlight_distance_text_on_screen and
+        show_nearby_highlight_distance_text_on_screen(mod) or false
+    local nearby_highlight_range = get_nearby_highlight_range and get_nearby_highlight_range(mod) or 10
     draw_cache.nearby_highlight_range_sq = nearby_highlight_range * nearby_highlight_range
-    draw_cache.nearby_highlight_thickness = mod.get_nearby_highlight_thickness and
-        mod:get_nearby_highlight_thickness() or 0
+    draw_cache.nearby_highlight_thickness = get_nearby_highlight_thickness and
+        get_nearby_highlight_thickness(mod) or 0
     draw_cache.slot_colors = UISettings and UISettings.player_slot_colors or nil
     draw_cache.debug_mode = get(mod, "debug_mode") == true
 
@@ -3335,6 +3342,7 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
                 local secondary_value_text_anchor = visual and visual.secondary_value_text_anchor or nil
                 local secondary_value_text_offset_x = visual and visual.secondary_value_text_offset_x or nil
                 local secondary_value_text_offset_y = visual and visual.secondary_value_text_offset_y or nil
+                local has_vertical_state = target.vertical_state ~= nil
 
                 if bracket_color and should_draw_marker_brackets(target, draw_cache) then
                     draw_marker_brackets(ui_renderer, bracket_x, bracket_y, bracket_z, bracket_size, bracket_color)
@@ -3375,7 +3383,7 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
                     draw_y,
                     base_icon_z,
                     marker_size,
-                    target.vertical_state ~= nil,
+                    has_vertical_state,
                     value_text_color,
                     value_text_anchor,
                     value_text_offset_x,
@@ -3389,7 +3397,7 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
                     draw_y,
                     base_icon_z,
                     marker_size,
-                    target.vertical_state ~= nil,
+                    has_vertical_state,
                     secondary_value_text_color,
                     secondary_value_text_anchor,
                     secondary_value_text_offset_x,
