@@ -114,6 +114,7 @@ local function _color(a, r, g, b)
 end
 
 local WHITE_WIDGET_COLOR = { 255, 255, 255, 255 }
+local RADAR_OUTLINE_WIDGET_COLOR = { 255, 213, 226, 206 }
 local AUSPEX_BACKGROUND_MATERIAL = "content/ui/materials/backgrounds/scanner/scanner_map_background"
 local AUSPEX_BACKGROUND_NOISE_MATERIAL = "content/ui/materials/backgrounds/scanner/scanner_background_noise"
 local AUSPEX_SCAN_NOISE_MATERIAL = "content/ui/materials/backgrounds/scanner/scanner_noise"
@@ -1454,6 +1455,22 @@ local function _has_sweep_material(content)
     return content.sweep_material ~= nil and content.sweep_material ~= ""
 end
 
+local function _has_overview_scale_x_left_icon(content)
+    return content.overview_scale_x_left_icon ~= nil and content.overview_scale_x_left_icon ~= ""
+end
+
+local function _has_overview_scale_x_right_icon(content)
+    return content.overview_scale_x_right_icon ~= nil and content.overview_scale_x_right_icon ~= ""
+end
+
+local function _has_overview_scale_y_top_icon(content)
+    return content.overview_scale_y_top_icon ~= nil and content.overview_scale_y_top_icon ~= ""
+end
+
+local function _has_overview_scale_y_bottom_icon(content)
+    return content.overview_scale_y_bottom_icon ~= nil and content.overview_scale_y_bottom_icon ~= ""
+end
+
 local function _frame_definition()
     return UIWidget.create_definition({
         {
@@ -1516,6 +1533,86 @@ local function _frame_definition()
     }, "screen")
 end
 
+local function _overview_scale_definition()
+    return UIWidget.create_definition({
+        {
+            pass_type = "rotated_texture",
+            value_id = "overview_scale_x_left_icon",
+            style_id = "overview_scale_x_left_icon",
+            style = {
+                angle = 0,
+                pivot = { 0, 0 },
+                vertical_alignment = "top",
+                horizontal_alignment = "left",
+                offset = { 0, 0, 40 },
+                size = { 16, 16 },
+                color = WHITE_WIDGET_COLOR,
+            },
+            visibility_function = _has_overview_scale_x_left_icon,
+        },
+        {
+            pass_type = "rotated_texture",
+            value_id = "overview_scale_x_right_icon",
+            style_id = "overview_scale_x_right_icon",
+            style = {
+                angle = 0,
+                pivot = { 0, 0 },
+                vertical_alignment = "top",
+                horizontal_alignment = "left",
+                offset = { 0, 0, 40 },
+                size = { 16, 16 },
+                color = WHITE_WIDGET_COLOR,
+            },
+            visibility_function = _has_overview_scale_x_right_icon,
+        },
+        {
+            pass_type = "rotated_texture",
+            value_id = "overview_scale_y_top_icon",
+            style_id = "overview_scale_y_top_icon",
+            style = {
+                angle = 0,
+                pivot = { 0, 0 },
+                vertical_alignment = "top",
+                horizontal_alignment = "left",
+                offset = { 0, 0, 40 },
+                size = { 16, 16 },
+                color = WHITE_WIDGET_COLOR,
+            },
+            visibility_function = _has_overview_scale_y_top_icon,
+        },
+        {
+            pass_type = "rotated_texture",
+            value_id = "overview_scale_y_bottom_icon",
+            style_id = "overview_scale_y_bottom_icon",
+            style = {
+                angle = 0,
+                pivot = { 0, 0 },
+                vertical_alignment = "top",
+                horizontal_alignment = "left",
+                offset = { 0, 0, 40 },
+                size = { 16, 16 },
+                color = WHITE_WIDGET_COLOR,
+            },
+            visibility_function = _has_overview_scale_y_bottom_icon,
+        },
+        {
+            pass_type = "texture",
+            value_id = "normal_zoom_icon",
+            style_id = "normal_zoom_icon",
+            style = {
+                vertical_alignment = "top",
+                horizontal_alignment = "left",
+                offset = { 0, 0, 40 },
+                size = { 16, 16 },
+                color = WHITE_WIDGET_COLOR,
+            },
+            visibility_function = function(content)
+                return content.normal_zoom_icon ~= nil and content.normal_zoom_icon ~= ""
+            end,
+        },
+    }, "screen")
+end
+
 local function _marker_definition()
     return UIWidget.create_definition({
         {
@@ -1573,10 +1670,14 @@ local function _marker_definition()
     }, "screen")
 end
 
-local MAX_RADAR_MARKERS = 200
+local MAX_RADAR_MARKERS = 301
 
 local function _create_frame_widget()
     return UIWidget.init("RadarFrame_Auspex", _frame_definition())
+end
+
+local function _create_overview_scale_widget()
+    return UIWidget.init("RadarOverviewScale", _overview_scale_definition())
 end
 
 local function _create_marker_widget(index)
@@ -1588,6 +1689,14 @@ local function _clear_frame_widget(widget)
     widget.content.noise_material = nil
     widget.content.scan_noise_material = nil
     widget.content.sweep_material = nil
+end
+
+local function _clear_overview_scale_widget(widget)
+    widget.content.overview_scale_x_left_icon = nil
+    widget.content.overview_scale_x_right_icon = nil
+    widget.content.overview_scale_y_top_icon = nil
+    widget.content.overview_scale_y_bottom_icon = nil
+    widget.content.normal_zoom_icon = nil
 end
 
 local function _clear_marker_widget(widget)
@@ -1607,21 +1716,34 @@ local function _ensure_frame_widget(self)
     _clear_frame_widget(self._frame_widget)
 end
 
-local function _ensure_marker_widgets(self)
-    if self._marker_widgets then
+local function _ensure_overview_scale_widget(self)
+    if self._overview_scale_widget then
         return
     end
 
-    self._marker_widgets = {}
-    self._last_active_marker_widget_index = 0
+    self._overview_scale_widget = _create_overview_scale_widget()
+    _clear_overview_scale_widget(self._overview_scale_widget)
+end
 
-    for i = 1, MAX_RADAR_MARKERS do
+local function _ensure_marker_widgets(self)
+    if not self._marker_widgets then
+        self._marker_widgets = {}
+        self._last_active_marker_widget_index = 0
+    end
+
+    local existing_count = #self._marker_widgets
+
+    if existing_count >= MAX_RADAR_MARKERS then
+        return
+    end
+
+    for i = existing_count + 1, MAX_RADAR_MARKERS do
         self._marker_widgets[i] = _create_marker_widget(i)
     end
 
     if mod:get("debug_mode") == true then
         _log_once(_logged_draws, "widget_pool_init",
-            string_format("[Radar] widget pool created | count=%d", MAX_RADAR_MARKERS))
+            string_format("[Radar] widget pool created | count=%d", #self._marker_widgets))
     end
 end
 
@@ -1705,7 +1827,8 @@ _icon_scale_factor = function()
         return 1
     end
 
-    local radar_size = tonumber(mod:get("radar_size")) or 300
+    local radar_size = mod.get_configured_radar_size and mod:get_configured_radar_size()
+        or tonumber(mod:get("radar_size")) or 300
     local scale = radar_size / 300
 
     if scale < 0.5 then
@@ -1972,18 +2095,6 @@ local function _should_draw_marker_brackets(target, draw_cache)
     return style == "marked_icon" or style == "marked_dot"
 end
 
-local function _center_dot_color(snapshot)
-    local slot_colors = UISettings and UISettings.player_slot_colors
-    local player_slot = snapshot and snapshot.player_slot or nil
-    local player_color = player_slot and slot_colors and slot_colors[player_slot] or nil
-
-    if player_color then
-        return _widget_to_color(_any_to_widget_color(player_color))
-    end
-
-    return _color(255, 0, 255, 0)
-end
-
 local MARKER_VALUE_TEXT_STYLE = table.merge_recursive(table.clone(UIFontSettings.body_small), {
     font_size = 12,
     font_type = "proxima_nova_bold",
@@ -1996,6 +2107,20 @@ local _marker_value_text_position = { 0, 0, 0 }
 local _marker_value_text_size = { 0, 0 }
 local _marker_value_text_color = { 255, 255, 225, 0 }
 local _marker_value_text_options = {}
+local OVERVIEW_SCALE_TEXT_STYLE = table.merge_recursive(table.clone(UIFontSettings.body_small), {
+    font_size = 18,
+    font_type = "proxima_nova_bold",
+    text_horizontal_alignment = "center",
+    text_vertical_alignment = "center",
+    text_color = Color(255, 213, 226, 206),
+    offset = { 0, 0, 0 },
+})
+local _overview_scale_text_scratch = {
+    position = { 0, 0, 0 },
+    size = { 0, 0 },
+    color = { 255, 213, 226, 206 },
+    options = {},
+}
 
 local function _marker_value_font_size(icon_size, digits)
     local font_size = math_max(10, math_floor(icon_size * 0.52 + 0.5))
@@ -2091,6 +2216,165 @@ end
 
 local ITEM_VERTICAL_ARROW_UP_ICON = "content/ui/materials/icons/circumstances/more_resistance_01"
 local ITEM_VERTICAL_ARROW_DOWN_ICON = "content/ui/materials/icons/circumstances/less_resistance_01"
+
+local function _overview_scale_font_size(radar_size)
+    local font_size = math_floor((tonumber(radar_size) or 0) * 0.022 + 0.5)
+
+    if font_size < 14 then
+        font_size = 14
+    elseif font_size > 24 then
+        font_size = 24
+    end
+
+    return font_size
+end
+
+local function _overview_scale_text_box_size(scale_text, font_size)
+    local length = string_len(scale_text or "")
+    local width = math_max(font_size + 8, math_floor(font_size * (length * 0.58 + 0.9) + 0.5))
+    local height = font_size + 6
+
+    return width, height
+end
+
+local function _draw_overview_scale_text(ui_renderer, scale_text, center_x, center_y, z, font_size, text_color)
+    local text_box_width, text_box_height = _overview_scale_text_box_size(scale_text, font_size)
+    local scratch = _overview_scale_text_scratch
+    local position = scratch.position
+    local size = scratch.size
+    local color = scratch.color
+    local options = scratch.options
+    local source_color = text_color or RADAR_OUTLINE_WIDGET_COLOR
+
+    position[1] = math_floor((center_x or 0) - text_box_width * 0.5 + 0.5)
+    position[2] = math_floor((center_y or 0) - text_box_height * 0.5 + 0.5)
+    position[3] = math_floor((z or 0) + 0.5)
+
+    size[1] = text_box_width
+    size[2] = text_box_height
+
+    color[1] = source_color[1]
+    color[2] = source_color[2]
+    color[3] = source_color[3]
+    color[4] = source_color[4]
+
+    table_clear(options)
+    UIFonts.get_font_options_by_style(OVERVIEW_SCALE_TEXT_STYLE, options)
+
+    UIRenderer.draw_text(
+        ui_renderer,
+        scale_text,
+        font_size,
+        OVERVIEW_SCALE_TEXT_STYLE.font_type,
+        Vector3(position[1], position[2], position[3]),
+        size,
+        color,
+        options
+    )
+
+    return text_box_width, text_box_height
+end
+
+local function _apply_overview_scale_icon(style, center_x, center_y, z, icon_size, angle, icon_color)
+    local offset = style.offset
+    local size = style.size
+    local pivot = style.pivot
+    local resolved_size = math_max(1, math_floor((tonumber(icon_size) or 0) + 0.5))
+
+    offset[1] = math_floor((tonumber(center_x) or 0) + 0.5) - math_floor(resolved_size * 0.5)
+    offset[2] = math_floor((tonumber(center_y) or 0) + 0.5) - math_floor(resolved_size * 0.5)
+    offset[3] = math_floor((z or 0) + 0.5)
+
+    size[1] = resolved_size
+    size[2] = resolved_size
+
+    pivot[1] = resolved_size * 0.5
+    pivot[2] = resolved_size * 0.5
+    style.angle = angle or 0
+    style.color = icon_color or RADAR_OUTLINE_WIDGET_COLOR
+end
+
+local function _draw_overview_scale_overlay(self, ui_renderer, x, y, z, radar_size, radar_range)
+    if not (mod.is_overview_mode_active and mod:is_overview_mode_active()) or mod:get("show_scale_legends") == false then
+        return
+    end
+
+    _ensure_overview_scale_widget(self)
+
+    local widget = self._overview_scale_widget
+    local content = widget.content
+    local scale_text = string_format("%d m", math_max(1, math_floor((tonumber(radar_range) or 0) + 0.5)))
+    local font_size = _overview_scale_font_size(radar_size)
+    local icon_size = math_max(12, math_floor(font_size * 1.1 + 0.5))
+    local gap = math_max(4, math_floor(font_size * 0.35 + 0.5))
+    local center_x = x + radar_size * 0.5
+    local center_y = y + radar_size * 0.5
+    local text_box_width, text_box_height = _overview_scale_text_box_size(scale_text, font_size)
+    local outside_gap = math_max(8, math_floor(font_size * 0.45 + 0.5))
+    local x_text_center_y = y + radar_size + outside_gap + text_box_height * 0.5
+    local y_text_center_x = x - outside_gap - math_max(text_box_width, icon_size) * 0.5
+    local legend_color = _overview_scale_text_scratch.color
+
+    content.normal_zoom_icon = nil
+
+    if _current_radar_style() == "auspex" then
+        legend_color[1] = 210
+        legend_color[2] = 0
+        legend_color[3] = 255
+        legend_color[4] = 0
+    else
+        legend_color[1] = RADAR_OUTLINE_WIDGET_COLOR[1]
+        legend_color[2] = RADAR_OUTLINE_WIDGET_COLOR[2]
+        legend_color[3] = RADAR_OUTLINE_WIDGET_COLOR[3]
+        legend_color[4] = RADAR_OUTLINE_WIDGET_COLOR[4]
+    end
+
+    content.overview_scale_x_left_icon = ITEM_VERTICAL_ARROW_UP_ICON
+    content.overview_scale_x_right_icon = ITEM_VERTICAL_ARROW_DOWN_ICON
+    content.overview_scale_y_top_icon = ITEM_VERTICAL_ARROW_UP_ICON
+    content.overview_scale_y_bottom_icon = ITEM_VERTICAL_ARROW_DOWN_ICON
+
+    _apply_overview_scale_icon(
+        widget.style.overview_scale_x_left_icon,
+        center_x - text_box_width * 0.5 - gap - icon_size * 0.5,
+        x_text_center_y,
+        z,
+        icon_size,
+        math_rad(90),
+        legend_color
+    )
+    _apply_overview_scale_icon(
+        widget.style.overview_scale_x_right_icon,
+        center_x + text_box_width * 0.5 + gap + icon_size * 0.5,
+        x_text_center_y,
+        z,
+        icon_size,
+        math_rad(90),
+        legend_color
+    )
+    _apply_overview_scale_icon(
+        widget.style.overview_scale_y_top_icon,
+        y_text_center_x,
+        center_y - text_box_height * 0.5 - gap - icon_size * 0.5,
+        z,
+        icon_size,
+        0,
+        legend_color
+    )
+    _apply_overview_scale_icon(
+        widget.style.overview_scale_y_bottom_icon,
+        y_text_center_x,
+        center_y + text_box_height * 0.5 + gap + icon_size * 0.5,
+        z,
+        icon_size,
+        0,
+        legend_color
+    )
+
+    UIWidget.draw(widget, ui_renderer)
+    _draw_overview_scale_text(ui_renderer, scale_text, center_x, x_text_center_y, z + 1, font_size, legend_color)
+    _draw_overview_scale_text(ui_renderer, scale_text, y_text_center_x, center_y, z + 1, font_size, legend_color)
+end
 
 local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size)
     local icon_style = widget.style.icon
@@ -2915,6 +3199,7 @@ HudElementRadar.init = function(self, parent, draw_layer, start_scale, optional_
     HudElementRadar.super.init(self, parent, draw_layer, start_scale, Definitions)
     _sync_screen_scenegraph(self)
     _ensure_frame_widget(self)
+    _ensure_overview_scale_widget(self)
     _ensure_marker_widgets(self)
 end
 
@@ -2934,6 +3219,7 @@ local function _top_left_from_center(center_value, size)
 end
 
 local function _draw_internal(self, ui_renderer, snapshot, render_settings, input_service, dt)
+    _ensure_overview_scale_widget(self)
     _ensure_marker_widgets(self)
 
     local draw_cache = _build_draw_cache()
@@ -2963,12 +3249,15 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
 
     local next_widget_index = 1
     local max_markers = mod:get_max_radar_markers()
-    local max_widget_index = math_min(max_markers, MAX_RADAR_MARKERS)
+    local max_widget_index = math_min(max_markers, MAX_RADAR_MARKERS - 1)
+    local collected_marker_count = 0
+    local drawn_marker_count = 0
+    local center_dot_drawn = false
 
     if snapshot and snapshot.player_position then
         local player_pos = snapshot.player_position
         local targets = snapshot.targets or {}
-        local target_count = #targets
+        collected_marker_count = #targets
         local project_target_to_radar = mod.project_target_to_radar
 
         if draw_cache.show_player_center_dot then
@@ -2983,25 +3272,25 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
             local self_icon_size = _scaled_icon_size(self_visual.size, self_scale, 10, 40)
             local self_draw_x = center_x - self_icon_size / 2
             local self_draw_y = center_y - self_icon_size / 2
-            local self_widget = marker_widgets[next_widget_index]
+            local self_widget = marker_widgets[MAX_RADAR_MARKERS]
 
             apply_marker_widget(self_widget, self_visual, self_draw_x, self_draw_y, base_icon_z, nil, self_icon_size)
             UIWidget_draw(self_widget, ui_renderer)
 
-            next_widget_index = next_widget_index + 1
+            center_dot_drawn = true
         end
 
-        if debug_mode and target_count > max_markers then
+        if debug_mode and collected_marker_count > max_markers then
             _log_once(
                 _logged_draws,
                 "marker_pool_overflow:" .. tostring(max_markers),
-                string_format("[Radar] marker pool overflow | targets=%d configured=%d pool=%d", target_count,
+                string_format("[Radar] marker pool overflow | targets=%d configured=%d pool=%d", collected_marker_count,
                     max_markers,
-                    MAX_RADAR_MARKERS)
+                    max_widget_index)
             )
         end
 
-        for i = 1, target_count do
+        for i = 1, collected_marker_count do
             if next_widget_index > max_widget_index then
                 break
             end
@@ -3108,14 +3397,117 @@ local function _draw_internal(self, ui_renderer, snapshot, render_settings, inpu
                 )
 
                 next_widget_index = next_widget_index + 1
+                drawn_marker_count = drawn_marker_count + 1
             end
         end
+    end
+
+    if debug_mode
+        and mod.is_overview_mode_active
+        and mod:is_overview_mode_active()
+        and mod.log_overview_marker_draw_counts then
+        mod:log_overview_marker_draw_counts(
+            collected_marker_count,
+            drawn_marker_count,
+            max_markers,
+            MAX_RADAR_MARKERS,
+            center_dot_drawn
+        )
+    end
+
+    _draw_overview_scale_overlay(
+        self,
+        ui_renderer,
+        x,
+        y,
+        z + 30,
+        size,
+        (mod.is_overview_mode_active and mod:is_overview_mode_active() and mod.get_overview_zoom_range
+            and mod:get_overview_zoom_range()) or range
+    )
+
+    local normal_zoom_text, normal_zoom_alpha = nil, nil
+
+    if mod.get_normal_radar_zoom_indicator then
+        normal_zoom_text, normal_zoom_alpha = mod:get_normal_radar_zoom_indicator()
+    end
+
+    if normal_zoom_text and normal_zoom_alpha and normal_zoom_alpha > 0 then
+        local widget = self._overview_scale_widget
+
+        _clear_overview_scale_widget(widget)
+
+        widget.content.normal_zoom_icon = "content/ui/materials/icons/crafting/replace_trait"
+
+        local font_size = _overview_scale_font_size(size)
+        local icon_size = math_max(16, math_floor(font_size * 1.3 + 0.5))
+        local gap = math_max(5, math_floor(font_size * 0.35 + 0.5))
+        local text_width, text_height = _overview_scale_text_box_size(normal_zoom_text, font_size)
+        local box_width = icon_size + gap + text_width
+        local box_height = math_max(icon_size, text_height)
+        local outside_gap = math_max(8, math_floor(font_size * 0.55 + 0.5))
+        local ui_width, ui_height = _ui_space_size()
+        local toast_x = center_x - box_width * 0.5
+        local toast_y = center_y < ui_height * 0.5
+            and y + size + outside_gap
+            or y - outside_gap - box_height
+
+        if toast_y < 0 or toast_y + box_height > ui_height then
+            toast_x = center_x < ui_width * 0.5
+                and x + size + outside_gap
+                or x - outside_gap - box_width
+            toast_y = center_y - box_height * 0.5
+        end
+
+        toast_x = math_clamp(toast_x, 0, math_max(0, ui_width - box_width))
+        toast_y = math_clamp(toast_y, 0, math_max(0, ui_height - box_height))
+
+        local zoom_color = _overview_scale_text_scratch.color
+
+        if _current_radar_style() == "auspex" then
+            zoom_color[1] = _scaled_alpha(210, normal_zoom_alpha)
+            zoom_color[2] = 0
+            zoom_color[3] = 255
+            zoom_color[4] = 0
+        else
+            zoom_color[1] = _scaled_alpha(RADAR_OUTLINE_WIDGET_COLOR[1], normal_zoom_alpha)
+            zoom_color[2] = RADAR_OUTLINE_WIDGET_COLOR[2]
+            zoom_color[3] = RADAR_OUTLINE_WIDGET_COLOR[3]
+            zoom_color[4] = RADAR_OUTLINE_WIDGET_COLOR[4]
+        end
+
+        local icon_style = widget.style.normal_zoom_icon
+        local icon_offset = icon_style.offset
+        local icon_style_size = icon_style.size
+        local icon_color = icon_style.color
+        local icon_x = toast_x
+        local icon_y = toast_y + (box_height - icon_size) * 0.5
+        local text_center_x = toast_x + icon_size + gap + text_width * 0.5
+        local toast_center_y = toast_y + box_height * 0.5
+
+        icon_offset[1] = icon_x
+        icon_offset[2] = icon_y
+        icon_offset[3] = z + 50
+        icon_style_size[1] = icon_size
+        icon_style_size[2] = icon_size
+        icon_color[1] = zoom_color[1]
+        icon_color[2] = zoom_color[2]
+        icon_color[3] = zoom_color[3]
+        icon_color[4] = zoom_color[4]
+
+        UIWidget.draw(widget, ui_renderer)
+        _draw_overview_scale_text(ui_renderer, normal_zoom_text, text_center_x, toast_center_y, z + 51, font_size,
+            zoom_color)
     end
 
     _draw_screen_highlights(self, ui_renderer, snapshot, z + 40, draw_cache)
 
     local last_active_marker_widget_index = next_widget_index - 1
     local previous_active_marker_widget_index = self._last_active_marker_widget_index or 0
+
+    if not center_dot_drawn then
+        _clear_marker_widget(marker_widgets[MAX_RADAR_MARKERS])
+    end
 
     if previous_active_marker_widget_index > last_active_marker_widget_index then
         for i = last_active_marker_widget_index + 1, previous_active_marker_widget_index do

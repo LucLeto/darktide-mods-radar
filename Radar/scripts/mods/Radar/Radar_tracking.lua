@@ -13,9 +13,12 @@ return function(env)
     local math_floor = math.floor
     local math_huge = math.huge
     local math_max = math.max
+    local math_min = math.min
     local math_sqrt = math.sqrt
     local string_find = string.find
     local string_format = string.format
+    local string_gsub = string.gsub
+    local string_lower = string.lower
     local table_concat = table.concat
     local table_sort = table.sort
     local table_clear = table.clear or function(t)
@@ -53,6 +56,30 @@ return function(env)
     local _scratch_render_layer_cache = {}
     local _scratch_selection_priority_cache = {}
     local _scratch_priority_target_cache = {}
+    local OVERVIEW_MIN_ZOOM_RANGE = 25
+    local OVERVIEW_MAX_ZOOM_RANGE = 500
+    local OVERVIEW_DEFAULT_ZOOM_RANGE = OVERVIEW_MAX_ZOOM_RANGE
+    local OVERVIEW_SCREEN_PADDING = 80
+    local OVERVIEW_RANGE_TRANSITION_DURATION = 0.28
+    local OVERVIEW_RANGE_TRANSITION_SCAN_INTERVAL = 0.05
+    local OVERVIEW_RESET_FIT_EDGE_FRACTION = 0.9
+    local OVERVIEW_RADAR_MARKER_LIMIT = 300
+    local NORMAL_RADAR_MIN_ZOOM_RANGE = 10
+    local NORMAL_RADAR_MAX_ZOOM_RANGE = 200
+    local NORMAL_RADAR_DEFAULT_ZOOM_RANGE = NORMAL_RADAR_MAX_ZOOM_RANGE
+    local NORMAL_RADAR_RESET_ZOOM_RANGE = NORMAL_RADAR_MIN_ZOOM_RANGE
+    local NORMAL_RADAR_ZOOM_MODIFIER_GRACE = 0.12
+    local NORMAL_RADAR_ZOOM_INDICATOR_DURATION = 1
+    local OVERVIEW_CAPTURED_ACTIONS_BY_DIRECTION = {
+        up = {
+            tactical_overlay_scroll_up = true,
+            wield_scroll_up = true,
+        },
+        down = {
+            tactical_overlay_scroll_down = true,
+            wield_scroll_down = true,
+        },
+    }
 
     local function _clear_scratch_radar_caches()
         table_clear(_scratch_kind_enabled_cache)
@@ -61,6 +88,381 @@ return function(env)
         table_clear(_scratch_render_layer_cache)
         table_clear(_scratch_selection_priority_cache)
         table_clear(_scratch_priority_target_cache)
+    end
+
+    local function _warm_radar_target_pool(min_size)
+        local pool = mod._radar_target_pool or {}
+        local target_size = math_floor(tonumber(min_size) or 0)
+        mod._radar_target_pool = pool
+
+        for i = #pool + 1, target_size do
+            pool[i] = {}
+        end
+
+        return pool
+    end
+
+    local function _normalized_keybind_entry(value)
+        if value == nil then
+            return nil
+        end
+
+        local normalized = string_lower(tostring(value))
+        normalized = string_gsub(normalized, "_", " ")
+        normalized = string_gsub(normalized, "%s+", " ")
+        normalized = string_gsub(normalized, "^%s+", "")
+        normalized = string_gsub(normalized, "%s+$", "")
+
+        return normalized
+    end
+
+    local function _keybind_uses_wheel_direction(binding, direction)
+        if type(binding) ~= "table" then
+            return false
+        end
+
+        for i = 1, #binding do
+            local entry = _normalized_keybind_entry(binding[i])
+
+            if entry and string_find(entry, "wheel", 1, true) and string_find(entry, direction, 1, true) then
+                return true
+            end
+        end
+
+        return false
+    end
+
+    local function _raw_device_button_held(device, local_name)
+        if not device or not local_name or not device.button_index or not device.button then
+            return false
+        end
+
+        local ok_index, index = pcall(device.button_index, local_name)
+
+        if (not ok_index or not index) and string_find(local_name, "_", 1, true) then
+            ok_index, index = pcall(device.button_index, string_gsub(local_name, "_", " "))
+        end
+
+        if not ok_index or not index then
+            return false
+        end
+
+        local ok_value, value = pcall(device.button, index)
+
+        return ok_value and (tonumber(value) or 0) > 0.5
+    end
+
+    local function _keyboard_modifier_alias_held(name)
+        if name == "shift" then
+            return _raw_device_button_held(Keyboard, "left shift")
+                or _raw_device_button_held(Keyboard, "right shift")
+        elseif name == "ctrl" or name == "control" then
+            return _raw_device_button_held(Keyboard, "left ctrl")
+                or _raw_device_button_held(Keyboard, "right ctrl")
+        elseif name == "alt" then
+            return _raw_device_button_held(Keyboard, "left alt")
+                or _raw_device_button_held(Keyboard, "right alt")
+        end
+
+        return false
+    end
+
+    local function _raw_input_button_held(name)
+        local normalized = _normalized_keybind_entry(name)
+
+        if not normalized or normalized == "" then
+            return false
+        end
+
+        if _keyboard_modifier_alias_held(normalized) then
+            return true
+        end
+
+        local raw_name = string_lower(tostring(name))
+        raw_name = string_gsub(raw_name, "^%s+", "")
+        raw_name = string_gsub(raw_name, "%s+$", "")
+
+        if string_find(raw_name, "keyboard_", 1, true) == 1 then
+            return _raw_device_button_held(Keyboard, string.sub(raw_name, 10))
+        elseif string_find(raw_name, "mouse_", 1, true) == 1 then
+            return _raw_device_button_held(Mouse, string.sub(raw_name, 7))
+        end
+
+        return _raw_device_button_held(Keyboard, raw_name)
+            or _raw_device_button_held(Keyboard, normalized)
+            or _raw_device_button_held(Mouse, raw_name)
+            or _raw_device_button_held(Mouse, normalized)
+    end
+
+    local function _raw_input_combo_held(binding_entry)
+        if binding_entry == nil then
+            return false
+        end
+
+        local entry = tostring(binding_entry)
+        local has_required_input = false
+
+        for enabled_part in string.gmatch(entry, "([^+]+)") do
+            local first = true
+
+            for disabled_part in string.gmatch(enabled_part, "([^-]+)") do
+                if first then
+                    first = false
+                    has_required_input = true
+
+                    if not _raw_input_button_held(disabled_part) then
+                        return false
+                    end
+                elseif _raw_input_button_held(disabled_part) then
+                    return false
+                end
+            end
+        end
+
+        return has_required_input
+    end
+
+    local function _radar_zoom_modifier_binding_held()
+        local binding = mod:get("radar_zoom_modifier_key")
+
+        if type(binding) ~= "table" then
+            return _raw_input_combo_held(binding)
+        end
+
+        for i = 1, #binding do
+            if _raw_input_combo_held(binding[i]) then
+                return true
+            end
+        end
+
+        return false
+    end
+
+    local function _refresh_overview_input_capture()
+        local capture_actions = mod._overview_capture_actions or {}
+        local zoom_in_binding = mod:get("overview_zoom_in_key")
+        local zoom_out_binding = mod:get("overview_zoom_out_key")
+        local capture_wheel_up = _keybind_uses_wheel_direction(zoom_in_binding, "up")
+            or _keybind_uses_wheel_direction(zoom_out_binding, "up")
+        local capture_wheel_down = _keybind_uses_wheel_direction(zoom_in_binding, "down")
+            or _keybind_uses_wheel_direction(zoom_out_binding, "down")
+
+        table_clear(capture_actions)
+
+        if capture_wheel_up then
+            for action_name, _ in pairs(OVERVIEW_CAPTURED_ACTIONS_BY_DIRECTION.up) do
+                capture_actions[action_name] = true
+            end
+        end
+
+        if capture_wheel_down then
+            for action_name, _ in pairs(OVERVIEW_CAPTURED_ACTIONS_BY_DIRECTION.down) do
+                capture_actions[action_name] = true
+            end
+        end
+
+        mod._overview_capture_actions = capture_actions
+    end
+
+    local function _configured_radar_origin(size)
+        local radar_size = tonumber(size) or mod:get_configured_radar_size()
+        local anchor = mod:get_radar_anchor()
+        local offset_x = mod:get_radar_offset_x(radar_size)
+        local offset_y = mod:get_radar_offset_y(radar_size)
+        local x, y = _get_radar_origin_from_offsets(anchor, offset_x, offset_y, radar_size)
+
+        return math_floor(x + 0.5), math_floor(y + 0.5)
+    end
+
+    local function _overview_radar_origin(size)
+        local radar_size = tonumber(size) or mod:get_radar_size()
+        local ui_width, ui_height = _get_ui_space_size()
+        local x = math_floor((ui_width - radar_size) * 0.5 + 0.5)
+        local y = math_floor((ui_height - radar_size) * 0.5 + 0.5)
+
+        return x, y
+    end
+
+    local function _overview_max_radar_size()
+        local ui_width, ui_height = _get_ui_space_size()
+        local max_size = math_min(ui_width, ui_height) - OVERVIEW_SCREEN_PADDING
+
+        if max_size < 100 then
+            max_size = 100
+        end
+
+        return math_floor(max_size + 0.5)
+    end
+
+    local function _normalize_overview_zoom_range(value)
+        local normalized = tonumber(value) or OVERVIEW_DEFAULT_ZOOM_RANGE
+
+        if normalized < OVERVIEW_MIN_ZOOM_RANGE then
+            normalized = OVERVIEW_MIN_ZOOM_RANGE
+        elseif normalized > OVERVIEW_MAX_ZOOM_RANGE then
+            normalized = OVERVIEW_MAX_ZOOM_RANGE
+        end
+
+        return math_floor(normalized + 0.5)
+    end
+
+    local function _normalize_normal_radar_zoom_range(value)
+        local normalized = tonumber(value) or NORMAL_RADAR_DEFAULT_ZOOM_RANGE
+
+        if normalized < NORMAL_RADAR_MIN_ZOOM_RANGE then
+            normalized = NORMAL_RADAR_MIN_ZOOM_RANGE
+        elseif normalized > NORMAL_RADAR_MAX_ZOOM_RANGE then
+            normalized = NORMAL_RADAR_MAX_ZOOM_RANGE
+        end
+
+        return math_floor(normalized + 0.5)
+    end
+
+    local function _next_normal_radar_zoom_range(current_range, direction)
+        local current = _normalize_normal_radar_zoom_range(current_range)
+
+        if direction == "in" then
+            if current > 150 then
+                return 150
+            elseif current > 100 then
+                return 100
+            elseif current > 75 then
+                return 75
+            elseif current > 50 then
+                return 50
+            elseif current > 25 then
+                return 25
+            end
+
+            return 10
+        elseif direction == "out" then
+            if current < 25 then
+                return 25
+            elseif current < 50 then
+                return 50
+            elseif current < 75 then
+                return 75
+            elseif current < 100 then
+                return 100
+            elseif current < 150 then
+                return 150
+            end
+
+            return 200
+        end
+
+        return current
+    end
+
+    local function _normal_radar_zoom_factor_hundredths(range)
+        local normalized = _normalize_normal_radar_zoom_range(range)
+
+        if normalized <= 10 then
+            return 200
+        elseif normalized <= 25 then
+            return math_floor(200 - (normalized - 10) * 25 / 15 + 0.5)
+        elseif normalized <= 50 then
+            return math_floor(175 - (normalized - 25) + 0.5)
+        elseif normalized <= 75 then
+            return math_floor(150 - (normalized - 50) + 0.5)
+        elseif normalized <= 100 then
+            return math_floor(125 - (normalized - 75) + 0.5)
+        elseif normalized <= 150 then
+            return math_floor(100 - (normalized - 100) + 0.5)
+        end
+
+        return math_floor(50 - (normalized - 150) * 25 / 50 + 0.5)
+    end
+
+    local function _ease_overview_range_transition(progress)
+        if progress <= 0 then
+            return 0
+        elseif progress >= 1 then
+            return 1
+        end
+
+        return progress * progress * (3 - 2 * progress)
+    end
+
+    local function _current_overview_range_transition()
+        if not mod._overview_range_transition_active then
+            return nil
+        end
+
+        local start_t = mod._overview_range_transition_start_t
+        local from_range = tonumber(mod._overview_range_transition_from)
+        local to_range = tonumber(mod._overview_range_transition_to)
+
+        if not start_t or not from_range or not to_range then
+            mod._overview_range_transition_active = false
+
+            return nil
+        end
+
+        local now = _safe_gameplay_time() or start_t
+        local duration = mod._overview_range_transition_duration or OVERVIEW_RANGE_TRANSITION_DURATION
+        local progress = duration > 0 and (now - start_t) / duration or 1
+
+        if progress >= 1 then
+            mod._overview_range_transition_active = false
+            mod._overview_range_transition_start_t = nil
+            mod._overview_range_transition_from = nil
+            mod._overview_range_transition_to = nil
+
+            return nil
+        end
+
+        local eased = _ease_overview_range_transition(progress)
+
+        return from_range + (to_range - from_range) * eased
+    end
+
+    local function _start_overview_range_transition(from_range, to_range)
+        local from = tonumber(from_range) or OVERVIEW_DEFAULT_ZOOM_RANGE
+        local to = tonumber(to_range) or from
+
+        if math_abs(from - to) < 0.5 then
+            mod._overview_range_transition_active = false
+            mod._overview_range_transition_start_t = nil
+            mod._overview_range_transition_from = nil
+            mod._overview_range_transition_to = nil
+
+            return
+        end
+
+        mod._overview_range_transition_active = true
+        mod._overview_range_transition_start_t = _safe_gameplay_time() or 0
+        mod._overview_range_transition_duration = OVERVIEW_RANGE_TRANSITION_DURATION
+        mod._overview_range_transition_from = from
+        mod._overview_range_transition_to = to
+        mod._next_scan_t = 0
+    end
+
+    local function _overview_reset_zoom_range()
+        local targets = mod._radar_targets or {}
+        local max_distance_sq = 0
+
+        for i = 1, #targets do
+            local target = targets[i]
+
+            if target and not target.ignore_radar_range then
+                local distance_sq = tonumber(target.distance_sq)
+
+                if distance_sq and _is_finite_number(distance_sq) and distance_sq > max_distance_sq then
+                    max_distance_sq = distance_sq
+                end
+            end
+        end
+
+        if max_distance_sq <= 0 then
+            return OVERVIEW_MIN_ZOOM_RANGE
+        end
+
+        local required_range = math_sqrt(max_distance_sq) / OVERVIEW_RESET_FIT_EDGE_FRACTION
+        local step = OVERVIEW_MIN_ZOOM_RANGE
+        local stepped_range = math_floor((required_range + step - 0.0001) / step) * step
+
+        return _normalize_overview_zoom_range(stepped_range)
     end
 
     local ROTTEN_ARMOR_BREED_ALIAS_BY_BASE_BREED = {
@@ -316,7 +718,8 @@ return function(env)
             or _safe_unit_has_buff_template(unit, "taunted_short")
     end
 
-    local function _supported_ability_marker_state_for_unit(unit, outline_extension_map, local_player_unit, local_combat_ability_name)
+    local function _supported_ability_marker_state_for_unit(unit, outline_extension_map, local_player_unit,
+                                                            local_combat_ability_name)
         local marker_names, bracket_color, primary_marker_name, primary_marker_priority =
             _supported_ability_outline_state_for_unit(unit, outline_extension_map, local_player_unit)
 
@@ -428,7 +831,9 @@ return function(env)
                 if is_active and not is_used and show_marker then
                     local kind, meta = _classify_interactee(extension, unit)
 
-                    if kind and (kind ~= "expedition_loot_converter" or _is_in_expedition_safe_zone()) then
+                    if kind
+                        and not _should_hide_expedition_store_product_in_open_zone(unit)
+                        and (kind ~= "expedition_loot_converter" or _is_in_expedition_safe_zone()) then
                         _track_unit(unit, kind, "interactee_system", meta)
                     else
                         _clear_tracked_unit_from_source(unit, "interactee_system")
@@ -1014,7 +1419,7 @@ return function(env)
             return {}
         end
 
-        local max_range = mod:get_radar_range()
+        local max_range = mod:get_radar_collection_range()
         local max_range_sq = max_range * max_range
         local max_markers = mod:get_max_radar_markers()
         local item_vertical_arrow_threshold = mod:get_item_vertical_arrow_threshold()
@@ -1025,7 +1430,8 @@ return function(env)
         local show_ability_marked_enemies = mod:get_show_ability_marked_enemies()
         local tracked_units = mod._tracked_units
         local tracked_points = mod._tracked_points
-        local targets = {}
+        local targets = _reuse_or_new_table(mod._radar_targets)
+        local target_pool = _warm_radar_target_pool(max_markers)
         local target_count = 0
 
         _clear_scratch_radar_caches()
@@ -1185,20 +1591,23 @@ return function(env)
             end
 
             target_count = target_count + 1
-            targets[target_count] = {
-                unit = unit,
-                kind = kind,
-                position = position,
-                source = source,
-                meta = meta,
-                distance_sq = distance_sq_horizontal,
-                distance_sq_3d = _distance_squared(player_pos, position),
-                vertical_delta = vertical_delta,
-                vertical_state = vertical_state,
-                ignore_radar_range = ignore_range,
-                render_layer = render_layer,
-                selection_priority = selection_priority,
-            }
+            local target = target_pool[target_count] or {}
+            target_pool[target_count] = target
+
+            target.unit = unit
+            target.kind = kind
+            target.position = position
+            target.source = source
+            target.meta = meta
+            target.distance_sq = distance_sq_horizontal
+            target.distance_sq_3d = _distance_squared(player_pos, position)
+            target.vertical_delta = vertical_delta
+            target.vertical_state = vertical_state
+            target.ignore_radar_range = ignore_range
+            target.render_layer = render_layer
+            target.selection_priority = selection_priority
+
+            targets[target_count] = target
         end
 
         for unit, data in pairs(tracked_units) do
@@ -1212,7 +1621,14 @@ return function(env)
         end
 
         mod._unclustered_radar_targets = targets
-        mod._highlight_source_radar_targets = _copy_target_list(targets)
+
+        if mod:has_any_nearby_highlight_enabled() then
+            mod._highlight_source_radar_targets = _copy_target_list(targets, mod._highlight_source_radar_targets)
+        else
+            mod._highlight_source_radar_targets = _reuse_or_new_table(mod._highlight_source_radar_targets)
+        end
+
+        local unclustered_total = #targets
 
         targets = _cluster_expedition_loot_targets(targets, player_pos, item_vertical_arrow_threshold_sq,
             item_vertical_hide_threshold)
@@ -1220,14 +1636,35 @@ return function(env)
         table_sort(targets, _compare_radar_targets_for_display)
 
         local target_total = #targets
+        local was_capped = target_total > max_markers
 
-        if target_total > max_markers then
+        if was_capped then
             for i = target_total, max_markers + 1, -1 do
                 targets[i] = nil
             end
         end
 
+        mod._last_radar_unclustered_marker_count = unclustered_total
+        mod._last_radar_candidate_marker_count = target_total
+        mod._last_radar_active_marker_count = #targets
+        mod._last_radar_marker_cap = max_markers
+        mod._last_radar_marker_capped = was_capped
+
         return targets
+    end
+
+    local function _write_radar_snapshot(player_unit, player_pos)
+        local local_player = _local_player()
+        local snapshot = mod._radar_snapshot or {}
+
+        snapshot.player_unit = player_unit
+        snapshot.player_position = player_pos
+        snapshot.player_rotation = _safe_player_rotation(player_unit)
+        snapshot.player_slot = _safe_player_slot(local_player)
+        snapshot.targets = mod._radar_targets
+        snapshot.screen_highlights = mod._screen_highlight_targets
+
+        return snapshot
     end
 
     local function _collect_radar_snapshot()
@@ -1241,16 +1678,7 @@ return function(env)
             return nil
         end
 
-        local local_player = _local_player()
-
-        return {
-            player_unit = player_unit,
-            player_position = player_pos,
-            player_rotation = _safe_player_rotation(player_unit),
-            player_slot = _safe_player_slot(local_player),
-            targets = mod._radar_targets,
-            screen_highlights = mod._screen_highlight_targets,
-        }
+        return _write_radar_snapshot(player_unit, player_pos)
     end
 
     local function _debug_log_scan()
@@ -1339,6 +1767,7 @@ return function(env)
         mod._logged_units = {}
         mod._radar_targets = {}
         mod._radar_snapshot = nil
+        mod._radar_target_pool = {}
         mod._last_update_t = nil
         mod._last_scan_signature = nil
         mod._last_block_signature = nil
@@ -1349,6 +1778,27 @@ return function(env)
         mod._last_expedition_in_safe_zone = nil
         mod._player_smart_tag_generation = 0
         mod._player_smart_tag_state_by_id = {}
+        mod._overview_mode_active = false
+        mod._overview_zoom_range = _normalize_overview_zoom_range(mod:get("overview_zoom_range"))
+        mod._overview_capture_actions = mod._overview_capture_actions or {}
+        mod._overview_range_transition_active = false
+        mod._overview_range_transition_start_t = nil
+        mod._overview_range_transition_from = nil
+        mod._overview_range_transition_to = nil
+        mod._normal_radar_zoom_modifier_t = nil
+        mod._normal_radar_zoom_indicator_t = nil
+        mod._last_radar_unclustered_marker_count = 0
+        mod._last_radar_candidate_marker_count = 0
+        mod._last_radar_active_marker_count = 0
+        mod._last_radar_marker_cap = 0
+        mod._last_radar_marker_capped = false
+        mod._overview_marker_high_raw = 0
+        mod._overview_marker_high_candidates = 0
+        mod._overview_marker_high_active = 0
+        mod._overview_marker_high_drawn = 0
+        mod._last_overview_marker_debug_signature = nil
+
+        _refresh_overview_input_capture()
     end
 
     local function _debug_log_block(reason, gameplay_t, mission_name, activity, mechanism_name)
@@ -1360,12 +1810,11 @@ return function(env)
         local player_state = _safe_player_character_state_name(player_unit)
 
         local signature = string_format(
-            "%s|%s|%s|%s|%s|%s",
+            "%s|%s|%s|%s|%s",
             tostring(reason),
             tostring(mission_name),
             tostring(activity),
             tostring(mechanism_name),
-            tostring(gameplay_t),
             tostring(player_state)
         )
 
@@ -1385,8 +1834,12 @@ return function(env)
         ))
     end
 
+    local function _is_radar_keybind_runtime_allowed()
+        return mod.is_radar_runtime_game_mode_allowed and mod:is_radar_runtime_game_mode_allowed()
+    end
+
     local function _update_internal(dt, t)
-        if mod:get("enable_radar") == false then
+        if mod:get("enable_radar") == false and not mod:is_overview_mode_active() then
             _reset_runtime_output_tables()
             return
         end
@@ -1408,25 +1861,29 @@ return function(env)
                 _reset_tracked_units_table()
             end
 
+            if mod:is_overview_mode_active() then
+                mod:set_overview_mode_active(false)
+            end
+
             _reset_runtime_output_tables()
             _debug_log_block(reason, gameplay_t, mission_name, activity, mechanism_name)
             return
         end
 
-        mod._radar_snapshot = {
-            player_unit = player_unit,
-            player_position = player_pos,
-            player_rotation = _safe_player_rotation(player_unit),
-            player_slot = _safe_player_slot(_local_player()),
-            targets = mod._radar_targets,
-            screen_highlights = mod._screen_highlight_targets,
-        }
+        mod._last_block_signature = nil
+        mod._radar_snapshot = _write_radar_snapshot(player_unit, player_pos)
 
         if scan_clock < (mod._next_scan_t or 0) then
             return
         end
 
-        mod._next_scan_t = scan_clock + SCAN_INTERVAL
+        _current_overview_range_transition()
+
+        local scan_interval = mod._overview_range_transition_active
+            and OVERVIEW_RANGE_TRANSITION_SCAN_INTERVAL
+            or SCAN_INTERVAL
+
+        mod._next_scan_t = scan_clock + scan_interval
 
         _sync_expedition_item_state()
         _scan_interactees()
@@ -1449,6 +1906,7 @@ return function(env)
     mod.on_game_state_changed = function(status, state_name)
         if status == "enter" and state_name == "GameplayStateRun" then
             mod._gameplay_run = true
+            _warm_radar_target_pool(512)
             mod._next_scan_t = 0
             mod._last_update_t = nil
             return
@@ -1483,6 +1941,37 @@ return function(env)
         use_hud_scale = true,
     })
 
+    local function _neutralize_input_value(value)
+        local value_type = type(value)
+
+        if value_type == "boolean" then
+            return false
+        end
+
+        if value_type == "number" then
+            return 0
+        end
+
+        if value_type == "userdata" and Vector3 then
+            return Vector3(0, 0, 0)
+        end
+
+        return value
+    end
+
+    local function _overview_input_action_hook(func, self, action_name, ...)
+        local value = func(self, action_name, ...)
+
+        if not mod:should_capture_overview_input_action(action_name) then
+            return value
+        end
+
+        return _neutralize_input_value(value)
+    end
+
+    mod:hook(CLASS.InputService, "_get", _overview_input_action_hook)
+    mod:hook(CLASS.InputService, "_get_simulate", _overview_input_action_hook)
+
     mod:hook_safe("StateGameplay", "update", function(self, dt, t, ...)
         mod._last_state_gameplay = self
         _update_internal(dt, t)
@@ -1516,6 +2005,217 @@ return function(env)
         end
 
         _update_internal(dt, _safe_gameplay_time())
+    end
+
+    local previous_on_setting_changed = mod.on_setting_changed
+
+    mod.on_setting_changed = function(setting_id, ...)
+        if previous_on_setting_changed then
+            previous_on_setting_changed(setting_id, ...)
+        end
+
+        if setting_id == "overview_zoom_in_key" or setting_id == "overview_zoom_out_key" then
+            _refresh_overview_input_capture()
+        end
+    end
+
+    function mod:is_overview_mode_active()
+        return self._overview_mode_active == true
+    end
+
+    function mod:get_overview_zoom_range()
+        local value = self._overview_zoom_range
+
+        if value == nil then
+            value = _normalize_overview_zoom_range(self:get("overview_zoom_range"))
+            self._overview_zoom_range = value
+        end
+
+        return _normalize_overview_zoom_range(value)
+    end
+
+    function mod:set_overview_zoom_range(value, persist)
+        local normalized = _normalize_overview_zoom_range(value)
+        local previous_range = self:get_overview_zoom_range()
+        local transition_range = _current_overview_range_transition()
+
+        self._overview_zoom_range = normalized
+
+        if persist ~= false then
+            self:set("overview_zoom_range", normalized)
+        end
+
+        if self:is_overview_mode_active() then
+            _start_overview_range_transition(transition_range or previous_range, normalized)
+        end
+
+        return normalized
+    end
+
+    function mod:is_normal_radar_zoom_modifier_active()
+        if self:is_overview_mode_active() then
+            return false
+        end
+
+        if not _is_radar_keybind_runtime_allowed() then
+            return false
+        end
+
+        if _radar_zoom_modifier_binding_held() then
+            return true
+        end
+
+        local last_t = self._normal_radar_zoom_modifier_t
+
+        if not last_t then
+            return false
+        end
+
+        local now = _safe_gameplay_time() or 0
+
+        return now - last_t <= NORMAL_RADAR_ZOOM_MODIFIER_GRACE
+    end
+
+    function mod:set_normal_radar_zoom_range(value)
+        local normalized = _normalize_normal_radar_zoom_range(value)
+
+        self:set("radar_range", normalized)
+        self._normal_radar_zoom_indicator_t = _safe_gameplay_time() or 0
+        self._next_scan_t = 0
+
+        return normalized
+    end
+
+    function mod:reset_radar_zoom()
+        if not _is_radar_keybind_runtime_allowed() then
+            return false
+        end
+
+        if self:is_overview_mode_active() then
+            return self:set_overview_zoom_range(_overview_reset_zoom_range())
+        end
+
+        if not self:is_normal_radar_zoom_modifier_active() then
+            return false
+        end
+
+        return self:set_normal_radar_zoom_range(NORMAL_RADAR_RESET_ZOOM_RANGE)
+    end
+
+    function mod:set_overview_mode_active(active)
+        local is_active = active == true
+
+        if is_active and not _is_radar_keybind_runtime_allowed() then
+            return false
+        end
+
+        if self._overview_mode_active == is_active then
+            return is_active
+        end
+
+        local transition_range = _current_overview_range_transition()
+        local current_range = transition_range
+            or (self._overview_mode_active and self:get_overview_zoom_range() or self:get_configured_radar_range())
+        local target_range = is_active and self:get_overview_zoom_range() or self:get_configured_radar_range()
+
+        self._overview_mode_active = is_active
+        self._overview_zoom_range = self:get_overview_zoom_range()
+
+        if is_active then
+            self._overview_marker_high_raw = 0
+            self._overview_marker_high_candidates = 0
+            self._overview_marker_high_active = 0
+            self._overview_marker_high_drawn = 0
+            self._last_overview_marker_debug_signature = nil
+            _start_overview_range_transition(current_range, target_range)
+        else
+            self._overview_range_transition_active = false
+            self._overview_range_transition_start_t = nil
+            self._overview_range_transition_from = nil
+            self._overview_range_transition_to = nil
+            self._next_scan_t = 0
+        end
+
+        _refresh_overview_input_capture()
+
+        if self:get("debug_mode") == true then
+            self:notify(
+                "Radar overview %s (%dm)",
+                is_active and "enabled" or "disabled",
+                self:get_overview_zoom_range()
+            )
+        end
+
+        return is_active
+    end
+
+    function mod:adjust_overview_zoom(direction)
+        if not self:is_overview_mode_active() then
+            return false
+        end
+
+        if not _is_radar_keybind_runtime_allowed() then
+            return false
+        end
+
+        local current_range = self:get_overview_zoom_range()
+        local new_range = current_range
+
+        if direction == "in" then
+            new_range = current_range - OVERVIEW_MIN_ZOOM_RANGE
+        elseif direction == "out" then
+            new_range = current_range + OVERVIEW_MIN_ZOOM_RANGE
+        end
+
+        return self:set_overview_zoom_range(new_range)
+    end
+
+    function mod:adjust_normal_radar_zoom(direction)
+        if not _is_radar_keybind_runtime_allowed() then
+            return false
+        end
+
+        if not self:is_normal_radar_zoom_modifier_active() then
+            return false
+        end
+
+        local current_range = self:get_configured_radar_range()
+        local new_range = _next_normal_radar_zoom_range(current_range, direction)
+
+        return self:set_normal_radar_zoom_range(new_range)
+    end
+
+    function mod:adjust_radar_zoom(direction)
+        if self:is_overview_mode_active() then
+            return self:adjust_overview_zoom(direction)
+        end
+
+        return self:adjust_normal_radar_zoom(direction)
+    end
+
+    function mod:should_capture_overview_input_action(action_name)
+        if action_name == nil then
+            return false
+        end
+
+        if not _is_radar_keybind_runtime_allowed() then
+            return false
+        end
+
+        local should_capture = self:is_overview_mode_active() or self:is_normal_radar_zoom_modifier_active()
+
+        if not should_capture then
+            return false
+        end
+
+        local capture_actions = self._overview_capture_actions
+
+        if capture_actions == nil then
+            _refresh_overview_input_capture()
+            capture_actions = self._overview_capture_actions
+        end
+
+        return capture_actions[tostring(action_name)] == true
     end
 
     function mod:get_player_display_style()
@@ -1566,7 +2266,7 @@ return function(env)
     end
 
     function mod:should_draw_radar()
-        if self:get("enable_radar") == false then
+        if self:get("enable_radar") == false and not self:is_overview_mode_active() then
             return false
         end
 
@@ -1581,29 +2281,183 @@ return function(env)
         return _is_allowed_runtime()
     end
 
+    function mod:get_configured_radar_size()
+        local value = tonumber(self:get("radar_size")) or 220
+
+        if value < 100 then
+            value = 100
+        elseif value > 1200 then
+            value = 1200
+        end
+
+        return math_floor(value + 0.5)
+    end
+
     function mod:get_radar_size()
-        return self:get("radar_size") or 220
+        if self:is_overview_mode_active() then
+            return _overview_max_radar_size()
+        end
+
+        return self:get_configured_radar_size()
+    end
+
+    function mod:get_configured_radar_range()
+        return _normalize_normal_radar_zoom_range(self:get("radar_range") or 40)
     end
 
     function mod:get_radar_range()
-        local value = tonumber(self:get("radar_range")) or 40
-
-        if value < 25 then
-            value = 25
-        elseif value > 100 then
-            value = 100
+        if self:is_overview_mode_active() then
+            return _current_overview_range_transition() or self:get_overview_zoom_range()
         end
 
-        return value
+        return self:get_configured_radar_range()
+    end
+
+    function mod:get_radar_collection_range()
+        if self:is_overview_mode_active() then
+            local transition_range = _current_overview_range_transition()
+
+            if transition_range then
+                return transition_range
+            end
+
+            return math_huge
+        end
+
+        _current_overview_range_transition()
+
+        return self:get_radar_range()
+    end
+
+    function mod:get_normal_radar_zoom_factor_text(range)
+        local hundredths = _normal_radar_zoom_factor_hundredths(range)
+        local factor = hundredths / 100
+
+        if hundredths % 10 == 0 then
+            return string_format("%.1fx", factor)
+        end
+
+        return string_format("%.2fx", factor)
+    end
+
+    function mod:get_normal_radar_zoom_indicator()
+        if self:is_overview_mode_active() then
+            return nil, nil
+        end
+
+        local start_t = self._normal_radar_zoom_indicator_t
+
+        if not start_t then
+            return nil, nil
+        end
+
+        local now = _safe_gameplay_time() or start_t
+        local elapsed = now - start_t
+
+        if elapsed < 0 or elapsed > NORMAL_RADAR_ZOOM_INDICATOR_DURATION then
+            self._normal_radar_zoom_indicator_t = nil
+
+            return nil, nil
+        end
+
+        local fade_start = NORMAL_RADAR_ZOOM_INDICATOR_DURATION * 0.7
+        local alpha_scale = 1
+
+        if elapsed > fade_start then
+            alpha_scale = (NORMAL_RADAR_ZOOM_INDICATOR_DURATION - elapsed)
+                / (NORMAL_RADAR_ZOOM_INDICATOR_DURATION - fade_start)
+        end
+
+        return self:get_normal_radar_zoom_factor_text(self:get_configured_radar_range()), alpha_scale
+    end
+
+    function mod:log_overview_marker_draw_counts(collected_count, drawn_count, configured_cap, widget_cap,
+                                                 center_dot_drawn)
+        if self:get("debug_mode") ~= true or not self:is_overview_mode_active() then
+            return
+        end
+
+        local raw_count = tonumber(self._last_radar_unclustered_marker_count) or tonumber(collected_count) or 0
+        local candidate_count = tonumber(self._last_radar_candidate_marker_count) or tonumber(collected_count) or 0
+        local active_count = tonumber(self._last_radar_active_marker_count) or tonumber(collected_count) or 0
+        local draw_count = tonumber(drawn_count) or 0
+        local marker_cap = tonumber(configured_cap) or self:get_max_radar_markers()
+        local pool_cap = tonumber(widget_cap) or marker_cap
+        local capped = self._last_radar_marker_capped == true
+        local center_dot = center_dot_drawn == true
+        local widget_count = draw_count + (center_dot and 1 or 0)
+        local limit_ok = active_count <= marker_cap and widget_count <= pool_cap
+
+        self._overview_marker_high_raw = math_max(tonumber(self._overview_marker_high_raw) or 0, raw_count)
+        self._overview_marker_high_candidates = math_max(tonumber(self._overview_marker_high_candidates) or 0,
+            candidate_count)
+        self._overview_marker_high_active = math_max(tonumber(self._overview_marker_high_active) or 0, active_count)
+        self._overview_marker_high_drawn = math_max(tonumber(self._overview_marker_high_drawn) or 0, draw_count)
+
+        local signature = table_concat({
+            tostring(raw_count),
+            tostring(candidate_count),
+            tostring(active_count),
+            tostring(draw_count),
+            tostring(marker_cap),
+            tostring(pool_cap),
+            tostring(capped),
+            tostring(center_dot),
+            tostring(widget_count),
+            tostring(limit_ok),
+            tostring(self._overview_marker_high_raw),
+            tostring(self._overview_marker_high_candidates),
+            tostring(self._overview_marker_high_active),
+            tostring(self._overview_marker_high_drawn),
+        }, "|")
+
+        if signature == self._last_overview_marker_debug_signature then
+            return
+        end
+
+        self._last_overview_marker_debug_signature = signature
+        self:info(string_format(
+            "Radar overview markers | raw=%d candidates=%d active=%d drawn=%d widgets=%d cap=%d widget_cap=%d capped=%s center_dot=%s limit_ok=%s high_raw=%d high_candidates=%d high_active=%d high_drawn=%d",
+            raw_count,
+            candidate_count,
+            active_count,
+            draw_count,
+            widget_count,
+            marker_cap,
+            pool_cap,
+            tostring(capped),
+            tostring(center_dot),
+            tostring(limit_ok),
+            self._overview_marker_high_raw,
+            self._overview_marker_high_candidates,
+            self._overview_marker_high_active,
+            self._overview_marker_high_drawn
+        ))
     end
 
     function mod:get_max_radar_markers()
+        if self:is_overview_mode_active() then
+            return self:get_overview_max_radar_markers()
+        end
+
         local value = tonumber(self:get("max_radar_markers")) or 64
 
         if value < 10 then
             value = 10
         elseif value > 200 then
             value = 200
+        end
+
+        return math_floor(value)
+    end
+
+    function mod:get_overview_max_radar_markers()
+        local value = tonumber(self:get("overview_max_radar_markers")) or OVERVIEW_RADAR_MARKER_LIMIT
+
+        if value < 100 then
+            value = 100
+        elseif value > OVERVIEW_RADAR_MARKER_LIMIT then
+            value = OVERVIEW_RADAR_MARKER_LIMIT
         end
 
         return math_floor(value)
@@ -1748,7 +2602,7 @@ return function(env)
     end
 
     function mod:get_radar_offset_x(size)
-        local radar_size = tonumber(size) or self:get_radar_size()
+        local radar_size = tonumber(size) or self:get_configured_radar_size()
         local max_x = _get_radar_position_bounds(radar_size)
         local value = self:get("radar_pos_x")
 
@@ -1762,7 +2616,7 @@ return function(env)
     end
 
     function mod:get_radar_offset_y(size)
-        local radar_size = tonumber(size) or self:get_radar_size()
+        local radar_size = tonumber(size) or self:get_configured_radar_size()
         local _, max_y = _get_radar_position_bounds(radar_size)
         local value = self:get("radar_pos_y")
 
@@ -1777,22 +2631,30 @@ return function(env)
 
     function mod:get_radar_pos_x(size)
         local radar_size = tonumber(size) or self:get_radar_size()
-        local anchor = self:get_radar_anchor()
-        local offset_x = self:get_radar_offset_x(radar_size)
-        local offset_y = self:get_radar_offset_y(radar_size)
-        local x = _get_radar_origin_from_offsets(anchor, offset_x, offset_y, radar_size)
 
-        return math_floor(x + 0.5)
+        if self:is_overview_mode_active() then
+            local x = _overview_radar_origin(radar_size)
+
+            return x
+        end
+
+        local x = _configured_radar_origin(radar_size)
+
+        return x
     end
 
     function mod:get_radar_pos_y(size)
         local radar_size = tonumber(size) or self:get_radar_size()
-        local anchor = self:get_radar_anchor()
-        local offset_x = self:get_radar_offset_x(radar_size)
-        local offset_y = self:get_radar_offset_y(radar_size)
-        local _, y = _get_radar_origin_from_offsets(anchor, offset_x, offset_y, radar_size)
 
-        return math_floor(y + 0.5)
+        if self:is_overview_mode_active() then
+            local _, y = _overview_radar_origin(radar_size)
+
+            return y
+        end
+
+        local _, y = _configured_radar_origin(radar_size)
+
+        return y
     end
 
     function mod:has_any_nearby_highlight_enabled()
@@ -1911,7 +2773,7 @@ return function(env)
     end
 
     function mod:set_radar_position(x, y)
-        local radar_size = self:get_radar_size()
+        local radar_size = self:get_configured_radar_size()
         local max_x, max_y = _get_radar_position_bounds(radar_size)
         local unrestricted = self:is_radar_position_unrestricted()
         local offset_x = self:get_radar_offset_x(radar_size)
@@ -1947,7 +2809,7 @@ return function(env)
     end
 
     function mod:set_radar_origin(x, y)
-        local radar_size = self:get_radar_size()
+        local radar_size = self:get_configured_radar_size()
         local anchor = self:get_radar_anchor()
         local max_x, max_y = _get_radar_position_bounds(radar_size)
         local unrestricted = self:is_radar_position_unrestricted()
@@ -1979,9 +2841,8 @@ return function(env)
     end
 
     function mod:set_radar_anchor(anchor, preserve_visual_position)
-        local radar_size = self:get_radar_size()
-        local current_x = self:get_radar_pos_x(radar_size)
-        local current_y = self:get_radar_pos_y(radar_size)
+        local radar_size = self:get_configured_radar_size()
+        local current_x, current_y = _configured_radar_origin(radar_size)
         local normalized_anchor = _normalize_radar_anchor(anchor)
 
         self:set("radar_anchor", normalized_anchor)
@@ -1994,8 +2855,15 @@ return function(env)
     end
 
     function mod:nudge_radar(dx, dy)
-        local x = self:get_radar_pos_x()
-        local y = self:get_radar_pos_y()
+        if self:is_overview_mode_active() then
+            return false
+        end
+
+        if not _is_radar_keybind_runtime_allowed() then
+            return false
+        end
+
+        local x, y = _configured_radar_origin()
 
         return self:set_radar_origin(x + (tonumber(dx) or 0), y + (tonumber(dy) or 0))
     end
@@ -2023,9 +2891,43 @@ return function(env)
     end
 
     function mod.toggle_radar_keybind(_)
+        if not _is_radar_keybind_runtime_allowed() then
+            return false
+        end
+
         local current_value = mod:get("enable_radar") ~= false
 
         return mod:set_radar_enabled(not current_value)
+    end
+
+    function mod.toggle_overview_keybind(_)
+        if not _is_radar_keybind_runtime_allowed() then
+            return false
+        end
+
+        return mod:set_overview_mode_active(not mod:is_overview_mode_active())
+    end
+
+    function mod.radar_zoom_modifier_keybind(_)
+        if not _is_radar_keybind_runtime_allowed() then
+            return false
+        end
+
+        mod._normal_radar_zoom_modifier_t = _safe_gameplay_time() or 0
+
+        return true
+    end
+
+    function mod.overview_zoom_in_keybind(_)
+        return mod:adjust_radar_zoom("in")
+    end
+
+    function mod.overview_zoom_out_keybind(_)
+        return mod:adjust_radar_zoom("out")
+    end
+
+    function mod.radar_zoom_reset_keybind(_)
+        return mod:reset_radar_zoom()
     end
 
     function mod.move_radar_left(_)
@@ -2077,7 +2979,7 @@ return function(env)
         end
 
         local outside_range = distance_sq_horizontal > range * range
-        if outside_range and not ignore_radar_range then
+        if outside_range and not ignore_radar_range and not self:is_overview_mode_active() then
             return nil, nil
         end
 

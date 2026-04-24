@@ -125,6 +125,24 @@ return {
         ["zh-cn"] = "切换雷达开关快捷键",
         ["zh-tw"] = "切換雷達開關",
     },
+    toggle_overview_key = {
+        en = "Toggle overview mode",
+    },
+    radar_zoom_modifier_key = {
+        en = "Radar zoom modifier",
+    },
+    overview_zoom_in_key = {
+        en = "Radar zoom in",
+    },
+    overview_zoom_out_key = {
+        en = "Radar zoom out",
+    },
+    radar_zoom_reset_key = {
+        en = "Reset radar zoom",
+    },
+    show_scale_legends = {
+        en = "Show scale legends",
+    },
     radar_size = {
         en = "Radar size",
         fr = "Taille du radar",
@@ -390,6 +408,9 @@ return {
         ko = "레이더 마커 최대 수",
         ["zh-cn"] = "雷达最大标记数量",
         ["zh-tw"] = "雷達標記上限",
+    },
+    overview_max_radar_markers = {
+        en = "Max overview markers",
     },
     scale_icons_with_radar_size = {
         en = "Scale icons with radar size",
@@ -2934,6 +2955,28 @@ return {
         ["zh-cn"] = "任务中切换雷达开关的按键绑定。",
         ["zh-tw"] = "任務中切換雷達開關的按鍵綁定。",
     },
+    toggle_overview_key_tooltip = {
+        en = "Keybind to toggle the centered overview mode on or off during a mission.",
+    },
+    radar_zoom_modifier_key_tooltip = {
+        en =
+        "Hold this key to let the radar zoom keybinds control the normal radar. While held, shared zoom inputs such as mouse wheel are captured for radar zoom only.",
+    },
+    overview_zoom_in_key_tooltip = {
+        en =
+        "Keybind to zoom the radar in. Works in overview mode, or on the normal radar while the radar zoom modifier is held.",
+    },
+    overview_zoom_out_key_tooltip = {
+        en =
+        "Keybind to zoom the radar out. Works in overview mode, or on the normal radar while the radar zoom modifier is held.",
+    },
+    radar_zoom_reset_key_tooltip = {
+        en =
+        "In overview mode, fits the zoom scale to the currently rendered normal-range markers. On the normal radar, hold the radar zoom modifier and press this key to reset to 10 m / 2.0x.",
+    },
+    show_scale_legends_tooltip = {
+        en = "Show the overview scale legends next to the radar while overview mode is active.",
+    },
     radar_size_tooltip = {
         en = "Sets the overall size of the radar on screen.",
         fr = "Définit la taille générale du radar à l’écran.",
@@ -2949,7 +2992,7 @@ return {
         ["zh-tw"] = "設定畫面上雷達的整體大小。",
     },
     radar_range_tooltip = {
-        en = "Maximum world distance, in meters, that markers can be shown on the radar.",
+        en = "Maximum world distance, from 10 m to 200 m, that markers can be shown on the normal radar.",
         fr = "Distance maximale dans le monde, en mètres, à laquelle les marqueurs peuvent être affichés sur le radar.",
         de = "Maximale Weltdistanz in Metern, bis zu der Marker auf dem Radar angezeigt werden können.",
         it = "Distanza massima nel mondo, in metri, entro cui i marcatori possono essere mostrati sul radar.",
@@ -3019,6 +3062,10 @@ return {
         ko = "레이더가 한 번에 그릴 수 있는 최대 마커 수입니다. 값을 낮추면 화면 혼잡을 줄이고 성능을 향상시킬 수 있습니다.",
         ["zh-cn"] = "雷达一次允许绘制的最大标记数量。较低的值可减少杂乱并提升性能。",
         ["zh-tw"] = "雷達一次允許繪製的最大標記數量。較低的值可減少雜亂並提升效能。",
+    },
+    overview_max_radar_markers_tooltip = {
+        en =
+        "Maximum number of target markers the overview radar is allowed to draw. Lower values can improve performance on slower systems.",
     },
     scale_icons_with_radar_size_tooltip = {
         en = "Automatically scale marker icons up or down together with the radar size.",

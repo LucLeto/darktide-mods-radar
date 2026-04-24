@@ -105,6 +105,38 @@ return function(env)
         return ok and value == true or false
     end
 
+    function _should_hide_expedition_store_product_in_open_zone(unit)
+        if not unit or not _is_expedition_runtime() or _is_in_expedition_safe_zone() then
+            return false
+        end
+
+        local game_mode = _safe_game_mode()
+        if not game_mode then
+            return false
+        end
+
+        -- Safe-zone store data marks sanctuary shop fixtures without also matching player-dropped deployables.
+        local get_unit_store_data = game_mode.get_unit_store_data
+        if type(get_unit_store_data) == "function" then
+            local ok_store_data, store_data = pcall(get_unit_store_data, game_mode, unit)
+
+            if ok_store_data and store_data ~= nil then
+                return true
+            end
+        end
+
+        local is_store_product = game_mode.is_store_product
+        if type(is_store_product) == "function" then
+            local ok_is_store_product, value = pcall(is_store_product, game_mode, unit)
+
+            if ok_is_store_product and value == true then
+                return true
+            end
+        end
+
+        return false
+    end
+
     local function _safe_vector3_unbox(value)
         if not value then
             return nil
@@ -551,6 +583,34 @@ return function(env)
         return mod:is_radar_enabled_for_game_mode(game_mode_id)
     end
 
+    function mod:is_radar_runtime_game_mode_allowed()
+        local mission_name = _safe_mission_name()
+        local activity = _safe_presence_activity()
+        local mechanism_name = _safe_mechanism_name()
+
+        if activity == "loading" then
+            return false
+        end
+
+        if mechanism_name == "left_session" or mechanism_name == "hub" then
+            return false
+        end
+
+        if not mission_name or mission_name == "hub_ship" then
+            return false
+        end
+
+        if mechanism_name == "onboarding" and mission_name ~= "tg_shooting_range" then
+            return false
+        end
+
+        if _is_hub_runtime(mission_name, activity, mechanism_name) then
+            return false
+        end
+
+        return _is_radar_enabled_for_current_mode(mission_name, mechanism_name)
+    end
+
     function _get_runtime_state()
         local gameplay_t = _safe_gameplay_time()
         local mission_name = _safe_mission_name()
@@ -584,7 +644,7 @@ return function(env)
             return false, "hub_runtime", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
         end
 
-        if not _is_radar_enabled_for_current_mode(mission_name, mechanism_name) then
+        if not mod:is_radar_runtime_game_mode_allowed() then
             return false, "game_mode_disabled", gameplay_t, mission_name, activity, mechanism_name, player_unit,
                 player_pos
         end

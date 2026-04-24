@@ -179,6 +179,51 @@ return {
                             function_name = "toggle_radar_keybind",
                         },
                         {
+                            setting_id = "toggle_overview_key",
+                            type = "keybind",
+                            default_value = {},
+                            keybind_trigger = "pressed",
+                            keybind_type = "function_call",
+                            function_name = "toggle_overview_keybind",
+                        },
+                        {
+                            setting_id = "radar_zoom_modifier_key",
+                            type = "keybind",
+                            default_value = {},
+                            keybind_trigger = "held",
+                            keybind_type = "function_call",
+                            function_name = "radar_zoom_modifier_keybind",
+                        },
+                        {
+                            setting_id = "overview_zoom_in_key",
+                            type = "keybind",
+                            default_value = { "wheel_down" },
+                            keybind_trigger = "pressed",
+                            keybind_type = "function_call",
+                            function_name = "overview_zoom_in_keybind",
+                        },
+                        {
+                            setting_id = "overview_zoom_out_key",
+                            type = "keybind",
+                            default_value = { "wheel_up" },
+                            keybind_trigger = "pressed",
+                            keybind_type = "function_call",
+                            function_name = "overview_zoom_out_keybind",
+                        },
+                        {
+                            setting_id = "radar_zoom_reset_key",
+                            type = "keybind",
+                            default_value = {},
+                            keybind_trigger = "pressed",
+                            keybind_type = "function_call",
+                            function_name = "radar_zoom_reset_keybind",
+                        },
+                        {
+                            setting_id = "show_scale_legends",
+                            type = "checkbox",
+                            default_value = true,
+                        },
+                        {
                             setting_id = "radar_size",
                             type = "numeric",
                             default_value = 180,
@@ -192,14 +237,17 @@ return {
                                     true)
                             end,
                             get = function()
-                                return mod:get_radar_size()
+                                return mod.get_configured_radar_size and mod:get_configured_radar_size()
+                                    or mod:get_radar_size()
                             end,
                         },
                         {
                             setting_id = "radar_range",
                             type = "numeric",
                             default_value = 40,
-                            range = { 25, 100 },
+                            range = { 10, 200 },
+                            decimals_number = 0,
+                            step_size_value = 1,
                         },
                         {
                             setting_id = "item_vertical_arrow_threshold",
@@ -222,6 +270,14 @@ return {
                             type = "numeric",
                             default_value = 64,
                             range = { 10, 200 },
+                        },
+                        {
+                            setting_id = "overview_max_radar_markers",
+                            type = "numeric",
+                            default_value = 300,
+                            range = { 100, 300 },
+                            decimals_number = 0,
+                            step_size_value = 25,
                         },
                         {
                             setting_id = "show_only_tagged_enemies",

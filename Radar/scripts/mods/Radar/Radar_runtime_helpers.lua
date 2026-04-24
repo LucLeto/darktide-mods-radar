@@ -1668,8 +1668,9 @@ return function(env)
         }
     end
 
-    function _copy_target_list(targets)
-        local copy = {}
+    function _copy_target_list(targets, destination)
+        local copy = destination or {}
+        table_clear(copy)
 
         if not targets then
             return copy
