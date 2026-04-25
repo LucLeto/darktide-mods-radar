@@ -721,8 +721,7 @@ return function(env)
     end
 
     local function _supported_ability_marker_state_for_unit(unit, outline_extension_map, local_player_unit, local_combat_ability_name)
-        local marker_names, bracket_color, primary_marker_name, primary_marker_priority =
-            _supported_ability_outline_state_for_unit(unit, outline_extension_map, local_player_unit)
+        local marker_names, bracket_color, primary_marker_name, primary_marker_priority = _supported_ability_outline_state_for_unit(unit, outline_extension_map, local_player_unit)
 
         if marker_names ~= nil then
             return marker_names, bracket_color, primary_marker_name, primary_marker_priority
@@ -935,8 +934,7 @@ return function(env)
                                 ability_marker_names,
                                 ability_marker_bracket_color,
                                 ability_marker_primary_name,
-                                ability_marker_priority =
-                                    _supported_ability_marker_state_for_unit(
+                                ability_marker_priority = _supported_ability_marker_state_for_unit(
                                         unit,
                                         outline_extension_map,
                                         local_player_unit,
@@ -1845,8 +1843,7 @@ return function(env)
             return
         end
 
-        local allowed, reason, gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos =
-            _get_runtime_state()
+        local allowed, reason, gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos = _get_runtime_state()
         local scan_clock = gameplay_t or t or 0
 
         if mod._last_update_t and scan_clock and scan_clock == mod._last_update_t then

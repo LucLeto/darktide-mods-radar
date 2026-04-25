@@ -127,21 +127,87 @@ return {
     },
     toggle_overview_key = {
         en = "Toggle overview mode",
+        fr = "Basculer le mode vue d'ensemble",
+        de = "Übersichtsmodus umschalten",
+        it = "Attiva/disattiva modalità panoramica",
+        es = "Alternar modo de vista general",
+        pl = "Przełącz tryb przeglądu",
+        ["pt-br"] = "Alternar modo de visão geral",
+        ["ru"] = "Переключить режим обзора",
+        ja = "概要モード切り替え",
+        ko = "개요 모드 전환",
+        ["zh-cn"] = "切换概览模式",
+        ["zh-tw"] = "切換概覽模式",
     },
     radar_zoom_modifier_key = {
         en = "Radar zoom modifier",
+        fr = "Modificateur de zoom du radar",
+        de = "Radar-Zoom-Modifikator",
+        it = "Modificatore zoom radar",
+        es = "Modificador de zoom del radar",
+        pl = "Modyfikator przybliżenia radaru",
+        ["pt-br"] = "Modificador de zoom do radar",
+        ["ru"] = "Модификатор масштаба радара",
+        ja = "レーダーズーム修飾キー",
+        ko = "레이더 확대/축소 보조 키",
+        ["zh-cn"] = "雷达缩放修饰键",
+        ["zh-tw"] = "雷達縮放修飾鍵",
     },
     overview_zoom_in_key = {
         en = "Radar zoom in",
+        fr = "Zoom avant du radar",
+        de = "Radar vergrößern",
+        it = "Aumenta zoom radar",
+        es = "Acercar radar",
+        pl = "Przybliż radar",
+        ["pt-br"] = "Aproximar radar",
+        ["ru"] = "Приблизить радар",
+        ja = "レーダーをズームイン",
+        ko = "레이더 확대",
+        ["zh-cn"] = "放大雷达",
+        ["zh-tw"] = "放大雷達",
     },
     overview_zoom_out_key = {
         en = "Radar zoom out",
+        fr = "Zoom arrière du radar",
+        de = "Radar verkleinern",
+        it = "Riduci zoom radar",
+        es = "Alejar radar",
+        pl = "Oddal radar",
+        ["pt-br"] = "Afastar radar",
+        ["ru"] = "Отдалить радар",
+        ja = "レーダーをズームアウト",
+        ko = "레이더 축소",
+        ["zh-cn"] = "缩小雷达",
+        ["zh-tw"] = "縮小雷達",
     },
     radar_zoom_reset_key = {
         en = "Reset radar zoom",
+        fr = "Réinitialiser le zoom du radar",
+        de = "Radar-Zoom zurücksetzen",
+        it = "Reimposta zoom radar",
+        es = "Restablecer zoom del radar",
+        pl = "Resetuj przybliżenie radaru",
+        ["pt-br"] = "Redefinir zoom do radar",
+        ["ru"] = "Сбросить масштаб радара",
+        ja = "レーダーズームをリセット",
+        ko = "레이더 확대/축소 초기화",
+        ["zh-cn"] = "重置雷达缩放",
+        ["zh-tw"] = "重設雷達縮放",
     },
     show_scale_legends = {
         en = "Show scale legends",
+        fr = "Afficher les repères d'échelle",
+        de = "Skalenlegenden anzeigen",
+        it = "Mostra legenda della scala",
+        es = "Mostrar leyendas de escala",
+        pl = "Pokaż legendy skali",
+        ["pt-br"] = "Mostrar legendas de escala",
+        ["ru"] = "Показывать шкалу масштаба",
+        ja = "スケール凡例を表示",
+        ko = "축척 범례 표시",
+        ["zh-cn"] = "显示比例图例",
+        ["zh-tw"] = "顯示比例圖例",
     },
     radar_size = {
         en = "Radar size",
@@ -411,6 +477,17 @@ return {
     },
     overview_max_radar_markers = {
         en = "Max overview markers",
+        fr = "Marqueurs max. en vue d'ensemble",
+        de = "Max. Übersichtsmarker",
+        it = "Indicatori panoramica max",
+        es = "Marcadores máximos de vista general",
+        pl = "Maks. znaczniki przeglądu",
+        ["pt-br"] = "Máx. de marcadores da visão geral",
+        ["ru"] = "Макс. маркеров обзора",
+        ja = "概要マーカー上限",
+        ko = "최대 개요 마커 수",
+        ["zh-cn"] = "最大概览标记数",
+        ["zh-tw"] = "最大概覽標記數",
     },
     scale_icons_with_radar_size = {
         en = "Scale icons with radar size",
@@ -2957,21 +3034,87 @@ return {
     },
     toggle_overview_key_tooltip = {
         en = "Keybind to toggle the centered overview mode on or off during a mission.",
+        fr = "Raccourci pour activer ou désactiver le mode vue d'ensemble centré pendant une mission.",
+        de = "Tastenbelegung, um den zentrierten Übersichtsmodus während einer Mission ein- oder auszuschalten.",
+        it = "Tasto per attivare o disattivare la modalità panoramica centrata durante una missione.",
+        es = "Atajo para activar o desactivar el modo de vista general centrada durante una misión.",
+        pl = "Skrót do włączania lub wyłączania wyśrodkowanego trybu przeglądu podczas misji.",
+        ["pt-br"] = "Atalho para ativar ou desativar o modo de visão geral centralizada durante uma missão.",
+        ["ru"] = "Клавиша для включения или выключения центрированного режима обзора во время миссии.",
+        ja = "ミッション中に中央表示の概要モードをオンまたはオフに切り替えるキー割り当てです。",
+        ko = "임무 중 중앙 개요 모드를 켜거나 끄는 키 지정입니다.",
+        ["zh-cn"] = "用于在任务中开启或关闭居中概览模式的按键绑定。",
+        ["zh-tw"] = "用於在任務中開啟或關閉置中概覽模式的按鍵綁定。",
     },
     radar_zoom_modifier_key_tooltip = {
         en = "Hold this key to let the radar zoom keybinds control the normal radar. While held, shared zoom inputs such as mouse wheel are captured for radar zoom only.",
+        fr = "Maintenez cette touche pour que les raccourcis de zoom du radar contrôlent le radar normal. Tant qu'elle est maintenue, les entrées de zoom partagées comme la molette de souris sont réservées uniquement au zoom du radar.",
+        de = "Halte diese Taste gedrückt, damit die Radar-Zoom-Tastenbelegungen das normale Radar steuern. Während sie gehalten wird, werden gemeinsame Zoom-Eingaben wie das Mausrad nur für den Radar-Zoom abgefangen.",
+        it = "Tieni premuto questo tasto per fare in modo che i tasti di zoom del radar controllino il radar normale. Mentre è premuto, gli input di zoom condivisi come la rotellina del mouse vengono catturati solo per lo zoom del radar.",
+        es = "Mantén pulsada esta tecla para que los atajos de zoom del radar controlen el radar normal. Mientras se mantenga pulsada, las entradas de zoom compartidas como la rueda del ratón se capturan solo para el zoom del radar.",
+        pl = "Przytrzymaj ten klawisz, aby skróty przybliżania radaru sterowały normalnym radarem. Gdy jest przytrzymany, współdzielone wejścia przybliżania, takie jak kółko myszy, są przechwytywane wyłącznie do przybliżania radaru.",
+        ["pt-br"] = "Segure esta tecla para permitir que os atalhos de zoom do radar controlem o radar normal. Enquanto estiver pressionada, entradas de zoom compartilhadas, como a roda do mouse, serão capturadas apenas para o zoom do radar.",
+        ["ru"] = "Удерживайте эту клавишу, чтобы привязки масштаба радара управляли обычным радаром. Пока клавиша удерживается, общие команды масштаба, например колесо мыши, используются только для масштаба радара.",
+        ja = "このキーを押している間、レーダーズームのキー割り当てで通常のレーダーを操作します。押している間は、マウスホイールなどの共有ズーム入力がレーダーズーム専用に取得されます。",
+        ko = "이 키를 누르고 있으면 레이더 확대/축소 키 지정이 일반 레이더를 제어합니다. 누르고 있는 동안 마우스 휠 같은 공용 확대/축소 입력은 레이더 확대/축소 전용으로 처리됩니다.",
+        ["zh-cn"] = "按住此键可让雷达缩放按键绑定控制普通雷达。按住期间，鼠标滚轮等共用缩放输入将仅用于雷达缩放。",
+        ["zh-tw"] = "按住此鍵可讓雷達縮放按鍵綁定控制一般雷達。按住期間，滑鼠滾輪等共用縮放輸入將僅用於雷達縮放。",
     },
     overview_zoom_in_key_tooltip = {
         en = "Keybind to zoom the radar in. Works in overview mode, or on the normal radar while the radar zoom modifier is held.",
+        fr = "Raccourci pour faire un zoom avant sur le radar. Fonctionne en mode vue d'ensemble, ou sur le radar normal lorsque le modificateur de zoom du radar est maintenu.",
+        de = "Tastenbelegung, um das Radar zu vergrößern. Funktioniert im Übersichtsmodus oder auf dem normalen Radar, während der Radar-Zoom-Modifikator gehalten wird.",
+        it = "Tasto per aumentare lo zoom del radar. Funziona in modalità panoramica, oppure sul radar normale mentre il modificatore zoom radar è premuto.",
+        es = "Atajo para acercar el radar. Funciona en modo de vista general, o en el radar normal mientras se mantiene pulsado el modificador de zoom del radar.",
+        pl = "Skrót do przybliżania radaru. Działa w trybie przeglądu albo na normalnym radarze, gdy przytrzymany jest modyfikator przybliżenia radaru.",
+        ["pt-br"] = "Atalho para aproximar o radar. Funciona no modo de visão geral ou no radar normal enquanto o modificador de zoom do radar estiver pressionado.",
+        ["ru"] = "Клавиша для приближения радара. Работает в режиме обзора или на обычном радаре, пока удерживается модификатор масштаба радара.",
+        ja = "レーダーをズームインするキー割り当てです。概要モードで動作し、レーダーズーム修飾キーを押している間は通常のレーダーでも動作します。",
+        ko = "레이더를 확대하는 키 지정입니다. 개요 모드에서 작동하며, 레이더 확대/축소 보조 키를 누르고 있는 동안에는 일반 레이더에서도 작동합니다.",
+        ["zh-cn"] = "用于放大雷达的按键绑定。可在概览模式中使用，也可在按住雷达缩放修饰键时用于普通雷达。",
+        ["zh-tw"] = "用於放大雷達的按鍵綁定。可在概覽模式中使用，也可在按住雷達縮放修飾鍵時用於一般雷達。",
     },
     overview_zoom_out_key_tooltip = {
         en = "Keybind to zoom the radar out. Works in overview mode, or on the normal radar while the radar zoom modifier is held.",
+        fr = "Raccourci pour faire un zoom arrière sur le radar. Fonctionne en mode vue d'ensemble, ou sur le radar normal lorsque le modificateur de zoom du radar est maintenu.",
+        de = "Tastenbelegung, um das Radar zu verkleinern. Funktioniert im Übersichtsmodus oder auf dem normalen Radar, während der Radar-Zoom-Modifikator gehalten wird.",
+        it = "Tasto per ridurre lo zoom del radar. Funziona in modalità panoramica, oppure sul radar normale mentre il modificatore zoom radar è premuto.",
+        es = "Atajo para alejar el radar. Funciona en modo de vista general, o en el radar normal mientras se mantiene pulsado el modificador de zoom del radar.",
+        pl = "Skrót do oddalania radaru. Działa w trybie przeglądu albo na normalnym radarze, gdy przytrzymany jest modyfikator przybliżenia radaru.",
+        ["pt-br"] = "Atalho para afastar o radar. Funciona no modo de visão geral ou no radar normal enquanto o modificador de zoom do radar estiver pressionado.",
+        ["ru"] = "Клавиша для отдаления радара. Работает в режиме обзора или на обычном радаре, пока удерживается модификатор масштаба радара.",
+        ja = "レーダーをズームアウトするキー割り当てです。概要モードで動作し、レーダーズーム修飾キーを押している間は通常のレーダーでも動作します。",
+        ko = "레이더를 축소하는 키 지정입니다. 개요 모드에서 작동하며, 레이더 확대/축소 보조 키를 누르고 있는 동안에는 일반 레이더에서도 작동합니다.",
+        ["zh-cn"] = "用于缩小雷达的按键绑定。可在概览模式中使用，也可在按住雷达缩放修饰键时用于普通雷达。",
+        ["zh-tw"] = "用於縮小雷達的按鍵綁定。可在概覽模式中使用，也可在按住雷達縮放修飾鍵時用於一般雷達。",
     },
     radar_zoom_reset_key_tooltip = {
         en = "In overview mode, fits the zoom scale to the currently rendered normal-range markers. On the normal radar, hold the radar zoom modifier and press this key to reset to 10 m / 2.0x.",
+        fr = "En mode vue d'ensemble, ajuste l'échelle de zoom aux marqueurs de portée normale actuellement affichés. Sur le radar normal, maintenez le modificateur de zoom du radar et appuyez sur cette touche pour réinitialiser à 10 m / 2.0x.",
+        de = "Im Übersichtsmodus wird die Zoom-Skala an die aktuell gerenderten Marker innerhalb der normalen Reichweite angepasst. Halte auf dem normalen Radar den Radar-Zoom-Modifikator gedrückt und drücke diese Taste, um auf 10 m / 2.0x zurückzusetzen.",
+        it = "In modalità panoramica, adatta la scala dello zoom agli indicatori a portata normale attualmente renderizzati. Sul radar normale, tieni premuto il modificatore zoom radar e premi questo tasto per reimpostare a 10 m / 2.0x.",
+        es = "En modo de vista general, ajusta la escala de zoom a los marcadores de alcance normal renderizados actualmente. En el radar normal, mantén pulsado el modificador de zoom del radar y pulsa esta tecla para restablecer a 10 m / 2.0x.",
+        pl = "W trybie przeglądu dopasowuje skalę przybliżenia do aktualnie renderowanych znaczników w normalnym zasięgu. Na normalnym radarze przytrzymaj modyfikator przybliżenia radaru i naciśnij ten klawisz, aby zresetować do 10 m / 2.0x.",
+        ["pt-br"] = "No modo de visão geral, ajusta a escala de zoom aos marcadores de alcance normal renderizados no momento. No radar normal, segure o modificador de zoom do radar e pressione esta tecla para redefinir para 10 m / 2.0x.",
+        ["ru"] = "В режиме обзора подгоняет масштаб под текущие отображаемые маркеры в обычном радиусе. На обычном радаре удерживайте модификатор масштаба радара и нажмите эту клавишу, чтобы сбросить значение до 10 м / 2.0x.",
+        ja = "概要モードでは、現在描画されている通常範囲内のマーカーにズーム倍率を合わせます。通常のレーダーでは、レーダーズーム修飾キーを押しながらこのキーを押すと 10 m / 2.0x にリセットします。",
+        ko = "개요 모드에서는 현재 렌더링된 일반 범위 마커에 맞게 확대/축소 배율을 조정합니다. 일반 레이더에서는 레이더 확대/축소 보조 키를 누른 채 이 키를 눌러 10 m / 2.0x로 초기화합니다.",
+        ["zh-cn"] = "在概览模式中，将缩放比例适配到当前渲染的普通范围标记。在普通雷达上，按住雷达缩放修饰键并按下此键可重置为 10 m / 2.0x。",
+        ["zh-tw"] = "在概覽模式中，將縮放比例適配到目前渲染的一般範圍標記。在一般雷達上，按住雷達縮放修飾鍵並按下此鍵可重設為 10 m / 2.0x。",
     },
     show_scale_legends_tooltip = {
         en = "Show the overview scale legends next to the radar while overview mode is active.",
+        fr = "Affiche les repères d'échelle de la vue d'ensemble à côté du radar lorsque le mode vue d'ensemble est actif.",
+        de = "Zeigt die Skalenlegenden der Übersicht neben dem Radar an, während der Übersichtsmodus aktiv ist.",
+        it = "Mostra la legenda della scala della panoramica accanto al radar mentre la modalità panoramica è attiva.",
+        es = "Muestra las leyendas de escala de la vista general junto al radar mientras el modo de vista general está activo.",
+        pl = "Pokazuje legendy skali przeglądu obok radaru, gdy tryb przeglądu jest aktywny.",
+        ["pt-br"] = "Mostra as legendas de escala da visão geral ao lado do radar enquanto o modo de visão geral estiver ativo.",
+        ["ru"] = "Показывает шкалу масштаба обзора рядом с радаром, пока активен режим обзора.",
+        ja = "概要モードが有効な間、レーダーの横に概要スケール凡例を表示します。",
+        ko = "개요 모드가 활성화된 동안 레이더 옆에 개요 축척 범례를 표시합니다.",
+        ["zh-cn"] = "概览模式启用时，在雷达旁显示概览比例图例。",
+        ["zh-tw"] = "概覽模式啟用時，在雷達旁顯示概覽比例圖例。",
     },
     radar_size_tooltip = {
         en = "Sets the overall size of the radar on screen.",
@@ -3002,22 +3145,14 @@ return {
         ["zh-tw"] = "標記可在雷達上顯示的最大世界距離，單位為公尺。",
     },
     item_vertical_arrow_threshold_tooltip = {
-        en =
-        "Show an up or down arrow for items that are above or below you when they are within this horizontal distance.",
-        fr =
-        "Afficher une flèche vers le haut ou le bas pour les objets situés au-dessus ou au-dessous de vous lorsqu’ils se trouvent dans cette distance horizontale.",
-        de =
-        "Zeigt für Gegenstände über oder unter dir einen Pfeil nach oben oder unten an, wenn sie sich innerhalb dieser horizontalen Entfernung befinden.",
-        it =
-        "Mostra una freccia verso l’alto o verso il basso per gli oggetti sopra o sotto di te quando si trovano entro questa distanza orizzontale.",
-        es =
-        "Muestra una flecha hacia arriba o hacia abajo para los objetos que están por encima o por debajo de ti cuando se encuentran dentro de esta distancia horizontal.",
-        pl =
-        "Pokazuje strzałkę w górę lub w dół dla przedmiotów znajdujących się nad tobą lub pod tobą, gdy są w tym zasięgu poziomym.",
-        ["pt-br"] =
-        "Mostra uma seta para cima ou para baixo para itens acima ou abaixo de você quando estiverem dentro desta distância horizontal.",
-        ["ru"] =
-        "Показывать стрелку вверх или вниз для предметов выше или ниже вас, если они находятся в пределах этого горизонтального расстояния.",
+        en = "Show an up or down arrow for items that are above or below you when they are within this horizontal distance.",
+        fr = "Afficher une flèche vers le haut ou le bas pour les objets situés au-dessus ou au-dessous de vous lorsqu’ils se trouvent dans cette distance horizontale.",
+        de = "Zeigt für Gegenstände über oder unter dir einen Pfeil nach oben oder unten an, wenn sie sich innerhalb dieser horizontalen Entfernung befinden.",
+        it = "Mostra una freccia verso l’alto o verso il basso per gli oggetti sopra o sotto di te quando si trovano entro questa distanza orizzontale.",
+        es = "Muestra una flecha hacia arriba o hacia abajo para los objetos que están por encima o por debajo de ti cuando se encuentran dentro de esta distancia horizontal.",
+        pl = "Pokazuje strzałkę w górę lub w dół dla przedmiotów znajdujących się nad tobą lub pod tobą, gdy są w tym zasięgu poziomym.",
+        ["pt-br"] = "Mostra uma seta para cima ou para baixo para itens acima ou abaixo de você quando estiverem dentro desta distância horizontal.",
+        ["ru"] = "Показывать стрелку вверх или вниз для предметов выше или ниже вас, если они находятся в пределах этого горизонтального расстояния.",
         ja = "この水平距離内にある場合、自分より上または下にあるアイテムに上向きまたは下向きの矢印を表示します。",
         ko = "이 수평 거리 안에 있을 때, 자신보다 위나 아래에 있는 아이템에 위쪽 또는 아래쪽 화살표를 표시합니다.",
         ["zh-cn"] = "当物品位于此水平距离内且在你上方或下方时，显示向上或向下箭头。",
@@ -3038,30 +3173,32 @@ return {
         ["zh-tw"] = "當垂直高度差大於此值時，在雷達上隱藏物品。",
     },
     max_radar_markers_tooltip = {
-        en =
-        "Maximum number of markers the radar is allowed to draw at once. Lower values can reduce clutter and improve performance.",
-        fr =
-        "Nombre maximal de marqueurs que le radar peut afficher en même temps. Des valeurs plus faibles peuvent réduire l’encombrement et améliorer les performances.",
-        de =
-        "Maximale Anzahl an Markern, die das Radar gleichzeitig zeichnen darf. Niedrigere Werte können Unordnung verringern und die Leistung verbessern.",
-        it =
-        "Numero massimo di marcatori che il radar può disegnare contemporaneamente. Valori più bassi possono ridurre il disordine e migliorare le prestazioni.",
-        es =
-        "Número máximo de marcadores que el radar puede dibujar a la vez. Los valores más bajos pueden reducir el desorden y mejorar el rendimiento.",
-        pl =
-        "Maksymalna liczba znaczników, które radar może wyświetlić jednocześnie. Niższe wartości mogą zmniejszyć bałagan i poprawić wydajność.",
-        ["pt-br"] =
-        "Número máximo de marcadores que o radar pode desenhar de uma vez. Valores menores podem reduzir a poluição visual e melhorar o desempenho.",
-        ["ru"] =
-        "Максимальное количество меток, которое радар может отображать одновременно. Меньшие значения могут уменьшить загромождение и повысить производительность.",
+        en = "Maximum number of markers the radar is allowed to draw at once. Lower values can reduce clutter and improve performance.",
+        fr = "Nombre maximal de marqueurs que le radar peut afficher en même temps. Des valeurs plus faibles peuvent réduire l’encombrement et améliorer les performances.",
+        de = "Maximale Anzahl an Markern, die das Radar gleichzeitig zeichnen darf. Niedrigere Werte können Unordnung verringern und die Leistung verbessern.",
+        it = "Numero massimo di marcatori che il radar può disegnare contemporaneamente. Valori più bassi possono ridurre il disordine e migliorare le prestazioni.",
+        es = "Número máximo de marcadores que el radar puede dibujar a la vez. Los valores más bajos pueden reducir el desorden y mejorar el rendimiento.",
+        pl = "Maksymalna liczba znaczników, które radar może wyświetlić jednocześnie. Niższe wartości mogą zmniejszyć bałagan i poprawić wydajność.",
+        ["pt-br"] = "Número máximo de marcadores que o radar pode desenhar de uma vez. Valores menores podem reduzir a poluição visual e melhorar o desempenho.",
+        ["ru"] = "Максимальное количество меток, которое радар может отображать одновременно. Меньшие значения могут уменьшить загромождение и повысить производительность.",
         ja = "レーダーが一度に描画できるマーカーの最大数です。値を低くすると、表示の混雑を減らし、パフォーマンスを改善できます。",
         ko = "레이더가 한 번에 그릴 수 있는 최대 마커 수입니다. 값을 낮추면 화면 혼잡을 줄이고 성능을 향상시킬 수 있습니다.",
         ["zh-cn"] = "雷达一次允许绘制的最大标记数量。较低的值可减少杂乱并提升性能。",
         ["zh-tw"] = "雷達一次允許繪製的最大標記數量。較低的值可減少雜亂並提升效能。",
     },
     overview_max_radar_markers_tooltip = {
-        en =
-        "Maximum number of target markers the overview radar is allowed to draw. Lower values can improve performance on slower systems.",
+        en = "Maximum number of target markers the overview radar is allowed to draw. Lower values can improve performance on slower systems.",
+        fr = "Nombre maximal de marqueurs de cible que le radar en vue d'ensemble peut afficher. Des valeurs plus basses peuvent améliorer les performances sur les systèmes plus lents.",
+        de = "Maximale Anzahl an Zielmarkern, die das Übersichtsradar zeichnen darf. Niedrigere Werte können die Leistung auf langsameren Systemen verbessern.",
+        it = "Numero massimo di indicatori bersaglio che il radar panoramico può disegnare. Valori più bassi possono migliorare le prestazioni sui sistemi più lenti.",
+        es = "Número máximo de marcadores de objetivo que el radar de vista general puede dibujar. Valores más bajos pueden mejorar el rendimiento en sistemas más lentos.",
+        pl = "Maksymalna liczba znaczników celów, które radar przeglądu może rysować. Niższe wartości mogą poprawić wydajność na wolniejszych systemach.",
+        ["pt-br"] = "Número máximo de marcadores de alvo que o radar da visão geral pode desenhar. Valores mais baixos podem melhorar o desempenho em sistemas mais lentos.",
+        ["ru"] = "Максимальное количество маркеров целей, которое может отрисовывать обзорный радар. Более низкие значения могут повысить производительность на слабых системах.",
+        ja = "概要レーダーが描画できるターゲットマーカーの最大数です。低い値にすると、低速な環境でパフォーマンスが向上する場合があります。",
+        ko = "개요 레이더가 그릴 수 있는 대상 마커의 최대 수입니다. 값을 낮추면 느린 시스템에서 성능이 향상될 수 있습니다.",
+        ["zh-cn"] = "概览雷达允许绘制的目标标记最大数量。较低的值可以提升较慢系统上的性能。",
+        ["zh-tw"] = "概覽雷達允許繪製的目標標記最大數量。較低的值可以提升較慢系統上的效能。",
     },
     scale_icons_with_radar_size_tooltip = {
         en = "Automatically scale marker icons up or down together with the radar size.",
@@ -3149,20 +3286,13 @@ return {
     },
     nearby_highlight_distance_text_tooltip = {
         en = "Show nearby item distances in meters on the screen highlight, the radar marker, or both.",
-        fr =
-        "Affiche la distance des objets proches en mètres sur le surlignage à l’écran, le marqueur du radar ou les deux.",
-        de =
-        "Zeigt Entfernungen naher Gegenstände in Metern an der Bildschirmhervorhebung, am Radarmarker oder an beiden Stellen an.",
-        it =
-        "Mostra la distanza degli oggetti vicini in metri sull’evidenziazione a schermo, sull’indicatore del radar o su entrambi.",
-        es =
-        "Muestra la distancia de los objetos cercanos en metros en el resaltado en pantalla, en el marcador del radar o en ambos.",
-        pl =
-        "Pokazuje odległość pobliskich przedmiotów w metrach na wyróżnieniu ekranowym, znaczniku radaru lub w obu miejscach.",
-        ["pt-br"] =
-        "Mostra a distância dos itens próximos em metros no destaque na tela, no marcador do radar ou em ambos.",
-        ["ru"] =
-        "Показывает расстояние до ближайших предметов в метрах на экранной подсветке, маркере радара или в обоих местах.",
+        fr = "Affiche la distance des objets proches en mètres sur le surlignage à l’écran, le marqueur du radar ou les deux.",
+        de = "Zeigt Entfernungen naher Gegenstände in Metern an der Bildschirmhervorhebung, am Radarmarker oder an beiden Stellen an.",
+        it = "Mostra la distanza degli oggetti vicini in metri sull’evidenziazione a schermo, sull’indicatore del radar o su entrambi.",
+        es = "Muestra la distancia de los objetos cercanos en metros en el resaltado en pantalla, en el marcador del radar o en ambos.",
+        pl = "Pokazuje odległość pobliskich przedmiotów w metrach na wyróżnieniu ekranowym, znaczniku radaru lub w obu miejscach.",
+        ["pt-br"] = "Mostra a distância dos itens próximos em metros no destaque na tela, no marcador do radar ou em ambos.",
+        ["ru"] = "Показывает расстояние до ближайших предметов в метрах на экранной подсветке, маркере радара или в обоих местах.",
         ja = "近くのアイテムまでの距離をメートルで、画面ハイライト、レーダーマーカー、またはその両方に表示します。",
         ko = "근처 아이템까지의 거리를 미터 단위로 화면 강조 표시, 레이더 마커 또는 둘 다에 표시합니다.",
         ["zh-cn"] = "以米为单位在屏幕高亮、雷达标记或两者上显示附近物品的距离。",
@@ -3170,10 +3300,8 @@ return {
     },
     nearby_highlight_screen_distance_text_tooltip = {
         en = "Show the current distance in meters above the world-space nearby highlight brackets.",
-        fr =
-        "Affiche la distance actuelle en mètres au-dessus des crochets de surlignage proches dans l’espace du monde.",
-        de =
-        "Zeigt die aktuelle Entfernung in Metern über den weltseitigen Klammer-Markierungen naher Hervorhebungen an.",
+        fr = "Affiche la distance actuelle en mètres au-dessus des crochets de surlignage proches dans l’espace du monde.",
+        de = "Zeigt die aktuelle Entfernung in Metern über den weltseitigen Klammer-Markierungen naher Hervorhebungen an.",
         it = "Mostra la distanza attuale in metri sopra le parentesi di evidenziazione vicine nello spazio di gioco.",
         es = "Muestra la distancia actual en metros sobre los corchetes de resaltado cercano en el mundo.",
         pl = "Pokazuje bieżącą odległość w metrach nad znacznikami pobliskich wyróżnień w świecie gry.",
@@ -3200,42 +3328,27 @@ return {
     },
     nearby_highlight_thickness_tooltip = {
         en = "Adjust nearby world highlight bracket thickness. Set this to 0 to keep the default adaptive thickness.",
-        fr =
-        "Ajuste l’épaisseur des crochets de surlignage proches dans le monde. Réglez sur 0 pour conserver l’épaisseur adaptative par défaut.",
-        de =
-        "Passt die Stärke naher Welt-Hervorhebungen an. Stelle diesen Wert auf 0, um die standardmässige adaptive Stärke beizubehalten.",
-        it =
-        "Regola lo spessore delle parentesi di evidenziazione vicine nel mondo. Imposta questo valore su 0 per mantenere lo spessore adattivo predefinito.",
-        es =
-        "Ajusta el grosor de los corchetes de resaltado cercano en el mundo. Pon este valor en 0 para mantener el grosor adaptativo predeterminado.",
-        pl =
-        "Dostosowuje grubość nawiasów pobliskich wyróżnień w świecie gry. Ustaw 0, aby zachować domyślną adaptacyjną grubość.",
-        ["pt-br"] =
-        "Ajusta a espessura dos colchetes de destaque próximos no mundo. Defina como 0 para manter a espessura adaptativa padrão.",
-        ["ru"] =
-        "Настраивает толщину скобок ближайшей подсветки в игровом мире. Установите 0, чтобы сохранить стандартную адаптивную толщину.",
+        fr = "Ajuste l’épaisseur des crochets de surlignage proches dans le monde. Réglez sur 0 pour conserver l’épaisseur adaptative par défaut.",
+        de = "Passt die Stärke naher Welt-Hervorhebungen an. Stelle diesen Wert auf 0, um die standardmässige adaptive Stärke beizubehalten.",
+        it = "Regola lo spessore delle parentesi di evidenziazione vicine nel mondo. Imposta questo valore su 0 per mantenere lo spessore adattivo predefinito.",
+        es = "Ajusta el grosor de los corchetes de resaltado cercano en el mundo. Pon este valor en 0 para mantener el grosor adaptativo predeterminado.",
+        pl = "Dostosowuje grubość nawiasów pobliskich wyróżnień w świecie gry. Ustaw 0, aby zachować domyślną adaptacyjną grubość.",
+        ["pt-br"] = "Ajusta a espessura dos colchetes de destaque próximos no mundo. Defina como 0 para manter a espessura adaptativa padrão.",
+        ["ru"] = "Настраивает толщину скобок ближайшей подсветки в игровом мире. Установите 0, чтобы сохранить стандартную адаптивную толщину.",
         ja = "ワールド空間での近距離ハイライト括弧の太さを調整します。0 にすると、標準の自動調整される太さを維持します。",
         ko = "월드 공간의 근처 강조 표시 브래킷 두께를 조정합니다. 0으로 설정하면 기본 적응형 두께를 유지합니다.",
         ["zh-cn"] = "调整世界空间中附近高亮括号的粗细。设为 0 可保持默认的自适应粗细。",
         ["zh-tw"] = "調整世界空間中附近高亮括號的粗細。設為 0 可保留預設的自適應粗細。",
     },
     nearby_highlight_opacity_tooltip = {
-        en =
-        "Sets the alpha value for nearby highlights from 25 to 255. 25 is faint, 255 is fully opaque, and occluded highlights still use the darker obstructed color.",
-        fr =
-        "Définit la valeur alpha des surlignages proches de 25 à 255. 25 est discret, 255 est totalement opaque, et les surlignages masqués utilisent toujours la couleur plus sombre d’obstruction.",
-        de =
-        "Legt den Alphawert für nahe Hervorhebungen von 25 bis 255 fest. 25 ist schwach, 255 ist vollständig deckend, und verdeckte Hervorhebungen nutzen weiterhin die dunklere verdeckte Farbe.",
-        it =
-        "Imposta il valore alfa delle evidenziazioni vicine da 25 a 255. 25 è tenue, 255 è completamente opaco, e le evidenziazioni occluse usano comunque il colore più scuro per gli ostacoli.",
-        es =
-        "Establece el valor alfa de los resaltados cercanos entre 25 y 255. 25 es tenue, 255 es totalmente opaco, y los resaltados ocultos siguen usando el color más oscuro de obstrucción.",
-        pl =
-        "Ustawia wartość alfa pobliskich wyróżnień od 25 do 255. 25 jest słabe, 255 jest całkowicie nieprzezroczyste, a zasłonięte wyróżnienia nadal używają ciemniejszego koloru przesłonięcia.",
-        ["pt-br"] =
-        "Define o valor alfa dos destaques próximos de 25 a 255. 25 é suave, 255 é totalmente opaco, e destaques encobertos ainda usam a cor mais escura de obstrução.",
-        ["ru"] =
-        "Задаёт значение альфа-канала для ближайших подсветок от 25 до 255. 25 - слабая видимость, 255 - полная непрозрачность, а скрытые подсветки по-прежнему используют более тёмный цвет перекрытия.",
+        en = "Sets the alpha value for nearby highlights from 25 to 255. 25 is faint, 255 is fully opaque, and occluded highlights still use the darker obstructed color.",
+        fr = "Définit la valeur alpha des surlignages proches de 25 à 255. 25 est discret, 255 est totalement opaque, et les surlignages masqués utilisent toujours la couleur plus sombre d’obstruction.",
+        de = "Legt den Alphawert für nahe Hervorhebungen von 25 bis 255 fest. 25 ist schwach, 255 ist vollständig deckend, und verdeckte Hervorhebungen nutzen weiterhin die dunklere verdeckte Farbe.",
+        it = "Imposta il valore alfa delle evidenziazioni vicine da 25 a 255. 25 è tenue, 255 è completamente opaco, e le evidenziazioni occluse usano comunque il colore più scuro per gli ostacoli.",
+        es = "Establece el valor alfa de los resaltados cercanos entre 25 y 255. 25 es tenue, 255 es totalmente opaco, y los resaltados ocultos siguen usando el color más oscuro de obstrucción.",
+        pl = "Ustawia wartość alfa pobliskich wyróżnień od 25 do 255. 25 jest słabe, 255 jest całkowicie nieprzezroczyste, a zasłonięte wyróżnienia nadal używają ciemniejszego koloru przesłonięcia.",
+        ["pt-br"] = "Define o valor alfa dos destaques próximos de 25 a 255. 25 é suave, 255 é totalmente opaco, e destaques encobertos ainda usam a cor mais escura de obstrução.",
+        ["ru"] = "Задаёт значение альфа-канала для ближайших подсветок от 25 до 255. 25 - слабая видимость, 255 - полная непрозрачность, а скрытые подсветки по-прежнему используют более тёмный цвет перекрытия.",
         ja = "近くのハイライトのアルファ値を 25 から 255 の範囲で設定します。25 は薄く、255 は完全不透明です。遮られたハイライトには引き続き暗い遮蔽色が使われます。",
         ko = "근처 강조 표시의 알파 값을 25에서 255 사이로 설정합니다. 25는 희미하고 255는 완전 불투명하며, 가려진 강조 표시는 계속 더 어두운 차폐 색상을 사용합니다.",
         ["zh-cn"] = "设置附近高亮的 Alpha 值，范围为 25 到 255。25 较淡，255 完全不透明，被遮挡的高亮仍会使用较暗的遮挡颜色。",
@@ -3246,8 +3359,7 @@ return {
         fr = "Remplace les couleurs par défaut des surlignages proches par les valeurs RVB personnalisées ci-dessous.",
         de = "Überschreibt die standardmässigen Farben naher Hervorhebungen mit den unten eingestellten RGB-Werten.",
         it = "Sostituisce i colori predefiniti delle evidenziazioni vicine con i valori RGB personalizzati qui sotto.",
-        es =
-        "Sustituye los colores predeterminados de los resaltados cercanos por los valores RGB personalizados de abajo.",
+        es = "Sustituye los colores predeterminados de los resaltados cercanos por los valores RGB personalizados de abajo.",
         pl = "Zastępuje domyślne kolory pobliskich wyróżnień niestandardowymi wartościami RGB poniżej.",
         ["pt-br"] = "Substitui as cores padrão dos destaques próximos pelos valores RGB personalizados abaixo.",
         ["ru"] = "Переопределяет стандартные цвета ближайшей подсветки пользовательскими значениями RGB ниже.",
@@ -3356,8 +3468,7 @@ return {
     },
     radar_move_step_tooltip = {
         en = "How many pixels the radar moves per key press when using the move keybinds.",
-        fr =
-        "Nombre de pixels de déplacement du radar par pression de touche lors de l’utilisation des raccourcis de déplacement.",
+        fr = "Nombre de pixels de déplacement du radar par pression de touche lors de l’utilisation des raccourcis de déplacement.",
         de = "Wie viele Pixel sich das Radar pro Tastendruck bewegt, wenn die Bewegungstasten verwendet werden.",
         it = "Di quanti pixel si sposta il radar per ogni pressione del tasto quando si usano i comandi di movimento.",
         es = "Cuántos píxeles se mueve el radar por pulsación al usar las teclas de movimiento.",
@@ -3441,19 +3552,13 @@ return {
     },
     nearby_highlight_common_pickups_tooltip = {
         en = "Also highlight nearby common pickups in the world when they are within the highlight distance.",
-        fr =
-        "Met également en surbrillance les ramassages courants proches dans le monde lorsqu'ils sont à portée de surbrillance.",
-        de =
-        "Hebt außerdem gewöhnliche Aufhebungen in der Nähe in der Welt hervor, wenn sie sich innerhalb der Hervorhebungsreichweite befinden.",
-        it =
-        "Evidenzia anche gli oggetti comuni raccolti vicini nel mondo quando sono entro la distanza di evidenziazione.",
+        fr = "Met également en surbrillance les ramassages courants proches dans le monde lorsqu'ils sont à portée de surbrillance.",
+        de = "Hebt außerdem gewöhnliche Aufhebungen in der Nähe in der Welt hervor, wenn sie sich innerhalb der Hervorhebungsreichweite befinden.",
+        it = "Evidenzia anche gli oggetti comuni raccolti vicini nel mondo quando sono entro la distanza di evidenziazione.",
         es = "También resalta los objetos comunes cercanos en el mundo cuando están dentro de la distancia de resaltado.",
-        pl =
-        "Podświetla również pobliskie zwykłe przedmioty do podniesienia w świecie, gdy znajdują się w zasięgu podświetlenia.",
-        ["pt-br"] =
-        "Também destaca itens comuns coletáveis próximos no mundo quando estiverem dentro da distância de destaque.",
-        ["ru"] =
-        "Также подсвечивает ближайшие обычные подбираемые предметы в мире, если они находятся в пределах дистанции подсветки.",
+        pl = "Podświetla również pobliskie zwykłe przedmioty do podniesienia w świecie, gdy znajdują się w zasięgu podświetlenia.",
+        ["pt-br"] = "Também destaca itens comuns coletáveis próximos no mundo quando estiverem dentro da distância de destaque.",
+        ["ru"] = "Также подсвечивает ближайшие обычные подбираемые предметы в мире, если они находятся в пределах дистанции подсветки.",
         ja = "ハイライト距離内にある場合、近くの一般的な取得アイテムもワールド内で強調表示します。",
         ko = "강조 거리 내에 있을 때 근처의 일반 획득 아이템도 월드에서 함께 강조합니다.",
         ["zh-cn"] = "当附近的普通拾取物位于高亮距离内时，也会在场景中高亮显示它们。",
@@ -3593,8 +3698,7 @@ return {
         es = "Elige cómo se muestran las cajas en el radar: ilustración, icono simplificado o desactivado.",
         pl = "Wybierz, jak skrzynie są wyświetlane na radarze: grafika, uproszczona ikona lub wyłączone.",
         ["pt-br"] = "Escolha como as caixas serão mostradas no radar: arte, ícone simplificado ou desativado.",
-        ["ru"] =
-        "Выберите, как ящики будут отображаться на радаре: полноразмерный значок, упрощённый значок или отключено.",
+        ["ru"] = "Выберите, как ящики будут отображаться на радаре: полноразмерный значок, упрощённый значок или отключено.",
         ja = "クレートをレーダーにどう表示するかを選択します: アートワーク、簡易アイコン、または無効。",
         ko = "상자를 레이더에 어떻게 표시할지 선택합니다: 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择板条箱在雷达上的显示方式：完整图标、简化图标或禁用。",
@@ -3616,10 +3720,8 @@ return {
     },
     nearby_highlight_materials_tooltip = {
         en = "Also highlight nearby materials in the world when they are within the highlight distance.",
-        fr =
-        "Met également en surbrillance les matériaux proches dans le monde lorsqu'ils sont à portée de surbrillance.",
-        de =
-        "Hebt außerdem Materialien in der Nähe in der Welt hervor, wenn sie sich innerhalb der Hervorhebungsreichweite befinden.",
+        fr = "Met également en surbrillance les matériaux proches dans le monde lorsqu'ils sont à portée de surbrillance.",
+        de = "Hebt außerdem Materialien in der Nähe in der Welt hervor, wenn sie sich innerhalb der Hervorhebungsreichweite befinden.",
         it = "Evidenzia anche i materiali vicini nel mondo quando sono entro la distanza di evidenziazione.",
         es = "También resalta los materiales cercanos en el mundo cuando están dentro de la distancia de resaltado.",
         pl = "Podświetla również pobliskie materiały w świecie, gdy znajdują się w zasięgu podświetlenia.",
@@ -3638,8 +3740,7 @@ return {
         es = "Elige cómo se muestra la diamantina en el radar: ilustración, icono simplificado o desactivado.",
         pl = "Wybierz, jak diamentyna jest wyświetlana na radarze: grafika, uproszczona ikona lub wyłączone.",
         ["pt-br"] = "Escolha como a Diamantina será mostrada no radar: arte, ícone simplificado ou desativado.",
-        ["ru"] =
-        "Выберите, как диамантин будет отображаться на радаре: полноразмерный значок, упрощённый значок или отключено.",
+        ["ru"] = "Выберите, как диамантин будет отображаться на радаре: полноразмерный значок, упрощённый значок или отключено.",
         ja = "ダイアマンティンをレーダーにどう表示するかを選択します: アートワーク、簡易アイコン、または無効。",
         ko = "디아만틴을 레이더에 어떻게 표시할지 선택합니다: 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择精金在雷达上的显示方式：完整图标、简化图标或禁用。",
@@ -3653,8 +3754,7 @@ return {
         es = "Elige cómo se muestra el plasteacero en el radar: ilustración, icono simplificado o desactivado.",
         pl = "Wybierz, jak plasteel jest wyświetlany na radarze: grafika, uproszczona ikona lub wyłączone.",
         ["pt-br"] = "Escolha como o Plasteel será mostrado no radar: arte, ícone simplificado ou desativado.",
-        ["ru"] =
-        "Выберите, как пласталь будет отображаться на радаре: полноразмерный значок, упрощённый значок или отключено.",
+        ["ru"] = "Выберите, как пласталь будет отображаться на радаре: полноразмерный значок, упрощённый значок или отключено.",
         ja = "プラスチールをレーダーにどう表示するかを選択します: アートワーク、簡易アイコン、または無効。",
         ko = "플라스틸을 레이더에 어떻게 표시할지 선택합니다: 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择塑钢在雷达上的显示方式：完整图标、简化图标或禁用。",
@@ -3676,19 +3776,13 @@ return {
     },
     nearby_highlight_primary_objective_tooltip = {
         en = "Also highlight nearby primary objective items in the world when they are within the highlight distance.",
-        fr =
-        "Met également en surbrillance les objets d'objectif principal proches dans le monde lorsqu'ils sont à portée de surbrillance.",
-        de =
-        "Hebt außerdem Hauptzielobjekte in der Nähe in der Welt hervor, wenn sie sich innerhalb der Hervorhebungsreichweite befinden.",
-        it =
-        "Evidenzia anche gli oggetti dell'obiettivo primario vicini nel mondo quando sono entro la distanza di evidenziazione.",
-        es =
-        "También resalta los objetos del objetivo principal cercanos en el mundo cuando están dentro de la distancia de resaltado.",
+        fr = "Met également en surbrillance les objets d'objectif principal proches dans le monde lorsqu'ils sont à portée de surbrillance.",
+        de = "Hebt außerdem Hauptzielobjekte in der Nähe in der Welt hervor, wenn sie sich innerhalb der Hervorhebungsreichweite befinden.",
+        it = "Evidenzia anche gli oggetti dell'obiettivo primario vicini nel mondo quando sono entro la distanza di evidenziazione.",
+        es = "También resalta los objetos del objetivo principal cercanos en el mundo cuando están dentro de la distancia de resaltado.",
         pl = "Podświetla również pobliskie przedmioty celu głównego w świecie, gdy znajdują się w zasięgu podświetlenia.",
-        ["pt-br"] =
-        "Também destaca itens próximos do objetivo principal no mundo quando estiverem dentro da distância de destaque.",
-        ["ru"] =
-        "Также подсвечивает ближайшие предметы основной задачи в мире, если они находятся в пределах дистанции подсветки.",
+        ["pt-br"] = "Também destaca itens próximos do objetivo principal no mundo quando estiverem dentro da distância de destaque.",
+        ["ru"] = "Также подсвечивает ближайшие предметы основной задачи в мире, если они находятся в пределах дистанции подсветки.",
         ja = "ハイライト距離内にある場合、近くの主要目標アイテムもワールド内で強調表示します。",
         ko = "강조 거리 내에 있을 때 근처의 주요 목표 아이템도 월드에서 함께 강조합니다.",
         ["zh-cn"] = "当附近的主要目标物品位于高亮距离内时，也会在场景中高亮显示它们。",
@@ -3822,20 +3916,13 @@ return {
     },
     nearby_highlight_secondary_objective_tooltip = {
         en = "Also highlight nearby secondary objective items in the world when they are within the highlight distance.",
-        fr =
-        "Met également en surbrillance les objets d'objectif secondaire proches dans le monde lorsqu'ils sont à portée de surbrillance.",
-        de =
-        "Hebt außerdem Sekundärzielobjekte in der Nähe in der Welt hervor, wenn sie sich innerhalb der Hervorhebungsreichweite befinden.",
-        it =
-        "Evidenzia anche gli oggetti dell'obiettivo secondario vicini nel mondo quando sono entro la distanza di evidenziazione.",
-        es =
-        "También resalta los objetos del objetivo secundario cercanos en el mundo cuando están dentro de la distancia de resaltado.",
-        pl =
-        "Podświetla również pobliskie przedmioty celu dodatkowego w świecie, gdy znajdują się w zasięgu podświetlenia.",
-        ["pt-br"] =
-        "Também destaca itens próximos do objetivo secundário no mundo quando estiverem dentro da distância de destaque.",
-        ["ru"] =
-        "Также подсвечивает ближайшие предметы дополнительной задачи в мире, если они находятся в пределах дистанции подсветки.",
+        fr = "Met également en surbrillance les objets d'objectif secondaire proches dans le monde lorsqu'ils sont à portée de surbrillance.",
+        de = "Hebt außerdem Sekundärzielobjekte in der Nähe in der Welt hervor, wenn sie sich innerhalb der Hervorhebungsreichweite befinden.",
+        it = "Evidenzia anche gli oggetti dell'obiettivo secondario vicini nel mondo quando sono entro la distanza di evidenziazione.",
+        es = "También resalta los objetos del objetivo secundario cercanos en el mundo cuando están dentro de la distancia de resaltado.",
+        pl = "Podświetla również pobliskie przedmioty celu dodatkowego w świecie, gdy znajdują się w zasięgu podświetlenia.",
+        ["pt-br"] = "Também destaca itens próximos do objetivo secundário no mundo quando estiverem dentro da distância de destaque.",
+        ["ru"] = "Также подсвечивает ближайшие предметы дополнительной задачи в мире, если они находятся в пределах дистанции подсветки.",
         ja = "ハイライト距離内にある場合、近くの副次目標アイテムもワールド内で強調表示します。",
         ko = "강조 거리 내에 있을 때 근처의 보조 목표 아이템도 월드에서 함께 강조합니다.",
         ["zh-cn"] = "当附近的次要目标物品位于高亮距离内时，也会在场景中高亮显示它们。",
@@ -3997,20 +4084,13 @@ return {
     },
     nearby_highlight_expeditions_specific_tooltip = {
         en = "Also highlight nearby expedition items in the world when they are within the highlight distance.",
-        fr =
-        "Met également en surbrillance les objets d'expédition proches dans le monde lorsqu'ils sont à portée de surbrillance.",
-        de =
-        "Hebt außerdem nahe Expeditionsobjekte in der Welt hervor, wenn sie sich innerhalb der Hervorhebungsdistanz befinden.",
-        it =
-        "Evidenzia anche gli oggetti di spedizione vicini nel mondo quando si trovano entro la distanza di evidenziazione.",
-        es =
-        "También resalta los objetos de expedición cercanos en el mundo cuando están dentro de la distancia de resaltado.",
-        pl =
-        "Dodatkowo podświetla pobliskie przedmioty ekspedycyjne w świecie, gdy znajdują się w zasięgu podświetlenia.",
-        ["pt-br"] =
-        "Também destaca itens de expedição próximos no mundo quando estiverem dentro da distância de destaque.",
-        ["ru"] =
-        "Также подсвечивает ближайшие предметы экспедиции в мире, когда они находятся в пределах дистанции подсветки.",
+        fr = "Met également en surbrillance les objets d'expédition proches dans le monde lorsqu'ils sont à portée de surbrillance.",
+        de = "Hebt außerdem nahe Expeditionsobjekte in der Welt hervor, wenn sie sich innerhalb der Hervorhebungsdistanz befinden.",
+        it = "Evidenzia anche gli oggetti di spedizione vicini nel mondo quando si trovano entro la distanza di evidenziazione.",
+        es = "También resalta los objetos de expedición cercanos en el mundo cuando están dentro de la distancia de resaltado.",
+        pl = "Dodatkowo podświetla pobliskie przedmioty ekspedycyjne w świecie, gdy znajdują się w zasięgu podświetlenia.",
+        ["pt-br"] = "Também destaca itens de expedição próximos no mundo quando estiverem dentro da distância de destaque.",
+        ["ru"] = "Также подсвечивает ближайшие предметы экспедиции в мире, когда они находятся в пределах дистанции подсветки.",
         ja = "ハイライト距離内にある近くの遠征アイテムもワールド上で強調表示します。",
         ko = "강조 표시 거리 내에 있는 근처 원정 아이템도 월드에서 함께 강조 표시합니다.",
         ["zh-cn"] = "当附近远征物品进入高亮距离时，也会在场景中高亮显示它们。",
@@ -4032,10 +4112,8 @@ return {
     },
     show_expeditions_loot_tooltip = {
         en = "Choose how Tech-Remnants is shown on the radar: artwork, simplified icon, or disabled.",
-        fr =
-        "Choisir comment les vestiges technologiques sont affichés sur le radar : illustration, icône simplifiée ou désactivé.",
-        de =
-        "Legt fest, wie Tech-Überreste auf dem Radar angezeigt werden: Artwork, vereinfachtes Symbol oder deaktiviert.",
+        fr = "Choisir comment les vestiges technologiques sont affichés sur le radar : illustration, icône simplifiée ou désactivé.",
+        de = "Legt fest, wie Tech-Überreste auf dem Radar angezeigt werden: Artwork, vereinfachtes Symbol oder deaktiviert.",
         it = "Scegli come mostrare i resti tecnologici sul radar: illustrazione, icona semplificata o disattivato.",
         es = "Elige cómo se muestran los restos tecnológicos en el radar: ilustración, icono simplificado o desactivado.",
         pl = "Wybierz, jak Tech-Remnants są pokazywane na radarze: grafika, uproszczona ikona lub wyłączone.",
@@ -4048,19 +4126,13 @@ return {
     },
     show_expeditions_dropped_loot_tooltip = {
         en = "Choose how Dropped Tech-Remnants is shown on the radar: artwork, simplified icon, or disabled.",
-        fr =
-        "Choisir comment les vestiges technologiques au sol sont affichés sur le radar : illustration, icône simplifiée ou désactivé.",
-        de =
-        "Legt fest, wie fallengelassene Tech-Überreste auf dem Radar angezeigt werden: Artwork, vereinfachtes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare i resti tecnologici lasciati a terra sul radar: illustrazione, icona semplificata o disattivato.",
-        es =
-        "Elige cómo se muestran los restos tecnológicos soltados en el radar: ilustración, icono simplificado o desactivado.",
+        fr = "Choisir comment les vestiges technologiques au sol sont affichés sur le radar : illustration, icône simplifiée ou désactivé.",
+        de = "Legt fest, wie fallengelassene Tech-Überreste auf dem Radar angezeigt werden: Artwork, vereinfachtes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare i resti tecnologici lasciati a terra sul radar: illustrazione, icona semplificata o disattivato.",
+        es = "Elige cómo se muestran los restos tecnológicos soltados en el radar: ilustración, icono simplificado o desactivado.",
         pl = "Wybierz, jak upuszczone Tech-Remnants są pokazywane na radarze: grafika, uproszczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os Tech-Remnants largados são mostrados no radar: arte, ícone simplificado ou desativado.",
-        ["ru"] =
-        "Выберите, как показывать выброшенные техно-останки на радаре: иллюстрация, упрощённый значок или отключено.",
+        ["pt-br"] = "Escolha como os Tech-Remnants largados são mostrados no radar: arte, ícone simplificado ou desativado.",
+        ["ru"] = "Выберите, как показывать выброшенные техно-останки на радаре: иллюстрация, упрощённый значок или отключено.",
         ja = "レーダー上でドロップされたテックレムナントをどう表示するかを選びます, アートワーク、簡易アイコン、または無効。",
         ko = "레이더에 떨어진 테크 잔재를 표시하는 방식을 선택합니다. 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择在雷达上如何显示掉落的科技残骸：原图、简化图标或禁用。",
@@ -4180,18 +4252,13 @@ return {
     },
     show_pocketable_landmine_explosive_tooltip = {
         en = "Choose how Servo-Triggered Mine is shown on the radar: artwork, simplified icon, or disabled.",
-        fr =
-        "Choisir comment la mine à déclenchement servo est affichée sur le radar : illustration, icône simplifiée ou désactivé.",
-        de =
-        "Legt fest, wie die servogesteuerte Mine auf dem Radar angezeigt wird: Artwork, vereinfachtes Symbol oder deaktiviert.",
+        fr = "Choisir comment la mine à déclenchement servo est affichée sur le radar : illustration, icône simplifiée ou désactivé.",
+        de = "Legt fest, wie die servogesteuerte Mine auf dem Radar angezeigt wird: Artwork, vereinfachtes Symbol oder deaktiviert.",
         it = "Scegli come mostrare la mina a innesco servo sul radar: illustrazione, icona semplificata o disattivato.",
-        es =
-        "Elige cómo se muestra la mina activada por servomecanismo en el radar: ilustración, icono simplificado o desactivado.",
-        pl =
-        "Wybierz, jak mina uruchamiana serwomechanizmem jest pokazywana na radarze: grafika, uproszczona ikona lub wyłączone.",
+        es = "Elige cómo se muestra la mina activada por servomecanismo en el radar: ilustración, icono simplificado o desactivado.",
+        pl = "Wybierz, jak mina uruchamiana serwomechanizmem jest pokazywana na radarze: grafika, uproszczona ikona lub wyłączone.",
         ["pt-br"] = "Escolha como a mina acionada por servo é mostrada no radar: arte, ícone simplificado ou desativado.",
-        ["ru"] =
-        "Выберите, как показывать мину с сервоприводным взрывателем на радаре: иллюстрация, упрощённый значок или отключено.",
+        ["ru"] = "Выберите, как показывать мину с сервоприводным взрывателем на радаре: иллюстрация, упрощённый значок или отключено.",
         ja = "レーダー上でサーボ起爆地雷をどう表示するかを選びます, アートワーク、簡易アイコン、または無効。",
         ko = "레이더에 서보 기폭 지뢰를 표시하는 방식을 선택합니다. 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择在雷达上如何显示伺服触发地雷：原图、简化图标或禁用。",
@@ -4199,10 +4266,8 @@ return {
     },
     show_pocketable_landmine_fire_tooltip = {
         en = "Choose how Purgation Snare is shown on the radar: artwork, simplified icon, or disabled.",
-        fr =
-        "Choisir comment le piège de purgation est affiché sur le radar : illustration, icône simplifiée ou désactivé.",
-        de =
-        "Legt fest, wie die Läuterungsfalle auf dem Radar angezeigt wird: Artwork, vereinfachtes Symbol oder deaktiviert.",
+        fr = "Choisir comment le piège de purgation est affiché sur le radar : illustration, icône simplifiée ou désactivé.",
+        de = "Legt fest, wie die Läuterungsfalle auf dem Radar angezeigt wird: Artwork, vereinfachtes Symbol oder deaktiviert.",
         it = "Scegli come mostrare la trappola purgante sul radar: illustrazione, icona semplificata o disattivato.",
         es = "Elige cómo se muestra la trampa de purgación en el radar: ilustración, icono simplificado o desactivado.",
         pl = "Wybierz, jak sidło puryfikacyjne jest pokazywane na radarze: grafika, uproszczona ikona lub wyłączone.",
@@ -4216,14 +4281,12 @@ return {
     show_pocketable_landmine_shock_tooltip = {
         en = "Choose how Voltaic Snare is shown on the radar: artwork, simplified icon, or disabled.",
         fr = "Choisir comment le piège voltaïque est affiché sur le radar : illustration, icône simplifiée ou désactivé.",
-        de =
-        "Legt fest, wie die Voltaikfalle auf dem Radar angezeigt wird: Artwork, vereinfachtes Symbol oder deaktiviert.",
+        de = "Legt fest, wie die Voltaikfalle auf dem Radar angezeigt wird: Artwork, vereinfachtes Symbol oder deaktiviert.",
         it = "Scegli come mostrare la trappola voltaica sul radar: illustrazione, icona semplificata o disattivato.",
         es = "Elige cómo se muestra la trampa voltaica en el radar: ilustración, icono simplificado o desactivado.",
         pl = "Wybierz, jak sidło woltaiczne jest pokazywane na radarze: grafika, uproszczona ikona lub wyłączone.",
         ["pt-br"] = "Escolha como a armadilha voltaica é mostrada no radar: arte, ícone simplificado ou desativado.",
-        ["ru"] =
-        "Выберите, как показывать вольтаическую ловушку на радаре: иллюстрация, упрощённый значок или отключено.",
+        ["ru"] = "Выберите, как показывать вольтаическую ловушку на радаре: иллюстрация, упрощённый значок или отключено.",
         ja = "レーダー上でボルタイクスネアをどう表示するかを選びます, アートワーク、簡易アイコン、または無効。",
         ko = "레이더에 볼타익 올가미를 표시하는 방식을 선택합니다. 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择在雷达上如何显示电击陷索：原图、简化图标或禁用。",
@@ -4232,8 +4295,7 @@ return {
     show_pocketable_void_shield_tooltip = {
         en = "Choose how Void Shell is shown on the radar: artwork, simplified icon, or disabled.",
         fr = "Choisir comment l'obus du vide est affiché sur le radar : illustration, icône simplifiée ou désactivé.",
-        de =
-        "Legt fest, wie die Leerenhülle auf dem Radar angezeigt wird: Artwork, vereinfachtes Symbol oder deaktiviert.",
+        de = "Legt fest, wie die Leerenhülle auf dem Radar angezeigt wird: Artwork, vereinfachtes Symbol oder deaktiviert.",
         it = "Scegli come mostrare il guscio del vuoto sul radar: illustrazione, icona semplificata o disattivato.",
         es = "Elige cómo se muestra el proyectil de vacío en el radar: ilustración, icono simplificado o desactivado.",
         pl = "Wybierz, jak powłoka pustki jest pokazywana na radarze: grafika, uproszczona ikona lub wyłączone.",
@@ -4246,19 +4308,13 @@ return {
     },
     show_pocketable_airstrike_tooltip = {
         en = "Choose how Bombing Run Signal Marker is shown on the radar: artwork, simplified icon, or disabled.",
-        fr =
-        "Choisir comment le marqueur de signal de bombardement est affiché sur le radar : illustration, icône simplifiée ou désactivé.",
-        de =
-        "Legt fest, wie die Bombardierungssignalmarkierung auf dem Radar angezeigt wird: Artwork, vereinfachtes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare il segnalatore di bombardamento sul radar: illustrazione, icona semplificata o disattivato.",
-        es =
-        "Elige cómo se muestra el marcador de señal de bombardeo en el radar: ilustración, icono simplificado o desactivado.",
+        fr = "Choisir comment le marqueur de signal de bombardement est affiché sur le radar : illustration, icône simplifiée ou désactivé.",
+        de = "Legt fest, wie die Bombardierungssignalmarkierung auf dem Radar angezeigt wird: Artwork, vereinfachtes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare il segnalatore di bombardamento sul radar: illustrazione, icona semplificata o disattivato.",
+        es = "Elige cómo se muestra el marcador de señal de bombardeo en el radar: ilustración, icono simplificado o desactivado.",
         pl = "Wybierz, jak znacznik sygnału nalotu jest pokazywany na radarze: grafika, uproszczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como o marcador de sinal de bombardeio é mostrado no radar: arte, ícone simplificado ou desativado.",
-        ["ru"] =
-        "Выберите, как показывать сигнальный маркер авианалёта на радаре: иллюстрация, упрощённый значок или отключено.",
+        ["pt-br"] = "Escolha como o marcador de sinal de bombardeio é mostrado no radar: arte, ícone simplificado ou desativado.",
+        ["ru"] = "Выберите, как показывать сигнальный маркер авианалёта на радаре: иллюстрация, упрощённый значок или отключено.",
         ja = "レーダー上で爆撃要請シグナルマーカーをどう表示するかを選びます, アートワーク、簡易アイコン、または無効。",
         ko = "레이더에 폭격 신호 표식을 표시하는 방식을 선택합니다. 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择在雷达上如何显示轰炸信号标记：原图、简化图标或禁用。",
@@ -4266,20 +4322,13 @@ return {
     },
     show_pocketable_artillery_strike_tooltip = {
         en = "Choose how Artillery Locator Beacon is shown on the radar: artwork, simplified icon, or disabled.",
-        fr =
-        "Choisir comment la balise de ciblage d'artillerie est affichée sur le radar : illustration, icône simplifiée ou désactivé.",
-        de =
-        "Legt fest, wie das Artillerie-Ortungsfeuer auf dem Radar angezeigt wird: Artwork, vereinfachtes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare il faro localizzatore d'artiglieria sul radar: illustrazione, icona semplificata o disattivato.",
-        es =
-        "Elige cómo se muestra la baliza localizadora de artillería en el radar: ilustración, icono simplificado o desactivado.",
-        pl =
-        "Wybierz, jak znacznik naprowadzający artylerię jest pokazywany na radarze: grafika, uproszczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como o sinalizador localizador de artilharia é mostrado no radar: arte, ícone simplificado ou desativado.",
-        ["ru"] =
-        "Выберите, как показывать артиллерийский маяк наведения на радаре: иллюстрация, упрощённый значок или отключено.",
+        fr = "Choisir comment la balise de ciblage d'artillerie est affichée sur le radar : illustration, icône simplifiée ou désactivé.",
+        de = "Legt fest, wie das Artillerie-Ortungsfeuer auf dem Radar angezeigt wird: Artwork, vereinfachtes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare il faro localizzatore d'artiglieria sul radar: illustrazione, icona semplificata o disattivato.",
+        es = "Elige cómo se muestra la baliza localizadora de artillería en el radar: ilustración, icono simplificado o desactivado.",
+        pl = "Wybierz, jak znacznik naprowadzający artylerię jest pokazywany na radarze: grafika, uproszczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como o sinalizador localizador de artilharia é mostrado no radar: arte, ícone simplificado ou desativado.",
+        ["ru"] = "Выберите, как показывать артиллерийский маяк наведения на радаре: иллюстрация, упрощённый значок или отключено.",
         ja = "レーダー上で砲撃誘導ビーコンをどう表示するかを選びます, アートワーク、簡易アイコン、または無効。",
         ko = "레이더에 포격 유도 비콘을 표시하는 방식을 선택합니다. 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择在雷达上如何显示炮击定位信标：原图、简化图标或禁用。",
@@ -4287,16 +4336,13 @@ return {
     },
     show_pocketable_big_grenade_tooltip = {
         en = "Choose how Modified Grenade is shown on the radar: artwork, simplified icon, or disabled.",
-        fr =
-        "Choisir comment la grenade modifiée est affichée sur le radar : illustration, icône simplifiée ou désactivé.",
-        de =
-        "Legt fest, wie die modifizierte Granate auf dem Radar angezeigt wird: Artwork, vereinfachtes Symbol oder deaktiviert.",
+        fr = "Choisir comment la grenade modifiée est affichée sur le radar : illustration, icône simplifiée ou désactivé.",
+        de = "Legt fest, wie die modifizierte Granate auf dem Radar angezeigt wird: Artwork, vereinfachtes Symbol oder deaktiviert.",
         it = "Scegli come mostrare la granata modificata sul radar: illustrazione, icona semplificata o disattivato.",
         es = "Elige cómo se muestra la granada modificada en el radar: ilustración, icono simplificado o desactivado.",
         pl = "Wybierz, jak zmodyfikowany granat jest pokazywany na radarze: grafika, uproszczona ikona lub wyłączone.",
         ["pt-br"] = "Escolha como a granada modificada é mostrada no radar: arte, ícone simplificado ou desativado.",
-        ["ru"] =
-        "Выберите, как показывать модифицированную гранату на радаре: иллюстрация, упрощённый значок или отключено.",
+        ["ru"] = "Выберите, как показывать модифицированную гранату на радаре: иллюстрация, упрощённый значок или отключено.",
         ja = "レーダー上で改造グレネードをどう表示するかを選びます, アートワーク、簡易アイコン、または無効。",
         ko = "레이더에 개조 수류탄을 표시하는 방식을 선택합니다. 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择在雷达上如何显示改装手雷：原图、简化图标或禁用。",
@@ -4304,20 +4350,13 @@ return {
     },
     show_pocketable_valkyrie_hover_tooltip = {
         en = "Choose how Fire-Support Signal Marker is shown on the radar: artwork, simplified icon, or disabled.",
-        fr =
-        "Choisir comment le marqueur de signal de soutien de feu est affiché sur le radar : illustration, icône simplifiée ou désactivé.",
-        de =
-        "Legt fest, wie die Feuerunterstützungssignalmarkierung auf dem Radar angezeigt wird: Artwork, vereinfachtes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare il segnalatore di supporto di fuoco sul radar: illustrazione, icona semplificata o disattivato.",
-        es =
-        "Elige cómo se muestra el marcador de señal de apoyo de fuego en el radar: ilustración, icono simplificado o desactivado.",
-        pl =
-        "Wybierz, jak znacznik sygnału wsparcia ogniowego jest pokazywany na radarze: grafika, uproszczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como o marcador de sinal de apoio de fogo é mostrado no radar: arte, ícone simplificado ou desativado.",
-        ["ru"] =
-        "Выберите, как показывать сигнальный маркер огневой поддержки на радаре: иллюстрация, упрощённый значок или отключено.",
+        fr = "Choisir comment le marqueur de signal de soutien de feu est affiché sur le radar : illustration, icône simplifiée ou désactivé.",
+        de = "Legt fest, wie die Feuerunterstützungssignalmarkierung auf dem Radar angezeigt wird: Artwork, vereinfachtes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare il segnalatore di supporto di fuoco sul radar: illustrazione, icona semplificata o disattivato.",
+        es = "Elige cómo se muestra el marcador de señal de apoyo de fuego en el radar: ilustración, icono simplificado o desactivado.",
+        pl = "Wybierz, jak znacznik sygnału wsparcia ogniowego jest pokazywany na radarze: grafika, uproszczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como o marcador de sinal de apoio de fogo é mostrado no radar: arte, ícone simplificado ou desativado.",
+        ["ru"] = "Выберите, как показывать сигнальный маркер огневой поддержки на радаре: иллюстрация, упрощённый значок или отключено.",
         ja = "レーダー上で火力支援シグナルマーカーをどう表示するかを選びます, アートワーク、簡易アイコン、または無効。",
         ko = "레이더에 화력 지원 신호 표식을 표시하는 방식을 선택합니다. 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择在雷达上如何显示火力支援信号标记：原图、简化图标或禁用。",
@@ -4339,20 +4378,13 @@ return {
     },
     nearby_highlight_martyr_s_skull_tooltip = {
         en = "Also highlight nearby martyr/skull items in the world when they are within the highlight distance.",
-        fr =
-        "Met également en surbrillance les objets crâne du martyr proches dans le monde lorsqu'ils sont à portée de surbrillance.",
-        de =
-        "Hebt außerdem nahe Märtyrerschädel-Objekte in der Welt hervor, wenn sie sich innerhalb der Hervorhebungsdistanz befinden.",
-        it =
-        "Evidenzia anche gli oggetti Teschio del Martire vicini nel mondo quando si trovano entro la distanza di evidenziazione.",
-        es =
-        "También resalta los objetos de Calavera del Mártir cercanos en el mundo cuando están dentro de la distancia de resaltado.",
-        pl =
-        "Dodatkowo podświetla pobliskie przedmioty Czaszki Męczennika w świecie, gdy znajdują się w zasięgu podświetlenia.",
-        ["pt-br"] =
-        "Também destaca itens de Caveira do Mártir próximos no mundo quando estiverem dentro da distância de destaque.",
-        ["ru"] =
-        "Также подсвечивает ближайшие предметы Черепа мученика в мире, когда они находятся в пределах дистанции подсветки.",
+        fr = "Met également en surbrillance les objets crâne du martyr proches dans le monde lorsqu'ils sont à portée de surbrillance.",
+        de = "Hebt außerdem nahe Märtyrerschädel-Objekte in der Welt hervor, wenn sie sich innerhalb der Hervorhebungsdistanz befinden.",
+        it = "Evidenzia anche gli oggetti Teschio del Martire vicini nel mondo quando si trovano entro la distanza di evidenziazione.",
+        es = "También resalta los objetos de Calavera del Mártir cercanos en el mundo cuando están dentro de la distancia de resaltado.",
+        pl = "Dodatkowo podświetla pobliskie przedmioty Czaszki Męczennika w świecie, gdy znajdują się w zasięgu podświetlenia.",
+        ["pt-br"] = "Também destaca itens de Caveira do Mártir próximos no mundo quando estiverem dentro da distância de destaque.",
+        ["ru"] = "Также подсвечивает ближайшие предметы Черепа мученика в мире, когда они находятся в пределах дистанции подсветки.",
         ja = "ハイライト距離内にある近くの殉教者の頭蓋骨アイテムもワールド上で強調表示します。",
         ko = "강조 표시 거리 내에 있는 근처 순교자의 해골 아이템도 월드에서 함께 강조 표시합니다.",
         ["zh-cn"] = "当附近殉道者头骨物品进入高亮距离时，也会在场景中高亮显示它们。",
@@ -4402,19 +4434,13 @@ return {
     },
     nearby_highlight_environment_tooltip = {
         en = "Also highlight nearby environment items in the world when they are within the highlight distance.",
-        fr =
-        "Met également en surbrillance les objets d'environnement proches dans le monde lorsqu'ils sont à portée de surbrillance.",
-        de =
-        "Hebt außerdem nahe Umgebungsobjekte in der Welt hervor, wenn sie sich innerhalb der Hervorhebungsdistanz befinden.",
-        it =
-        "Evidenzia anche gli oggetti ambientali vicini nel mondo quando si trovano entro la distanza di evidenziazione.",
-        es =
-        "También resalta los objetos del entorno cercanos en el mundo cuando están dentro de la distancia de resaltado.",
+        fr = "Met également en surbrillance les objets d'environnement proches dans le monde lorsqu'ils sont à portée de surbrillance.",
+        de = "Hebt außerdem nahe Umgebungsobjekte in der Welt hervor, wenn sie sich innerhalb der Hervorhebungsdistanz befinden.",
+        it = "Evidenzia anche gli oggetti ambientali vicini nel mondo quando si trovano entro la distanza di evidenziazione.",
+        es = "También resalta los objetos del entorno cercanos en el mundo cuando están dentro de la distancia de resaltado.",
         pl = "Dodatkowo podświetla pobliskie obiekty otoczenia w świecie, gdy znajdują się w zasięgu podświetlenia.",
-        ["pt-br"] =
-        "Também destaca itens do ambiente próximos no mundo quando estiverem dentro da distância de destaque.",
-        ["ru"] =
-        "Также подсвечивает ближайшие объекты окружения в мире, когда они находятся в пределах дистанции подсветки.",
+        ["pt-br"] = "Também destaca itens do ambiente próximos no mundo quando estiverem dentro da distância de destaque.",
+        ["ru"] = "Также подсвечивает ближайшие объекты окружения в мире, когда они находятся в пределах дистанции подсветки.",
         ja = "ハイライト距離内にある近くの環境アイテムもワールド上で強調表示します。",
         ko = "강조 표시 거리 내에 있는 근처 환경 아이템도 월드에서 함께 강조 표시합니다.",
         ["zh-cn"] = "当附近环境物品进入高亮距离时，也会在场景中高亮显示它们。",
@@ -4534,20 +4560,13 @@ return {
     },
     boss_marker_range_mode_tooltip = {
         en = "Normal uses the radar range. Infinite keeps boss markers visible regardless of distance.",
-        fr =
-        "Normal utilise la portée du radar. Infini garde les marqueurs de boss visibles quelle que soit la distance.",
-        de =
-        "Normal verwendet die Radarreichweite. Unendlich hält Boss-Markierungen unabhängig von der Entfernung sichtbar.",
-        it =
-        "Normale usa la portata del radar. Infinita mantiene visibili i marcatori dei boss indipendentemente dalla distanza.",
-        es =
-        "Normal usa el alcance del radar. Infinito mantiene visibles los marcadores de jefes sin importar la distancia.",
-        pl =
-        "Tryb normalny używa zasięgu radaru. Nieskończony utrzymuje znaczniki bossów widoczne niezależnie od odległości.",
-        ["pt-br"] =
-        "Normal usa o alcance do radar. Infinito mantém os marcadores de chefes visíveis independentemente da distância.",
-        ["ru"] =
-        "Обычный режим использует дальность радара. Бесконечный режим оставляет метки боссов видимыми независимо от расстояния.",
+        fr = "Normal utilise la portée du radar. Infini garde les marqueurs de boss visibles quelle que soit la distance.",
+        de = "Normal verwendet die Radarreichweite. Unendlich hält Boss-Markierungen unabhängig von der Entfernung sichtbar.",
+        it = "Normale usa la portata del radar. Infinita mantiene visibili i marcatori dei boss indipendentemente dalla distanza.",
+        es = "Normal usa el alcance del radar. Infinito mantiene visibles los marcadores de jefes sin importar la distancia.",
+        pl = "Tryb normalny używa zasięgu radaru. Nieskończony utrzymuje znaczniki bossów widoczne niezależnie od odległości.",
+        ["pt-br"] = "Normal usa o alcance do radar. Infinito mantém os marcadores de chefes visíveis independentemente da distância.",
+        ["ru"] = "Обычный режим использует дальность радара. Бесконечный режим оставляет метки боссов видимыми независимо от расстояния.",
         ja = "通常はレーダー範囲を使用します。無限は距離に関係なくボスマーカーを表示し続けます。",
         ko = "일반은 레이더 범위를 사용합니다. 무한은 거리와 관계없이 보스 마커를 계속 표시합니다.",
         ["zh-cn"] = "普通模式使用雷达范围。无限模式会让首领标记无视距离始终可见。",
@@ -4709,20 +4728,13 @@ return {
     },
     show_enemy_cultist_gunner_tooltip = {
         en = "Choose how markers for Dreg Gunner are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Tireurs Dreg sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Dreg-Schützen auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare sul radar i marcatori del Mitragliere Dreg: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores del Artillero Dreg: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Dreg Gunnera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Artilheiro Dreg são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Стрелка-отродья: только значок, отмеченный значок или отключено.",
+        fr = "Choisissez comment les marqueurs des Tireurs Dreg sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Dreg-Schützen auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare sul radar i marcatori del Mitragliere Dreg: solo icona, icona contrassegnata o disattivato.",
+        es = "Elige cómo se muestran en el radar los marcadores del Artillero Dreg: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki Dreg Gunnera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Artilheiro Dreg são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Стрелка-отродья: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でDreg Gunnerのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 드렉 거너 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Dreg Gunner 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -4730,20 +4742,13 @@ return {
     },
     show_enemy_cultist_berzerker_tooltip = {
         en = "Choose how markers for Dreg Rager are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Enragés Dreg sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Dreg-Rasende auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare sul radar i marcatori del Furioso Dreg: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores del Rabioso Dreg: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Dreg Ragera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Dreg Rager são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Буйного-отродья: только значок, отмеченный значок или отключено.",
+        fr = "Choisissez comment les marqueurs des Enragés Dreg sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Dreg-Rasende auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare sul radar i marcatori del Furioso Dreg: solo icona, icona contrassegnata o disattivato.",
+        es = "Elige cómo se muestran en el radar los marcadores del Rabioso Dreg: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki Dreg Ragera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Dreg Rager são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Буйного-отродья: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でDreg Ragerのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 드렉 레이저 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Dreg Rager 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -4751,20 +4756,13 @@ return {
     },
     show_enemy_cultist_shocktrooper_tooltip = {
         en = "Choose how markers for Dreg Shotgunner are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Fusiliers Dreg sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Dreg-Schrotflintenschützen auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare sul radar i marcatori del Fuciliere a pompa Dreg: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores del Escopetero Dreg: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Dreg Shotgunnera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Escopeteiro Dreg são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Дробовикщика-отродья: только значок, отмеченный значок или отключено.",
+        fr = "Choisissez comment les marqueurs des Fusiliers Dreg sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Dreg-Schrotflintenschützen auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare sul radar i marcatori del Fuciliere a pompa Dreg: solo icona, icona contrassegnata o disattivato.",
+        es = "Elige cómo se muestran en el radar los marcadores del Escopetero Dreg: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki Dreg Shotgunnera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Escopeteiro Dreg são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Дробовикщика-отродья: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でDreg Shotgunnerのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 드렉 샷거너 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Dreg Shotgunner 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -4772,20 +4770,13 @@ return {
     },
     show_enemy_renegade_gunner_tooltip = {
         en = "Choose how markers for Scab Gunner are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Tireurs Scab sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Scab-Schützen auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare sul radar i marcatori del Mitragliere Scab: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores del Artillero Scab: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Scab Gunnera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Artilheiro Scab são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Стрелка-отступника: только значок, отмеченный значок или отключено.",
+        fr = "Choisissez comment les marqueurs des Tireurs Scab sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Scab-Schützen auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare sul radar i marcatori del Mitragliere Scab: solo icona, icona contrassegnata o disattivato.",
+        es = "Elige cómo se muestran en el radar los marcadores del Artillero Scab: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki Scab Gunnera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Artilheiro Scab são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Стрелка-отступника: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でScab Gunnerのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 스캡 거너 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Scab Gunner 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -4793,20 +4784,13 @@ return {
     },
     show_enemy_renegade_executor_tooltip = {
         en = "Choose how markers for Scab Mauler are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Massacreurs Scab sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Scab-Mauler auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare sul radar i marcatori del Mauler Scab: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores del Mauler Scab: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Scab Maulera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Scab Mauler são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Мясника-отступника: только значок, отмеченный значок или отключено.",
+        fr = "Choisissez comment les marqueurs des Massacreurs Scab sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Scab-Mauler auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare sul radar i marcatori del Mauler Scab: solo icona, icona contrassegnata o disattivato.",
+        es = "Elige cómo se muestran en el radar los marcadores del Mauler Scab: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki Scab Maulera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Scab Mauler são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Мясника-отступника: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でScab Maulerのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 스캡 마울러 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Scab Mauler 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -4814,20 +4798,13 @@ return {
     },
     show_enemy_renegade_plasma_gunner_tooltip = {
         en = "Choose how markers for Scab Plasma Gunner are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Tireurs plasma Scab sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Scab-Plasmaschützen auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare sul radar i marcatori del Mitragliere al plasma Scab: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores del Artillero de plasma Scab: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Scab Plasma Gunnera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Artilheiro de Plasma Scab são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Плазменного стрелка-отступника: только значок, отмеченный значок или отключено.",
+        fr = "Choisissez comment les marqueurs des Tireurs plasma Scab sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Scab-Plasmaschützen auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare sul radar i marcatori del Mitragliere al plasma Scab: solo icona, icona contrassegnata o disattivato.",
+        es = "Elige cómo se muestran en el radar los marcadores del Artillero de plasma Scab: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki Scab Plasma Gunnera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Artilheiro de Plasma Scab são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Плазменного стрелка-отступника: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でScab Plasma Gunnerのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 스캡 플라즈마 거너 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Scab Plasma Gunner 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -4835,20 +4812,13 @@ return {
     },
     show_enemy_renegade_berzerker_tooltip = {
         en = "Choose how markers for Scab Rager are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Enragés Scab sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Scab-Rasende auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare sul radar i marcatori del Furioso Scab: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores del Rabioso Scab: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Scab Ragera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Scab Rager são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Буйного-отступника: только значок, отмеченный значок или отключено.",
+        fr = "Choisissez comment les marqueurs des Enragés Scab sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Scab-Rasende auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare sul radar i marcatori del Furioso Scab: solo icona, icona contrassegnata o disattivato.",
+        es = "Elige cómo se muestran en el radar los marcadores del Rabioso Scab: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki Scab Ragera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Scab Rager são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Буйного-отступника: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でScab Ragerのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 스캡 레이저 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Scab Rager 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -4856,20 +4826,13 @@ return {
     },
     show_enemy_renegade_shocktrooper_tooltip = {
         en = "Choose how markers for Scab Shotgunner are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Fusiliers Scab sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Scab-Schrotflintenschützen auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare sul radar i marcatori del Fuciliere a pompa Scab: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores del Escopetero Scab: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Scab Shotgunnera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Escopeteiro Scab são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Дробовикщика-отступника: только значок, отмеченный значок или отключено.",
+        fr = "Choisissez comment les marqueurs des Fusiliers Scab sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Scab-Schrotflintenschützen auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare sul radar i marcatori del Fuciliere a pompa Scab: solo icona, icona contrassegnata o disattivato.",
+        es = "Elige cómo se muestran en el radar los marcadores del Escopetero Scab: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki Scab Shotgunnera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Escopeteiro Scab são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Дробовикщика-отступника: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でScab Shotgunnerのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 스캡 샷거너 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Scab Shotgunner 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -4877,20 +4840,13 @@ return {
     },
     show_enemy_chaos_ogryn_bulwark_tooltip = {
         en = "Choose how markers for Ogryn - Bulwark are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Ogryns - Remparts sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Ogryn - Bulwark auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare sul radar i marcatori dell'Ogryn - Bulwark: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores del Ogryn - Bulwark: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Ogryna - Bulwarka mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Ogryn - Bulwark são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Огрина - Щитоносца: только значок, отмеченный значок или отключено.",
+        fr = "Choisissez comment les marqueurs des Ogryns - Remparts sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Ogryn - Bulwark auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare sul radar i marcatori dell'Ogryn - Bulwark: solo icona, icona contrassegnata o disattivato.",
+        es = "Elige cómo se muestran en el radar los marcadores del Ogryn - Bulwark: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki Ogryna - Bulwarka mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Ogryn - Bulwark são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Огрина - Щитоносца: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でOgryn - Bulwarkのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 오그린 - 불워크 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Ogryn - Bulwark 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -4898,20 +4854,13 @@ return {
     },
     show_enemy_chaos_ogryn_executor_tooltip = {
         en = "Choose how markers for Ogryn - Crusher are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Ogryns - Crushers sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Ogryn - Crusher auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare sul radar i marcatori dell'Ogryn - Crusher: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores del Ogryn - Crusher: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Ogryna - Crushera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Ogryn - Crusher são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Огрина - Крушителя: только значок, отмеченный значок или отключено.",
+        fr = "Choisissez comment les marqueurs des Ogryns - Crushers sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Ogryn - Crusher auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare sul radar i marcatori dell'Ogryn - Crusher: solo icona, icona contrassegnata o disattivato.",
+        es = "Elige cómo se muestran en el radar los marcadores del Ogryn - Crusher: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki Ogryna - Crushera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Ogryn - Crusher são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Огрина - Крушителя: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でOgryn - Crusherのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 오그린 - 크러셔 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Ogryn - Crusher 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -4919,20 +4868,13 @@ return {
     },
     show_enemy_chaos_ogryn_gunner_tooltip = {
         en = "Choose how markers for Ogryn - Reaper are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Ogryns - Reapers sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Ogryn - Reaper auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare sul radar i marcatori dell'Ogryn - Reaper: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores del Ogryn - Reaper: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Ogryna - Reapera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Ogryn - Reaper são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Огрина - Жнеца: только значок, отмеченный значок или отключено.",
+        fr = "Choisissez comment les marqueurs des Ogryns - Reapers sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Ogryn - Reaper auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare sul radar i marcatori dell'Ogryn - Reaper: solo icona, icona contrassegnata o disattivato.",
+        es = "Elige cómo se muestran en el radar los marcadores del Ogryn - Reaper: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki Ogryna - Reapera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Ogryn - Reaper são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Огрина - Жнеца: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でOgryn - Reaperのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 오그린 - 리퍼 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Ogryn - Reaper 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -4940,20 +4882,13 @@ return {
     },
     show_enemy_renegade_grenadier_tooltip = {
         en = "Choose how markers for Scab Bomber are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Bombardiers Scab sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Scab-Bomber auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare sul radar i marcatori del Bombardiere Scab: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores del Bombardero Scab: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Scab Bombera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Bombardeiro Scab são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Бомбиста-отступника: только значок, отмеченный значок или отключено.",
+        fr = "Choisissez comment les marqueurs des Bombardiers Scab sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Scab-Bomber auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare sul radar i marcatori del Bombardiere Scab: solo icona, icona contrassegnata o disattivato.",
+        es = "Elige cómo se muestran en el radar los marcadores del Bombardero Scab: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki Scab Bombera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Bombardeiro Scab são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Бомбиста-отступника: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でScab Bomberのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 스캡 봄버 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Scab Bomber 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -4961,20 +4896,13 @@ return {
     },
     show_enemy_cultist_grenadier_tooltip = {
         en = "Choose how markers for Dreg Tox Bomber are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Bombardiers toxiques Dreg sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Dreg-Tox-Bomber auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare sul radar i marcatori del Bombardiere tossico Dreg: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores del Bombardero tóxico Dreg: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Dreg Tox Bombera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Bombardeiro Tóxico Dreg são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Токс-бомбиста-отродья: только значок, отмеченный значок или отключено.",
+        fr = "Choisissez comment les marqueurs des Bombardiers toxiques Dreg sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Dreg-Tox-Bomber auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare sul radar i marcatori del Bombardiere tossico Dreg: solo icona, icona contrassegnata o disattivato.",
+        es = "Elige cómo se muestran en el radar los marcadores del Bombardero tóxico Dreg: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki Dreg Tox Bombera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Bombardeiro Tóxico Dreg são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Токс-бомбиста-отродья: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でDreg Tox Bomberのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 드렉 톡스 봄버 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Dreg Tox Bomber 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -4982,20 +4910,13 @@ return {
     },
     show_enemy_renegade_flamer_tooltip = {
         en = "Choose how markers for Scab Flamer are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Flamers Scab sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Scab-Flamer auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare sul radar i marcatori del Piromane Scab: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores del Lanzallamas Scab: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Scab Flamera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Scab Flamer são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Огнеметчика-отступника: только значок, отмеченный значок или отключено.",
+        fr = "Choisissez comment les marqueurs des Flamers Scab sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Scab-Flamer auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare sul radar i marcatori del Piromane Scab: solo icona, icona contrassegnata o disattivato.",
+        es = "Elige cómo se muestran en el radar los marcadores del Lanzallamas Scab: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki Scab Flamera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Scab Flamer são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Огнеметчика-отступника: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でScab Flamerのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 스캡 플레머 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Scab Flamer 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -5003,20 +4924,13 @@ return {
     },
     show_enemy_cultist_flamer_tooltip = {
         en = "Choose how markers for Dreg Tox Flamer are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Flamers toxiques Dreg sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Dreg-Tox-Flamer auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare sul radar i marcatori del Piromane tossico Dreg: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores del Lanzallamas tóxico Dreg: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Dreg Tox Flamera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Dreg Tox Flamer são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Токс-огнеметчика-отродья: только значок, отмеченный значок или отключено.",
+        fr = "Choisissez comment les marqueurs des Flamers toxiques Dreg sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Dreg-Tox-Flamer auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare sul radar i marcatori del Piromane tossico Dreg: solo icona, icona contrassegnata o disattivato.",
+        es = "Elige cómo se muestran en el radar los marcadores del Lanzallamas tóxico Dreg: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki Dreg Tox Flamera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Dreg Tox Flamer são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Токс-огнеметчика-отродья: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でDreg Tox Flamerのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 드렉 톡스 플레머 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Dreg Tox Flamer 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -5024,18 +4938,13 @@ return {
     },
     show_enemy_cultist_mutant_tooltip = {
         en = "Choose how markers for Mutant are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Mutants sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Mutanten auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        fr = "Choisissez comment les marqueurs des Mutants sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Mutanten auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
         it = "Scegli come mostrare sul radar i marcatori del Mutante: solo icona, icona contrassegnata o disattivato.",
         es = "Elige cómo se muestran en el radar los marcadores del Mutante: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Mutanta mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Mutante são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Мутанта: только значок, отмеченный значок или отключено.",
+        pl = "Wybierz, jak znaczniki Mutanta mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Mutante são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Мутанта: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でMutantのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 뮤턴트 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Mutant 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -5043,18 +4952,13 @@ return {
     },
     show_enemy_chaos_poxwalker_bomber_tooltip = {
         en = "Choose how markers for Poxburster are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Poxbursters sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Poxburster auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        fr = "Choisissez comment les marqueurs des Poxbursters sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Poxburster auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
         it = "Scegli come mostrare sul radar i marcatori del Poxburster: solo icona, icona contrassegnata o disattivato.",
         es = "Elige cómo se muestran en el radar los marcadores del Poxburster: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Poxburstera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Poxburster são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Взрывника-чумохода: только значок, отмеченный значок или отключено.",
+        pl = "Wybierz, jak znaczniki Poxburstera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Poxburster são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Взрывника-чумохода: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でPoxbursterのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 폭스버스터 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Poxburster 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -5062,20 +4966,13 @@ return {
     },
     show_enemy_chaos_armored_hound_tooltip = {
         en = "Choose how markers for Armored Pox Hound are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Chiens de la vérole blindés sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Gepanzerte Poxhunde auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare sul radar i marcatori del Segugio del vaiolo corazzato: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores del Sabueso de la Peste blindado: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Opancerzonego Pox Hounda mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Cão Pox Blindado são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Бронированного чумного пса: только значок, отмеченный значок или отключено.",
+        fr = "Choisissez comment les marqueurs des Chiens de la vérole blindés sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Gepanzerte Poxhunde auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare sul radar i marcatori del Segugio del vaiolo corazzato: solo icona, icona contrassegnata o disattivato.",
+        es = "Elige cómo se muestran en el radar los marcadores del Sabueso de la Peste blindado: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki Opancerzonego Pox Hounda mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Cão Pox Blindado são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Бронированного чумного пса: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でArmored Pox Houndのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 장갑 포كس 하운드 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Armored Pox Hound 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -5083,20 +4980,13 @@ return {
     },
     show_enemy_chaos_hound_tooltip = {
         en = "Choose how markers for Pox Hound are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Chiens de la vérole sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Poxhunde auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare sul radar i marcatori del Segugio del vaiolo: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores del Sabueso de la Peste: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Pox Hounda mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Cão Pox são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Чумного пса: только значок, отмеченный значок или отключено.",
+        fr = "Choisissez comment les marqueurs des Chiens de la vérole sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Poxhunde auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare sul radar i marcatori del Segugio del vaiolo: solo icona, icona contrassegnata o disattivato.",
+        es = "Elige cómo se muestran en el radar los marcadores del Sabueso de la Peste: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki Pox Hounda mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Cão Pox são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Чумного пса: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でPox Houndのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 폭스 하운드 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Pox Hound 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -5104,19 +4994,13 @@ return {
     },
     show_enemy_renegade_sniper_tooltip = {
         en = "Choose how markers for Sniper are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Snipers sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Scharfschützen auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        fr = "Choisissez comment les marqueurs des Snipers sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Scharfschützen auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
         it = "Scegli come mostrare sul radar i marcatori del Cecchino: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores del Francotirador: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Snajpera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Sniper são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Снайпера: только значок, отмеченный значок или отключено.",
+        es = "Elige cómo se muestran en el radar los marcadores del Francotirador: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki Snajpera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Sniper são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Снайпера: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でSniperのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 스나이퍼 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Sniper 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -5124,18 +5008,13 @@ return {
     },
     show_enemy_renegade_netgunner_tooltip = {
         en = "Choose how markers for Trapper are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Trappeurs sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Trapper auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        fr = "Choisissez comment les marqueurs des Trappeurs sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Trapper auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
         it = "Scegli come mostrare sul radar i marcatori del Trapper: solo icona, icona contrassegnata o disattivato.",
         es = "Elige cómo se muestran en el radar los marcadores del Trampero: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Trappera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Trapper são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Ловчего: только значок, отмеченный значок или отключено.",
+        pl = "Wybierz, jak znaczniki Trappera mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Trapper são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Ловчего: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でTrapperのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 트래퍼 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Trapper 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -5143,18 +5022,13 @@ return {
     },
     show_enemy_cultist_ritualist_tooltip = {
         en = "Choose how markers for Ritualist are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des Ritualistes sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Ritualisten auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        fr = "Choisissez comment les marqueurs des Ritualistes sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Ritualisten auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
         it = "Scegli come mostrare sul radar i marcatori del Ritualista: solo icona, icona contrassegnata o disattivato.",
         es = "Elige cómo se muestran en el radar los marcadores del Ritualista: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki Ritualisty mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores do Ritualista são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки Ритуалиста: только значок, отмеченный значок или отключено.",
+        pl = "Wybierz, jak znaczniki Ritualisty mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores do Ritualista são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки Ритуалиста: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でRitualistのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 리추얼리스트 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 Ritualist 标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -5203,22 +5077,14 @@ return {
         ["zh-tw"] = "在雷達上顯示玩家標記和標點。",
     },
     show_player_tag_elevation_tooltip = {
-        en =
-        "Show vertical arrows for player tags and apply the existing elevation hide threshold to them.",
-        fr =
-        "Affiche des flèches verticales pour les tags des joueurs et leur applique le seuil de masquage d’élévation existant.",
-        de =
-        "Zeigt vertikale Pfeile für Spieler-Markierungen an und wendet den bestehenden Höhen-Ausblendungswert darauf an.",
-        it =
-        "Mostra frecce verticali per i tag dei giocatori e applica loro la soglia esistente di nascondimento per elevazione.",
-        es =
-        "Muestra flechas verticales para las marcas de jugador y les aplica el umbral existente de ocultación por elevación.",
-        pl =
-        "Pokazuje pionowe strzałki dla znaczników graczy i stosuje do nich istniejący próg ukrywania według wysokości.",
-        ["pt-br"] =
-        "Mostra setas verticais para marcações de jogadores e aplica a elas o limite existente de ocultação por elevação.",
-        ["ru"] =
-        "Показывает вертикальные стрелки для меток игроков и применяет к ним существующий порог скрытия по высоте.",
+        en = "Show vertical arrows for player tags and apply the existing elevation hide threshold to them.",
+        fr = "Affiche des flèches verticales pour les tags des joueurs et leur applique le seuil de masquage d’élévation existant.",
+        de = "Zeigt vertikale Pfeile für Spieler-Markierungen an und wendet den bestehenden Höhen-Ausblendungswert darauf an.",
+        it = "Mostra frecce verticali per i tag dei giocatori e applica loro la soglia esistente di nascondimento per elevazione.",
+        es = "Muestra flechas verticales para las marcas de jugador y les aplica el umbral existente de ocultación por elevación.",
+        pl = "Pokazuje pionowe strzałki dla znaczników graczy i stosuje do nich istniejący próg ukrywania według wysokości.",
+        ["pt-br"] = "Mostra setas verticais para marcações de jogadores e aplica a elas o limite existente de ocultação por elevação.",
+        ["ru"] = "Показывает вертикальные стрелки для меток игроков и применяет к ним существующий порог скрытия по высоте.",
         ja = "プレイヤータグに上下矢印を表示し、既存の高低差による非表示しきい値を適用します。",
         ko = "플레이어 태그에 수직 화살표를 표시하고 기존 고도 숨김 임계값을 적용합니다.",
         ["zh-cn"] = "为玩家标记显示垂直箭头，并对其应用现有的高度隐藏阈值。",
@@ -5296,17 +5162,13 @@ return {
     },
     nearby_highlight_event_tooltip = {
         en = "Also highlight nearby event items in the world when they are within the highlight distance.",
-        fr =
-        "Met également en surbrillance les objets d'événement proches dans le monde lorsqu'ils sont à portée de surbrillance.",
-        de =
-        "Hebt außerdem nahe Ereignisgegenstände in der Welt hervor, wenn sie sich innerhalb der Hervorhebungsdistanz befinden.",
+        fr = "Met également en surbrillance les objets d'événement proches dans le monde lorsqu'ils sont à portée de surbrillance.",
+        de = "Hebt außerdem nahe Ereignisgegenstände in der Welt hervor, wenn sie sich innerhalb der Hervorhebungsdistanz befinden.",
         it = "Evidenzia anche gli oggetti evento vicini nel mondo quando rientrano nella distanza di evidenziazione.",
-        es =
-        "También resalta los objetos de evento cercanos en el mundo cuando están dentro de la distancia de resaltado.",
+        es = "También resalta los objetos de evento cercanos en el mundo cuando están dentro de la distancia de resaltado.",
         pl = "Dodatkowo podświetla pobliskie przedmioty wydarzeń w świecie, gdy znajdują się w zasięgu podświetlenia.",
         ["pt-br"] = "Também destaca itens de evento próximos no mundo quando eles estão dentro da distância de destaque.",
-        ["ru"] =
-        "Также подсвечивает ближайшие предметы события в мире, когда они находятся в пределах дистанции подсветки.",
+        ["ru"] = "Также подсвечивает ближайшие предметы события в мире, когда они находятся в пределах дистанции подсветки.",
         ja = "ハイライト距離内にある近くのイベントアイテムもワールド上で強調表示します。",
         ko = "강조 표시 거리 내에 있는 근처 이벤트 아이템도 월드에서 함께 강조 표시합니다.",
         ["zh-cn"] = "当附近的事件物品进入高亮距离时，也会在世界中高亮显示它们。",
@@ -5387,12 +5249,10 @@ return {
         fr = "Active la journalisation de débogage supplémentaire et les visuels de secours pour le dépannage.",
         de = "Aktiviert zusätzliche Debug-Protokollierung und Ersatzdarstellungen zur Fehlersuche.",
         it = "Abilita registri di debug aggiuntivi e visuali di fallback per la risoluzione dei problemi.",
-        es =
-        "Activa registros de depuración adicionales y elementos visuales de respaldo para la resolución de problemas.",
+        es = "Activa registros de depuración adicionales y elementos visuales de respaldo para la resolución de problemas.",
         pl = "Włącza dodatkowe logowanie debugowania i zastępcze elementy wizualne do diagnozowania problemów.",
         ["pt-br"] = "Ativa logs de depuração adicionais e elementos visuais alternativos para solução de problemas.",
-        ["ru"] =
-        "Включает дополнительное отладочное логирование и резервные визуальные элементы для поиска неисправностей.",
+        ["ru"] = "Включает дополнительное отладочное логирование и резервные визуальные элементы для поиска неисправностей.",
         ja = "問題切り分けのために追加のデバッグログと代替表示を有効にします。",
         ko = "문제 해결을 위해 추가 디버그 로그와 대체 시각 요소를 활성화합니다.",
         ["zh-cn"] = "启用额外的调试日志和后备视觉效果以便排查问题。",
@@ -5400,20 +5260,13 @@ return {
     },
     show_unknown_pickups_tooltip = {
         en = "Show pickups with unknown or unmapped types. Mainly useful for debugging new content.",
-        fr =
-        "Affiche les ramassages avec des types inconnus ou non mappés. Principalement utile pour déboguer du nouveau contenu.",
-        de =
-        "Zeigt Aufhebbares mit unbekannten oder nicht zugeordneten Typen an. Hauptsächlich nützlich zum Debuggen neuer Inhalte.",
-        it =
-        "Mostra gli oggetti raccoglibili con tipi sconosciuti o non mappati. Utile soprattutto per il debug di nuovi contenuti.",
-        es =
-        "Muestra objetos recogibles con tipos desconocidos o no asignados. Principalmente útil para depurar contenido nuevo.",
-        pl =
-        "Pokazuje podnoszone przedmioty o nieznanych lub nieprzypisanych typach. Przydatne głównie do debugowania nowej zawartości.",
-        ["pt-br"] =
-        "Mostra itens coletáveis com tipos desconhecidos ou não mapeados. Útil principalmente para depurar conteúdo novo.",
-        ["ru"] =
-        "Показывает предметы с неизвестными или несопоставленными типами. В основном полезно для отладки нового контента.",
+        fr = "Affiche les ramassages avec des types inconnus ou non mappés. Principalement utile pour déboguer du nouveau contenu.",
+        de = "Zeigt Aufhebbares mit unbekannten oder nicht zugeordneten Typen an. Hauptsächlich nützlich zum Debuggen neuer Inhalte.",
+        it = "Mostra gli oggetti raccoglibili con tipi sconosciuti o non mappati. Utile soprattutto per il debug di nuovi contenuti.",
+        es = "Muestra objetos recogibles con tipos desconocidos o no asignados. Principalmente útil para depurar contenido nuevo.",
+        pl = "Pokazuje podnoszone przedmioty o nieznanych lub nieprzypisanych typach. Przydatne głównie do debugowania nowej zawartości.",
+        ["pt-br"] = "Mostra itens coletáveis com tipos desconhecidos ou não mapeados. Útil principalmente para depurar conteúdo novo.",
+        ["ru"] = "Показывает предметы с неизвестными или несопоставленными типами. В основном полезно для отладки нового контента.",
         ja = "不明または未割り当ての種類の拾得物を表示します。主に新しいコンテンツのデバッグ用です。",
         ko = "알 수 없거나 매핑되지 않은 유형의 픽업을 표시합니다. 주로 새 콘텐츠 디버깅에 유용합니다.",
         ["zh-cn"] = "显示未知或未映射类型的拾取物，主要用于调试新内容。",
@@ -5421,20 +5274,13 @@ return {
     },
     show_enemy_common_tooltip = {
         en = "Choose how markers for Common enemies are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des ennemis communs sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für gewöhnliche Feinde auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
-        it =
-        "Scegli come mostrare sul radar i marcatori dei nemici comuni: solo icona, icona contrassegnata o disattivato.",
-        es =
-        "Elige cómo se muestran en el radar los marcadores de enemigos comunes: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki zwykłych wrogów mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores de inimigos comuns são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки обычных врагов: только значок, отмеченный значок или отключено.",
+        fr = "Choisissez comment les marqueurs des ennemis communs sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für gewöhnliche Feinde auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        it = "Scegli come mostrare sul radar i marcatori dei nemici comuni: solo icona, icona contrassegnata o disattivato.",
+        es = "Elige cómo se muestran en el radar los marcadores de enemigos comunes: solo icono, icono marcado o desactivado.",
+        pl = "Wybierz, jak znaczniki zwykłych wrogów mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores de inimigos comuns são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки обычных врагов: только значок, отмеченный значок или отключено.",
         ja = "レーダー上で通常の敵マーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 일반 적 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上普通敌人标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -5456,18 +5302,13 @@ return {
     },
     show_enemy_shooter_tooltip = {
         en = "Choose how markers for Shooters are shown on the radar: icon only, marked icon, or disabled.",
-        fr =
-        "Choisissez comment les marqueurs des tireurs sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
-        de =
-        "Legt fest, wie Markierungen für Schützen auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
+        fr = "Choisissez comment les marqueurs des tireurs sont affichés sur le radar : icône seule, icône marquée ou désactivé.",
+        de = "Legt fest, wie Markierungen für Schützen auf dem Radar angezeigt werden: nur Symbol, markiertes Symbol oder deaktiviert.",
         it = "Scegli come mostrare sul radar i marcatori dei tiratori: solo icona, icona contrassegnata o disattivato.",
         es = "Elige cómo se muestran en el radar los marcadores de tiradores: solo icono, icono marcado o desactivado.",
-        pl =
-        "Wybierz, jak znaczniki strzelających wrogów mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
-        ["pt-br"] =
-        "Escolha como os marcadores de atiradores são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
-        ["ru"] =
-        "Выберите, как на радаре будут отображаться метки стрелков: только значок, отмеченный значок или отключено.",
+        pl = "Wybierz, jak znaczniki strzelających wrogów mają być wyświetlane na radarze: tylko ikona, oznaczona ikona lub wyłączone.",
+        ["pt-br"] = "Escolha como os marcadores de atiradores são exibidos no radar: apenas ícone, ícone marcado ou desativado.",
+        ["ru"] = "Выберите, как на радаре будут отображаться метки стрелков: только значок, отмеченный значок или отключено.",
         ja = "レーダー上でシューターのマーカーをどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 사수 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上射手标记的显示方式: 仅图标、已标记图标或禁用。",
@@ -5516,30 +5357,21 @@ return {
         ["zh-tw"] = "僅顯示已標記的物品",
     },
     show_only_tagged_enemies_tooltip = {
-        en =
-        "Only show enemy radar markers while the enemy has an active in-game tag. Tagged enemies also ignore the radar range limit while tagged. Existing enemy visibility settings still apply.",
-        fr =
-        "Affiche les marqueurs radar des ennemis uniquement lorsqu'un ennemi a un marquage actif en jeu. Les ennemis marqués ignorent également la limite de portée du radar tant qu'ils sont marqués. Les paramètres de visibilité des ennemis existants s'appliquent toujours.",
-        de =
-        "Zeigt Radar-Markierungen für Gegner nur an, solange der Gegner im Spiel aktiv markiert ist. Markierte Gegner ignorieren während der Markierung außerdem die Radar-Reichweitenbegrenzung. Bereits vorhandene Sichtbarkeitseinstellungen für Gegner gelten weiterhin.",
-        it =
-        "Mostra gli indicatori radar dei nemici solo quando il nemico ha un contrassegno attivo nel gioco. I nemici contrassegnati ignorano anche il limite di portata del radar finché restano contrassegnati. Le impostazioni di visibilità dei nemici già esistenti continuano comunque ad applicarsi.",
-        es =
-        "Muestra los marcadores de radar de enemigos solo mientras el enemigo tenga una marca activa en el juego. Los enemigos marcados también ignoran el límite de alcance del radar mientras estén marcados. Los ajustes de visibilidad de enemigos existentes siguen aplicándose.",
-        pl =
-        "Pokazuje znaczniki radarowe wrogów tylko wtedy, gdy wróg ma aktywne oznaczenie w grze. Oznaczeni wrogowie ignorują także limit zasięgu radaru, dopóki są oznaczeni. Dotychczasowe ustawienia widoczności wrogów nadal mają zastosowanie.",
-        ["pt-br"] =
-        "Mostra os marcadores de radar dos inimigos apenas enquanto o inimigo tiver uma marcação ativa no jogo. Inimigos marcados também ignoram o limite de alcance do radar enquanto estiverem marcados. As configurações de visibilidade de inimigos existentes continuam valendo.",
-        ["ru"] =
-        "Показывает отметки врагов на радаре только пока на враге есть активная метка в игре. Отмеченные враги также игнорируют ограничение дальности радара, пока метка активна. Существующие настройки видимости врагов продолжают применяться.",
+        en = "Only show enemy radar markers while the enemy has an active in-game tag. Tagged enemies also ignore the radar range limit while tagged. Existing enemy visibility settings still apply.",
+        fr = "Affiche les marqueurs radar des ennemis uniquement lorsqu'un ennemi a un marquage actif en jeu. Les ennemis marqués ignorent également la limite de portée du radar tant qu'ils sont marqués. Les paramètres de visibilité des ennemis existants s'appliquent toujours.",
+        de = "Zeigt Radar-Markierungen für Gegner nur an, solange der Gegner im Spiel aktiv markiert ist. Markierte Gegner ignorieren während der Markierung außerdem die Radar-Reichweitenbegrenzung. Bereits vorhandene Sichtbarkeitseinstellungen für Gegner gelten weiterhin.",
+        it = "Mostra gli indicatori radar dei nemici solo quando il nemico ha un contrassegno attivo nel gioco. I nemici contrassegnati ignorano anche il limite di portata del radar finché restano contrassegnati. Le impostazioni di visibilità dei nemici già esistenti continuano comunque ad applicarsi.",
+        es = "Muestra los marcadores de radar de enemigos solo mientras el enemigo tenga una marca activa en el juego. Los enemigos marcados también ignoran el límite de alcance del radar mientras estén marcados. Los ajustes de visibilidad de enemigos existentes siguen aplicándose.",
+        pl = "Pokazuje znaczniki radarowe wrogów tylko wtedy, gdy wróg ma aktywne oznaczenie w grze. Oznaczeni wrogowie ignorują także limit zasięgu radaru, dopóki są oznaczeni. Dotychczasowe ustawienia widoczności wrogów nadal mają zastosowanie.",
+        ["pt-br"] = "Mostra os marcadores de radar dos inimigos apenas enquanto o inimigo tiver uma marcação ativa no jogo. Inimigos marcados também ignoram o limite de alcance do radar enquanto estiverem marcados. As configurações de visibilidade de inimigos existentes continuam valendo.",
+        ["ru"] = "Показывает отметки врагов на радаре только пока на враге есть активная метка в игре. Отмеченные враги также игнорируют ограничение дальности радара, пока метка активна. Существующие настройки видимости врагов продолжают применяться.",
         ja = "敵にゲーム内で有効なタグが付いている間だけ、敵のレーダーマーカーを表示します。タグ付きの敵は、タグが付いている間はレーダーの距離制限も無視します。既存の敵表示設定は引き続き適用されます。",
         ko = "적에게 게임 내 활성 태그가 있을 때만 적 레이더 마커를 표시합니다. 태그된 적은 태그가 유지되는 동안 레이더 거리 제한도 무시합니다. 기존 적 표시 설정은 그대로 적용됩니다.",
         ["zh-cn"] = "仅当敌人在游戏中具有有效标记时才显示敌人雷达标记。被标记的敌人在被标记期间也会无视雷达距离限制。现有的敌人可见性设置仍然适用。",
         ["zh-tw"] = "僅當敵人在遊戲中具有有效標記時才顯示敵人雷達標記。被標記的敵人在被標記期間也會無視雷達距離限制。現有的敵人可見性設定仍然適用。",
     },
     show_ability_marked_enemies_tooltip = {
-        en =
-            "Also include enemies while they have a supported ability or smart-tag outline such as \"" ..
+        en = "Also include enemies while they have a supported ability or smart-tag outline such as \"" ..
             Localize("loc_talent_psyker_marked_enemies_passive") ..
             "\", \"" ..
             Localize("loc_talent_broker_ability_focus_improved") ..
@@ -5554,8 +5386,7 @@ return {
             "\" or \"" ..
             Localize("loc_ability_ogryn_taunt_shout") ..
             "\". Their brackets use the highest-priority supported outline color when one is available, they ignore the radar range limit, and \"Tagged enemies only\" will not hide them.",
-        fr =
-            "Inclut également les ennemis tant qu’ils ont un contour pris en charge provenant d’une capacité ou d’un smart tag, comme \"" ..
+        fr = "Inclut également les ennemis tant qu’ils ont un contour pris en charge provenant d’une capacité ou d’un smart tag, comme \"" ..
             Localize("loc_talent_psyker_marked_enemies_passive") ..
             "\", \"" ..
             Localize("loc_talent_broker_ability_focus_improved") ..
@@ -5570,8 +5401,7 @@ return {
             "\" ou \"" ..
             Localize("loc_ability_ogryn_taunt_shout") ..
             "\". Leurs crochets utilisent la couleur de contour prise en charge ayant la priorité la plus élevée lorsqu’elle est disponible, ils ignorent la limite de portée du radar, et \"Ennemis marqués uniquement\" ne les masquera pas.",
-        de =
-            "Berücksichtigt Gegner auch dann, wenn sie eine unterstützte Umrandung durch eine Fähigkeit oder einen Smart-Tag haben, wie zum Beispiel \"" ..
+        de = "Berücksichtigt Gegner auch dann, wenn sie eine unterstützte Umrandung durch eine Fähigkeit oder einen Smart-Tag haben, wie zum Beispiel \"" ..
             Localize("loc_talent_psyker_marked_enemies_passive") ..
             "\", \"" ..
             Localize("loc_talent_broker_ability_focus_improved") ..
@@ -5586,8 +5416,7 @@ return {
             "\" oder \"" ..
             Localize("loc_ability_ogryn_taunt_shout") ..
             "\". Ihre Klammern verwenden die unterstützte Umrandungsfarbe mit der höchsten Priorität, sofern verfügbar, sie ignorieren die Radarreichweitenbegrenzung, und \"Nur markierte Gegner\" blendet sie nicht aus.",
-        it =
-            "Include anche i nemici finché hanno un contorno supportato da abilità o smart tag, come \"" ..
+        it = "Include anche i nemici finché hanno un contorno supportato da abilità o smart tag, come \"" ..
             Localize("loc_talent_psyker_marked_enemies_passive") ..
             "\", \"" ..
             Localize("loc_talent_broker_ability_focus_improved") ..
@@ -5602,8 +5431,7 @@ return {
             "\" o \"" ..
             Localize("loc_ability_ogryn_taunt_shout") ..
             "\". Le loro parentesi usano il colore del contorno supportato con la priorità più alta quando disponibile, ignorano il limite di portata del radar e \"Solo nemici segnalati\" non li nasconderà.",
-        es =
-            "También incluye a los enemigos mientras tengan un contorno compatible de habilidad o smart tag, como \"" ..
+        es = "También incluye a los enemigos mientras tengan un contorno compatible de habilidad o smart tag, como \"" ..
             Localize("loc_talent_psyker_marked_enemies_passive") ..
             "\", \"" ..
             Localize("loc_talent_broker_ability_focus_improved") ..
@@ -5618,8 +5446,7 @@ return {
             "\" o \"" ..
             Localize("loc_ability_ogryn_taunt_shout") ..
             "\". Sus corchetes usan el color de contorno compatible de mayor prioridad cuando está disponible, ignoran el límite de alcance del radar y \"Solo enemigos marcados\" no los ocultará.",
-        pl =
-            "Uwzględnia także wrogów, gdy mają obsługiwaną obwódkę zdolności lub inteligentnego oznaczenia, taką jak \"" ..
+        pl = "Uwzględnia także wrogów, gdy mają obsługiwaną obwódkę zdolności lub inteligentnego oznaczenia, taką jak \"" ..
             Localize("loc_talent_psyker_marked_enemies_passive") ..
             "\", \"" ..
             Localize("loc_talent_broker_ability_focus_improved") ..
@@ -5634,8 +5461,7 @@ return {
             "\" lub \"" ..
             Localize("loc_ability_ogryn_taunt_shout") ..
             "\". Ich nawiasy używają obsługiwanego koloru obwódki o najwyższym priorytecie, jeśli jest dostępny, ignorują limit zasięgu radaru, a opcja \"Tylko oznaczeni wrogowie\" ich nie ukryje.",
-        ["pt-br"] =
-            "Também inclui inimigos enquanto eles tiverem um contorno compatível de habilidade ou marcação inteligente, como \"" ..
+        ["pt-br"] = "Também inclui inimigos enquanto eles tiverem um contorno compatível de habilidade ou marcação inteligente, como \"" ..
             Localize("loc_talent_psyker_marked_enemies_passive") ..
             "\", \"" ..
             Localize("loc_talent_broker_ability_focus_improved") ..
@@ -5650,8 +5476,7 @@ return {
             "\" ou \"" ..
             Localize("loc_ability_ogryn_taunt_shout") ..
             "\". Os colchetes deles usam a cor de contorno compatível de maior prioridade quando disponível, ignoram o limite de alcance do radar, e \"Somente inimigos marcados\" não vai ocultá-los.",
-        ["ru"] =
-            "Также включает врагов, пока на них есть поддерживаемая обводка способности или умной метки, например \"" ..
+        ["ru"] = "Также включает врагов, пока на них есть поддерживаемая обводка способности или умной метки, например \"" ..
             Localize("loc_talent_psyker_marked_enemies_passive") ..
             "\", \"" ..
             Localize("loc_talent_broker_ability_focus_improved") ..
@@ -5666,8 +5491,7 @@ return {
             "\" или \"" ..
             Localize("loc_ability_ogryn_taunt_shout") ..
             "\". Их скобки используют поддерживаемый цвет обводки с наивысшим приоритетом, если он доступен, они игнорируют ограничение дальности радара, и опция \"Только отмеченные враги\" не будет их скрывать.",
-        ja =
-            "また、\"" ..
+        ja = "また、\"" ..
             Localize("loc_talent_psyker_marked_enemies_passive") ..
             "\", \"" ..
             Localize("loc_talent_broker_ability_focus_improved") ..
@@ -5682,8 +5506,7 @@ return {
             "\" や \"" ..
             Localize("loc_ability_ogryn_taunt_shout") ..
             "\" のような、サポートされているアビリティまたはスマートタグのアウトラインが付いている敵も対象に含めます。ブラケットには利用可能な場合、優先度が最も高いサポート済みアウトライン色が使われ、レーダー範囲制限を無視し、\"タグ付けされた敵のみ\" でも非表示になりません。",
-        ko =
-            "\"" ..
+        ko = "\"" ..
             Localize("loc_talent_psyker_marked_enemies_passive") ..
             "\", \"" ..
             Localize("loc_talent_broker_ability_focus_improved") ..
@@ -5698,8 +5521,7 @@ return {
             "\" 또는 \"" ..
             Localize("loc_ability_ogryn_taunt_shout") ..
             "\" 같은 지원되는 능력 또는 스마트 태그 외곽선이 있는 동안의 적도 포함합니다. 해당 괄호 표시는 사용 가능할 때 가장 높은 우선순위의 지원 외곽선 색상을 사용하고, 레이더 거리 제한을 무시하며, \"태그된 적만\" 옵션으로도 숨겨지지 않습니다.",
-        ["zh-cn"] =
-            "敌人在拥有受支持的技能或智能标记描边时也会被包含在内，例如 \"" ..
+        ["zh-cn"] = "敌人在拥有受支持的技能或智能标记描边时也会被包含在内，例如 \"" ..
             Localize("loc_talent_psyker_marked_enemies_passive") ..
             "\", \"" ..
             Localize("loc_talent_broker_ability_focus_improved") ..
@@ -5714,8 +5536,7 @@ return {
             "\" 或 \"" ..
             Localize("loc_ability_ogryn_taunt_shout") ..
             "\"。它们的括号会在可用时使用优先级最高的受支持描边颜色，忽略雷达距离限制，并且“仅显示已标记敌人”也不会隐藏它们。",
-        ["zh-tw"] =
-            "敵人在具有受支援的技能或智慧標記外框時也會被納入顯示，例如 \"" ..
+        ["zh-tw"] = "敵人在具有受支援的技能或智慧標記外框時也會被納入顯示，例如 \"" ..
             Localize("loc_talent_psyker_marked_enemies_passive") ..
             "\", \"" ..
             Localize("loc_talent_broker_ability_focus_improved") ..
@@ -5732,26 +5553,16 @@ return {
             "\"。它們的括號會在可用時使用優先度最高的受支援外框顏色，忽略雷達距離限制，而且「僅顯示已標記敵人」也不會將它們隱藏。",
     },
     show_only_tagged_items_tooltip = {
-        en =
-        "Only show item radar markers while the item has an active in-game tag. Tagged items also ignore the radar range limit while tagged. This affects pickups, materials, crates, deployables, luggables, and similar item markers, but not players or expedition objective locations.",
-        fr =
-        "Affiche les marqueurs radar des objets uniquement lorsqu'un objet a un marquage actif en jeu. Les objets marqués ignorent également la limite de portée du radar tant qu'ils sont marqués. Cela affecte les objets à ramasser, matériaux, caisses, objets déployables, objets transportables et marqueurs d'objets similaires, mais pas les joueurs ni les emplacements d'objectifs d'expédition.",
-        de =
-        "Zeigt Radar-Markierungen für Gegenstände nur an, solange der Gegenstand im Spiel aktiv markiert ist. Markierte Gegenstände ignorieren während der Markierung außerdem die Radar-Reichweitenbegrenzung. Das betrifft Aufhebbares, Materialien, Kisten, platzierbare Gegenstände, tragbare Objekte und ähnliche Gegenstandsmarkierungen, aber nicht Spieler oder Orte von Expeditionszielen.",
-        it =
-        "Mostra gli indicatori radar degli oggetti solo quando l'oggetto ha un contrassegno attivo nel gioco. Gli oggetti contrassegnati ignorano anche il limite di portata del radar finché restano contrassegnati. Questo influisce su raccolte, materiali, casse, oggetti schierabili, trasportabili e indicatori di oggetti simili, ma non sui giocatori o sulle posizioni degli obiettivi di spedizione.",
-        es =
-        "Muestra los marcadores de radar de objetos solo mientras el objeto tenga una marca activa en el juego. Los objetos marcados también ignoran el límite de alcance del radar mientras estén marcados. Esto afecta a recogibles, materiales, cajas, desplegables, objetos transportables y marcadores de objetos similares, pero no a los jugadores ni a las ubicaciones de objetivos de expedición.",
-        pl =
-        "Pokazuje znaczniki radarowe przedmiotów tylko wtedy, gdy przedmiot ma aktywne oznaczenie w grze. Oznaczone przedmioty również ignorują limit zasięgu radaru, dopóki są oznaczone. Dotyczy to podnoszonych przedmiotów, materiałów, skrzyń, obiektów rozstawianych, przenoszonych i podobnych znaczników przedmiotów, ale nie graczy ani lokalizacji celów ekspedycji.",
-        ["pt-br"] =
-        "Mostra os marcadores de radar dos itens apenas enquanto o item tiver uma marcação ativa no jogo. Itens marcados também ignoram o limite de alcance do radar enquanto estiverem marcados. Isso afeta itens coletáveis, materiais, caixas, itens posicionáveis, carregáveis e marcadores semelhantes, mas não jogadores nem locais de objetivos da expedição.",
-        ["ru"] =
-        "Показывает отметки предметов на радаре только пока на предмете есть активная метка в игре. Отмеченные предметы также игнорируют ограничение дальности радара, пока метка активна. Это влияет на подбираемые предметы, материалы, ящики, размещаемые объекты, переносимые объекты и похожие отметки предметов, но не на игроков и не на местоположения целей экспедиции.",
-        ja =
-        "アイテムにゲーム内で有効なタグが付いている間だけ、アイテムのレーダーマーカーを表示します。タグ付きのアイテムは、タグが付いている間はレーダーの距離制限も無視します。これは拾得物、素材、クレート、設置物、運搬物などの類似アイテムマーカーに適用されますが、プレイヤーや遠征目標の位置には適用されません。",
-        ko =
-        "아이템에 게임 내 활성 태그가 있을 때만 아이템 레이더 마커를 표시합니다. 태그된 아이템은 태그가 유지되는 동안 레이더 거리 제한도 무시합니다. 이는 픽업 아이템, 재료, 상자, 설치물, 운반물 및 유사한 아이템 마커에 적용되지만, 플레이어나 원정 목표 위치에는 적용되지 않습니다.",
+        en = "Only show item radar markers while the item has an active in-game tag. Tagged items also ignore the radar range limit while tagged. This affects pickups, materials, crates, deployables, luggables, and similar item markers, but not players or expedition objective locations.",
+        fr = "Affiche les marqueurs radar des objets uniquement lorsqu'un objet a un marquage actif en jeu. Les objets marqués ignorent également la limite de portée du radar tant qu'ils sont marqués. Cela affecte les objets à ramasser, matériaux, caisses, objets déployables, objets transportables et marqueurs d'objets similaires, mais pas les joueurs ni les emplacements d'objectifs d'expédition.",
+        de = "Zeigt Radar-Markierungen für Gegenstände nur an, solange der Gegenstand im Spiel aktiv markiert ist. Markierte Gegenstände ignorieren während der Markierung außerdem die Radar-Reichweitenbegrenzung. Das betrifft Aufhebbares, Materialien, Kisten, platzierbare Gegenstände, tragbare Objekte und ähnliche Gegenstandsmarkierungen, aber nicht Spieler oder Orte von Expeditionszielen.",
+        it = "Mostra gli indicatori radar degli oggetti solo quando l'oggetto ha un contrassegno attivo nel gioco. Gli oggetti contrassegnati ignorano anche il limite di portata del radar finché restano contrassegnati. Questo influisce su raccolte, materiali, casse, oggetti schierabili, trasportabili e indicatori di oggetti simili, ma non sui giocatori o sulle posizioni degli obiettivi di spedizione.",
+        es = "Muestra los marcadores de radar de objetos solo mientras el objeto tenga una marca activa en el juego. Los objetos marcados también ignoran el límite de alcance del radar mientras estén marcados. Esto afecta a recogibles, materiales, cajas, desplegables, objetos transportables y marcadores de objetos similares, pero no a los jugadores ni a las ubicaciones de objetivos de expedición.",
+        pl = "Pokazuje znaczniki radarowe przedmiotów tylko wtedy, gdy przedmiot ma aktywne oznaczenie w grze. Oznaczone przedmioty również ignorują limit zasięgu radaru, dopóki są oznaczone. Dotyczy to podnoszonych przedmiotów, materiałów, skrzyń, obiektów rozstawianych, przenoszonych i podobnych znaczników przedmiotów, ale nie graczy ani lokalizacji celów ekspedycji.",
+        ["pt-br"] = "Mostra os marcadores de radar dos itens apenas enquanto o item tiver uma marcação ativa no jogo. Itens marcados também ignoram o limite de alcance do radar enquanto estiverem marcados. Isso afeta itens coletáveis, materiais, caixas, itens posicionáveis, carregáveis e marcadores semelhantes, mas não jogadores nem locais de objetivos da expedição.",
+        ["ru"] = "Показывает отметки предметов на радаре только пока на предмете есть активная метка в игре. Отмеченные предметы также игнорируют ограничение дальности радара, пока метка активна. Это влияет на подбираемые предметы, материалы, ящики, размещаемые объекты, переносимые объекты и похожие отметки предметов, но не на игроков и не на местоположения целей экспедиции.",
+        ja = "アイテムにゲーム内で有効なタグが付いている間だけ、アイテムのレーダーマーカーを表示します。タグ付きのアイテムは、タグが付いている間はレーダーの距離制限も無視します。これは拾得物、素材、クレート、設置物、運搬物などの類似アイテムマーカーに適用されますが、プレイヤーや遠征目標の位置には適用されません。",
+        ko = "아이템에 게임 내 활성 태그가 있을 때만 아이템 레이더 마커를 표시합니다. 태그된 아이템은 태그가 유지되는 동안 레이더 거리 제한도 무시합니다. 이는 픽업 아이템, 재료, 상자, 설치물, 운반물 및 유사한 아이템 마커에 적용되지만, 플레이어나 원정 목표 위치에는 적용되지 않습니다.",
         ["zh-cn"] = "仅当物品在游戏中具有有效标记时才显示物品雷达标记。被标记的物品在被标记期间也会无视雷达距离限制。这会影响拾取物、材料、箱子、可部署物、搬运物以及类似的物品标记，但不影响玩家或远征目标位置。",
         ["zh-tw"] = "僅當物品在遊戲中具有有效標記時才顯示物品雷達標記。被標記的物品在被標記期間也會無視雷達距離限制。這會影響拾取物、材料、箱子、可部署物、搬運物以及類似的物品標記，但不影響玩家或遠征目標位置。",
     }

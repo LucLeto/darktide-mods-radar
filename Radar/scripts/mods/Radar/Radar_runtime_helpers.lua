@@ -522,8 +522,7 @@ return function(env)
 
         if (ability_type == nil or ability_type == "combat_ability")
             and ability_extension.get_current_ability_name then
-            local ok_current_ability_name, current_ability_name =
-                pcall(ability_extension.get_current_ability_name, ability_extension)
+            local ok_current_ability_name, current_ability_name = pcall(ability_extension.get_current_ability_name, ability_extension)
 
             if ok_current_ability_name
                 and current_ability_name ~= nil
