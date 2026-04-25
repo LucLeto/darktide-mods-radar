@@ -2551,7 +2551,7 @@ return function(env)
     function mod:get_radar_style()
         local value = tostring(self:get("radar_style") or "square")
 
-        if value ~= "circle" then
+        if value ~= "circle" and value ~= "auspex" then
             value = "square"
         end
 
@@ -2571,7 +2571,8 @@ return function(env)
     function mod:get_radar_guides()
         local value = tostring(self:get("radar_guides") or "crosshair")
 
-        if value ~= "crosshair" and value ~= "view_guides" and value ~= "range_rings" and value ~= "off" then
+        if value ~= "crosshair" and value ~= "view_guides" and value ~= "range_rings"
+            and value ~= "auspex_background" and value ~= "off" then
             value = "crosshair"
         end
 

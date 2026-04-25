@@ -15,7 +15,7 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 ## Feature Overview
 
 - Tracks nearby pickups, materials, mission items, deployables, environment interactables, expedition POIs, teammates, player smart tags, tagged targets, supported ability-outlined enemies, and high-priority enemies on a single camera-oriented radar.
-- Supports **Square**, **Circle**, and **Auspex** radar styles. Square and Circle use configurable **outline** and **guide** options, while **Auspex** adds an optional animated sweep.
+- Supports **Square**, **Circle**, and **Auspex** radar styles. Square and Circle use configurable **outline** and **guide** options, including the Auspex guides, while **Auspex** adds an optional animated sweep.
 - Lets you tune **radar size**, **range**, **background opacity**, **maximum marker count**, **nearby highlight range**, supported vertical filtering behavior, and the dedicated nearby-highlight presentation settings.
 - Supports per-category **Icon size (%)** sliders across item, player, enemy, event, and debug marker groups, plus dedicated enemy sub-category scaling.
 - Supports separate display controls for **bosses**, **enemy groups**, **teammates**, **player smart tags**, **tagged-only enemy and item filtering**, supported **ability outlines**, and the local **player center dot**.
@@ -80,7 +80,7 @@ The vertical item arrows add a small **up** or **down** overlay to supported ite
 
 **Square** and **Circle** radar styles support the same outline and guide options, and the frame rendering is tuned so crosshairs fit the active frame, view guides reach the border cleanly, circle range rings stay thin and solid, circle outlines remain visually continuous, and square dotted outlines render as proper dots.
 
-The **Auspex** style is a separate presentation layer rather than another outline or guide combination. It uses its own frame treatment and can optionally render with an animated sweep.
+The **Auspex** style still provides its own frame treatment, and the same scanner background can also be used as an **Auspex background** guide on Square or Circle radar styles. The animated sweep toggle applies to both.
 
 ### Square radar variants
 | Guide | Solid | Dotted | Off |
@@ -158,9 +158,9 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Scale icons with radar size | Keeps marker size fixed or scales it with the radar. The final combined icon size is capped at **4.0x**. |
 | Radar style | **Square**, **Circle**, or **Auspex**. |
 | Radar outline | **Solid**, **Dotted**, or **Off**. Only used by the **Square** and **Circle** radar styles. |
-| Radar guides | **Crosshair**, **View guides**, **Range rings**, or **Off**. Only used by the **Square** and **Circle** radar styles. |
+| Radar guides | **Crosshair**, **View guides**, **Range rings**, **Auspex**, or **Off**. Only used by the **Square** and **Circle** radar styles. |
 | Radar background opacity | Adjustable from **0** to **255**. Controls the alpha of the radar background without changing marker readability. |
-| Animated radar sweep | Enables or disables the animated sweep used by the **Auspex** radar style. |
+| Animated radar sweep | Enables or disables the animated sweep used by the **Auspex** radar style and **Auspex** guides. |
 | Nearby highlight range (m) | Adjustable from **5 m** to **20 m**. Controls how close supported items must be before their screen-space bracket highlights appear. |
 | Highlight thickness | Adjusts the line thickness used by nearby screen-space highlight brackets. |
 | Highlight opacity | Adjusts the opacity of nearby screen-space highlight brackets. |

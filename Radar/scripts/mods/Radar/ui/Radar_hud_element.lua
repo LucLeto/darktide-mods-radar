@@ -17,7 +17,6 @@ local tonumber = tonumber
 local tostring = tostring
 local type = type
 local math_abs = math.abs
-local math_atan = math.atan
 local math_clamp = math.clamp
 local math_cos = math.cos
 local math_floor = math.floor
@@ -27,12 +26,8 @@ local math_pi = math.pi
 local math_rad = math.rad
 local math_sin = math.sin
 local math_sqrt = math.sqrt
-local math_tan = math.tan
 local math_huge = math.huge
 local string_format = string.format
-local string_len = string.len
-local string_lower = string.lower
-local string_sub = string.sub
 local table_clear = table.clear or function(t)
     for k in pairs(t) do
         t[k] = nil
@@ -1122,7 +1117,7 @@ local function _safe_player_horizontal_fov()
         aspect_ratio = RESOLUTION_LOOKUP.width / RESOLUTION_LOOKUP.height
     end
 
-    return 2 * math_atan(math_tan(vertical_fov * 0.5) * aspect_ratio)
+    return 2 * math.atan(math.tan(vertical_fov * 0.5) * aspect_ratio)
 end
 
 local function _view_cone_half_angle()
@@ -1169,10 +1164,33 @@ local function _view_cone_endpoint_square(center_x, center_y, left, top, right, 
     return center_x + dx * best_t, center_y + dy * best_t
 end
 
-local function _draw_radar_guides(ui_renderer, x, y, z, size, is_circle)
+local _draw_auspex_material_layers = nil
+
+local function _draw_radar_guides(self, ui_renderer, x, y, z, size, is_circle, camera_rotation)
     local guide_style = mod.get_radar_guides and mod:get_radar_guides() or "crosshair"
 
     if guide_style == "off" then
+        return
+    end
+
+    local guide_color = _color(90, 255, 255, 255)
+
+    if guide_style == "auspex_background" then
+        local outline_style = mod.get_radar_outline and mod:get_radar_outline() or "solid"
+        local material_inset = outline_style ~= "off" and 3 or 0
+
+        _draw_auspex_material_layers(self, ui_renderer, x, y, z - 1, size, camera_rotation, {
+            background_inset = material_inset,
+            sweep_inset = material_inset,
+            background_z_offset = 1,
+            draw_noise = false,
+            draw_scan_noise = false,
+            background_color = RADAR_OUTLINE_WIDGET_COLOR,
+            sweep_color = RADAR_OUTLINE_WIDGET_COLOR,
+            --background_color = _widget_color(130, 255, 255, 255),
+            --sweep_color = _widget_color(130, 255, 255, 255),
+        })
+
         return
     end
 
@@ -1185,8 +1203,6 @@ local function _draw_radar_guides(ui_renderer, x, y, z, size, is_circle)
         center_y = y + size / 2
         radius = size / 2
     end
-
-    local guide_color = _color(90, 255, 255, 255)
 
     if guide_style == "crosshair" then
         if is_circle then
@@ -1304,82 +1320,106 @@ local function _apply_frame_layer_style(style, x, y, z, size, color)
     style.color = color or WHITE_WIDGET_COLOR
 end
 
-local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera_rotation)
-    local frame_widget = self._frame_widget
+_draw_auspex_material_layers = function(self, ui_renderer, x, y, z, size, camera_rotation, options)
+    local frame_widget = self and self._frame_widget
     if not frame_widget then
         return
     end
 
-    local fill_alpha = mod.get_background_opacity and mod:get_background_opacity() or 90
-    local animated_sweep_enabled = mod:get("auspex_animated_sweep") ~= false
-    local outline_style = mod.get_radar_outline and mod:get_radar_outline() or "solid"
-    local camera_yaw = _safe_yaw(camera_rotation)
-    local fill_color = _color(fill_alpha, 0, 0, 0)
-    local background_inset = outline_style ~= "off" and 5 or 0
-    local background_size = math_max(1, size - background_inset * 2)
-    local background_x = x + background_inset
-    local background_y = y + background_inset
+    options = options or {}
 
-    _draw_square_fill_soft(ui_renderer, x, y, z - 1, size, fill_color)
+    local animated_sweep_enabled = mod:get("auspex_animated_sweep") ~= false
+    local camera_yaw = _safe_yaw(camera_rotation)
+    local rotation_angle = camera_yaw and -camera_yaw or 0
+    local background_inset = options.background_inset or 0
+    local noise_inset = options.noise_inset or 0
+    local scan_noise_inset = options.scan_noise_inset or noise_inset
+    local sweep_inset = options.sweep_inset or background_inset
+    local background_size = math_max(1, size - background_inset * 2)
+    local noise_size = math_max(1, size - noise_inset * 2)
+    local scan_noise_size = math_max(1, size - scan_noise_inset * 2)
+    local sweep_size = math_max(1, size - sweep_inset * 2)
+    local draw_noise = options.draw_noise ~= false
+    local draw_scan_noise = options.draw_scan_noise ~= false
+    local apply_rotation = function(style, angle)
+        if not style then
+            return
+        end
+
+        local layer_size = style.size
+        local layer_pivot = style.pivot
+
+        if not layer_pivot then
+            layer_pivot = { 0, 0 }
+            style.pivot = layer_pivot
+        end
+
+        if layer_size then
+            layer_pivot[1] = (layer_size[1] or 0) * 0.5
+            layer_pivot[2] = (layer_size[2] or 0) * 0.5
+        end
+
+        style.angle = angle or 0
+    end
 
     frame_widget.content.background_material = AUSPEX_BACKGROUND_MATERIAL
-    frame_widget.content.noise_material = AUSPEX_BACKGROUND_NOISE_MATERIAL
-    frame_widget.content.scan_noise_material = AUSPEX_SCAN_NOISE_MATERIAL
+    frame_widget.content.noise_material = draw_noise and AUSPEX_BACKGROUND_NOISE_MATERIAL or nil
+    frame_widget.content.scan_noise_material = draw_scan_noise and AUSPEX_SCAN_NOISE_MATERIAL or nil
     frame_widget.content.sweep_material = animated_sweep_enabled and AUSPEX_SWEEP_MATERIAL or nil
 
     _apply_frame_layer_style(
         frame_widget.style.background,
-        background_x,
-        background_y,
-        z,
+        x + background_inset,
+        y + background_inset,
+        z + (options.background_z_offset or 0),
         background_size,
-        AUSPEX_BACKGROUND_WIDGET_COLOR
+        options.background_color or AUSPEX_BACKGROUND_WIDGET_COLOR
     )
-    do
-        local background_style = frame_widget.style.background
-        local background_size = background_style and background_style.size
-        local background_pivot = background_style and background_style.pivot
-
-        if background_style and not background_pivot then
-            background_pivot = { 0, 0 }
-            background_style.pivot = background_pivot
-        end
-
-        if background_pivot and background_size then
-            background_pivot[1] = (background_size[1] or 0) * 0.5
-            background_pivot[2] = (background_size[2] or 0) * 0.5
-        end
-
-        if background_style then
-            background_style.angle = camera_yaw and -camera_yaw or 0
-        end
+    apply_rotation(frame_widget.style.background, rotation_angle)
+    if draw_noise then
+        _apply_frame_layer_style(
+            frame_widget.style.noise,
+            x + noise_inset,
+            y + noise_inset,
+            z + 1,
+            noise_size,
+            options.noise_color or AUSPEX_BACKGROUND_NOISE_WIDGET_COLOR
+        )
+    end
+    if draw_scan_noise then
+        _apply_frame_layer_style(
+            frame_widget.style.scan_noise,
+            x + scan_noise_inset,
+            y + scan_noise_inset,
+            z + 2,
+            scan_noise_size,
+            options.scan_noise_color or AUSPEX_SCAN_NOISE_WIDGET_COLOR
+        )
     end
     _apply_frame_layer_style(
-        frame_widget.style.noise,
-        x,
-        y,
-        z + 1,
-        size,
-        AUSPEX_BACKGROUND_NOISE_WIDGET_COLOR
-    )
-    _apply_frame_layer_style(
-        frame_widget.style.scan_noise,
-        x,
-        y,
-        z + 2,
-        size,
-        AUSPEX_SCAN_NOISE_WIDGET_COLOR
-    )
-    _apply_frame_layer_style(
         frame_widget.style.sweep,
-        background_x,
-        background_y,
+        x + sweep_inset,
+        y + sweep_inset,
         z + 3,
-        background_size,
-        animated_sweep_enabled and AUSPEX_SWEEP_WIDGET_COLOR or WHITE_WIDGET_COLOR
+        sweep_size,
+        animated_sweep_enabled and (options.sweep_color or AUSPEX_SWEEP_WIDGET_COLOR) or WHITE_WIDGET_COLOR
     )
+    apply_rotation(frame_widget.style.sweep, rotation_angle)
 
     UIWidget.draw(frame_widget, ui_renderer)
+end
+
+local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera_rotation)
+    local fill_alpha = mod.get_background_opacity and mod:get_background_opacity() or 90
+    local outline_style = mod.get_radar_outline and mod:get_radar_outline() or "solid"
+    local fill_color = _color(fill_alpha, 0, 0, 0)
+    local background_inset = outline_style ~= "off" and 5 or 0
+
+    _draw_square_fill_soft(ui_renderer, x, y, z - 1, size, fill_color)
+    _draw_auspex_material_layers(self, ui_renderer, x, y, z, size, camera_rotation, {
+        background_inset = background_inset,
+        sweep_inset = background_inset,
+    })
 
     if outline_style == "solid" then
         local thickness = math_max(1, math_floor(size * 0.012 + 0.5))
@@ -1420,7 +1460,7 @@ local function _draw_radar_frame(self, ui_renderer, x, y, z, size, camera_rotati
         _draw_radar_frame_square(ui_renderer, x, y, z, size, outline_style)
     end
 
-    _draw_radar_guides(ui_renderer, x, y, z + 1, size, is_circle)
+    _draw_radar_guides(self, ui_renderer, x, y, z + 1, size, is_circle, camera_rotation)
 end
 
 local function _has_icon(content)
@@ -1517,10 +1557,12 @@ local function _frame_definition()
             visibility_function = _has_scan_noise_material,
         },
         {
-            pass_type = "texture",
+            pass_type = "rotated_texture",
             value_id = "sweep_material",
             style_id = "sweep",
             style = {
+                angle = 0,
+                pivot = { 0, 0 },
                 hdr = true,
                 vertical_alignment = "top",
                 horizontal_alignment = "left",
@@ -1902,10 +1944,10 @@ local function _has_enemy_prefix(kind)
     end
 
     if type(kind) == "string" then
-        return string_sub(kind, 1, 6) == "enemy_"
+        return string.sub(kind, 1, 6) == "enemy_"
     end
 
-    return string_sub(tostring(kind), 1, 6) == "enemy_"
+    return string.sub(tostring(kind), 1, 6) == "enemy_"
 end
 
 local function _cached_enemy_category_icon_scale(kind, draw_cache)
@@ -2147,7 +2189,7 @@ local function _draw_marker_value_text(ui_renderer, value_text, x, y, z, icon_si
         return
     end
 
-    local digits = string_len(value_text)
+    local digits = string.len(value_text)
 
     if digits <= 0 then
         return
@@ -2237,7 +2279,7 @@ local function _overview_scale_font_size(radar_size)
 end
 
 local function _overview_scale_text_box_size(scale_text, font_size)
-    local length = string_len(scale_text or "")
+    local length = string.len(scale_text or "")
     local width = math_max(font_size + 8, math_floor(font_size * (length * 0.58 + 0.9) + 0.5))
     local height = font_size + 6
 
@@ -3009,7 +3051,7 @@ local function _target_visual(target, draw_cache)
     end
 
     if target_kind == "player_teammate" then
-        local archetype_name = meta and meta.archetype_name and string_lower(tostring(meta.archetype_name)) or nil
+        local archetype_name = meta and meta.archetype_name and string.lower(tostring(meta.archetype_name)) or nil
         local player_slot = meta and tonumber(meta.player_slot) or nil
         local slot_colors = draw_cache and draw_cache.slot_colors or (UISettings and UISettings.player_slot_colors)
         local player_color = player_slot and slot_colors and slot_colors[player_slot] or nil

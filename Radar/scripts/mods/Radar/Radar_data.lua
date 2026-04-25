@@ -370,6 +370,10 @@ return {
                                     value = "range_rings",
                                 },
                                 {
+                                    text = "radar_style_auspex",
+                                    value = "auspex_background",
+                                },
+                                {
                                     text = "radar_guides_off",
                                     value = "off",
                                 },
