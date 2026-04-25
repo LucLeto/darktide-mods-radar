@@ -1037,27 +1037,6 @@ return function(env)
         }
     end
 
-    function _outline_color_vector3(color)
-        local src = color or DEFAULT_COLOR_ARRAY_WHITE
-
-        return Vector3(
-            (src[2] or 255) / 255,
-            (src[3] or 255) / 255,
-            (src[4] or 255) / 255
-        )
-    end
-
-    function _nearby_outline_color_signature(color)
-        local src = color or DEFAULT_COLOR_ARRAY_WHITE
-
-        return string_format(
-            "%d:%d:%d",
-            src[2] or 255,
-            src[3] or 255,
-            src[4] or 255
-        )
-    end
-
     SCREEN_HIGHLIGHT_Z_OFFSET_BY_KIND = {
         material_diamantine = 0.1,
         material_plasteel = 0.1,
@@ -1814,33 +1793,6 @@ return function(env)
         end
 
         return nil
-    end
-
-    function _safe_unit_outline_lookup(unit, outline_extension_map)
-        local extension = _safe_unit_outline_extension(unit, outline_extension_map)
-
-        if not extension then
-            return nil
-        end
-
-        local outlines = rawget(extension, "outlines")
-
-        if type(outlines) ~= "table" then
-            return nil
-        end
-
-        local outline_lookup = nil
-
-        for _, outline in pairs(outlines) do
-            local outline_name = outline and outline.name
-
-            if outline_name ~= nil then
-                outline_lookup = outline_lookup or {}
-                outline_lookup[tostring(outline_name)] = true
-            end
-        end
-
-        return outline_lookup
     end
 
     function _safe_game_mode_manager()

@@ -602,7 +602,6 @@ local _draw_cache = {
     enemy_scale_by_kind = {},
     enemy_visual_by_kind = {},
     nearby_highlight_enabled_by_kind = {},
-    nearby_highlight_color_by_kind = {},
     nearby_highlight_distance_text_enabled_by_kind = {},
     show_player_tag_distance_text = false,
     show_boss_distance_text = false,
@@ -629,7 +628,6 @@ local function _build_draw_cache()
     table_clear(draw_cache.enemy_scale_by_kind)
     table_clear(draw_cache.enemy_visual_by_kind)
     table_clear(draw_cache.nearby_highlight_enabled_by_kind)
-    table_clear(draw_cache.nearby_highlight_color_by_kind)
     table_clear(draw_cache.nearby_highlight_distance_text_enabled_by_kind)
 
     draw_cache.icon_scale = _icon_scale_factor()
@@ -1454,30 +1452,6 @@ local function _cached_nearby_highlight_enabled(kind, draw_cache)
     return enabled
 end
 
-local function _cached_nearby_highlight_color(kind, draw_cache)
-    if kind == nil then
-        return nil
-    end
-
-    local cache = draw_cache and draw_cache.nearby_highlight_color_by_kind or nil
-
-    if cache then
-        local cached = cache[kind]
-
-        if cached ~= nil then
-            return cached ~= false and cached or nil
-        end
-    end
-
-    local color = mod.get_nearby_highlight_color and mod:get_nearby_highlight_color(kind) or nil
-
-    if cache then
-        cache[kind] = color or false
-    end
-
-    return color
-end
-
 local function _cached_nearby_highlight_distance_text_enabled(kind, draw_cache)
     if kind == nil then
         return false
@@ -2069,7 +2043,7 @@ local function _top_left_from_center(center_value, size)
     return snapped_center - math_floor(snapped_size * 0.5)
 end
 
-local function _draw_internal(self, ui_renderer, snapshot, render_settings, input_service, dt)
+local function _draw_internal(self, ui_renderer, snapshot)
     RadarHudWidgets.ensure_overview_scale_widget(self)
     RadarHudWidgets.ensure_marker_widgets(self)
 
@@ -2384,7 +2358,7 @@ HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input
 
     UIRenderer_begin_pass(ui_renderer, self._ui_scenegraph, input_service, dt, render_settings)
 
-    local ok, err = pcall(_draw_internal, self, ui_renderer, snapshot, render_settings, input_service, dt)
+    local ok, err = pcall(_draw_internal, self, ui_renderer, snapshot)
 
     UIRenderer_end_pass(ui_renderer)
 

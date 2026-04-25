@@ -1392,21 +1392,6 @@ return function(env)
         return pass_through_targets
     end
 
-    local function _compare_radar_targets_by_distance(a, b)
-        return (a.distance_sq or math_huge) < (b.distance_sq or math_huge)
-    end
-
-    local function _compare_radar_targets_boss_first(a, b)
-        local a_is_boss = _is_boss_marker_kind(a.kind)
-        local b_is_boss = _is_boss_marker_kind(b.kind)
-
-        if a_is_boss ~= b_is_boss then
-            return a_is_boss
-        end
-
-        return (a.distance_sq or math_huge) < (b.distance_sq or math_huge)
-    end
-
     local function _compare_radar_targets_for_display(a, b)
         local a_priority = a and a.selection_priority or 0
         local b_priority = b and b.selection_priority or 0
@@ -1855,7 +1840,7 @@ return function(env)
         return mod.is_radar_runtime_game_mode_allowed and mod:is_radar_runtime_game_mode_allowed()
     end
 
-    local function _update_internal(dt, t)
+    local function _update_internal(t)
         if mod:get("enable_radar") == false and not mod:is_overview_mode_active() then
             _reset_runtime_output_tables()
             return
@@ -1990,7 +1975,7 @@ return function(env)
 
     mod:hook_safe("StateGameplay", "update", function(self, dt, t, ...)
         mod._last_state_gameplay = self
-        _update_internal(dt, t)
+        _update_internal(t)
     end)
 
     mod:hook_safe("CollectiblesManager", "rpc_player_destroyed_destructible_collectible",
@@ -2015,12 +2000,12 @@ return function(env)
             end
         end)
 
-    mod.update = function(dt)
+    mod.update = function()
         if not mod._gameplay_run then
             return
         end
 
-        _update_internal(dt, _safe_gameplay_time())
+        _update_internal(_safe_gameplay_time())
     end
 
     local previous_on_setting_changed = mod.on_setting_changed
