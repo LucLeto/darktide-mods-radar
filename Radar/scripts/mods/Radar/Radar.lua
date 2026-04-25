@@ -61,7 +61,8 @@ mod:hook_safe(CLASS.BaseView, "update", function(self)
     end
 
     local scrollbar_widget = settings_grid._scrollbar_widget
-    if not scrollbar_widget or not scrollbar_widget.content then
+    local scrollbar_content = scrollbar_widget and scrollbar_widget.content
+    if not scrollbar_content then
         return
     end
 
@@ -70,8 +71,8 @@ mod:hook_safe(CLASS.BaseView, "update", function(self)
 
     --  Detect category switch into my mod
     if in_radar_category and (last_category ~= current_category or last_category == nil) then
-        scrollbar_widget.content.scroll_value = last_scroll_amount
-        scrollbar_widget.content.value = last_scroll_amount
+        scrollbar_content.scroll_value = last_scroll_amount
+        scrollbar_content.value = last_scroll_amount
     end
 
     --  Always track scroll while inside my mod

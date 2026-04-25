@@ -122,6 +122,26 @@ local function _any_to_widget_color(color, fallback)
     }
 end
 
+local function _style_color_table(style)
+    if style._radar_private_color ~= true then
+        style.color = _any_to_widget_color(style.color, WHITE_WIDGET_COLOR)
+        style._radar_private_color = true
+    end
+
+    return style.color
+end
+
+local function _copy_into_widget_color(destination, color, fallback)
+    local src = color or fallback or WHITE_WIDGET_COLOR
+
+    destination[1] = src[1] or src.a or 255
+    destination[2] = src[2] or src.r or 255
+    destination[3] = src[3] or src.g or 255
+    destination[4] = src[4] or src.b or 255
+
+    return destination
+end
+
 local function _with_alpha_widget(color, alpha)
     local c = _any_to_widget_color(color)
     c[1] = alpha or c[1] or 255
@@ -1202,8 +1222,19 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size)
     local title_icon_style = widget.style.title_icon
     local arrow_icon_style = widget.style.arrow_icon
     local size = tonumber(icon_size) or _scaled_icon_size(visual and visual.size or 14)
-    local color = _any_to_widget_color(visual and visual.color or nil)
-    local overlay_color = _any_to_widget_color(visual and visual.overlay_color or nil)
+    local color = _copy_into_widget_color(_style_color_table(icon_style), visual and visual.color or nil)
+    local overlay_color = overlay_icon_style and _copy_into_widget_color(
+        _style_color_table(overlay_icon_style),
+        visual and visual.overlay_color or nil
+    ) or nil
+    local title_color = title_icon_style and _copy_into_widget_color(
+        _style_color_table(title_icon_style),
+        visual and visual.color or nil
+    ) or nil
+    local arrow_color = arrow_icon_style and _copy_into_widget_color(
+        _style_color_table(arrow_icon_style),
+        WHITE_WIDGET_COLOR
+    ) or nil
     local vertical_state = target and target.vertical_state or nil
     local arrow_icon = nil
 
@@ -1265,7 +1296,7 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size)
         title_offset[3] = icon_z + 2
         title_size[1] = size
         title_size[2] = size
-        title_icon_style.color = color
+        title_icon_style.color = title_color or color
     end
 
     if arrow_icon_style then
@@ -1279,7 +1310,7 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size)
         arrow_offset[3] = icon_z + 3
         arrow_size_tbl[1] = arrow_size
         arrow_size_tbl[2] = arrow_size
-        arrow_icon_style.color = WHITE_WIDGET_COLOR
+        arrow_icon_style.color = arrow_color or WHITE_WIDGET_COLOR
     end
 end
 

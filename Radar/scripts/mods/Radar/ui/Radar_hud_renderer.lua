@@ -647,6 +647,57 @@ end
 
 local _draw_auspex_material_layers = nil
 
+local function _apply_layer_rotation(style, angle)
+    if not style then
+        return
+    end
+
+    local layer_size = style.size
+    local layer_pivot = style.pivot
+
+    if not layer_pivot then
+        layer_pivot = { 0, 0 }
+        style.pivot = layer_pivot
+    end
+
+    if layer_size then
+        layer_pivot[1] = (layer_size[1] or 0) * 0.5
+        layer_pivot[2] = (layer_size[2] or 0) * 0.5
+    end
+
+    style.angle = angle or 0
+end
+
+local AUSPEX_GUIDE_OPTIONS_WITH_OUTLINE = {
+    background_inset = 3,
+    sweep_inset = 3,
+    background_z_offset = 1,
+    draw_noise = false,
+    draw_scan_noise = false,
+    background_color = RADAR_OUTLINE_WIDGET_COLOR,
+    sweep_color = RADAR_OUTLINE_WIDGET_COLOR,
+}
+
+local AUSPEX_GUIDE_OPTIONS_NO_OUTLINE = {
+    background_inset = 0,
+    sweep_inset = 0,
+    background_z_offset = 1,
+    draw_noise = false,
+    draw_scan_noise = false,
+    background_color = RADAR_OUTLINE_WIDGET_COLOR,
+    sweep_color = RADAR_OUTLINE_WIDGET_COLOR,
+}
+
+local AUSPEX_FRAME_OPTIONS_WITH_OUTLINE = {
+    background_inset = 5,
+    sweep_inset = 5,
+}
+
+local AUSPEX_FRAME_OPTIONS_NO_OUTLINE = {
+    background_inset = 0,
+    sweep_inset = 0,
+}
+
 local function _draw_radar_guides(self, ui_renderer, x, y, z, size, is_circle, camera_rotation)
     local guide_style = mod.get_radar_guides and mod:get_radar_guides() or "crosshair"
 
@@ -658,19 +709,9 @@ local function _draw_radar_guides(self, ui_renderer, x, y, z, size, is_circle, c
 
     if guide_style == "auspex_background" then
         local outline_style = mod.get_radar_outline and mod:get_radar_outline() or "solid"
-        local material_inset = outline_style ~= "off" and 3 or 0
+        local options = outline_style ~= "off" and AUSPEX_GUIDE_OPTIONS_WITH_OUTLINE or AUSPEX_GUIDE_OPTIONS_NO_OUTLINE
 
-        _draw_auspex_material_layers(self, ui_renderer, x, y, z - 1, size, camera_rotation, {
-            background_inset = material_inset,
-            sweep_inset = material_inset,
-            background_z_offset = 1,
-            draw_noise = false,
-            draw_scan_noise = false,
-            background_color = RADAR_OUTLINE_WIDGET_COLOR,
-            sweep_color = RADAR_OUTLINE_WIDGET_COLOR,
-            --background_color = _widget_color(130, 255, 255, 255),
-            --sweep_color = _widget_color(130, 255, 255, 255),
-        })
+        _draw_auspex_material_layers(self, ui_renderer, x, y, z - 1, size, camera_rotation, options)
 
         return
     end
@@ -822,26 +863,6 @@ _draw_auspex_material_layers = function(self, ui_renderer, x, y, z, size, camera
     local sweep_size = math_max(1, size - sweep_inset * 2)
     local draw_noise = options.draw_noise ~= false
     local draw_scan_noise = options.draw_scan_noise ~= false
-    local apply_rotation = function(style, angle)
-        if not style then
-            return
-        end
-
-        local layer_size = style.size
-        local layer_pivot = style.pivot
-
-        if not layer_pivot then
-            layer_pivot = { 0, 0 }
-            style.pivot = layer_pivot
-        end
-
-        if layer_size then
-            layer_pivot[1] = (layer_size[1] or 0) * 0.5
-            layer_pivot[2] = (layer_size[2] or 0) * 0.5
-        end
-
-        style.angle = angle or 0
-    end
 
     frame_widget.content.background_material = AUSPEX_BACKGROUND_MATERIAL
     frame_widget.content.noise_material = draw_noise and AUSPEX_BACKGROUND_NOISE_MATERIAL or nil
@@ -856,7 +877,7 @@ _draw_auspex_material_layers = function(self, ui_renderer, x, y, z, size, camera
         background_size,
         options.background_color or AUSPEX_BACKGROUND_WIDGET_COLOR
     )
-    apply_rotation(frame_widget.style.background, rotation_angle)
+    _apply_layer_rotation(frame_widget.style.background, rotation_angle)
     if draw_noise then
         _apply_frame_layer_style(
             frame_widget.style.noise,
@@ -885,7 +906,7 @@ _draw_auspex_material_layers = function(self, ui_renderer, x, y, z, size, camera
         sweep_size,
         animated_sweep_enabled and (options.sweep_color or AUSPEX_SWEEP_WIDGET_COLOR) or WHITE_WIDGET_COLOR
     )
-    apply_rotation(frame_widget.style.sweep, rotation_angle)
+    _apply_layer_rotation(frame_widget.style.sweep, rotation_angle)
 
     UIWidget.draw(frame_widget, ui_renderer)
 end
@@ -894,13 +915,10 @@ local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera
     local fill_alpha = mod.get_background_opacity and mod:get_background_opacity() or 90
     local outline_style = mod.get_radar_outline and mod:get_radar_outline() or "solid"
     local fill_color = _color(fill_alpha, 0, 0, 0)
-    local background_inset = outline_style ~= "off" and 5 or 0
+    local options = outline_style ~= "off" and AUSPEX_FRAME_OPTIONS_WITH_OUTLINE or AUSPEX_FRAME_OPTIONS_NO_OUTLINE
 
     _draw_square_fill_soft(ui_renderer, x, y, z - 1, size, fill_color)
-    _draw_auspex_material_layers(self, ui_renderer, x, y, z, size, camera_rotation, {
-        background_inset = background_inset,
-        sweep_inset = background_inset,
-    })
+    _draw_auspex_material_layers(self, ui_renderer, x, y, z, size, camera_rotation, options)
 
     if outline_style == "solid" then
         local thickness = math_max(1, math_floor(size * 0.012 + 0.5))

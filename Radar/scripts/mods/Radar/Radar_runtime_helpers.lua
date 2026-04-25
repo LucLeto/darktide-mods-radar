@@ -1403,80 +1403,34 @@ return function(env)
         return nil
     end
 
-    function _extract_hud_raycast_distance(a, b, c, d)
-        local value = a
-
+    local function _extract_hud_raycast_distance_from_value(value)
         if type(value) == "number" and _is_finite_number(value) then
             return value
         end
 
         if type(value) == "table" then
-            if _is_finite_number(value.distance) then
-                return value.distance
+            local distance = value.distance
+
+            if _is_finite_number(distance) then
+                return distance
             end
 
             local first = value[1]
+            distance = type(first) == "table" and first.distance or nil
 
-            if type(first) == "table" and _is_finite_number(first.distance) then
-                return first.distance
-            end
-        end
-
-        value = b
-
-        if type(value) == "number" and _is_finite_number(value) then
-            return value
-        end
-
-        if type(value) == "table" then
-            if _is_finite_number(value.distance) then
-                return value.distance
-            end
-
-            local first = value[1]
-
-            if type(first) == "table" and _is_finite_number(first.distance) then
-                return first.distance
-            end
-        end
-
-        value = c
-
-        if type(value) == "number" and _is_finite_number(value) then
-            return value
-        end
-
-        if type(value) == "table" then
-            if _is_finite_number(value.distance) then
-                return value.distance
-            end
-
-            local first = value[1]
-
-            if type(first) == "table" and _is_finite_number(first.distance) then
-                return first.distance
-            end
-        end
-
-        value = d
-
-        if type(value) == "number" and _is_finite_number(value) then
-            return value
-        end
-
-        if type(value) == "table" then
-            if _is_finite_number(value.distance) then
-                return value.distance
-            end
-
-            local first = value[1]
-
-            if type(first) == "table" and _is_finite_number(first.distance) then
-                return first.distance
+            if _is_finite_number(distance) then
+                return distance
             end
         end
 
         return nil
+    end
+
+    function _extract_hud_raycast_distance(a, b, c, d)
+        return _extract_hud_raycast_distance_from_value(a)
+            or _extract_hud_raycast_distance_from_value(b)
+            or _extract_hud_raycast_distance_from_value(c)
+            or _extract_hud_raycast_distance_from_value(d)
     end
 
     function mod:is_hud_world_position_occluded(camera_position, world_position)

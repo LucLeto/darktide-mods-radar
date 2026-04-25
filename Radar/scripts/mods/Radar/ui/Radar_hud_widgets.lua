@@ -7,6 +7,15 @@ local LogBuckets = {
     draws = {},
 }
 
+local function _white_widget_color()
+    return {
+        WHITE_WIDGET_COLOR[1],
+        WHITE_WIDGET_COLOR[2],
+        WHITE_WIDGET_COLOR[3],
+        WHITE_WIDGET_COLOR[4],
+    }
+end
+
 local function _log_once(bucket, key, message)
     if mod:get("debug_mode") ~= true then
         return
@@ -72,7 +81,7 @@ local function _frame_definition()
                 horizontal_alignment = "left",
                 offset = { 0, 0, 1 },
                 size = { 16, 16 },
-                color = WHITE_WIDGET_COLOR,
+                color = _white_widget_color(),
             },
             visibility_function = WidgetVisibility.has_background_material,
         },
@@ -86,7 +95,7 @@ local function _frame_definition()
                 horizontal_alignment = "left",
                 offset = { 0, 0, 2 },
                 size = { 16, 16 },
-                color = WHITE_WIDGET_COLOR,
+                color = _white_widget_color(),
             },
             visibility_function = WidgetVisibility.has_noise_material,
         },
@@ -100,7 +109,7 @@ local function _frame_definition()
                 horizontal_alignment = "left",
                 offset = { 0, 0, 3 },
                 size = { 16, 16 },
-                color = WHITE_WIDGET_COLOR,
+                color = _white_widget_color(),
             },
             visibility_function = WidgetVisibility.has_scan_noise_material,
         },
@@ -116,7 +125,7 @@ local function _frame_definition()
                 horizontal_alignment = "left",
                 offset = { 0, 0, 4 },
                 size = { 16, 16 },
-                color = WHITE_WIDGET_COLOR,
+                color = _white_widget_color(),
             },
             visibility_function = WidgetVisibility.has_sweep_material,
         },
@@ -136,7 +145,7 @@ local function _overview_scale_definition()
                 horizontal_alignment = "left",
                 offset = { 0, 0, 40 },
                 size = { 16, 16 },
-                color = WHITE_WIDGET_COLOR,
+                color = _white_widget_color(),
             },
             visibility_function = WidgetVisibility.has_overview_scale_x_left_icon,
         },
@@ -151,7 +160,7 @@ local function _overview_scale_definition()
                 horizontal_alignment = "left",
                 offset = { 0, 0, 40 },
                 size = { 16, 16 },
-                color = WHITE_WIDGET_COLOR,
+                color = _white_widget_color(),
             },
             visibility_function = WidgetVisibility.has_overview_scale_x_right_icon,
         },
@@ -166,7 +175,7 @@ local function _overview_scale_definition()
                 horizontal_alignment = "left",
                 offset = { 0, 0, 40 },
                 size = { 16, 16 },
-                color = WHITE_WIDGET_COLOR,
+                color = _white_widget_color(),
             },
             visibility_function = WidgetVisibility.has_overview_scale_y_top_icon,
         },
@@ -181,7 +190,7 @@ local function _overview_scale_definition()
                 horizontal_alignment = "left",
                 offset = { 0, 0, 40 },
                 size = { 16, 16 },
-                color = WHITE_WIDGET_COLOR,
+                color = _white_widget_color(),
             },
             visibility_function = WidgetVisibility.has_overview_scale_y_bottom_icon,
         },
@@ -194,7 +203,7 @@ local function _overview_scale_definition()
                 horizontal_alignment = "left",
                 offset = { 0, 0, 40 },
                 size = { 16, 16 },
-                color = WHITE_WIDGET_COLOR,
+                color = _white_widget_color(),
             },
             visibility_function = function(content)
                 return content.normal_zoom_icon ~= nil and content.normal_zoom_icon ~= ""
@@ -214,7 +223,7 @@ local function _marker_definition()
                 horizontal_alignment = "left",
                 offset = { 0, 0, 10 },
                 size = { 16, 16 },
-                color = WHITE_WIDGET_COLOR,
+                color = _white_widget_color(),
             },
             visibility_function = WidgetVisibility.has_icon,
         },
@@ -227,7 +236,7 @@ local function _marker_definition()
                 horizontal_alignment = "left",
                 offset = { 0, 0, 11 },
                 size = { 10, 10 },
-                color = WHITE_WIDGET_COLOR,
+                color = _white_widget_color(),
             },
             visibility_function = WidgetVisibility.has_overlay_icon,
         },
@@ -240,7 +249,7 @@ local function _marker_definition()
                 horizontal_alignment = "left",
                 offset = { 0, 0, 12 },
                 size = { 16, 16 },
-                color = WHITE_WIDGET_COLOR,
+                color = _white_widget_color(),
             },
             visibility_function = WidgetVisibility.has_title_icon,
         },
@@ -253,7 +262,7 @@ local function _marker_definition()
                 horizontal_alignment = "left",
                 offset = { 2, 2, 16 },
                 size = { 4, 4 },
-                color = WHITE_WIDGET_COLOR,
+                color = _white_widget_color(),
             },
             visibility_function = WidgetVisibility.has_arrow_icon,
         },

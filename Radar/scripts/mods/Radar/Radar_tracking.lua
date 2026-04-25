@@ -58,6 +58,9 @@ return function(env)
     local _scratch_render_layer_cache = {}
     local _scratch_selection_priority_cache = {}
     local _scratch_priority_target_cache = {}
+    local _scratch_seen_interactees = {}
+    local _scratch_seen_chests = {}
+    local _scratch_seen_destructibles = {}
     local OVERVIEW_MIN_ZOOM_RANGE = 25
     local OVERVIEW_MAX_ZOOM_RANGE = 500
     local OVERVIEW_DEFAULT_ZOOM_RANGE = OVERVIEW_MAX_ZOOM_RANGE
@@ -802,7 +805,8 @@ return function(env)
 
         local player_unit = _player_unit()
         local tracked_units = mod._tracked_units
-        local seen_interactees = {}
+        local seen_interactees = _scratch_seen_interactees
+        table_clear(seen_interactees)
 
         for unit, extension in pairs(interactee_map) do
             if _safe_unit_alive(unit) and extension then
@@ -872,8 +876,9 @@ return function(env)
         end
 
         local tracked_units = mod._tracked_units
-        local seen_chests = {}
+        local seen_chests = _scratch_seen_chests
         local track_item_tags = mod:get_show_only_tagged_items()
+        table_clear(seen_chests)
 
         for unit, extension in pairs(chest_map) do
             if _safe_unit_alive(unit) and extension then
@@ -978,8 +983,9 @@ return function(env)
         end
 
         local tracked_units = mod._tracked_units
-        local seen_destructibles = {}
+        local seen_destructibles = _scratch_seen_destructibles
         local track_item_tags = mod:get_show_only_tagged_items()
+        table_clear(seen_destructibles)
 
         for unit, extension in pairs(destructible_map) do
             if _safe_unit_alive(unit) and extension then
@@ -1422,12 +1428,12 @@ return function(env)
     local function _collect_radar_targets()
         local player_unit = _player_unit()
         if not _safe_unit_alive(player_unit) then
-            return {}
+            return _reuse_or_new_table(mod._radar_targets)
         end
 
         local player_pos = _safe_unit_position(player_unit)
         if not player_pos then
-            return {}
+            return _reuse_or_new_table(mod._radar_targets)
         end
 
         local max_range = mod:get_radar_collection_range()
@@ -2884,10 +2890,10 @@ return function(env)
         self:set("enable_radar", is_enabled)
 
         if not is_enabled then
-            self._radar_targets = {}
-            self._screen_highlight_targets = {}
-            self._highlight_source_radar_targets = {}
-            self._unclustered_radar_targets = {}
+            self._radar_targets = _reuse_or_new_table(self._radar_targets)
+            self._screen_highlight_targets = _reuse_or_new_table(self._screen_highlight_targets)
+            self._highlight_source_radar_targets = _reuse_or_new_table(self._highlight_source_radar_targets)
+            self._unclustered_radar_targets = _reuse_or_new_table(self._unclustered_radar_targets)
             self._radar_snapshot = nil
         end
 
