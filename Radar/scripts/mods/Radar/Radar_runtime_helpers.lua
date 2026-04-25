@@ -1323,9 +1323,14 @@ return function(env)
             return nil
         end
 
-        local ok_forward, forward = pcall(Quaternion.forward, rotation)
-        local ok_right, right = pcall(Quaternion.right, rotation)
-        local ok_up, up = pcall(Quaternion.up, rotation)
+        local quaternion = Quaternion
+        local quaternion_forward = quaternion.forward
+        local quaternion_right = quaternion.right
+        local quaternion_up = quaternion.up
+
+        local ok_forward, forward = pcall(quaternion_forward, rotation)
+        local ok_right, right = pcall(quaternion_right, rotation)
+        local ok_up, up = pcall(quaternion_up, rotation)
 
         if not ok_forward or not ok_right or not ok_up or not forward or not right or not up then
             return nil

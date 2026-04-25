@@ -135,35 +135,44 @@ return function(env)
     end
 
     local function _raw_device_button_held(device, local_name)
-        if not device or not local_name or not device.button_index or not device.button then
+        if not device or not local_name then
             return false
         end
 
-        local ok_index, index = pcall(device.button_index, local_name)
+        local button_index = device.button_index
+        local button = device.button
+
+        if not button_index or not button then
+            return false
+        end
+
+        local ok_index, index = pcall(button_index, local_name)
 
         if (not ok_index or not index) and string_find(local_name, "_", 1, true) then
-            ok_index, index = pcall(device.button_index, string_gsub(local_name, "_", " "))
+            ok_index, index = pcall(button_index, string_gsub(local_name, "_", " "))
         end
 
         if not ok_index or not index then
             return false
         end
 
-        local ok_value, value = pcall(device.button, index)
+        local ok_value, value = pcall(button, index)
 
         return ok_value and (tonumber(value) or 0) > 0.5
     end
 
     local function _keyboard_modifier_alias_held(name)
+        local keyboard = Keyboard
+
         if name == "shift" then
-            return _raw_device_button_held(Keyboard, "left shift")
-                or _raw_device_button_held(Keyboard, "right shift")
+            return _raw_device_button_held(keyboard, "left shift")
+                or _raw_device_button_held(keyboard, "right shift")
         elseif name == "ctrl" or name == "control" then
-            return _raw_device_button_held(Keyboard, "left ctrl")
-                or _raw_device_button_held(Keyboard, "right ctrl")
+            return _raw_device_button_held(keyboard, "left ctrl")
+                or _raw_device_button_held(keyboard, "right ctrl")
         elseif name == "alt" then
-            return _raw_device_button_held(Keyboard, "left alt")
-                or _raw_device_button_held(Keyboard, "right alt")
+            return _raw_device_button_held(keyboard, "left alt")
+                or _raw_device_button_held(keyboard, "right alt")
         end
 
         return false
@@ -184,16 +193,19 @@ return function(env)
         raw_name = string_gsub(raw_name, "^%s+", "")
         raw_name = string_gsub(raw_name, "%s+$", "")
 
+        local keyboard = Keyboard
+        local mouse = Mouse
+
         if string_find(raw_name, "keyboard_", 1, true) == 1 then
-            return _raw_device_button_held(Keyboard, string_sub(raw_name, 10))
+            return _raw_device_button_held(keyboard, string_sub(raw_name, 10))
         elseif string_find(raw_name, "mouse_", 1, true) == 1 then
-            return _raw_device_button_held(Mouse, string_sub(raw_name, 7))
+            return _raw_device_button_held(mouse, string_sub(raw_name, 7))
         end
 
-        return _raw_device_button_held(Keyboard, raw_name)
-            or _raw_device_button_held(Keyboard, normalized)
-            or _raw_device_button_held(Mouse, raw_name)
-            or _raw_device_button_held(Mouse, normalized)
+        return _raw_device_button_held(keyboard, raw_name)
+            or _raw_device_button_held(keyboard, normalized)
+            or _raw_device_button_held(mouse, raw_name)
+            or _raw_device_button_held(mouse, normalized)
     end
 
     local function _raw_input_combo_held(binding_entry)
