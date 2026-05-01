@@ -775,12 +775,8 @@ return function(env)
             return true
         end
 
-        if kind == "material_expeditions_loot_player_drop" then
-            if not _has_active_expedition_player_drop(unit) then
-                return false
-            end
-        end
-
+        -- Player-drop loot bookkeeping lives on the server; clients still identify the pickup by
+        -- pickup_type, so section filtering must not require the server-only dropped-loot table.
         local game_mode = _safe_game_mode()
         local active_section_index = _safe_expedition_active_section_index(game_mode)
 

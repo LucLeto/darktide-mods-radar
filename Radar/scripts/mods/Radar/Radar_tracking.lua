@@ -1486,6 +1486,7 @@ return function(env)
             if is_priority_target == nil then
                 is_priority_target = kind == "enemy_daemonhost" or _is_boss_marker_kind(kind) or
                     ENEMY_RADAR_DEFINITION_BY_KIND[kind] ~= nil or
+                    kind == "material_expeditions_loot_player_drop" or
                     kind == "location_attention" or
                     kind == "location_ping" or
                     kind == "location_threat"

@@ -327,6 +327,8 @@ return function(env)
     }
     local PLAYER_SMART_TAG_SELECTION_PRIORITY = 300
     local PLAYER_SMART_TAG_RENDER_LAYER = 3
+    local EXPEDITION_PLAYER_DROP_SELECTION_PRIORITY = 650
+    local EXPEDITION_PLAYER_DROP_RENDER_LAYER = 6
 
     local function _enemy_radar_default_icon_size(category)
         if category == "horde" then
@@ -1118,6 +1120,10 @@ return function(env)
     end
 
     function mod:get_target_selection_priority(kind)
+        if kind == "material_expeditions_loot_player_drop" then
+            return EXPEDITION_PLAYER_DROP_SELECTION_PRIORITY
+        end
+
         if kind == "location_attention" or kind == "location_ping" or kind == "location_threat" then
             return PLAYER_SMART_TAG_SELECTION_PRIORITY
         end
@@ -1139,6 +1145,10 @@ return function(env)
     end
 
     function mod:get_target_render_layer(kind)
+        if kind == "material_expeditions_loot_player_drop" then
+            return EXPEDITION_PLAYER_DROP_RENDER_LAYER
+        end
+
         if kind == "location_attention" or kind == "location_ping" or kind == "location_threat" then
             return PLAYER_SMART_TAG_RENDER_LAYER
         end
