@@ -1072,6 +1072,7 @@ return {
         ["zh-cn"] = "仅图标",
         ["zh-tw"] = "僅圖示",
     },
+    display_style_icon_distance = _localized_text_for_all_languages("Icon + Distance m"),
     display_style_marked_icon = {
         en = "Marked icon",
         fr = "Icône marquée",

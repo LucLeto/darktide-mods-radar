@@ -170,6 +170,24 @@ return function(env)
         expedition_objective_arrival = true,
     }
 
+    EXPEDITION_MARKER_DISPLAY_MODE_KIND_TO_SETTING = {
+        expedition_loot_converter = "show_expedition_loot_converter",
+        expedition_objective_opportunity = "show_expedition_objective_opportunity",
+        expedition_objective_transition = "show_expedition_objective_transition",
+        expedition_objective_main_objective = "show_expedition_objective_main_objective",
+        expedition_objective_extraction = "show_expedition_objective_extraction",
+        expedition_objective_arrival = "show_expedition_objective_arrival",
+    }
+
+    EXPEDITION_MARKER_DISPLAY_MODE_DEFAULT_BY_SETTING = {
+        show_expedition_objective_opportunity = "icon_distance",
+        show_expedition_objective_transition = "icon_only",
+        show_expedition_objective_main_objective = "icon_only",
+        show_expedition_objective_extraction = "icon_only",
+        show_expedition_objective_arrival = "icon_only",
+        show_expedition_loot_converter = "icon_only",
+    }
+
     EXPEDITION_OBJECTIVE_ICON_DEFAULTS = {
         expedition_loot_converter = "content/ui/materials/hud/interactions/icons/expeditions",
         expedition_objective_transition = "content/ui/materials/backgrounds/scanner/scanner_map_exit",
@@ -912,6 +930,15 @@ return function(env)
         "show_pocketable_void_shield",
     }
 
+    EXPEDITION_MARKER_DISPLAY_MODE_SETTING_IDS = {
+        "show_expedition_objective_opportunity",
+        "show_expedition_objective_transition",
+        "show_expedition_objective_main_objective",
+        "show_expedition_objective_extraction",
+        "show_expedition_objective_arrival",
+        "show_expedition_loot_converter",
+    }
+
     EXPEDITION_LOOT_VALUE_BY_PICKUP_NAME = {
         expedition_loot_small_tier_1 = 10,
         expedition_loot_small_tier_2 = 25,
@@ -1015,6 +1042,22 @@ return function(env)
         end
 
         return "artwork"
+    end
+
+    local function _normalize_expedition_marker_display_mode(value, default_value)
+        if value == "icon_only" or value == "icon_distance" or value == "off" then
+            return value
+        end
+
+        if value == false then
+            return "off"
+        end
+
+        if value == true then
+            return "icon_only"
+        end
+
+        return default_value or "icon_only"
     end
 
     function mod:get_marker_scale_group(kind)
@@ -1178,6 +1221,18 @@ return function(env)
         return _normalize_marker_display_mode(mod:get(setting_id))
     end
 
+    function mod:get_expedition_marker_display_mode(kind)
+        local setting_id = EXPEDITION_MARKER_DISPLAY_MODE_KIND_TO_SETTING[kind]
+        if not setting_id then
+            return nil
+        end
+
+        return _normalize_expedition_marker_display_mode(
+            mod:get(setting_id),
+            EXPEDITION_MARKER_DISPLAY_MODE_DEFAULT_BY_SETTING[setting_id]
+        )
+    end
+
     local function _migrate_marker_display_mode_settings()
         local mod_get = mod.get
         local mod_set = mod.set
@@ -1188,6 +1243,22 @@ return function(env)
 
             if value == true then
                 mod_set(mod, setting_id, "artwork")
+            elseif value == false then
+                mod_set(mod, setting_id, "off")
+            end
+        end
+    end
+
+    local function _migrate_expedition_marker_display_mode_settings()
+        local mod_get = mod.get
+        local mod_set = mod.set
+
+        for i = 1, #EXPEDITION_MARKER_DISPLAY_MODE_SETTING_IDS do
+            local setting_id = EXPEDITION_MARKER_DISPLAY_MODE_SETTING_IDS[i]
+            local value = mod_get(mod, setting_id)
+
+            if value == true then
+                mod_set(mod, setting_id, "icon_only")
             elseif value == false then
                 mod_set(mod, setting_id, "off")
             end
@@ -1207,6 +1278,7 @@ return function(env)
 
     function mod.on_all_mods_loaded()
         _migrate_marker_display_mode_settings()
+        _migrate_expedition_marker_display_mode_settings()
         _migrate_player_visibility_settings()
 
         local debug_mode = mod:get("debug_mode") == true

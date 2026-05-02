@@ -100,6 +100,44 @@ local function _icon_marked_off_dropdown(setting_id, default_value)
     }
 end
 
+local function _expedition_marker_display_mode_dropdown(setting_id, default_value)
+    return {
+        setting_id = setting_id,
+        type = "dropdown",
+        default_value = default_value,
+        options = {
+            {
+                text = "display_style_icon_only",
+                value = "icon_only",
+            },
+            {
+                text = "display_style_icon_distance",
+                value = "icon_distance",
+            },
+            {
+                text = "radar_outline_off",
+                value = "off",
+            },
+        },
+        get = function()
+            local value = mod:get(setting_id)
+
+            if value == nil then
+                return default_value
+            end
+
+            if value == "icon_only" or value == "icon_distance" or value == "off" then
+                return value
+            end
+
+            return value == false and "off" or "icon_only"
+        end,
+        change = function(new_value)
+            mod:set(setting_id, new_value)
+        end,
+    }
+end
+
 local function _expedition_loot_marker_mode_dropdown(setting_id)
     return {
         setting_id = setting_id,
@@ -723,36 +761,24 @@ return {
                             type = "checkbox",
                             default_value = true,
                         },
-                        {
-                            setting_id = "show_expedition_objective_opportunity",
-                            type = "checkbox",
-                            default_value = true,
-                        },
-                        {
-                            setting_id = "show_expedition_objective_transition",
-                            type = "checkbox",
-                            default_value = true,
-                        },
-                        {
-                            setting_id = "show_expedition_objective_main_objective",
-                            type = "checkbox",
-                            default_value = true,
-                        },
-                        {
-                            setting_id = "show_expedition_objective_extraction",
-                            type = "checkbox",
-                            default_value = true,
-                        },
-                        {
-                            setting_id = "show_expedition_objective_arrival",
-                            type = "checkbox",
-                            default_value = true,
-                        },
-                        {
-                            setting_id = "show_expedition_loot_converter",
-                            type = "checkbox",
-                            default_value = true,
-                        },
+                        _expedition_marker_display_mode_dropdown(
+                            "show_expedition_objective_opportunity",
+                            "icon_distance"),
+                        _expedition_marker_display_mode_dropdown(
+                            "show_expedition_objective_transition",
+                            "icon_only"),
+                        _expedition_marker_display_mode_dropdown(
+                            "show_expedition_objective_main_objective",
+                            "icon_only"),
+                        _expedition_marker_display_mode_dropdown(
+                            "show_expedition_objective_extraction",
+                            "icon_only"),
+                        _expedition_marker_display_mode_dropdown(
+                            "show_expedition_objective_arrival",
+                            "icon_only"),
+                        _expedition_marker_display_mode_dropdown(
+                            "show_expedition_loot_converter",
+                            "icon_only"),
                     },
                 },
                 {

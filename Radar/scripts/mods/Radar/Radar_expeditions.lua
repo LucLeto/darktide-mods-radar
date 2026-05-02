@@ -721,6 +721,7 @@ return function(env)
 
     function _kind_enabled(kind)
         local get_enemy_marker_mode = mod.get_enemy_marker_mode
+        local get_expedition_marker_display_mode = mod.get_expedition_marker_display_mode
         local get_marker_display_mode = mod.get_marker_display_mode
         local get_setting = mod.get
         local enemy_display_mode = get_enemy_marker_mode(mod, kind)
@@ -735,6 +736,12 @@ return function(env)
 
         if enemy_display_mode ~= nil then
             return enemy_display_mode ~= "off"
+        end
+
+        local expedition_display_mode = get_expedition_marker_display_mode and
+            get_expedition_marker_display_mode(mod, kind) or nil
+        if expedition_display_mode ~= nil then
+            return expedition_display_mode ~= "off"
         end
 
         local display_mode = get_marker_display_mode(mod, kind)
