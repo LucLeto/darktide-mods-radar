@@ -1050,6 +1050,27 @@ return {
                             default_value = true,
                         },
                         {
+                            setting_id = "player_marker_range_mode",
+                            type = "dropdown",
+                            default_value = "normal",
+                            options = {
+                                {
+                                    text = "player_marker_range_mode_normal",
+                                    value = "normal",
+                                },
+                                {
+                                    text = "player_marker_range_mode_infinite",
+                                    value = "infinite",
+                                },
+                            },
+                            get = function()
+                                return mod:get_player_marker_range_mode()
+                            end,
+                            change = function(new_value)
+                                mod:set("player_marker_range_mode", new_value)
+                            end,
+                        },
+                        {
                             setting_id = "player_display_style",
                             type = "dropdown",
                             default_value = "marked_icon",

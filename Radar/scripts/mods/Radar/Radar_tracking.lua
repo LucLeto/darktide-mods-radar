@@ -2247,6 +2247,16 @@ return function(env)
         return self:get("show_player_center_dot") ~= false
     end
 
+    function mod:get_player_marker_range_mode()
+        local value = tostring(self:get("player_marker_range_mode") or "normal")
+
+        if value ~= "infinite" then
+            value = "normal"
+        end
+
+        return value
+    end
+
     function mod:get_radar_snapshot()
         return self._radar_snapshot
     end

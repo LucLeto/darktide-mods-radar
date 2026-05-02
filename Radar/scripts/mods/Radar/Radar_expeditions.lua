@@ -712,6 +712,10 @@ return function(env)
             return true
         end
 
+        if kind == "player_teammate" and mod:get_player_marker_range_mode() == "infinite" then
+            return true
+        end
+
         if _is_boss_marker_kind(kind) and mod:get_boss_marker_range_mode() == "infinite" then
             return true
         end
