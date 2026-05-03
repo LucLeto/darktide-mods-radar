@@ -324,6 +324,22 @@ return function(env)
         misc = "enemy_misc_icon_scale",
     }
 
+    local ENEMY_RADAR_VERTICAL_ARROW_SETTING_BY_KIND = {
+        enemy_daemonhost = "show_enemy_boss_vertical_arrows",
+        enemy_monstrosity = "show_enemy_boss_vertical_arrows",
+        enemy_captain = "show_enemy_boss_vertical_arrows",
+        enemy_karnak_twin = "show_enemy_boss_vertical_arrows",
+    }
+
+    local ENEMY_RADAR_VERTICAL_ARROW_SETTING_BY_CATEGORY = {
+        special = "show_enemy_special_vertical_arrows",
+        elite = "show_enemy_elite_vertical_arrows",
+        shooter = "show_enemy_shooter_vertical_arrows",
+        common = "show_enemy_common_vertical_arrows",
+        horde = "show_enemy_horde_vertical_arrows",
+        misc = "show_enemy_misc_vertical_arrows",
+    }
+
     local ENEMY_RADAR_SELECTION_PRIORITY = {
         boss = 500,
         special = 400,
@@ -1102,6 +1118,25 @@ return function(env)
         return ENEMY_RADAR_DEFINITION_BY_KIND[kind_or_breed] or ENEMY_RADAR_DEFINITIONS_BY_BREED[kind_or_breed]
     end
 
+    function mod:show_enemy_vertical_arrows(kind_or_breed)
+        local direct_setting_id = rawget(ENEMY_RADAR_VERTICAL_ARROW_SETTING_BY_KIND, kind_or_breed)
+
+        if direct_setting_id ~= nil then
+            return self:get(direct_setting_id) == true
+        end
+
+        local definition = self:get_enemy_radar_definition(kind_or_breed)
+
+        if not definition then
+            return false
+        end
+
+        local category = definition.category
+        local setting_id = category and rawget(ENEMY_RADAR_VERTICAL_ARROW_SETTING_BY_CATEGORY, category) or nil
+
+        return setting_id ~= nil and self:get(setting_id) == true
+    end
+
     function mod:get_enemy_marker_mode(kind)
         local setting_id = ENEMY_RADAR_SETTING_BY_KIND[kind]
 
@@ -1324,6 +1359,7 @@ return function(env)
         load_package("packages/ui/views/mission_board_view/mission_board_view")
         load_package("packages/ui/views/scanner_display_view/scanner_display_view")
         load_package("packages/ui/material_sets/circumstances")
+        load_package("packages/ui/views/crafting_view/crafting_view")
 
         if debug_mode then
             mod:info("Packages loaded")

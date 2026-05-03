@@ -67,6 +67,15 @@ local function _nearby_highlight_radar_distance_text_checkbox(setting_id)
     }
 end
 
+local function _enemy_vertical_arrows_checkbox(setting_id)
+    return {
+        setting_id = setting_id,
+        tooltip = "show_enemy_vertical_arrows_tooltip",
+        type = "checkbox",
+        default_value = false,
+    }
+end
+
 local function _icon_marked_off_dropdown(setting_id, default_value)
     local tooltip = nil
 
@@ -978,6 +987,7 @@ return {
                             type = "checkbox",
                             default_value = true,
                         },
+                        _enemy_vertical_arrows_checkbox("show_enemy_boss_vertical_arrows"),
                         _icon_scale_slider("enemy_horde_icon_scale", "enemy_horde_icon_scale"),
                         {
                             setting_id = "show_enemy_horde",
@@ -985,10 +995,13 @@ return {
                             default_value = false,
                             tooltip = "horde_tooltip",
                         },
+                        _enemy_vertical_arrows_checkbox("show_enemy_horde_vertical_arrows"),
                         _icon_scale_slider("enemy_common_icon_scale", "enemy_common_icon_scale"),
                         _icon_marked_off_dropdown("show_enemy_common", "icon_only"),
+                        _enemy_vertical_arrows_checkbox("show_enemy_common_vertical_arrows"),
                         _icon_scale_slider("enemy_shooter_icon_scale", "enemy_shooter_icon_scale"),
                         _icon_marked_off_dropdown("show_enemy_shooter", "icon_only"),
+                        _enemy_vertical_arrows_checkbox("show_enemy_shooter_vertical_arrows"),
                         _icon_scale_slider("enemy_elite_icon_scale", "enemy_elite_icon_scale"),
                         _icon_marked_off_dropdown("show_enemy_cultist_gunner", "icon_only"),
                         _icon_marked_off_dropdown("show_enemy_cultist_berzerker", "icon_only"),
@@ -1001,6 +1014,7 @@ return {
                         _icon_marked_off_dropdown("show_enemy_chaos_ogryn_bulwark", "icon_only"),
                         _icon_marked_off_dropdown("show_enemy_chaos_ogryn_executor", "icon_only"),
                         _icon_marked_off_dropdown("show_enemy_chaos_ogryn_gunner", "icon_only"),
+                        _enemy_vertical_arrows_checkbox("show_enemy_elite_vertical_arrows"),
                         _icon_scale_slider("enemy_special_icon_scale", "enemy_special_icon_scale"),
                         _icon_marked_off_dropdown("show_enemy_renegade_grenadier", "icon_only"),
                         _icon_marked_off_dropdown("show_enemy_cultist_grenadier", "icon_only"),
@@ -1012,8 +1026,10 @@ return {
                         _icon_marked_off_dropdown("show_enemy_chaos_hound", "icon_only"),
                         _icon_marked_off_dropdown("show_enemy_renegade_sniper", "icon_only"),
                         _icon_marked_off_dropdown("show_enemy_renegade_netgunner", "marked_icon"),
+                        _enemy_vertical_arrows_checkbox("show_enemy_special_vertical_arrows"),
                         _icon_scale_slider("enemy_misc_icon_scale", "enemy_misc_icon_scale"),
                         _icon_marked_off_dropdown("show_enemy_cultist_ritualist", "icon_only"),
+                        _enemy_vertical_arrows_checkbox("show_enemy_misc_vertical_arrows"),
                     },
                 },
                 {

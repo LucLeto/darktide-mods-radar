@@ -1216,7 +1216,7 @@ local function _draw_overview_scale_overlay(self, ui_renderer, x, y, z, radar_si
     _draw_overview_scale_text(ui_renderer, scale_text, y_text_center_x, center_y, z + 1, font_size, legend_color)
 end
 
-local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size)
+local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, bracket_x, bracket_y, bracket_size)
     local icon_style = widget.style.icon
     local overlay_icon_style = widget.style.overlay_icon
     local title_icon_style = widget.style.title_icon
@@ -1253,6 +1253,10 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size)
     local icon_offset = icon_style.offset
     local icon_size_tbl = icon_style.size
     local icon_z = math_floor((z or 0) + 0.5)
+    local arrow_anchor_x = nil
+    local arrow_anchor_y = nil
+    local arrow_anchor_size = nil
+    local arrow_size_base = nil
 
     icon_offset[1] = math_floor((x or 0) + 0.5)
     icon_offset[2] = math_floor((y or 0) + 0.5)
@@ -1260,6 +1264,20 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size)
     icon_size_tbl[1] = size
     icon_size_tbl[2] = size
     icon_style.color = color
+
+    if target
+        and _is_enemy_kind(target.kind)
+        and not _is_boss_enemy_kind(target.kind) then
+        local anchor_size = tonumber(bracket_size)
+
+        if anchor_size and anchor_size > 0 then
+            arrow_anchor_x = math_floor((tonumber(bracket_x) or icon_offset[1]) + 0.5)
+            arrow_anchor_y = math_floor((tonumber(bracket_y) or icon_offset[2]) + 0.5)
+            arrow_anchor_size = math_floor(anchor_size + 0.5)
+        end
+
+        arrow_size_base = size
+    end
 
     if overlay_icon_style then
         local overlay_size = nil
@@ -1285,6 +1303,13 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size)
         overlay_size_tbl[1] = overlay_size
         overlay_size_tbl[2] = overlay_size
         overlay_icon_style.color = overlay_color
+
+        if target
+            and _is_enemy_kind(target.kind)
+            and not _is_boss_enemy_kind(target.kind)
+            and overlay_base_size ~= nil then
+            arrow_size_base = overlay_size
+        end
     end
 
     if title_icon_style then
@@ -1302,11 +1327,14 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size)
     if arrow_icon_style then
         local arrow_offset = arrow_icon_style.offset
         local arrow_size_tbl = arrow_icon_style.size
-        local arrow_size = math_max(6, math_floor(size * 0.45 + 1))
+        local base_x = arrow_anchor_x or icon_offset[1]
+        local base_y = arrow_anchor_y or icon_offset[2]
+        local base_size = arrow_anchor_size or size
+        local arrow_size = math_max(6, math_floor((arrow_size_base or base_size) * 0.45 + 1))
         local overlap = math_floor(arrow_size * 0.5 + 1) + 2
 
-        arrow_offset[1] = icon_offset[1] + size - overlap
-        arrow_offset[2] = icon_offset[2] + size - overlap
+        arrow_offset[1] = base_x + base_size - overlap
+        arrow_offset[2] = base_y + base_size - overlap
         arrow_offset[3] = icon_z + 3
         arrow_size_tbl[1] = arrow_size
         arrow_size_tbl[2] = arrow_size
@@ -2221,7 +2249,8 @@ local function _draw_internal(self, ui_renderer, snapshot)
                     draw_marker_brackets(ui_renderer, bracket_x, bracket_y, bracket_z, bracket_size, bracket_color)
                 end
 
-                apply_marker_widget(widget, visual, draw_x, draw_y, icon_z, target, marker_size)
+                apply_marker_widget(widget, visual, draw_x, draw_y, icon_z, target, marker_size,
+                    bracket_x, bracket_y, bracket_size)
 
                 if debug_mode then
                     _log_once(

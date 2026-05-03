@@ -1172,8 +1172,18 @@ return function(env)
         return true
     end
 
-    local function _supports_vertical_item_marker(kind)
-        return _is_item_kind(kind)
+    local function _supports_vertical_marker(kind)
+        if _is_item_kind(kind) then
+            return true
+        end
+
+        if not _is_enemy_kind(kind) then
+            return false
+        end
+
+        local show_enemy_vertical_arrows = mod.show_enemy_vertical_arrows
+
+        return show_enemy_vertical_arrows ~= nil and show_enemy_vertical_arrows(mod, kind) == true
     end
 
     local function _expedition_loot_target_value(target)
@@ -1469,11 +1479,11 @@ return function(env)
             return ignore_range
         end
 
-        local function _cached_supports_vertical_item_marker(kind)
+        local function _cached_supports_vertical_marker(kind)
             local supports_vertical = supports_vertical_cache[kind]
 
             if supports_vertical == nil then
-                supports_vertical = _supports_vertical_item_marker(kind)
+                supports_vertical = _supports_vertical_marker(kind)
                 supports_vertical_cache[kind] = supports_vertical
             end
 
@@ -1564,7 +1574,7 @@ return function(env)
             local vertical_delta = nil
             local vertical_state = nil
 
-            if _cached_supports_vertical_item_marker(kind) then
+            if _cached_supports_vertical_marker(kind) then
                 vertical_delta = _vertical_delta(player_pos, position)
 
                 if vertical_delta ~= nil then
