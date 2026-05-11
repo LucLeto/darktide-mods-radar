@@ -699,16 +699,8 @@ return function(env)
             or kind == "location_threat"
     end
 
-    function _ignore_radar_range_for_kind(kind)
-        if kind == "expedition_loot_converter" then
-            return false
-        end
-
+    function _has_infinite_radar_range_for_kind(kind)
         if kind == "material_expeditions_loot_player_drop" then
-            return true
-        end
-
-        if _is_player_smart_tag_kind(kind) then
             return true
         end
 
@@ -717,6 +709,22 @@ return function(env)
         end
 
         if _is_boss_marker_kind(kind) and mod:get_boss_marker_range_mode() == "infinite" then
+            return true
+        end
+
+        return false
+    end
+
+    function _ignore_radar_range_for_kind(kind)
+        if kind == "expedition_loot_converter" then
+            return false
+        end
+
+        if _is_player_smart_tag_kind(kind) then
+            return true
+        end
+
+        if _has_infinite_radar_range_for_kind(kind) then
             return true
         end
 

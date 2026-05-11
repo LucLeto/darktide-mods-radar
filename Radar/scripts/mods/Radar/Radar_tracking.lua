@@ -54,6 +54,7 @@ return function(env)
 
     local _scratch_kind_enabled_cache = {}
     local _scratch_ignore_range_cache = {}
+    local _scratch_infinite_range_cache = {}
     local _scratch_supports_vertical_cache = {}
     local _scratch_render_layer_cache = {}
     local _scratch_selection_priority_cache = {}
@@ -89,6 +90,7 @@ return function(env)
     local function _clear_scratch_radar_caches()
         table_clear(_scratch_kind_enabled_cache)
         table_clear(_scratch_ignore_range_cache)
+        table_clear(_scratch_infinite_range_cache)
         table_clear(_scratch_supports_vertical_cache)
         table_clear(_scratch_render_layer_cache)
         table_clear(_scratch_selection_priority_cache)
@@ -1450,6 +1452,7 @@ return function(env)
 
         local kind_enabled_cache = _scratch_kind_enabled_cache
         local ignore_range_cache = _scratch_ignore_range_cache
+        local infinite_range_cache = _scratch_infinite_range_cache
         local supports_vertical_cache = _scratch_supports_vertical_cache
         local render_layer_cache = _scratch_render_layer_cache
         local selection_priority_cache = _scratch_selection_priority_cache
@@ -1477,6 +1480,17 @@ return function(env)
             end
 
             return ignore_range
+        end
+
+        local function _cached_infinite_radar_range(kind)
+            local infinite_range = infinite_range_cache[kind]
+
+            if infinite_range == nil then
+                infinite_range = _has_infinite_radar_range_for_kind(kind)
+                infinite_range_cache[kind] = infinite_range
+            end
+
+            return infinite_range
         end
 
         local function _cached_supports_vertical_marker(kind)
@@ -1553,7 +1567,8 @@ return function(env)
             end
 
             local distance_sq_horizontal = _distance_squared_horizontal(player_pos, position)
-            local ignore_range = _cached_ignore_radar_range(kind)
+            local infinite_range = _cached_infinite_radar_range(kind)
+            local ignore_range = infinite_range or _cached_ignore_radar_range(kind)
 
             if explicitly_tagged_target or ability_marked_enemy then
                 ignore_range = true
@@ -1580,7 +1595,7 @@ return function(env)
                 if vertical_delta ~= nil then
                     local abs_vertical_delta = math_abs(vertical_delta)
 
-                    if abs_vertical_delta >= item_vertical_hide_threshold then
+                    if not infinite_range and abs_vertical_delta >= item_vertical_hide_threshold then
                         return
                     end
 
