@@ -1847,8 +1847,18 @@ return function(env)
         ))
     end
 
+    local function _is_ui_input_active()
+        local managers = Managers
+        local ui_manager = managers and managers.ui
+        local using_input = ui_manager and ui_manager.using_input
+
+        return using_input and using_input(ui_manager, true) == true
+    end
+
     local function _is_radar_keybind_runtime_allowed()
-        return mod.is_radar_runtime_game_mode_allowed and mod:is_radar_runtime_game_mode_allowed()
+        return not _is_ui_input_active()
+            and mod.is_radar_runtime_game_mode_allowed
+            and mod:is_radar_runtime_game_mode_allowed()
     end
 
     local function _update_internal(t)
