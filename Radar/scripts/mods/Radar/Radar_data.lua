@@ -1154,6 +1154,16 @@ return {
                             default_value = true,
                         },
                         {
+                            setting_id = "show_dark_rites_totem",
+                            type = "checkbox",
+                            default_value = true,
+                        },
+                        {
+                            setting_id = "show_dark_rites_servo_skull",
+                            type = "checkbox",
+                            default_value = true,
+                        },
+                        {
                             setting_id = "show_pocketable_corrupted_auspex_scanner",
                             type = "checkbox",
                             default_value = true,

@@ -987,6 +987,7 @@ return function(env)
         local tracked_units = mod._tracked_units
         local seen_destructibles = _scratch_seen_destructibles
         local track_item_tags = mod:get_show_only_tagged_items()
+        local dark_rites_scan_allowed = _is_dark_rites_marker_scan_allowed()
         table_clear(seen_destructibles)
 
         for unit, extension in pairs(destructible_map) do
@@ -999,6 +1000,9 @@ return function(env)
                 local collectible_section_id = collectible_data and collectible_data.section_id or nil
                 local collectible_name = collectible_data and collectible_data.name or nil
                 local collectible_key = _idol_collectible_key(collectible_section_id, collectible_id)
+                local prop_data_name = nil
+                local unit_data_breed_name = nil
+                local is_live_event_skulls_totem = false
                 local extension_visible = _safe_destructible_visible(extension)
                 local unit_visible = _safe_unit_main_visible(unit)
                 local health_alive = _safe_health_alive(unit)
@@ -1006,10 +1010,30 @@ return function(env)
                 local destroyed_by_event = mod._idol_destroyed_units[unit] ~= nil
                     or (collectible_key ~= nil and mod._idol_destroyed_collectible_keys[collectible_key] ~= nil)
 
-                if not destroyed_by_event and has_active_collectible and extension_visible == true and health_alive ~= false and unit_visible ~= false then
-                    _track_unit(unit, "pickup_heretic_idol", "destructible_system", {
+                if dark_rites_scan_allowed then
+                    if collectible_type == "nurgle_totem" then
+                        is_live_event_skulls_totem = true
+                    elseif collectible_type ~= "heretic_idol" or not has_active_collectible then
+                        prop_data_name = _safe_unit_prop_data_name(unit)
+                        unit_data_breed_name = _safe_unit_data_breed_name(unit)
+                        is_live_event_skulls_totem = _is_live_event_skulls_totem_unit(collectible_type, unit_data_breed_name,
+                            prop_data_name)
+                    end
+                end
+
+                if not destroyed_by_event
+                    and (has_active_collectible or is_live_event_skulls_totem)
+                    and extension_visible == true
+                    and health_alive ~= false
+                    and unit_visible ~= false then
+                    local kind = is_live_event_skulls_totem and "dark_rites_totem" or "pickup_heretic_idol"
+
+                    _track_unit(unit, kind, "destructible_system", {
                         collectible_type = collectible_type,
                         unit_name = _safe_lower_string(_safe_unit_name(unit)),
+                        prop_data_name = prop_data_name,
+                        unit_data_breed_name = unit_data_breed_name,
+                        is_live_event_skulls_totem = is_live_event_skulls_totem,
                         extension_visible = extension_visible,
                         unit_visible = unit_visible,
                         health_alive = health_alive,
@@ -1459,6 +1483,7 @@ return function(env)
         local priority_target_cache = _scratch_priority_target_cache
         local get_target_render_layer = mod.get_target_render_layer
         local get_target_selection_priority = mod.get_target_selection_priority
+        local is_event_marker_kind = mod.is_event_marker_kind
 
         local function _cached_kind_enabled(kind)
             local enabled = kind_enabled_cache[kind]
@@ -1510,6 +1535,7 @@ return function(env)
             if is_priority_target == nil then
                 is_priority_target = kind == "enemy_daemonhost" or _is_boss_marker_kind(kind) or
                     ENEMY_RADAR_DEFINITION_BY_KIND[kind] ~= nil or
+                    (is_event_marker_kind and is_event_marker_kind(mod, kind) == true) or
                     kind == "material_expeditions_loot_player_drop" or
                     kind == "location_attention" or
                     kind == "location_ping" or
@@ -1800,6 +1826,7 @@ return function(env)
         mod._last_scan_signature = nil
         mod._last_block_signature = nil
         mod._last_state_gameplay = nil
+        _reset_dark_rites_marker_scan_cache()
         mod._idol_destroyed_collectible_keys = {}
         mod._idol_destroyed_units = {}
         mod._last_safe_zone_section_index = nil

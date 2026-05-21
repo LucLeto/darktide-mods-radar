@@ -25,6 +25,10 @@ return function(env)
             t[k] = nil
         end
     end
+    local DARK_RITES_CIRCUMSTANCE_PREFIX = "skulls_guns"
+    local LEGACY_SKULLS_CIRCUMSTANCE_PREFIX = "skulls_event_01"
+    local DARK_RITES_CIRCUMSTANCE_VARIANT_PREFIX = DARK_RITES_CIRCUMSTANCE_PREFIX .. "_"
+    local LEGACY_SKULLS_CIRCUMSTANCE_VARIANT_PREFIX = LEGACY_SKULLS_CIRCUMSTANCE_PREFIX .. "_"
     local _scratch_highlight_enabled_by_kind = {}
 
     local function _reuse_screen_highlight_output()
@@ -187,6 +191,34 @@ return function(env)
 
     function _safe_unit_collectible_type(unit)
         return _safe_unit_data_string(unit, "collectible_type")
+    end
+
+    function _safe_unit_prop_data_name(unit)
+        return _safe_unit_data_string(unit, "armor_data_name")
+    end
+
+    function _safe_unit_data_breed_name(unit)
+        local script_unit = ScriptUnit
+        local has_extension = script_unit and script_unit.has_extension
+
+        if not unit or not has_extension then
+            return nil
+        end
+
+        local unit_data_extension = has_extension(unit, "unit_data_system")
+        local breed_name_fn = unit_data_extension and unit_data_extension.breed_name or nil
+
+        if not breed_name_fn then
+            return nil
+        end
+
+        local ok_breed_name, breed_name = pcall(breed_name_fn, unit_data_extension)
+
+        if ok_breed_name and breed_name ~= nil then
+            return _safe_lower_string(breed_name)
+        end
+
+        return nil
     end
 
     function _safe_destructible_collectible_data(extension)
@@ -568,7 +600,7 @@ return function(env)
             end
         end
 
-        if kind == "pickup_heretic_idol" then
+        if kind == "pickup_heretic_idol" or kind == "dark_rites_totem" then
             local health_alive = _safe_health_alive(unit)
             if health_alive == false then
                 return false
@@ -669,6 +701,101 @@ return function(env)
         end
 
         return nil
+    end
+
+    local function _safe_circumstance_value(value)
+        if value ~= nil and value ~= "" then
+            return _safe_lower_string(value)
+        end
+
+        return nil
+    end
+
+    function _safe_circumstance_name()
+        local state_gameplay = mod._last_state_gameplay
+        if state_gameplay then
+            local shared_state = state_gameplay._shared_state
+            local circumstance_name = _safe_circumstance_value(shared_state and shared_state.circumstance_name)
+
+            if circumstance_name ~= nil then
+                return circumstance_name
+            end
+        end
+
+        local state_manager = Managers and Managers.state
+        local game_mode_manager = state_manager and state_manager.game_mode
+        if game_mode_manager and game_mode_manager.circumstance_name then
+            local ok, circumstance_name = pcall(game_mode_manager.circumstance_name, game_mode_manager)
+            circumstance_name = ok and _safe_circumstance_value(circumstance_name) or nil
+
+            if circumstance_name ~= nil then
+                return circumstance_name
+            end
+        end
+
+        local gameplay = state_manager and state_manager.gameplay
+        local shared_state = gameplay and gameplay._shared_state
+        local circumstance_name = _safe_circumstance_value(shared_state and shared_state.circumstance_name)
+        if circumstance_name ~= nil then
+            return circumstance_name
+        end
+
+        local package_synchronizer_client = Managers and Managers.package_synchronizer_client
+        circumstance_name = _safe_circumstance_value(package_synchronizer_client and package_synchronizer_client._circumstance_name)
+        if circumstance_name ~= nil then
+            return circumstance_name
+        end
+
+        local mechanism_manager = Managers and Managers.mechanism
+        if mechanism_manager and mechanism_manager.mechanism_data then
+            local ok, mechanism_data = pcall(mechanism_manager.mechanism_data, mechanism_manager)
+            circumstance_name = ok and _safe_circumstance_value(mechanism_data and mechanism_data.circumstance_name) or nil
+
+            if circumstance_name ~= nil then
+                return circumstance_name
+            end
+        end
+
+        local mechanism = mechanism_manager and mechanism_manager._mechanism
+        local mechanism_data = mechanism and mechanism._mechanism_data
+        circumstance_name = _safe_circumstance_value(mechanism_data and mechanism_data.circumstance_name)
+            or _safe_circumstance_value(mechanism and mechanism._circumstance_name)
+
+        if circumstance_name ~= nil then
+            return circumstance_name
+        end
+
+        return nil
+    end
+
+    local function _is_skulls_live_event_circumstance(circumstance_name)
+        return circumstance_name == DARK_RITES_CIRCUMSTANCE_PREFIX
+            or circumstance_name == LEGACY_SKULLS_CIRCUMSTANCE_PREFIX
+            or _string_starts_with(circumstance_name, DARK_RITES_CIRCUMSTANCE_VARIANT_PREFIX)
+            or _string_starts_with(circumstance_name, LEGACY_SKULLS_CIRCUMSTANCE_VARIANT_PREFIX)
+    end
+
+    function _reset_dark_rites_marker_scan_cache()
+        mod._dark_rites_marker_scan_cache_valid = false
+        mod._dark_rites_marker_scan_allowed = true
+        mod._dark_rites_marker_cached_circumstance_name = nil
+    end
+
+    function _is_dark_rites_marker_scan_allowed()
+        local circumstance_name = _safe_circumstance_name()
+
+        if mod._dark_rites_marker_scan_cache_valid == true
+            and mod._dark_rites_marker_cached_circumstance_name == circumstance_name then
+            return mod._dark_rites_marker_scan_allowed == true
+        end
+
+        local scan_allowed = circumstance_name == nil or _is_skulls_live_event_circumstance(circumstance_name)
+
+        mod._dark_rites_marker_scan_cache_valid = true
+        mod._dark_rites_marker_scan_allowed = scan_allowed
+        mod._dark_rites_marker_cached_circumstance_name = circumstance_name
+
+        return scan_allowed
     end
 
     function _safe_presence_activity()
@@ -1081,6 +1208,8 @@ return function(env)
         luggable_socket = 0.18,
         pickup_heretic_idol = 0.12,
         pickup_tainted_skull = 0.1,
+        dark_rites_totem = 0.12,
+        dark_rites_servo_skull = 0.1,
         pocketable_corrupted_auspex_scanner = 0.08,
         pickup_saints = 0.12,
         pickup_stolen_rations = 0.08,

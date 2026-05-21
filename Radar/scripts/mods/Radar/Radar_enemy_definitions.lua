@@ -60,6 +60,8 @@ return function(env)
         luggable_socket = { 255, 255, 245, 80 },
         pickup_heretic_idol = { 255, 150, 190, 60 },
         pickup_tainted_skull = { 255, 150, 190, 60 },
+        dark_rites_totem = { 255, 150, 190, 60 },
+        dark_rites_servo_skull = { 255, 150, 190, 60 },
         pocketable_corrupted_auspex_scanner = { 255, 255, 120, 0 },
         pickup_saints = { 255, 192, 160, 0 },
         pickup_stolen_rations = { 255, 150, 190, 60 },
@@ -75,6 +77,9 @@ return function(env)
     mod._last_update_t = nil
     mod._last_scan_signature = nil
     mod._last_block_signature = nil
+    mod._dark_rites_marker_scan_cache_valid = false
+    mod._dark_rites_marker_scan_allowed = true
+    mod._dark_rites_marker_cached_circumstance_name = nil
     mod._screen_highlight_targets = {}
     mod._unclustered_radar_targets = {}
     mod._highlight_source_radar_targets = {}
@@ -114,6 +119,9 @@ return function(env)
         medicae_station = "show_medicae_station",
         luggable_socket = "show_luggable_socket",
         pickup_heretic_idol = "show_heretic_idol",
+        pickup_tainted_skull = "show_tainted_skull",
+        dark_rites_totem = "show_dark_rites_totem",
+        dark_rites_servo_skull = "show_dark_rites_servo_skull",
         crate_unknown = "show_crates",
         enemy_daemonhost = "show_monstrosities",
         enemy_monstrosity = "show_monstrosities",
@@ -272,6 +280,8 @@ return function(env)
         location_ping = "players_group",
         location_threat = "players_group",
         pickup_tainted_skull = "event_group",
+        dark_rites_totem = "event_group",
+        dark_rites_servo_skull = "event_group",
         pocketable_corrupted_auspex_scanner = "event_group",
         pickup_saints = "event_group",
         pickup_stolen_rations = "event_group",
@@ -361,6 +371,8 @@ return function(env)
     }
     local PLAYER_SMART_TAG_SELECTION_PRIORITY = 300
     local PLAYER_SMART_TAG_RENDER_LAYER = 3
+    local EVENT_MARKER_SELECTION_PRIORITY = 600
+    local EVENT_MARKER_RENDER_LAYER = 7
     local EXPEDITION_PLAYER_DROP_SELECTION_PRIORITY = 650
     local EXPEDITION_PLAYER_DROP_RENDER_LAYER = 6
 
@@ -1088,6 +1100,10 @@ return function(env)
         return MARKER_SCALE_GROUP_BY_KIND[kind]
     end
 
+    function mod:is_event_marker_kind(kind)
+        return kind ~= nil and MARKER_SCALE_GROUP_BY_KIND[kind] == "event_group"
+    end
+
     local function _percent_scale_from_setting(self, setting_id)
         if not setting_id then
             return 1
@@ -1198,6 +1214,10 @@ return function(env)
     end
 
     function mod:get_target_selection_priority(kind)
+        if self:is_event_marker_kind(kind) then
+            return EVENT_MARKER_SELECTION_PRIORITY
+        end
+
         if kind == "material_expeditions_loot_player_drop" then
             return EXPEDITION_PLAYER_DROP_SELECTION_PRIORITY
         end
@@ -1223,6 +1243,10 @@ return function(env)
     end
 
     function mod:get_target_render_layer(kind)
+        if self:is_event_marker_kind(kind) then
+            return EVENT_MARKER_RENDER_LAYER
+        end
+
         if kind == "material_expeditions_loot_player_drop" then
             return EXPEDITION_PLAYER_DROP_RENDER_LAYER
         end
@@ -1360,6 +1384,7 @@ return function(env)
         load_package("packages/ui/views/scanner_display_view/scanner_display_view")
         load_package("packages/ui/material_sets/circumstances")
         load_package("packages/ui/views/crafting_view/crafting_view")
+        load_package("packages/ui/views/penance_overview_view/penance_overview_view")
 
         if debug_mode then
             mod:info("Packages loaded")

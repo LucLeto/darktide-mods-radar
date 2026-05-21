@@ -864,6 +864,10 @@ return function(env)
             local exact_kind = EXACT_PICKUP_KIND_BY_NAME[pickup_name]
 
             if exact_kind then
+                if exact_kind == "pickup_tainted_skull" and not _is_dark_rites_marker_scan_allowed() then
+                    return nil, meta
+                end
+
                 return exact_kind, meta
             end
 
@@ -882,6 +886,11 @@ return function(env)
             if _string_starts_with(pickup_name, "expedition_loot_small_") then
                 return "material_expeditions_loot", meta
             end
+        end
+
+        if description == "loc_skulls_guns_servo_skull_interact_description"
+            and _is_dark_rites_marker_scan_allowed() then
+            return "dark_rites_servo_skull", meta
         end
 
         local key = tostring(pickup_name or "") .. "|"
@@ -1169,6 +1178,12 @@ return function(env)
         end
     end
 
+    function _is_live_event_skulls_totem_unit(collectible_type, unit_data_breed_name, prop_data_name)
+        return collectible_type == "nurgle_totem"
+            or unit_data_breed_name == "nurgle_totem"
+            or prop_data_name == "nurgle_totem"
+    end
+
     function _clear_tracked_idol_by_collectible(section_id, id)
         local collectible_key = _idol_collectible_key(section_id, id)
 
@@ -1186,7 +1201,8 @@ return function(env)
         for unit, data in pairs(tracked_units) do
             local meta = data and data.meta or nil
 
-            if data and data.source == "destructible_system" and data.kind == "pickup_heretic_idol"
+            if data and data.source == "destructible_system"
+                and (data.kind == "pickup_heretic_idol" or data.kind == "dark_rites_totem")
                 and meta and meta.collectible_section_id == section_id and meta.collectible_id == id then
                 tracked_units[unit] = nil
                 destroyed_units[unit] = now
@@ -1195,7 +1211,20 @@ return function(env)
     end
 
     function _mark_idol_unit_destroyed(unit, extension)
-        if unit == nil or _safe_unit_collectible_type(unit) ~= "heretic_idol" then
+        if unit == nil then
+            return
+        end
+
+        local collectible_type = _safe_unit_collectible_type(unit)
+        local is_live_event_skulls_totem = false
+
+        if collectible_type ~= "heretic_idol" and _is_dark_rites_marker_scan_allowed() then
+            local prop_data_name = _safe_unit_prop_data_name(unit)
+            local unit_data_breed_name = _safe_unit_data_breed_name(unit)
+            is_live_event_skulls_totem = _is_live_event_skulls_totem_unit(collectible_type, unit_data_breed_name, prop_data_name)
+        end
+
+        if collectible_type ~= "heretic_idol" and not is_live_event_skulls_totem then
             return
         end
 

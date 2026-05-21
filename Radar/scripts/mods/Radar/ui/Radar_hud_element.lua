@@ -442,6 +442,16 @@ local PRESENTATIONS = {
         color = _widget_color(255, 150, 190, 60),
         size = 14,
     },
+    dark_rites_totem = {
+        icon = "content/ui/materials/icons/achievements/categories/category_heretics",
+        color = _widget_color(255, 150, 190, 60),
+        size = 20,
+    },
+    dark_rites_servo_skull = {
+        icon = "content/ui/materials/icons/abilities/default",
+        color = _widget_color(255, 150, 190, 60),
+        size = 14,
+    },
     pickup_saints = {
         icon = "content/ui/materials/icons/circumstances/live_event_01",
         color = _widget_color(255, 192, 160, 0),
