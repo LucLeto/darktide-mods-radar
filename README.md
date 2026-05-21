@@ -4,7 +4,7 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 
 ## Feature Overview
 
-- Tracks nearby pickups, materials, mission items, deployables, environment interactables, expedition POIs, teammates, player smart tags, tagged targets, supported ability-outlined enemies, and high-priority enemies on a single camera-oriented radar or the temporary centered overview.
+- Tracks nearby pickups, materials, mission items, deployables, environment interactables, live-event pickups and objectives, expedition POIs, teammates, player smart tags, tagged targets, supported ability-outlined enemies, and high-priority enemies on a single camera-oriented radar or the temporary centered overview.
 - Supports **Square**, **Circle**, and **Auspex** radar styles. Square and Circle use configurable **outline** and **guide** options, including the Auspex background guide, while **Auspex** adds its dedicated scanner frame treatment.
 - Lets you tune **radar size**, normal radar **range**, centered overview **zoom range**, **background opacity**, **maximum marker count**, **nearby highlight range**, supported vertical arrow and hiding behavior, and the dedicated nearby-highlight presentation settings.
 - Supports per-category **Icon size (%)** sliders across item, player, enemy, event, and debug marker groups, plus dedicated enemy sub-category scaling.
@@ -250,7 +250,7 @@ Each major option group now includes an **Icon size (%)** slider. These sliders 
 | Enemy Special | Special enemies |
 | Enemy Misc | Ritualists |
 | Players | Teammate markers |
-| Event-Related Items | Event pickups and event objectives |
+| Event-Related Items | Event pickups and event objectives, including Dark Rites totems and servo skulls |
 | Debugging | Unknown pickup markers and debug visuals |
 
 ### Enemy radar controls
@@ -304,7 +304,7 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Expeditions-Specific Items | Highlights nearby salvage, tech-remnants, expedition pocketables, and related expedition pickups. |
 | Martyr's Skull Items | Highlights nearby martyr's skull items and their orange power cell markers. |
 | Environment | Highlights nearby medicae stations, power sockets, and heretic idols. |
-| Event-Related Items | Highlights nearby event pickups and event objectives. |
+| Event-Related Items | Highlights nearby event pickups and event objectives, including Dark Rites totems and servo skulls. |
 
 ### Tech-Remnant controls
 
@@ -337,6 +337,18 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Power Socket | Shows luggable power socket targets. |
 | Heretic Idol | Shows active heretic idols while they are still present. |
 
+### Event Controls
+
+| Option | What it controls |
+| --- | --- |
+| Event-Related Items | Group of toggles for live-event pickups and event objectives. |
+| Tainted Skulls | Shows tainted skull pickups from skull live-event circumstances. |
+| Dark Rites Totems | Shows destroyable Dark Rites ritual totems while they are still active. |
+| Dark Rites Servo Skulls | Shows the spawned Dark Rites servo skull objective interactable. |
+| Tainted Communications Device | Shows corrupted auspex scanner event pickups. |
+| Holy Relics | Shows Holy Relics event pickups. |
+| Stolen Rations | Shows Stolen Rations event pickups. |
+
 ### Positioning and Toggle Use
 
 - Use **Toggle radar on or off** for quick in-mission HUD control, or the per-mode enable toggles if you want Radar active only in selected activities.
@@ -351,6 +363,7 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 - Supported enemies can also be surfaced through active ability-mark or smart-tag outline states when **Ability-marked enemies** is enabled.
 - **Tagged enemies only** and **Tagged items only** restrict visibility to actively tagged targets, and those tagged targets ignore the usual radar range limit while the tag remains active.
 - Supported item markers and enemy markers from enabled enemy categories can show vertical **up** and **down** arrows. They use the shared vertical arrow range and shared vertical hide threshold, while nearby highlight brackets and optional distance text remain item-focused presentation features.
+- Event-related markers use elevated marker priority so event objectives stay visible when dense enemy markers are nearby.
 - **Expedition POIs**, **environment markers**, and **tech-remnant clusters** follow their own category-specific rules so outdated markers clear correctly and context-sensitive markers only appear when relevant.
 - Expedition POIs can be shown as **Icon only**, **Icon + Distance m**, or **Off** per category. Existing boolean settings migrate to **Icon only** for enabled markers and **Off** for disabled markers.
 - Expedition section filtering also handles **Deadsider Sanctuary** transitions. Store fixtures and sanctuary-only markers are cleared when moving back into open expedition zones, while active player-dropped Tech-Remnants remain eligible for radar display.
@@ -610,6 +623,8 @@ These markers are driven by expedition navigation data rather than standard pick
 | Preview | Marker | Notes |
 | --- | --- | --- |
 | <img src="doc/img/pickup_tainted_skull.png"  width="80" alt="Tainted Skull marker" /> | Tainted Skulls | Green skull marker. |
+| <img src="doc/img/dark_rites_totem.png"  width="80" alt="Dark Rites Totem marker" /> | Dark Rites Totems | Green heretics icon marker for destroyable Dark Rites ritual totems. |
+| <img src="doc/img/dark_rites_servo_skull.png"  width="80" alt="Dark Rites Servo Skull marker" /> | Dark Rites Servo Skulls | Green ability icon marker for spawned Dark Rites servo skull objective interactables. |
 | <img src="doc/img/pocketable_corrupted_auspex_scanner.png"  width="80" alt="Tainted Communications Device marker" /> | Tainted Communications Device | Orange auspex scanner marker. |
 | <img src="doc/img/pickup_saints.png"  width="80" alt="Holy Relics marker" /> | Holy Relics | Gold relic marker. |
 | <img src="doc/img/pickup_stolen_rations.png"  width="80" alt="Stolen Rations marker" /> | Stolen Rations | Green crate marker. |
@@ -682,6 +697,8 @@ The remaining formerly white pickup icons were recolored so marker families read
 | `content/ui/materials/hud/interactions/icons/barrel_explosive` | Promethium Barrel | `(255, 255, 110, 0)` |
 | `content/ui/materials/icons/circumstances/live_event_01` | Holy Relics | `(255, 192, 160, 0)` |
 | `content/ui/materials/hud/interactions/icons/enemy` | Martyr's Skull, Tainted Skulls | `(255, 255, 215, 0)`, `(255, 150, 190, 60)` |
+| `content/ui/materials/icons/achievements/categories/category_heretics` | Dark Rites Totems | `(255, 150, 190, 60)` |
+| `content/ui/materials/icons/abilities/default` | Dark Rites Servo Skulls | `(255, 150, 190, 60)` |
 
 ### Runtime-dynamic colors
 
