@@ -10,6 +10,7 @@ return function(env)
     local type = type
     local rawget = rawget
     local math_floor = math.floor
+    local math_sqrt = math.sqrt
     local string_find = string.find
     local string_format = string.format
     local string_lower = string.lower
@@ -828,8 +829,544 @@ return function(env)
         }
     end
 
+    local MARTYR_SKULL_RIDDLE_POSITION_MATCH_DISTANCE_SQ = 0.01
+    local MARTYR_SKULL_RIDDLE_SOLVE_DOOR_POSITION_MATCH_DISTANCE_SQ = 0.25
+    local MARTYR_SKULL_RIDDLE_COORDINATE_FALLBACK_LIVE_UNIT_DISTANCE_SQ = 0.25
+
+    local MARTYR_SKULL_RIDDLE_SIGNATURES_BY_MISSION = {
+        cm_habs = {
+            ["default|default|loc_interactable_button_01"] = {
+                fallback = true,
+                { x = 143.653, y = -157.591, z = -13.257 },
+            },
+            ["default|default|loc_interactable_button_02"] = {
+                fallback = true,
+                { x = 144.131, y = -157.116, z = -13.258 },
+            },
+            ["default|default|loc_interactable_button_03"] = {
+                fallback = true,
+                { x = 144.565, y = -156.677, z = -13.258 },
+            },
+            ["default|default|loc_interactable_prison_cells"] = {
+                { x = 142.250, y = -170.223, z = -12.543 },
+                { x = 140.248, y = -170.223, z = -12.543 },
+            },
+            ["default|default|loc_interactable_security_switch"] = {
+                { x = 142.749, y = -161.852, z = -12.526 },
+            },
+        },
+        cm_archives = {
+            ["default|default|loc_interaction_chandelier"] = {
+                { x = -65.260, y = 102.926, z = 2.356 },
+                { x = -65.950, y = 77.582, z = 2.396 },
+                { x = -82.659, y = 103.048, z = 4.354 },
+                { x = -83.250, y = 77.526, z = 4.400 },
+                { x = -99.303, y = 103.019, z = 4.371 },
+            },
+        },
+        cm_raid = {
+            ["default|puzzle|loc_interactable_gate"] = {
+                { x = -288.418, y = -276.372, z = -24.939 },
+                { x = -294.552, y = -289.393, z = -27.135 },
+            },
+            ["default|puzzle|loc_interactable_key"] = {
+                { x = -292.131, y = -290.854, z = -21.719 },
+                { x = -313.701, y = -239.565, z = -24.006 },
+            },
+            ["default|default|loc_interactable_gate|#id[0cdc9d780a3425c5]"] = {
+                { x = -287.903, y = -278.082, z = -26.492 },
+                { x = -296.225, y = -289.884, z = -28.430 },
+            },
+            ["setup_breach_charge|default|loc_action_interaction_setup_breach_charge"] = {
+                { x = -290.934, y = -298.562, z = -21.312 },
+            },
+        },
+        dm_propaganda = {
+            ["default|default|loc_interactable_skull_weight"] = {
+                { x = 22.907, y = 32.243, z = 2.204 },
+            },
+            ["default|default|loc_interactable_trash_bin"] = {
+                { x = 22.737, y = 32.175, z = 2.949 },
+            },
+            ["default|puzzle|loc_interactable_skull_weight"] = {
+                { x = 2.261, y = -2.895, z = 4.014 },
+            },
+        },
+        dm_stockpile = {
+            ["default|puzzle|loc_interactable_crane"] = {
+                { x = -121.067, y = 155.778, z = 13.462 },
+                { x = -121.566, y = 156.419, z = 13.462 },
+                { x = -122.064, y = 157.061, z = 13.462 },
+                { x = -122.563, y = 157.702, z = 13.462 },
+            },
+        },
+        dm_forge = {
+            ["default|default|loc_interactable_button"] = {
+                { x = -8.578, y = 37.113, z = 5.007 },
+            },
+            ["default|default|loc_interactable_button|#id[e9b4edfaf3e74a23]"] = {
+                { x = 60.767, y = -5.137, z = -11.409 },
+            },
+        },
+        fm_armoury = {
+            ["default|default|loc_interactable_gate|#id[97214c4425c8caf6]"] = {
+                { x = -264.935, y = -117.707, z = -11.452 },
+            },
+            ["default|default|loc_interactable_power"] = {
+                { x = -268.635, y = -114.754, z = -11.867 },
+            },
+            ["default|default|loc_interactable_valve"] = {
+                { x = -257.823, y = -119.245, z = -11.690 },
+            },
+        },
+        fm_cargo = {
+            ["default|puzzle|loc_interactable_shower"] = {
+                { x = -91.864, y = -40.848, z = 1.044 },
+                { x = -97.586, y = -35.261, z = 1.044 },
+                { x = -102.470, y = -37.313, z = 1.044 },
+                { x = -114.491, y = -33.777, z = 1.044 },
+            },
+        },
+        fm_resurgence = {
+            ["default|puzzle|loc_interactable_valve"] = {
+                { x = 143.984, y = 119.827, z = -2.750 },
+                { x = 144.515, y = 119.297, z = -2.750 },
+                { x = 145.045, y = 118.766, z = -2.750 },
+                { x = 145.575, y = 118.236, z = -2.750 },
+            },
+        },
+        hm_complex = {
+            ["default|default|loc_interactable_candle"] = {
+                { x = -250.027, y = 103.021, z = -22.079 },
+                { x = -249.219, y = 105.886, z = -22.147 },
+                { x = -246.302, y = 106.784, z = -22.077 },
+                { x = -243.328, y = 105.864, z = -22.029 },
+                { x = -242.171, y = 103.021, z = -22.085 },
+                { x = -243.358, y = 100.062, z = -22.057 },
+                { x = -246.182, y = 99.176, z = -22.067 },
+                { x = -248.785, y = 100.552, z = -22.067 },
+            },
+        },
+        hm_strain = {
+            ["default|default|loc_interactable_button"] = {
+                { x = 16.000, y = 91.000, z = -48.046 },
+            },
+            ["default|puzzle|loc_interactable_projector"] = {
+                { x = 7.496, y = 88.728, z = -48.768 },
+                { x = 7.496, y = 96.885, z = -48.768 },
+            },
+        },
+        km_station = {
+            ["default|puzzle|loc_interactable_valve"] = {
+                { x = -1.340, y = -176.501, z = -8.621 },
+                { x = -6.098, y = -204.798, z = -10.511 },
+                { x = 9.483, y = -229.324, z = -5.663 },
+                { x = 44.075, y = -214.487, z = 2.128 },
+                { x = 51.270, y = -219.523, z = -1.389 },
+            },
+        },
+        lm_cooling = {
+            ["default|puzzle|loc_interactable_key"] = {
+                { x = -39.311, y = -181.093, z = -18.938 },
+            },
+            ["default|puzzle|loc_interactable_locker"] = {
+                { x = -40.480, y = -215.426, z = -21.998 },
+                { x = -41.298, y = -215.202, z = -22.997 },
+            },
+        },
+    }
+
+    local MARTYR_SKULL_RIDDLE_SOLVE_DOORS_BY_MISSION = {
+        cm_habs = {
+            require_all = true,
+            { x = 142.246, y = -170.633, z = -14.345, label = "prison_cell_door_a" },
+            { x = 136.254, y = -170.615, z = -14.345, label = "prison_cell_door_b" },
+        },
+        fm_cargo = {
+            { x = -103.178, y = -52.162, z = 1.044, label = "skull_door" },
+        },
+    }
+
+    local MARTYR_SKULL_RIDDLE_DOOR_DEBUG_POINTS_BY_MISSION = {
+        dm_forge = {
+            { x = -8.578, y = 37.113, z = 5.007, label = "riddle_button" },
+        },
+        fm_cargo = {
+            { x = -97.7419, y = -51.6034, z = 1.7982, label = "skull_marker" },
+        },
+    }
+
+    local function _martyr_skull_riddle_signature(interaction_type, ui_interaction_type, description)
+        return tostring(interaction_type or "") .. "|"
+            .. tostring(ui_interaction_type or "") .. "|"
+            .. tostring(description or "")
+    end
+
+    local function _martyr_skull_riddle_unit_signature(interaction_type, ui_interaction_type, description, unit_name)
+        return _martyr_skull_riddle_signature(interaction_type, ui_interaction_type, description) .. "|"
+            .. tostring(unit_name or "")
+    end
+
+    local function _matches_martyr_skull_riddle_entry(entry, unit)
+        if entry == true then
+            return true
+        end
+
+        if not entry or not unit then
+            return false
+        end
+
+        local position = _safe_unit_position(unit)
+
+        if not position then
+            return false
+        end
+
+        for i = 1, #entry do
+            if _distance_squared(position, entry[i]) <= MARTYR_SKULL_RIDDLE_POSITION_MATCH_DISTANCE_SQ then
+                return true
+            end
+        end
+
+        return false
+    end
+
+    local function _has_mission_martyr_skull_riddle_signature(interaction_type, ui_interaction_type, description,
+                                                              unit_name, unit)
+        if not description then
+            return false
+        end
+
+        local mission_name = _safe_mission_name()
+        local mission_signatures = mission_name and MARTYR_SKULL_RIDDLE_SIGNATURES_BY_MISSION[mission_name] or nil
+
+        if not mission_signatures then
+            return false
+        end
+
+        local signature = _martyr_skull_riddle_signature(interaction_type, ui_interaction_type, description)
+        if _matches_martyr_skull_riddle_entry(mission_signatures[signature], unit) then
+            return true
+        end
+
+        return _matches_martyr_skull_riddle_entry(mission_signatures[_martyr_skull_riddle_unit_signature(
+            interaction_type, ui_interaction_type, description, unit_name)], unit)
+    end
+
+    local function _is_current_mission_martyr_skull_riddle_solved()
+        local solved_by_mission = mod._martyr_skull_riddle_solved_by_mission
+        local mission_name = solved_by_mission and _safe_mission_name() or nil
+
+        return mission_name ~= nil and solved_by_mission[mission_name] == true
+    end
+
+    function _should_scan_hidden_martyr_skull_riddle_interactables()
+        if _is_current_mission_martyr_skull_riddle_solved() then
+            return false
+        end
+
+        local mission_name = _safe_mission_name()
+
+        return mission_name ~= nil and MARTYR_SKULL_RIDDLE_SIGNATURES_BY_MISSION[mission_name] ~= nil
+    end
+
+    local function _mark_martyr_skull_riddle_solved(mission_name, reason, unit)
+        if not mission_name then
+            return
+        end
+
+        local solved_by_mission = mod._martyr_skull_riddle_solved_by_mission
+
+        if not solved_by_mission then
+            solved_by_mission = {}
+            mod._martyr_skull_riddle_solved_by_mission = solved_by_mission
+        end
+
+        if solved_by_mission[mission_name] == true then
+            return
+        end
+
+        solved_by_mission[mission_name] = true
+
+        if mod:get("debug_mode") == true then
+            local position = _safe_unit_position(unit)
+            local x, y, z = _vector3_components(position)
+            local position_text = "nil"
+
+            if _is_finite_number(x) and _is_finite_number(y) and _is_finite_number(z) then
+                position_text = string_format("%.3f,%.3f,%.3f", x, y, z)
+            end
+
+            _log_once("martyr_skull_riddle_solved:" .. tostring(mission_name), string_format(
+                "Martyr's Skull riddle solved: mission=%s reason=%s unit_name=%s position=%s",
+                tostring(mission_name),
+                tostring(reason),
+                tostring(_safe_lower_string(_safe_unit_name(unit))),
+                position_text
+            ))
+        end
+    end
+
+    local function _is_martyr_skull_riddle_solve_door_open_state(state)
+        return state == "open" or state == "open_fwd" or state == "open_bwd"
+    end
+
+    local function _is_matching_open_martyr_skull_riddle_solve_door(unit, extension, solve_door)
+        if not _safe_unit_alive(unit) or not extension then
+            return false
+        end
+
+        local position = _safe_unit_position(unit)
+
+        if not position or _distance_squared(position, solve_door) >
+            MARTYR_SKULL_RIDDLE_SOLVE_DOOR_POSITION_MATCH_DISTANCE_SQ then
+            return false
+        end
+
+        if _is_martyr_skull_riddle_solve_door_open_state(rawget(extension, "_current_state")) then
+            return true
+        end
+
+        if solve_door.solved_when_can_open == true then
+            local can_open = extension.can_open
+
+            if can_open then
+                local ok, value = pcall(can_open, extension)
+
+                return ok and value == true or false
+            end
+        end
+
+        return false
+    end
+
+    function _sync_martyr_skull_riddle_solve_state()
+        local mission_name = _safe_mission_name()
+        local solve_doors = mission_name and MARTYR_SKULL_RIDDLE_SOLVE_DOORS_BY_MISSION[mission_name] or nil
+
+        if not solve_doors or _is_current_mission_martyr_skull_riddle_solved() then
+            return
+        end
+
+        local door_map = _safe_unit_to_extension_map("door_system")
+
+        if not door_map then
+            return
+        end
+
+        if solve_doors.require_all == true then
+            local last_open_unit = nil
+
+            for i = 1, #solve_doors do
+                local solve_door = solve_doors[i]
+                local is_open = false
+
+                for unit, extension in pairs(door_map) do
+                    if _is_matching_open_martyr_skull_riddle_solve_door(unit, extension, solve_door) then
+                        is_open = true
+                        last_open_unit = unit
+                        break
+                    end
+                end
+
+                if not is_open then
+                    return
+                end
+            end
+
+            _mark_martyr_skull_riddle_solved(mission_name, "doors_open", last_open_unit)
+            return
+        end
+
+        for unit, extension in pairs(door_map) do
+            for i = 1, #solve_doors do
+                if _is_matching_open_martyr_skull_riddle_solve_door(unit, extension, solve_doors[i]) then
+                    _mark_martyr_skull_riddle_solved(mission_name, "door_open", unit)
+                    return
+                end
+            end
+        end
+    end
+
+    local function _is_martyr_skull_riddle_interactable(interaction_type, ui_interaction_type, description, unit_name,
+                                                        unit)
+        if _is_current_mission_martyr_skull_riddle_solved() then
+            return false
+        end
+
+        return _has_mission_martyr_skull_riddle_signature(interaction_type, ui_interaction_type, description, unit_name,
+            unit)
+    end
+
+    local function _debug_position_text(position)
+        local x, y, z = _vector3_components(position)
+
+        if not _is_finite_number(x) or not _is_finite_number(y) or not _is_finite_number(z) then
+            return "nil"
+        end
+
+        return string_format("%.3f,%.3f,%.3f", x, y, z)
+    end
+
+    local function _debug_unit_position_text(unit)
+        return _debug_position_text(_safe_unit_position(unit))
+    end
+
+    local function _debug_log_classified_martyr_skull_riddle_interactable(interaction_type, ui_interaction_type, icon,
+                                                                          description, unit_name, pickup_name,
+                                                                          pickup_group, unit)
+        if mod:get("debug_mode") ~= true then
+            return
+        end
+
+        local position_text = _debug_unit_position_text(unit)
+        local signature = _martyr_skull_riddle_signature(interaction_type, ui_interaction_type, description)
+        local unit_signature = _martyr_skull_riddle_unit_signature(interaction_type, ui_interaction_type, description,
+            unit_name)
+        local key = string_lower("classified_martyr_skull_riddle_interactable:"
+            .. tostring(_safe_mission_name()) .. "|"
+            .. signature .. "|"
+            .. unit_signature .. "|"
+            .. position_text .. "|"
+            .. tostring(pickup_name) .. "|"
+            .. tostring(icon) .. "|"
+            .. tostring(pickup_group))
+
+        _log_once(key, string_format(
+            "Classified Martyr's Skull riddle interactable: mission=%s kind=martyr_skull_riddle_interactable signature=%s unit_signature=%s position=%s interaction_type=%s ui_interaction_type=%s pickup_name=%s icon=%s description=%s unit_name=%s pickup_group=%s",
+            tostring(_safe_mission_name()),
+            signature,
+            unit_signature,
+            position_text,
+            tostring(interaction_type),
+            tostring(ui_interaction_type),
+            tostring(pickup_name),
+            tostring(icon),
+            tostring(description),
+            tostring(unit_name),
+            tostring(pickup_group)
+        ))
+    end
+
+    local function _debug_extension_call(extension, method_name)
+        local method = extension and extension[method_name]
+
+        if not method then
+            return nil
+        end
+
+        local ok, value = pcall(method, extension)
+
+        if ok then
+            return value
+        end
+
+        return nil
+    end
+
+    local function _debug_number_text(value)
+        if _is_finite_number(value) then
+            return string_format("%.2f", value)
+        end
+
+        return tostring(value)
+    end
+
+    local function _nearest_martyr_skull_riddle_door_debug_point(mission_name, position)
+        local points = MARTYR_SKULL_RIDDLE_DOOR_DEBUG_POINTS_BY_MISSION[mission_name]
+
+        if not points or not position then
+            return nil, nil
+        end
+
+        local best_label = nil
+        local best_distance_sq = nil
+
+        for i = 1, #points do
+            local point = points[i]
+            local distance_sq = _distance_squared(position, point)
+
+            if not best_distance_sq or distance_sq < best_distance_sq then
+                best_label = point.label
+                best_distance_sq = distance_sq
+            end
+        end
+
+        return best_label, best_distance_sq
+    end
+
+    function _debug_log_martyr_skull_door_candidates()
+        if mod:get("debug_mode") ~= true then
+            return
+        end
+
+        local mission_name = _safe_mission_name()
+
+        if not mission_name or not MARTYR_SKULL_RIDDLE_SIGNATURES_BY_MISSION[mission_name] then
+            return
+        end
+
+        local door_map = _safe_unit_to_extension_map("door_system")
+
+        if not door_map then
+            _log_once("martyr_skull_door_debug:no_door_map:" .. tostring(mission_name),
+                "Door candidate scan unavailable: mission=" .. tostring(mission_name) .. " reason=no_door_system_map")
+            return
+        end
+
+        for unit, extension in pairs(door_map) do
+            if _safe_unit_alive(unit) and extension then
+                local position = _safe_unit_position(unit)
+                local position_text = _debug_unit_position_text(unit)
+                local unit_name = _safe_lower_string(_safe_unit_name(unit))
+                local current_state = rawget(extension, "_current_state")
+                local start_state = rawget(extension, "_start_state")
+                local door_type = rawget(extension, "_type")
+                local open_type = rawget(extension, "_open_type")
+                local allow_closing = rawget(extension, "_allow_closing")
+                local self_closing_time = rawget(extension, "_self_closing_time")
+                local control_panel_units = rawget(extension, "_control_panel_units")
+                local control_panel_count = type(control_panel_units) == "table" and #control_panel_units or 0
+                local can_open = _debug_extension_call(extension, "can_open")
+                local can_close = _debug_extension_call(extension, "can_close")
+                local nav_blocked = _debug_extension_call(extension, "nav_blocked")
+                local last_state_change = _debug_extension_call(extension, "get_last_state_change_time")
+                local nearest_label, nearest_distance_sq =
+                    _nearest_martyr_skull_riddle_door_debug_point(mission_name, position)
+                local nearest_distance = nearest_distance_sq and math_sqrt(nearest_distance_sq) or nil
+                local key = string_format("martyr_skull_door_debug:%s|%s|%s|%s|%s",
+                    tostring(mission_name),
+                    tostring(unit_name),
+                    position_text,
+                    tostring(current_state),
+                    _debug_number_text(last_state_change)
+                )
+
+                _log_once(key, string_format(
+                    "Door candidate: mission=%s position=%s unit_name=%s state=%s start_state=%s type=%s open_type=%s allow_closing=%s self_closing_time=%s can_open=%s can_close=%s nav_blocked=%s last_state_change=%s control_panels=%s nearest_riddle_point=%s nearest_riddle_distance=%s",
+                    tostring(mission_name),
+                    position_text,
+                    tostring(unit_name),
+                    tostring(current_state),
+                    tostring(start_state),
+                    tostring(door_type),
+                    tostring(open_type),
+                    tostring(allow_closing),
+                    _debug_number_text(self_closing_time),
+                    tostring(can_open),
+                    tostring(can_close),
+                    tostring(nav_blocked),
+                    _debug_number_text(last_state_change),
+                    tostring(control_panel_count),
+                    tostring(nearest_label),
+                    _debug_number_text(nearest_distance)
+                ))
+            end
+        end
+    end
+
     local function _classify_pickup_like(interaction_type, ui_interaction_type, icon, description, unit_name, pickup_name,
-                                         pickup_data, marked_by_player_slot)
+                                         pickup_data, marked_by_player_slot, unit, suppress_debug)
         local pickup_group = pickup_data and pickup_data.group or nil
         local meta = _pickup_meta(pickup_name, pickup_data, interaction_type, ui_interaction_type, icon, description,
             unit_name,
@@ -884,13 +1421,44 @@ return function(env)
             end
         end
 
+        if _is_martyr_skull_riddle_interactable(interaction_type, ui_interaction_type, description, unit_name,
+            unit) then
+            _debug_log_classified_martyr_skull_riddle_interactable(interaction_type, ui_interaction_type, icon,
+                description, unit_name, pickup_name, pickup_group, unit)
+
+            return "martyr_skull_riddle_interactable", meta
+        end
+
         local key = tostring(pickup_name or "") .. "|"
             .. tostring(interaction_type or "") .. "|"
+            .. tostring(ui_interaction_type or "") .. "|"
             .. tostring(icon or "") .. "|"
             .. tostring(description or "") .. "|"
             .. tostring(unit_name or "") .. "|"
             .. tostring(pickup_group or "")
         key = string_lower(key)
+
+        if not suppress_debug and mod:get("debug_mode") == true then
+            local position_text = _debug_unit_position_text(unit)
+            local signature = _martyr_skull_riddle_signature(interaction_type, ui_interaction_type, description)
+            local unit_signature = _martyr_skull_riddle_unit_signature(interaction_type, ui_interaction_type,
+                description, unit_name)
+
+            _log_once("unclassified_interactable:" .. key .. "|" .. position_text, string_format(
+                "Unclassified interactable: mission=%s signature=%s unit_signature=%s position=%s interaction_type=%s ui_interaction_type=%s pickup_name=%s icon=%s description=%s unit_name=%s pickup_group=%s",
+                tostring(_safe_mission_name()),
+                signature,
+                unit_signature,
+                position_text,
+                tostring(interaction_type),
+                tostring(ui_interaction_type),
+                tostring(pickup_name),
+                tostring(icon),
+                tostring(description),
+                tostring(unit_name),
+                tostring(pickup_group)
+            ))
+        end
 
         if string_find(key, "grimoire", 1, true)
             or string_find(key, "scripture", 1, true)
@@ -903,7 +1471,10 @@ return function(env)
             or string_find(key, "saints_pickup", 1, true)
             or string_find(key, "stolen_rations", 1, true)
             or string_find(key, "penance_collectible", 1, true) then
-            _log_once(key, "Unknown pickup: " .. key)
+            if not suppress_debug then
+                _log_once(key, "Unknown pickup: " .. key)
+            end
+
             return "pickup_unknown", meta
         end
 
@@ -954,7 +1525,7 @@ return function(env)
         return _safe_player_slot(player)
     end
 
-    function _classify_interactee(extension, unit)
+    function _classify_interactee(extension, unit, suppress_debug, skip_marked_by_player_slot)
         if not extension then
             return nil, nil
         end
@@ -992,10 +1563,10 @@ return function(env)
         local pickup_name = _safe_unit_pickup_name(unit)
         local pickups_by_name = Pickups and Pickups.by_name or nil
         local pickup_data = pickup_name and pickups_by_name and pickups_by_name[pickup_name] or nil
-        local marked_by_player_slot = _marked_by_player_slot_for_unit(unit)
+        local marked_by_player_slot = skip_marked_by_player_slot and nil or _marked_by_player_slot_for_unit(unit)
 
         local kind, meta = _classify_pickup_like(interaction_type, ui_interaction_type, icon, description, unit_name,
-            pickup_name, pickup_data, marked_by_player_slot)
+            pickup_name, pickup_data, marked_by_player_slot, unit, suppress_debug)
 
         if kind == "material_expeditions_loot" then
             meta.remnant_value = _expedition_loot_value_for_pickup_name(pickup_name)
@@ -1238,6 +1809,76 @@ return function(env)
             position = position,
             meta = meta,
         }
+    end
+
+    local function _has_live_martyr_skull_riddle_interactable_near_position(position)
+        local tracked_units = mod._tracked_units
+
+        if not tracked_units then
+            return false
+        end
+
+        for unit, data in pairs(tracked_units) do
+            if data
+                and data.kind == "martyr_skull_riddle_interactable"
+                and data.source == "interactee_system" then
+                local tracked_position = data.position or _safe_unit_position(unit)
+
+                if _distance_squared(tracked_position, position) <=
+                    MARTYR_SKULL_RIDDLE_COORDINATE_FALLBACK_LIVE_UNIT_DISTANCE_SQ then
+                    return true
+                end
+            end
+        end
+
+        return false
+    end
+
+    local function _martyr_skull_riddle_signature_parts(signature)
+        local interaction_type, ui_interaction_type, description = string_match(signature, "^([^|]*)|([^|]*)|([^|]*)")
+
+        return interaction_type, ui_interaction_type, description
+    end
+
+    function _scan_martyr_skull_riddle_coordinate_fallbacks()
+        if not _kind_enabled("martyr_skull_riddle_interactable")
+            or _is_current_mission_martyr_skull_riddle_solved() then
+            return
+        end
+
+        local mission_name = _safe_mission_name()
+        local mission_signatures = mission_name and MARTYR_SKULL_RIDDLE_SIGNATURES_BY_MISSION[mission_name] or nil
+
+        if not mission_signatures then
+            return
+        end
+
+        for signature, entry in pairs(mission_signatures) do
+            if type(entry) == "table" and entry.fallback == true then
+                local interaction_type, ui_interaction_type, description =
+                    _martyr_skull_riddle_signature_parts(signature)
+
+                for i = 1, #entry do
+                    local position = entry[i]
+
+                    if position and not _has_live_martyr_skull_riddle_interactable_near_position(position) then
+                        _track_point(
+                            string_format("martyr_skull_riddle_fallback:%s:%s:%s", tostring(mission_name),
+                                tostring(signature), tostring(i)),
+                            "martyr_skull_riddle_interactable",
+                            position,
+                            "martyr_skull_riddle_coordinate_fallback",
+                            {
+                                interaction_type = interaction_type,
+                                ui_interaction_type = ui_interaction_type,
+                                interaction_icon = "content/ui/materials/hud/interactions/icons/default",
+                                description = description,
+                            }
+                        )
+                    end
+                end
+            end
+        end
     end
 
     local PLAYER_SMART_TAG_KINDS = {

@@ -437,6 +437,11 @@ local PRESENTATIONS = {
         color = _widget_color(255, 255, 215, 0),
         size = 14,
     },
+    martyr_skull_riddle_interactable = {
+        icon = "content/ui/materials/hud/interactions/icons/default",
+        color = _widget_color(255, 255, 215, 0),
+        size = 14,
+    },
     pickup_tainted_skull = {
         icon = "content/ui/materials/hud/interactions/icons/enemy",
         color = _widget_color(255, 150, 190, 60),

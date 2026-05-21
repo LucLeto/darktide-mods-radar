@@ -55,6 +55,7 @@ return function(env)
         pocketable_valkyrie_hover = { 255, 95, 125, 70 },
         pocketable_void_shield = { 255, 181, 166, 66 },
         pickup_martyr_skull = { 255, 255, 215, 0 },
+        martyr_skull_riddle_interactable = { 255, 255, 215, 0 },
         luggable_power_cell_orange = { 255, 255, 140, 0 },
         medicae_station = { 255, 38, 205, 26 },
         luggable_socket = { 255, 255, 245, 80 },
@@ -80,6 +81,7 @@ return function(env)
     mod._highlight_source_radar_targets = {}
     mod._idol_destroyed_collectible_keys = {}
     mod._idol_destroyed_units = {}
+    mod._martyr_skull_riddle_solved_by_mission = {}
     mod._last_safe_zone_section_index = nil
     mod._last_expedition_in_safe_zone = nil
     mod._player_smart_tag_generation = 0
@@ -123,6 +125,7 @@ return function(env)
         location_attention = "show_player_tags",
         location_ping = "show_player_tags",
         location_threat = "show_player_tags",
+        martyr_skull_riddle_interactable = "show_martyr_skull_riddle_interactables",
         material_diamantine = "show_diamantine",
         material_plasteel = "show_plasteel",
         material_expeditions_currency = "show_expeditions_currency",
@@ -261,6 +264,7 @@ return function(env)
         pocketable_valkyrie_hover = "expeditions_specific_group",
         pocketable_void_shield = "expeditions_specific_group",
         pickup_martyr_skull = "martyr_s_skull_group",
+        martyr_skull_riddle_interactable = "martyr_s_skull_group",
         luggable_power_cell_orange = "martyr_s_skull_group",
         medicae_station = "environment_group",
         luggable_socket = "environment_group",

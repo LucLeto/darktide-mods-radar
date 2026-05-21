@@ -808,6 +808,8 @@ return function(env)
         local player_unit = _player_unit()
         local tracked_units = mod._tracked_units
         local seen_interactees = _scratch_seen_interactees
+        local force_hidden_martyr_skull_riddle_interactables = _kind_enabled("martyr_skull_riddle_interactable")
+            and _should_scan_hidden_martyr_skull_riddle_interactables()
         table_clear(seen_interactees)
 
         for unit, extension in pairs(interactee_map) do
@@ -846,8 +848,20 @@ return function(env)
                     end
                 end
 
-                if is_active and not is_used and show_marker then
-                    local kind, meta = _classify_interactee(extension, unit)
+                if is_active and not is_used then
+                    local kind = nil
+                    local meta = nil
+
+                    if show_marker then
+                        kind, meta = _classify_interactee(extension, unit)
+                    elseif force_hidden_martyr_skull_riddle_interactables then
+                        kind, meta = _classify_interactee(extension, unit, true, true)
+
+                        if kind ~= "martyr_skull_riddle_interactable" then
+                            kind = nil
+                            meta = nil
+                        end
+                    end
 
                     if kind
                         and not _should_hide_expedition_store_product_in_open_zone(unit)
@@ -1511,6 +1525,7 @@ return function(env)
                 is_priority_target = kind == "enemy_daemonhost" or _is_boss_marker_kind(kind) or
                     ENEMY_RADAR_DEFINITION_BY_KIND[kind] ~= nil or
                     kind == "material_expeditions_loot_player_drop" or
+                    kind == "martyr_skull_riddle_interactable" or
                     kind == "location_attention" or
                     kind == "location_ping" or
                     kind == "location_threat"
@@ -1802,6 +1817,7 @@ return function(env)
         mod._last_state_gameplay = nil
         mod._idol_destroyed_collectible_keys = {}
         mod._idol_destroyed_units = {}
+        mod._martyr_skull_riddle_solved_by_mission = {}
         mod._last_safe_zone_section_index = nil
         mod._last_expedition_in_safe_zone = nil
         mod._player_smart_tag_generation = 0
@@ -1923,13 +1939,16 @@ return function(env)
         mod._next_scan_t = scan_clock + scan_interval
 
         _sync_expedition_item_state()
+        _sync_martyr_skull_riddle_solve_state()
         _scan_interactees()
+        _debug_log_martyr_skull_door_candidates()
         _scan_chests()
         _scan_minions()
         _scan_destructibles()
         _scan_smart_tag_targets()
         _refresh_player_units()
         _scan_expedition_objectives()
+        _scan_martyr_skull_riddle_coordinate_fallbacks()
         _scan_player_tag_points()
         _prune_units()
 

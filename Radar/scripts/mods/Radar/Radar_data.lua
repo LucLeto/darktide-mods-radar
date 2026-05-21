@@ -874,6 +874,11 @@ return {
                             default_value = true,
                         },
                         {
+                            setting_id = "show_martyr_skull_riddle_interactables",
+                            type = "checkbox",
+                            default_value = true,
+                        },
+                        {
                             setting_id = "show_power_cell_orange",
                             type = "checkbox",
                             default_value = true,

@@ -1076,6 +1076,7 @@ return function(env)
         pocketable_valkyrie_hover = 0.08,
         pocketable_void_shield = 0.08,
         pickup_martyr_skull = 0.1,
+        martyr_skull_riddle_interactable = 0.12,
         luggable_power_cell_orange = 0.18,
         medicae_station = 0.2,
         luggable_socket = 0.18,
