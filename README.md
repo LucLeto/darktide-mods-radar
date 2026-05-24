@@ -17,6 +17,12 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 - Supports tech-remnant loot modes for **Default**, **Scale by value**, and **Merge nearby piles**, plus optional cluster value text and radius tuning.
 - Includes optional distance text for bosses, player tags, nearby marker highlights, and expedition POIs, per-enemy-category vertical arrow toggles, **Infinite** boss and teammate range modes, **debug logs**, and an **unknown pickups** toggle for discovery and troubleshooting.
 
+## Optional enhanced settings menu
+
+Radar supports optional menu enhancements from [Alf's Mod Settings Extensions](https://www.nexusmods.com/warhammer40kdarktide/mods/864).
+
+When installed, Radar's settings menu is organized into curated tabs with clearer sub-sections and improved widgets where supported. Radar does not require this extension and continues to work normally with plain [DMF](https://www.nexusmods.com/warhammer40kdarktide/mods/8).
+
 ## In-Game Radar Examples
 
 The screenshots below show the live radar styles in gameplay. Together they illustrate the camera-oriented layout, mixed pickup categories, teammate markers, expedition POIs, smart tag support, priority targets, and the optional centered overview mode.
@@ -413,16 +419,16 @@ Left: **Icon only**. Right: **Marked icon**.
 
 | Preview | Marker | Notes |
 | --- | --- | --- |
-| <img src="doc/img/cultist_melee.png"  width="80" alt="Dreg Bruiser marker" /> | Dreg Bruiser | Uses the shared **Common enemies** display-style dropdown. |
-| <img src="doc/img/renegade_melee.png"  width="80" alt="Scab Bruiser marker" /> | Scab Bruiser | Uses the shared **Common enemies** display-style dropdown. |
+| <img src="doc/img/cultist_melee.png"  width="80" alt="Dreg Bruiser marker" /> | Dreg Bruiser | Individual common enemy display-style dropdown. |
+| <img src="doc/img/renegade_melee.png"  width="80" alt="Scab Bruiser marker" /> | Scab Bruiser | Individual common enemy display-style dropdown. |
 
 ### Shooter Enemies
 
 | Preview | Marker | Notes |
 | --- | --- | --- |
-| <img src="doc/img/cultist_assault.png"  width="80" alt="Dreg Stalker marker" /> | Dreg Stalker | Uses the shared **Shooters** display-style dropdown. |
-| <img src="doc/img/renegade_assault.png"  width="80" alt="Scab Stalker marker" /> | Scab Stalker | Uses the shared **Shooters** display-style dropdown. |
-| <img src="doc/img/renegade_rifleman.png"  width="80" alt="Scab Shooter marker" /> | Scab Shooter | Uses the shared **Shooters** display-style dropdown. |
+| <img src="doc/img/cultist_assault.png"  width="80" alt="Dreg Stalker marker" /> | Dreg Stalker | Individual shooter enemy display-style dropdown. |
+| <img src="doc/img/renegade_assault.png"  width="80" alt="Scab Stalker marker" /> | Scab Stalker | Individual shooter enemy display-style dropdown. |
+| <img src="doc/img/renegade_rifleman.png"  width="80" alt="Scab Shooter marker" /> | Scab Shooter | Individual shooter enemy display-style dropdown. |
 
 ### Elite Enemies
 

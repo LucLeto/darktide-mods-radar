@@ -637,7 +637,7 @@ return function(env)
             "content/ui/materials/icons/item_types/weapons",
             ENEMY_RADAR_DEFAULT_DREG_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
-            "show_enemy_shooter",
+            "show_enemy_cultist_assault",
             {
                 icon_size = 7,
                 background_size = 24,
@@ -661,7 +661,7 @@ return function(env)
             "content/ui/materials/icons/item_types/weapons",
             ENEMY_RADAR_DEFAULT_SCAB_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
-            "show_enemy_shooter",
+            "show_enemy_renegade_assault",
             {
                 icon_size = 7,
                 background_size = 24,
@@ -673,7 +673,7 @@ return function(env)
             "content/ui/materials/icons/item_types/ranged_weapons",
             ENEMY_RADAR_DEFAULT_SCAB_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
-            "show_enemy_shooter",
+            "show_enemy_renegade_rifleman",
             {
                 icon_size = 7,
                 background_size = 24,
@@ -888,7 +888,7 @@ return function(env)
             "content/ui/materials/hud/interactions/icons/default",
             ENEMY_RADAR_DEFAULT_DREG_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
-            "show_enemy_common",
+            "show_enemy_cultist_melee",
             {
                 icon_size = 8,
                 background_size = 16,
@@ -900,7 +900,7 @@ return function(env)
             "content/ui/materials/hud/interactions/icons/default",
             ENEMY_RADAR_DEFAULT_SCAB_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
-            "show_enemy_common",
+            "show_enemy_renegade_melee",
             {
                 icon_size = 8,
                 background_size = 16,
@@ -1088,6 +1088,18 @@ return function(env)
         return default_value or "icon_only"
     end
 
+    local function _normalize_enemy_marker_display_mode(value)
+        if value == false or value == "off" then
+            return "off"
+        end
+
+        if value == "marked_icon" then
+            return "marked_icon"
+        end
+
+        return "icon_only"
+    end
+
     function mod:get_marker_scale_group(kind)
         if not kind then
             return nil
@@ -1170,13 +1182,7 @@ return function(env)
             return "off"
         end
 
-        value = tostring(value or "icon_only")
-
-        if value ~= "icon_only" and value ~= "marked_icon" and value ~= "off" then
-            value = "icon_only"
-        end
-
-        return value
+        return _normalize_enemy_marker_display_mode(value)
     end
 
     function mod:get_enemy_category_scale_factor(kind_or_breed)
@@ -1324,6 +1330,46 @@ return function(env)
         end
     end
 
+    local function _migrate_split_enemy_category_settings()
+        local mod_get = mod.get
+        local mod_set = mod.set
+        local migrations = {
+            {
+                legacy_setting_id = "show_enemy_common",
+                setting_ids = {
+                    "show_enemy_cultist_melee",
+                    "show_enemy_renegade_melee",
+                },
+            },
+            {
+                legacy_setting_id = "show_enemy_shooter",
+                setting_ids = {
+                    "show_enemy_cultist_assault",
+                    "show_enemy_renegade_assault",
+                    "show_enemy_renegade_rifleman",
+                },
+            },
+        }
+
+        for i = 1, #migrations do
+            local migration = migrations[i]
+            local legacy_value = mod_get(mod, migration.legacy_setting_id)
+
+            if legacy_value ~= nil then
+                local migrated_value = _normalize_enemy_marker_display_mode(legacy_value)
+                local setting_ids = migration.setting_ids
+
+                for j = 1, #setting_ids do
+                    local setting_id = setting_ids[j]
+
+                    if mod_get(mod, setting_id) == nil then
+                        mod_set(mod, setting_id, migrated_value)
+                    end
+                end
+            end
+        end
+    end
+
     local function _migrate_player_visibility_settings()
         if mod:get("show_players") ~= nil then
             return
@@ -1338,6 +1384,7 @@ return function(env)
     function mod.on_all_mods_loaded()
         _migrate_marker_display_mode_settings()
         _migrate_expedition_marker_display_mode_settings()
+        _migrate_split_enemy_category_settings()
         _migrate_player_visibility_settings()
 
         local debug_mode = mod:get("debug_mode") == true
