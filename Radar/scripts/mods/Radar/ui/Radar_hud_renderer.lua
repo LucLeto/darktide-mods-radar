@@ -32,12 +32,10 @@ local function _widget_color(a, r, g, b)
     return { a, r, g, b }
 end
 
-local function _color(a, r, g, b)
-    return Color(a, r, g, b)
-end
-
 local WHITE_WIDGET_COLOR = { 255, 255, 255, 255 }
 local RADAR_OUTLINE_WIDGET_COLOR = { 255, 213, 226, 206 }
+local RADAR_BACKGROUND_WIDGET_COLOR = { 90, 0, 0, 0 }
+local RADAR_GUIDES_WIDGET_COLOR = { 90, 255, 255, 255 }
 local AUSPEX_BACKGROUND_MATERIAL = "content/ui/materials/backgrounds/scanner/scanner_map_background"
 local AUSPEX_BACKGROUND_NOISE_MATERIAL = "content/ui/materials/backgrounds/scanner/scanner_background_noise"
 local AUSPEX_SCAN_NOISE_MATERIAL = "content/ui/materials/backgrounds/scanner/scanner_noise"
@@ -46,6 +44,9 @@ local AUSPEX_BACKGROUND_WIDGET_COLOR = _widget_color(255, 0, 255, 0)
 local AUSPEX_BACKGROUND_NOISE_WIDGET_COLOR = _widget_color(255, 0, 255, 0)
 local AUSPEX_SCAN_NOISE_WIDGET_COLOR = _widget_color(90, 0, 255, 0)
 local AUSPEX_SWEEP_WIDGET_COLOR = _widget_color(128, 0, 255, 0)
+local AUSPEX_FRAME_WIDGET_COLOR = { 210, 0, 255, 0 }
+local AUSPEX_DOTTED_FRAME_WIDGET_COLOR = { 190, 0, 255, 0 }
+local AUSPEX_INNER_GLOW_WIDGET_COLOR = { 80, 0, 255, 0 }
 local FULL_CIRCLE = math_pi * 2
 
 local function _widget_to_color(color)
@@ -59,6 +60,16 @@ local function _widget_to_color(color)
     local b = color[4] or color.b or 255
 
     return Color(a, r, g, b)
+end
+
+local function _configured_widget_color(prefix, fallback)
+    local get_radar_color = mod.get_radar_color
+
+    return get_radar_color and get_radar_color(mod, prefix, fallback) or fallback
+end
+
+local function _configured_color(prefix, fallback)
+    return _widget_to_color(_configured_widget_color(prefix, fallback))
 end
 
 local function _normalized_radar_style(value)
@@ -705,11 +716,15 @@ local function _draw_radar_guides(self, ui_renderer, x, y, z, size, is_circle, c
         return
     end
 
-    local guide_color = _color(90, 255, 255, 255)
+    local guide_color = _configured_color("radar_guides", RADAR_GUIDES_WIDGET_COLOR)
 
     if guide_style == "auspex_background" then
         local outline_style = mod.get_radar_outline and mod:get_radar_outline() or "solid"
         local options = outline_style ~= "off" and AUSPEX_GUIDE_OPTIONS_WITH_OUTLINE or AUSPEX_GUIDE_OPTIONS_NO_OUTLINE
+        local outline_color = _configured_widget_color("radar_outline", RADAR_OUTLINE_WIDGET_COLOR)
+
+        options.background_color = outline_color
+        options.sweep_color = outline_color
 
         _draw_auspex_material_layers(self, ui_renderer, x, y, z - 1, size, camera_rotation, options)
 
@@ -791,9 +806,8 @@ end
 
 local function _draw_radar_frame_square(ui_renderer, x, y, z, size, outline_style)
     local thickness = 2
-    local fill_alpha = mod.get_background_opacity and mod:get_background_opacity() or 90
-    local fill_color = _color(fill_alpha, 0, 0, 0)
-    local outline_color = _color(255, 213, 226, 206)
+    local fill_color = _configured_color("radar_background", RADAR_BACKGROUND_WIDGET_COLOR)
+    local outline_color = _configured_color("radar_outline", RADAR_OUTLINE_WIDGET_COLOR)
 
     _draw_square_fill_soft(ui_renderer, x, y, z, size, fill_color)
 
@@ -809,9 +823,8 @@ end
 
 local function _draw_radar_frame_circle(ui_renderer, x, y, z, size, outline_style)
     local center_x, center_y, radius = _circle_metrics(x, y, size)
-    local fill_alpha = mod.get_background_opacity and mod:get_background_opacity() or 90
-    local fill_color = _color(fill_alpha, 0, 0, 0)
-    local outline_color = _color(255, 213, 226, 206)
+    local fill_color = _configured_color("radar_background", RADAR_BACKGROUND_WIDGET_COLOR)
+    local outline_color = _configured_color("radar_outline", RADAR_OUTLINE_WIDGET_COLOR)
 
     _draw_circle_fill_soft(ui_renderer, center_x, center_y, z, radius, fill_color)
 
@@ -875,7 +888,7 @@ _draw_auspex_material_layers = function(self, ui_renderer, x, y, z, size, camera
         y + background_inset,
         z + (options.background_z_offset or 0),
         background_size,
-        options.background_color or AUSPEX_BACKGROUND_WIDGET_COLOR
+        options.background_color or _configured_widget_color("auspex_background", AUSPEX_BACKGROUND_WIDGET_COLOR)
     )
     _apply_layer_rotation(frame_widget.style.background, rotation_angle)
     if draw_noise then
@@ -885,7 +898,7 @@ _draw_auspex_material_layers = function(self, ui_renderer, x, y, z, size, camera
             y + noise_inset,
             z + 1,
             noise_size,
-            options.noise_color or AUSPEX_BACKGROUND_NOISE_WIDGET_COLOR
+            options.noise_color or _configured_widget_color("auspex_noise", AUSPEX_BACKGROUND_NOISE_WIDGET_COLOR)
         )
     end
     if draw_scan_noise then
@@ -895,7 +908,7 @@ _draw_auspex_material_layers = function(self, ui_renderer, x, y, z, size, camera
             y + scan_noise_inset,
             z + 2,
             scan_noise_size,
-            options.scan_noise_color or AUSPEX_SCAN_NOISE_WIDGET_COLOR
+            options.scan_noise_color or _configured_widget_color("auspex_scan_noise", AUSPEX_SCAN_NOISE_WIDGET_COLOR)
         )
     end
     _apply_frame_layer_style(
@@ -904,7 +917,8 @@ _draw_auspex_material_layers = function(self, ui_renderer, x, y, z, size, camera
         y + sweep_inset,
         z + 3,
         sweep_size,
-        animated_sweep_enabled and (options.sweep_color or AUSPEX_SWEEP_WIDGET_COLOR) or WHITE_WIDGET_COLOR
+        animated_sweep_enabled and (options.sweep_color or _configured_widget_color("auspex_sweep", AUSPEX_SWEEP_WIDGET_COLOR))
+        or WHITE_WIDGET_COLOR
     )
     _apply_layer_rotation(frame_widget.style.sweep, rotation_angle)
 
@@ -912,9 +926,8 @@ _draw_auspex_material_layers = function(self, ui_renderer, x, y, z, size, camera
 end
 
 local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera_rotation)
-    local fill_alpha = mod.get_background_opacity and mod:get_background_opacity() or 90
     local outline_style = mod.get_radar_outline and mod:get_radar_outline() or "solid"
-    local fill_color = _color(fill_alpha, 0, 0, 0)
+    local fill_color = _configured_color("radar_background", RADAR_BACKGROUND_WIDGET_COLOR)
     local options = outline_style ~= "off" and AUSPEX_FRAME_OPTIONS_WITH_OUTLINE or AUSPEX_FRAME_OPTIONS_NO_OUTLINE
 
     _draw_square_fill_soft(ui_renderer, x, y, z - 1, size, fill_color)
@@ -923,8 +936,8 @@ local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera
     if outline_style == "solid" then
         local thickness = math_max(1, math_floor(size * 0.012 + 0.5))
         local inset = thickness + 2
-        local frame_color = _color(210, 0, 255, 0)
-        local inner_glow_color = _color(80, 0, 255, 0)
+        local frame_color = _configured_color("auspex_frame", AUSPEX_FRAME_WIDGET_COLOR)
+        local inner_glow_color = _configured_color("auspex_inner_glow", AUSPEX_INNER_GLOW_WIDGET_COLOR)
 
         _draw_square_outline(ui_renderer, x, y, z + 4, size, thickness, frame_color)
 
@@ -935,7 +948,7 @@ local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera
         local thickness = math_max(1, math_floor(size * 0.01 + 0.5))
         local dash = math_max(6, math_floor(size * 0.06 + 0.5))
         local gap = math_max(4, math_floor(size * 0.04 + 0.5))
-        local frame_color = _color(190, 0, 255, 0)
+        local frame_color = _configured_color("auspex_frame_dotted", AUSPEX_DOTTED_FRAME_WIDGET_COLOR)
 
         _draw_square_outline_dotted_cornered(ui_renderer, x, y, z + 4, size, thickness, frame_color, dash, gap)
     end
