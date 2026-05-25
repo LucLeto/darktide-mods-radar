@@ -1,4 +1,5 @@
 local mod = get_mod("Radar")
+local RadarColorSettings = mod:io_dofile("Radar/scripts/mods/Radar/Radar_color_settings")
 
 local DROPDOWN_ICON_COLOUR_WHITE = { 255, 255, 255, 255 }
 local DROPDOWN_ICON_COLOUR_RED = { 255, 255, 64, 64 }
@@ -7,7 +8,6 @@ local DROPDOWN_ICON_COLOUR_TOX = { 255, 0, 255, 0 }
 local DROPDOWN_ICON_DEFAULT = "content/ui/materials/hud/interactions/icons/default"
 local DROPDOWN_ICON_ENEMY = "content/ui/materials/hud/interactions/icons/enemy"
 local DROPDOWN_ICON_PLAYER = "content/ui/materials/icons/classes/veteran"
-local DROPDOWN_ICON_PLAYER_TAG = "content/ui/materials/hud/interactions/icons/attention"
 local DROPDOWN_ICON_TECH_REMNANT = "content/ui/materials/icons/currencies/tech_remnant_big"
 
 local REQUIRED_ICON_PACKAGES = {
@@ -399,10 +399,6 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
         icon = DROPDOWN_ICON_DEFAULT,
         icon_colour = DROPDOWN_ICON_COLOUR_WHITE,
     },
-    show_player_tags = {
-        icon = DROPDOWN_ICON_PLAYER_TAG,
-        icon_colour = DROPDOWN_ICON_COLOUR_WHITE,
-    },
     show_tainted_skull = {
         icon = "content/ui/materials/hud/interactions/icons/enemy",
         icon_colour = { 255, 150, 190, 60 },
@@ -438,6 +434,8 @@ local DEFAULT_DROPDOWN_PRESENTATION = {
     icon_colour = DROPDOWN_ICON_COLOUR_WHITE,
 }
 
+local _dropdown_marker_icon_colour
+
 local function _dropdown_option(text, value, icon, icon_colour)
     local option = {
         text = text,
@@ -454,9 +452,10 @@ end
 
 local function _marker_enabled_options(setting_id)
     local presentation = MARKER_DROPDOWN_PRESENTATIONS[setting_id] or DEFAULT_DROPDOWN_PRESENTATION
+    local icon_colour = _dropdown_marker_icon_colour(setting_id, presentation.icon_colour)
 
     return {
-        _dropdown_option("marker_display_mode_icon", true, presentation.icon, presentation.icon_colour),
+        _dropdown_option("marker_display_mode_icon", true, presentation.icon, icon_colour),
         _dropdown_option("radar_outline_off", false),
     }
 end
@@ -492,7 +491,7 @@ local function _artwork_icon_off_dropdown(setting_id)
     local artwork_icon = presentation.artwork_icon or presentation.icon
     local artwork_colour = presentation.artwork_colour or presentation.icon_colour or DROPDOWN_ICON_COLOUR_WHITE
     local icon = presentation.icon
-    local icon_colour = presentation.icon_colour or DROPDOWN_ICON_COLOUR_WHITE
+    local icon_colour = _dropdown_marker_icon_colour(setting_id, presentation.icon_colour)
 
     return {
         setting_id = setting_id,
@@ -530,15 +529,363 @@ local function _icon_scale_slider(setting_id, title_key)
     }
 end
 
-local function _color_channel_slider(setting_id)
+local COLOR_CHANNELS = {
+    {
+        suffix = "opacity",
+        title_suffix = "opacity",
+        index = 1,
+    },
+    {
+        suffix = "red",
+        title_suffix = "red",
+        index = 2,
+    },
+    {
+        suffix = "green",
+        title_suffix = "green",
+        index = 3,
+    },
+    {
+        suffix = "blue",
+        title_suffix = "blue",
+        index = 4,
+    },
+}
+
+local COLOR_LABEL_SUFFIX_BY_ROLE = {
+    icon = {
+        key = "color_option_icon_suffix",
+        fallback = " icon color",
+    },
+    highlight = {
+        key = "color_option_highlight_suffix",
+        fallback = " highlight color",
+    },
+    background = {
+        key = "color_option_background_suffix",
+        fallback = " background color",
+    },
+}
+
+local function _color_channel_slider(setting_id, default_value, title, tooltip)
     return {
         setting_id = setting_id,
+        title = title,
+        tooltip = tooltip,
         type = "numeric",
-        default_value = 255,
+        localize = true,
+        default_value = default_value or 255,
         range = { 0, 255 },
         decimals_number = 0,
         step_size_value = 1,
     }
+end
+
+local function _color_setting_id(prefix, suffix)
+    local opacity_setting_by_prefix = RadarColorSettings.opacity_setting_by_prefix
+
+    if suffix == "opacity" and opacity_setting_by_prefix and opacity_setting_by_prefix[prefix] then
+        return opacity_setting_by_prefix[prefix]
+    end
+
+    return prefix .. "_" .. suffix
+end
+
+local DROPDOWN_COLOR_PREFIX_BY_SETTING_ID = {
+    show_monstrosities = "enemy_boss_marker",
+    show_captains = "enemy_boss_marker",
+    show_karnak_twins = "enemy_boss_marker",
+    show_enemy_horde = "enemy_horde_marker",
+}
+
+local _dropdown_icon_color_by_prefix = {}
+
+local function _dropdown_color_prefix_from_anchor(setting_id)
+    local anchored_color_settings = RadarColorSettings.anchored_color_settings
+    local color_descriptors = anchored_color_settings and anchored_color_settings[setting_id] or nil
+
+    if color_descriptors == nil then
+        return nil
+    end
+
+    for i = 1, #color_descriptors do
+        local descriptor = color_descriptors[i]
+
+        if descriptor.label_role == "icon" then
+            return descriptor.prefix
+        end
+    end
+
+    return nil
+end
+
+local function _dropdown_color_prefix(setting_id)
+    local prefix = DROPDOWN_COLOR_PREFIX_BY_SETTING_ID[setting_id]
+
+    if prefix then
+        return prefix
+    end
+
+    prefix = _dropdown_color_prefix_from_anchor(setting_id)
+
+    if prefix then
+        return prefix
+    end
+
+    local kind = setting_id and string.sub(setting_id, 1, 5) == "show_" and string.sub(setting_id, 6) or nil
+
+    if kind == nil then
+        return nil
+    end
+
+    local marker_prefix_by_kind = RadarColorSettings.marker_prefix_by_kind
+    local enemy_icon_prefix_by_kind = RadarColorSettings.enemy_icon_prefix_by_kind
+
+    return marker_prefix_by_kind and marker_prefix_by_kind[kind] or
+        enemy_icon_prefix_by_kind and enemy_icon_prefix_by_kind[kind] or nil
+end
+
+local function _dropdown_color_channel(prefix, suffix, default_value)
+    local value = tonumber(mod:get(_color_setting_id(prefix, suffix)))
+
+    if value == nil then
+        value = default_value or 255
+    end
+
+    if value < 0 then
+        value = 0
+    elseif value > 255 then
+        value = 255
+    end
+
+    return math.floor(value + 0.5)
+end
+
+local function _refresh_dropdown_icon_colour(prefix)
+    local color = prefix and _dropdown_icon_color_by_prefix[prefix] or nil
+
+    if color == nil then
+        return
+    end
+
+    local defaults = RadarColorSettings.default_by_prefix[prefix] or color
+
+    color[1] = _dropdown_color_channel(prefix, "opacity", defaults[1] or 255)
+    color[2] = _dropdown_color_channel(prefix, "red", defaults[2] or 255)
+    color[3] = _dropdown_color_channel(prefix, "green", defaults[3] or 255)
+    color[4] = _dropdown_color_channel(prefix, "blue", defaults[4] or 255)
+end
+
+local function _refresh_dropdown_icon_colours()
+    for prefix in pairs(_dropdown_icon_color_by_prefix) do
+        _refresh_dropdown_icon_colour(prefix)
+    end
+end
+
+_dropdown_marker_icon_colour = function(setting_id, fallback)
+    local prefix = _dropdown_color_prefix(setting_id)
+
+    if prefix == nil then
+        return fallback or DROPDOWN_ICON_COLOUR_WHITE
+    end
+
+    local color = _dropdown_icon_color_by_prefix[prefix]
+
+    if color == nil then
+        local defaults = RadarColorSettings.default_by_prefix[prefix] or fallback or DROPDOWN_ICON_COLOUR_WHITE
+
+        color = {
+            defaults[1] or 255,
+            defaults[2] or 255,
+            defaults[3] or 255,
+            defaults[4] or 255,
+        }
+        _dropdown_icon_color_by_prefix[prefix] = color
+    end
+
+    _refresh_dropdown_icon_colour(prefix)
+
+    return color
+end
+
+local function _install_dropdown_icon_color_refresh()
+    mod._radar_dropdown_icon_color_refresh = _refresh_dropdown_icon_colours
+
+    if mod._radar_dropdown_icon_color_refresh_installed then
+        return
+    end
+
+    mod._radar_dropdown_icon_color_refresh_installed = true
+
+    local previous_on_setting_changed = mod.on_setting_changed
+
+    mod.on_setting_changed = function(setting_id, ...)
+        if previous_on_setting_changed then
+            previous_on_setting_changed(setting_id, ...)
+        end
+
+        local refresh_dropdown_icon_color = mod._radar_dropdown_icon_color_refresh
+
+        if refresh_dropdown_icon_color then
+            refresh_dropdown_icon_color()
+        end
+    end
+end
+
+_install_dropdown_icon_color_refresh()
+
+local function _localized_or_raw(text_id)
+    if text_id == nil then
+        return nil
+    end
+
+    local success, localized_text = pcall(mod.localize, mod, text_id)
+
+    if success and localized_text ~= nil and localized_text ~= "" and localized_text ~= "<" .. text_id .. ">" then
+        return localized_text
+    end
+
+    return text_id
+end
+
+local function _localized_setting_title(widget)
+    local title = widget and (widget.title or widget.setting_id) or nil
+
+    if title == nil then
+        return nil
+    end
+
+    return _localized_or_raw(title)
+end
+
+local function _localized_color_label_suffix(label_role)
+    local suffix = COLOR_LABEL_SUFFIX_BY_ROLE[label_role]
+
+    if suffix == nil then
+        return nil
+    end
+
+    local success, localized_suffix = pcall(mod.localize, mod, suffix.key)
+
+    if success and localized_suffix ~= nil and localized_suffix ~= "" then
+        return localized_suffix
+    end
+
+    return suffix.fallback
+end
+
+local function _color_setting_group_title(descriptor, anchor_widget)
+    local label_role = descriptor.label_role
+    local label_suffix = descriptor.label_suffix or (label_role and _localized_color_label_suffix(label_role))
+
+    if label_suffix then
+        local label_prefix = descriptor.label_prefix or _localized_setting_title(anchor_widget)
+
+        if label_prefix and label_prefix ~= "" then
+            return label_prefix .. label_suffix
+        end
+    end
+
+    return _localized_or_raw(descriptor.title_prefix or "marker_color")
+end
+
+local function _color_setting_sliders(descriptor)
+    local sliders = {}
+    local prefix = descriptor.prefix
+    local default = descriptor.default or { 255, 255, 255, 255 }
+    local title_prefix = descriptor.title_prefix or "marker_color"
+    local tooltip = descriptor.tooltip or "marker_color_slider_tooltip"
+    local channels = descriptor.channels
+
+    for i = 1, #COLOR_CHANNELS do
+        local channel = COLOR_CHANNELS[i]
+
+        if channels == nil or channels[channel.suffix] == true then
+            sliders[#sliders + 1] = _color_channel_slider(
+                _color_setting_id(prefix, channel.suffix),
+                default[channel.index] or 255,
+                title_prefix .. "_" .. channel.title_suffix,
+                tooltip
+            )
+        end
+    end
+
+    return sliders
+end
+
+local function _color_setting_group(descriptor, anchor_widget, tab, tab_overrides)
+    local tooltip = descriptor.tooltip or "marker_color_slider_tooltip"
+
+    local group = {
+        setting_id = descriptor.group_setting_id or (descriptor.prefix .. "_group"),
+        title = _color_setting_group_title(descriptor, anchor_widget),
+        tooltip = mod:localize(tooltip),
+        type = "group",
+        localize = false,
+        sub_widgets = _color_setting_sliders(descriptor),
+    }
+
+    if tab then
+        group.tab = tab
+    end
+
+    if tab_overrides then
+        group.tab_overrides = tab_overrides
+    end
+
+    return group
+end
+
+local function _color_setting_groups(anchor, tab, tab_overrides)
+    local groups = {}
+    local anchored_color_settings = RadarColorSettings.anchored_color_settings
+    local color_descriptors = anchored_color_settings and anchored_color_settings[anchor] or nil
+
+    if color_descriptors == nil then
+        return groups
+    end
+
+    for i = 1, #color_descriptors do
+        groups[#groups + 1] = _color_setting_group(color_descriptors[i], nil, tab, tab_overrides)
+    end
+
+    return groups
+end
+
+local function _insert_color_settings(widgets, tab, tab_overrides)
+    local anchored_color_settings = RadarColorSettings.anchored_color_settings or {}
+    local i = 1
+
+    while i <= #widgets do
+        local widget = widgets[i]
+        local widget_tab = widget.tab or tab
+        local widget_tab_overrides = widget.tab_overrides or tab_overrides
+
+        if widget.type == "group" and widget.sub_widgets then
+            _insert_color_settings(widget.sub_widgets, widget_tab, widget_tab_overrides)
+        end
+
+        local color_descriptors = widget.skip_color_settings ~= true and widget.setting_id and
+            anchored_color_settings[widget.setting_id] or nil
+
+        if color_descriptors and #color_descriptors > 0 then
+            local insert_at = i
+
+            for descriptor_index = 1, #color_descriptors do
+                insert_at = insert_at + 1
+                table.insert(widgets, insert_at, _color_setting_group(
+                    color_descriptors[descriptor_index],
+                    widget,
+                    widget.tab,
+                    widget.tab_overrides
+                ))
+            end
+
+            i = insert_at
+        end
+
+        i = i + 1
+    end
 end
 
 local function _nearby_highlight_radar_distance_text_checkbox(setting_id)
@@ -579,7 +926,7 @@ end
 local function _icon_marked_off_dropdown(setting_id, default_value)
     local presentation = ENEMY_DROPDOWN_PRESENTATIONS[setting_id] or DEFAULT_DROPDOWN_PRESENTATION
     local icon = presentation.icon
-    local icon_colour = presentation.icon_colour or DROPDOWN_ICON_COLOUR_WHITE
+    local icon_colour = _dropdown_marker_icon_colour(setting_id, presentation.icon_colour)
 
     return {
         setting_id = setting_id,
@@ -596,7 +943,7 @@ end
 local function _expedition_marker_display_mode_dropdown(setting_id, default_value)
     local presentation = EXPEDITION_DROPDOWN_PRESENTATIONS[setting_id] or DEFAULT_DROPDOWN_PRESENTATION
     local icon = presentation.icon
-    local icon_colour = presentation.icon_colour or DROPDOWN_ICON_COLOUR_WHITE
+    local icon_colour = _dropdown_marker_icon_colour(setting_id, presentation.icon_colour)
 
     return {
         setting_id = setting_id,
@@ -632,12 +979,9 @@ local function _expedition_loot_marker_mode_dropdown(setting_id)
         type = "dropdown",
         default_value = "default",
         options = {
-            _dropdown_option("expedition_loot_marker_mode_default", "default",
-                DROPDOWN_ICON_TECH_REMNANT, DROPDOWN_ICON_COLOUR_WHITE),
-            _dropdown_option("expedition_loot_marker_mode_scaled", "scaled",
-                DROPDOWN_ICON_TECH_REMNANT, DROPDOWN_ICON_COLOUR_WHITE),
-            _dropdown_option("expedition_loot_marker_mode_clustered", "clustered",
-                DROPDOWN_ICON_TECH_REMNANT, DROPDOWN_ICON_COLOUR_WHITE),
+            _dropdown_option("expedition_loot_marker_mode_default", "default"),
+            _dropdown_option("expedition_loot_marker_mode_scaled", "scaled"),
+            _dropdown_option("expedition_loot_marker_mode_clustered", "clustered"),
         },
     }
 end
@@ -1095,18 +1439,15 @@ return {
                                 },
                             },
                         },
-                        {
-                            setting_id = "background_opacity",
-                            type = "numeric",
-                            default_value = 90,
-                            range = { 0, 255 },
-                            decimals_number = 0,
-                            step_size_value = 5,
-                            get = function()
-                                return mod:get_background_opacity()
-                            end,
-                        },
                     },
+                },
+                {
+                    setting_id = "radar_colors_group",
+                    type = "group",
+                    tab = TAB_LAYOUT,
+                    tab_overrides = TAB_OVERRIDES_LAYOUT,
+                    skip_color_settings = true,
+                    sub_widgets = _color_setting_groups("radar_colors_group"),
                 },
                 {
                     setting_id = "nearby_highlight_group",
@@ -1139,22 +1480,6 @@ return {
                             decimals_number = 0,
                             step_size_value = 1,
                         },
-                        {
-                            setting_id = "nearby_highlight_opacity",
-                            type = "numeric",
-                            default_value = 255,
-                            range = { 25, 255 },
-                            decimals_number = 0,
-                            step_size_value = 5,
-                        },
-                        {
-                            setting_id = "nearby_highlight_use_custom_color",
-                            type = "checkbox",
-                            default_value = false,
-                        },
-                        _color_channel_slider("nearby_highlight_color_red"),
-                        _color_channel_slider("nearby_highlight_color_green"),
-                        _color_channel_slider("nearby_highlight_color_blue"),
                     },
                 },
                 {
@@ -1535,14 +1860,10 @@ return {
                                         {
                                             text = "display_style_icon_only",
                                             value = "icon_only",
-                                            icon = "content/ui/materials/icons/presets/preset_05",
-                                            icon_colour = DROPDOWN_ICON_COLOUR_RED,
                                         },
                                         {
                                             text = "display_style_marked_icon",
                                             value = "marked_icon",
-                                            icon = "content/ui/materials/icons/presets/preset_05",
-                                            icon_colour = DROPDOWN_ICON_COLOUR_RED,
                                         },
                                     },
                                 },
@@ -1736,26 +2057,18 @@ return {
                                         {
                                             text = "display_style_icon_only",
                                             value = "icon_only",
-                                            icon = DROPDOWN_ICON_PLAYER,
-                                            icon_colour = DROPDOWN_ICON_COLOUR_WHITE,
                                         },
                                         {
                                             text = "display_style_marked_icon",
                                             value = "marked_icon",
-                                            icon = DROPDOWN_ICON_PLAYER,
-                                            icon_colour = DROPDOWN_ICON_COLOUR_WHITE,
                                         },
                                         {
                                             text = "display_style_dot_only",
                                             value = "dot_only",
-                                            icon = DROPDOWN_ICON_DEFAULT,
-                                            icon_colour = DROPDOWN_ICON_COLOUR_WHITE,
                                         },
                                         {
                                             text = "display_style_marked_dot",
                                             value = "marked_dot",
-                                            icon = DROPDOWN_ICON_DEFAULT,
-                                            icon_colour = DROPDOWN_ICON_COLOUR_WHITE,
                                         },
                                     },
                                 },
@@ -1784,14 +2097,10 @@ return {
                                         {
                                             text = "display_style_icon_only",
                                             value = "icon_only",
-                                            icon = DROPDOWN_ICON_PLAYER_TAG,
-                                            icon_colour = DROPDOWN_ICON_COLOUR_WHITE,
                                         },
                                         {
                                             text = "display_style_marked_icon",
                                             value = "marked_icon",
-                                            icon = DROPDOWN_ICON_PLAYER_TAG,
-                                            icon_colour = DROPDOWN_ICON_COLOUR_WHITE,
                                         },
                                     },
                                 },
@@ -1866,6 +2175,7 @@ return {
             }
 
             _apply_marker_enabled_dropdowns(widgets)
+            _insert_color_settings(widgets)
             _apply_missing_tooltips(widgets)
 
             return widgets

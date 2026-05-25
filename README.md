@@ -6,13 +6,13 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 
 - Tracks nearby pickups, materials, mission items, deployables, environment interactables, live-event pickups and objectives, expedition POIs, teammates, player smart tags, tagged targets, supported ability-outlined enemies, and high-priority enemies on a single camera-oriented radar or the temporary centered overview.
 - Supports **Square**, **Circle**, and **Auspex** radar styles. Square and Circle use configurable **outline** and **guide** options, including the Auspex background guide, while **Auspex** adds its dedicated scanner frame treatment.
-- Lets you tune **radar size**, normal radar **range**, centered overview **zoom range**, **background opacity**, **maximum marker count**, **nearby highlight range**, supported vertical arrow and hiding behavior, and the dedicated nearby-highlight presentation settings.
+- Lets you tune **radar size**, normal radar **range**, centered overview **zoom range**, **Radar Colors**, **maximum marker count**, **nearby highlight range**, supported vertical arrow and hiding behavior, and the dedicated nearby-highlight presentation settings.
 - Supports per-category **Icon size (%)** sliders across item, player, enemy, event, and debug marker groups, plus dedicated enemy sub-category scaling.
 - Supports separate display, range, and vertical arrow controls for **bosses**, **enemy groups**, **teammates**, **player smart tags**, **tagged-only enemy and item filtering**, supported **ability outlines**, and the local **player center dot**, including **Infinite** marker range modes for bosses and teammates.
 - Includes mission-ready keybinds for **toggle radar on or off**, **toggle overview mode**, temporary radar zoom, and radar movement, plus per-mode enable toggles for **Regular Missions**, **Havoc**, **Mortis Trials**, and **Expeditions**.
 - Supports anchor-based **radar positioning** with offsets, movement keybinds, configurable movement step size, and an optional unrestricted positioning fallback for ultrawide or advanced layouts.
 - Supports **Artwork**, **Icon**, and **Off** display modes for the supported artwork-based pickup families, with automatic migration from older boolean settings.
-- Adds optional nearby screen-space highlight brackets for supported non-enemy marker groups, with configurable thickness, opacity, color override, and optional distance labels on the screen highlight, the radar marker, or both.
+- Adds optional nearby screen-space highlight brackets for supported non-enemy marker groups, with configurable thickness, per-marker highlight colors, and optional distance labels on the screen highlight, the radar marker, or both.
 - Adds dedicated **Expedition POI** support for numbered **Sites of Interest**, **Deadsider Sanctuaries**, **Data Reliquary Harvesters**, **Main Objective**, **Valkyrie Extraction Zone**, and **Valkyrie Arrival Zone**, with per-category **Icon only**, **Icon + Distance m**, and **Off** display modes.
 - Supports tech-remnant loot modes for **Default**, **Scale by value**, and **Merge nearby piles**, plus optional cluster value text and radius tuning.
 - Includes optional distance text for bosses, player tags, nearby marker highlights, and expedition POIs, per-enemy-category vertical arrow toggles, **Infinite** boss and teammate range modes, **debug logs**, and an **unknown pickups** toggle for discovery and troubleshooting.
@@ -60,7 +60,7 @@ The keybind-based **centered overview mode** temporarily expands the radar into 
 
 ### Nearby highlight example
 
-Nearby highlights add small screen-space brackets for supported non-enemy markers when they are close enough to matter. You can now tune their thickness and opacity, optionally override them with a custom color, and show item distance text on the screen highlight, the radar marker, or both.
+Nearby highlights add small screen-space brackets for supported non-enemy markers when they are close enough to matter. You can tune their thickness, set per-marker highlight colors with ARGB sliders, and show item distance text on the screen highlight, the radar marker, or both.
 
 <p>
   <img src="doc/img/highlight_example.png" width="70%" alt="Nearby highlight example" />
@@ -125,7 +125,7 @@ Expedition POI settings use dropdown display modes instead of simple on/off togg
 Supported artwork-based markers now use dropdowns instead of simple booleans. Each supported marker can be shown as **Artwork**, **Icon**, or **Off**.
 
 - **Artwork** uses the original item artwork or pickup art.
-- **Icon** uses a simplified HUD icon material with an ARGB tint.
+- **Icon** uses a simplified HUD icon material with a configurable ARGB tint.
 - **Off** hides that specific marker entirely.
 - Existing saved boolean settings are migrated automatically, with old `true` values becoming **Artwork** and old `false` values becoming **Off**.
 
@@ -188,12 +188,10 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Radar style | **Square**, **Circle**, or **Auspex**. |
 | Radar outline | **Solid**, **Dotted**, or **Off**. Only used by the **Square** and **Circle** radar styles. |
 | Radar guides | **Crosshair**, **View guides**, **Range rings**, **Auspex**, or **Off**. Only used by the **Square** and **Circle** radar styles. |
-| Radar background opacity | Adjustable from **0** to **255**. Controls the alpha of the radar background without changing marker readability. |
+| Radar Colors | ARGB sliders for Radar UI colors such as background, outline, guides, Auspex layers, marker text, and overview legend indicators. |
 | Animated radar sweep | Enables or disables the animated sweep used by the **Auspex** radar style and **Auspex** guides. |
 | Nearby highlight range (m) | Adjustable from **5 m** to **20 m**. Controls how close supported items must be before their screen-space bracket highlights appear. |
 | Highlight thickness | Adjusts the line thickness used by nearby screen-space highlight brackets. |
-| Highlight opacity | Adjusts the opacity of nearby screen-space highlight brackets. |
-| Custom highlight color | Lets nearby highlight brackets use an override color instead of the default per-marker color behavior. |
 | Show distance above nearby highlights | Shows item distance text above supported nearby screen-space highlights. |
 | Show distance on radar markers | Shows distance text on supported nearby radar markers. |
 | Boss marker style | **Icon only** or **Marked icon**. |
@@ -295,9 +293,7 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Option | What it controls |
 | --- | --- |
 | Highlight thickness | Adjusts the line thickness used by nearby screen-space highlight brackets. |
-| Highlight opacity | Adjusts the opacity used by nearby screen-space highlight brackets. |
-| Use custom highlight color | Enables a shared override color for nearby highlights instead of the default per-marker color behavior. |
-| Nearby highlight color | Sets the override color used when custom highlight color is enabled. |
+| Marker highlight color sliders | Set the Opacity, Red, Green, and Blue channels used directly by nearby highlights for a specific supported marker group. |
 | Show distance above nearby highlights | Shows item distance text above supported nearby screen-space highlights. |
 | Show distance on radar markers | Shows distance text on supported nearby radar markers. |
 
@@ -376,7 +372,7 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 
 ## Target Markers
 
-The legend below follows the option groups exposed by `Radar_data.lua`. Enemy markers are listed in the same gameplay-oriented order used by the enemy settings: bosses, horde, common, shooters, elites, specials, and misc. Each enemy category can also enable vertical **up** and **down** arrows independently. The preview tiles were generated from the included `doc/img` assets and the ARGB values used by the HUD presentations.
+The legend below follows the option groups exposed by `Radar_data.lua`. Enemy markers are listed in the same gameplay-oriented order used by the enemy settings: bosses, horde, common, shooters, elites, specials, and misc. Each enemy category can also enable vertical **up** and **down** arrows independently. The preview tiles were generated from the included `doc/img` assets and the default ARGB values used by the HUD presentations.
 
 ### Ability outline and smart-tag examples
 
@@ -643,7 +639,27 @@ These markers are driven by expedition navigation data rather than standard pick
 
 ## Display Modes and Color Rules
 
-The readme preview icons follow the HUD presentations used by the mod.
+The readme preview icons follow the default HUD presentations used by the mod. Most fixed marker and Radar UI colors are configurable in the mod options through four ARGB sliders:
+
+- **Opacity** controls the alpha channel.
+- **Red**, **Green**, and **Blue** control the color channels.
+- Plain DMF shows each channel as a normal numeric slider.
+- With Alf's Mod Settings Extensions installed, compatible consecutive ARGB sliders may be shown as compact color picker widgets.
+
+The ARGB values listed below are the default values used after a fresh install or reset to defaults. Changing the sliders changes the rendered Radar colors without editing the source.
+
+### Configurable color groups
+
+Color sliders are placed near the setting they affect:
+
+| Area | Examples |
+| --- | --- |
+| Radar Colors | Radar background, outline, guides, Auspex layers, marker text, and overview legend indicators |
+| Marker icon colors | Pickup, objective, expedition, event, enemy, and other icon-mode marker colors |
+| Marker background colors | Marked enemy and boss background or bracket colors where applicable |
+| Nearby highlight colors | Per-marker highlight colors for marker groups that support nearby screen-space highlights |
+
+Artwork mode uses original item artwork and is not tinted by these sliders. Player teammate markers and the local player center dot use runtime player/HUD colors instead of fixed configurable marker colors.
 
 ### Artwork mode
 
@@ -656,7 +672,7 @@ Examples:
 
 ### Icon mode
 
-Icon mode swaps supported markers to simplified HUD icon materials with dedicated ARGB colors.
+Icon mode swaps supported markers to simplified HUD icon materials with configurable ARGB colors. The table lists the default ARGB values.
 
 | Marker family | Icon material | ARGB |
 | --- | --- | --- |
@@ -708,10 +724,11 @@ The remaining formerly white pickup icons were recolored so marker families read
 
 ### Runtime-dynamic colors
 
-Not every radar marker uses a fixed readme tint:
+Not every radar marker uses a configurable fixed ARGB color:
 
 - **Teammates** use the class icon for the detected archetype and take their color from the active HUD slot color at runtime.
 - **The radar center dot** also uses the local player's HUD color.
+- **Player smart tags** use their own tag presentations: attention and location tags follow player-slot colors, while threat tags keep their built-in warning color.
 
 ## Requirements
 
@@ -729,7 +746,7 @@ Not every radar marker uses a fixed readme tint:
 - Teammates, teammate marker range, the local player center dot, and player smart tags now have separate controls, so ally information can be tuned more precisely.
 - Player smart tags support optional distance text, but no longer use player-tag elevation arrows or related elevation hiding behavior. Enemy markers can use vertical arrows separately through their own category options.
 - Supported ability-marked and smart-tag outlined enemies can optionally be treated as radar-visible targets, and shared `special_target` outline handling is gated to the local owning context so unrelated outlines do not leak into radar visibility. Enemy vertical arrow toggles only affect arrow display, not whether those enemies are eligible for radar visibility.
-- Nearby highlights now support thickness, opacity, optional custom color override, and optional distance labels, and their placement was adjusted to stay aligned more reliably under scaled HUD layouts.
+- Nearby highlights now support thickness, per-marker ARGB highlight colors, and optional distance labels, and their placement was adjusted to stay aligned more reliably under scaled HUD layouts.
 - **Tagged enemies only** and **Tagged items only** are filters, not new marker families. They reuse the game's active tag state and let tagged targets ignore the normal radar range limit while tagged.
 - Expedition POIs and section-scoped expedition items are filtered to the active expedition section. POI categories can independently show icon-only markers, include meter distance text, or be hidden. Sanctuary-state transitions trigger cleanup so stale safe-zone markers do not leak into open zones, while active player-dropped Tech-Remnants can still be shown.
 - Marker previews in this readme were generated from the included template assets and documentation images so the legend matches the mod's configured presentations as closely as possible.

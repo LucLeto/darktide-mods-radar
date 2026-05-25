@@ -110,6 +110,9 @@ end
 
 local WHITE_WIDGET_COLOR = { 255, 255, 255, 255 }
 local RADAR_OUTLINE_WIDGET_COLOR = { 255, 213, 226, 206 }
+local RADAR_LEGEND_INDICATOR_WIDGET_COLOR = { 255, 213, 226, 206 }
+local MARKER_VALUE_TEXT_WIDGET_COLOR = { 255, 255, 225, 0 }
+local RADAR_ZOOM_INDICATOR_WIDGET_COLOR = { 210, 0, 255, 0 }
 
 local function _any_to_widget_color(color, fallback)
     local src = color or fallback or WHITE_WIDGET_COLOR
@@ -140,6 +143,36 @@ local function _copy_into_widget_color(destination, color, fallback)
     destination[4] = src[4] or src.b or 255
 
     return destination
+end
+
+local function _configured_marker_color(kind, fallback)
+    local get_marker_color = mod.get_marker_color
+
+    return get_marker_color and get_marker_color(mod, kind, fallback) or fallback
+end
+
+local function _configured_marker_background_color(kind, fallback)
+    local get_marker_background_color = mod.get_marker_background_color
+
+    return get_marker_background_color and get_marker_background_color(mod, kind, fallback) or fallback
+end
+
+local function _configured_enemy_icon_color(kind, fallback)
+    local get_enemy_radar_icon_color = mod.get_enemy_radar_icon_color
+
+    return get_enemy_radar_icon_color and get_enemy_radar_icon_color(mod, kind, fallback) or fallback
+end
+
+local function _configured_enemy_background_color(kind, fallback)
+    local get_enemy_radar_background_color = mod.get_enemy_radar_background_color
+
+    return get_enemy_radar_background_color and get_enemy_radar_background_color(mod, kind, fallback) or fallback
+end
+
+local function _configured_radar_color(prefix, fallback)
+    local get_radar_color = mod.get_radar_color
+
+    return get_radar_color and get_radar_color(mod, prefix, fallback) or fallback
 end
 
 local function _with_alpha_widget(color, alpha)
@@ -409,7 +442,6 @@ local PRESENTATIONS = {
     },
     pickup_unknown = {
         icon = "content/ui/materials/icons/traits/empty",
-        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
     medicae_station = {
@@ -1043,10 +1075,12 @@ local function _draw_marker_value_text(ui_renderer, value_text, x, y, z, icon_si
         color[3] = value_text_color[3] or 225
         color[4] = value_text_color[4] or 0
     else
-        color[1] = 255
-        color[2] = 255
-        color[3] = 225
-        color[4] = 0
+        local marker_value_color = _configured_radar_color("marker_value_text", MARKER_VALUE_TEXT_WIDGET_COLOR)
+
+        color[1] = marker_value_color[1]
+        color[2] = marker_value_color[2]
+        color[3] = marker_value_color[3]
+        color[4] = marker_value_color[4]
     end
 
     table_clear(options)
@@ -1094,7 +1128,7 @@ local function _draw_overview_scale_text(ui_renderer, scale_text, center_x, cent
     local size = scratch.size
     local color = scratch.color
     local options = scratch.options
-    local source_color = text_color or RADAR_OUTLINE_WIDGET_COLOR
+    local source_color = text_color or _configured_radar_color("radar_outline", RADAR_OUTLINE_WIDGET_COLOR)
 
     position[1] = math_floor((center_x or 0) - text_box_width * 0.5 + 0.5)
     position[2] = math_floor((center_y or 0) - text_box_height * 0.5 + 0.5)
@@ -1141,7 +1175,7 @@ local function _apply_overview_scale_icon(style, center_x, center_y, z, icon_siz
     pivot[1] = resolved_size * 0.5
     pivot[2] = resolved_size * 0.5
     style.angle = angle or 0
-    style.color = icon_color or RADAR_OUTLINE_WIDGET_COLOR
+    style.color = icon_color or _configured_radar_color("radar_outline", RADAR_OUTLINE_WIDGET_COLOR)
 end
 
 local function _draw_overview_scale_overlay(self, ui_renderer, x, y, z, radar_size, radar_range)
@@ -1168,15 +1202,20 @@ local function _draw_overview_scale_overlay(self, ui_renderer, x, y, z, radar_si
     content.normal_zoom_icon = nil
 
     if _current_radar_style() == "auspex" then
-        legend_color[1] = 210
-        legend_color[2] = 0
-        legend_color[3] = 255
-        legend_color[4] = 0
+        local zoom_indicator_color = _configured_radar_color("radar_zoom_indicator", RADAR_ZOOM_INDICATOR_WIDGET_COLOR)
+
+        legend_color[1] = zoom_indicator_color[1]
+        legend_color[2] = zoom_indicator_color[2]
+        legend_color[3] = zoom_indicator_color[3]
+        legend_color[4] = zoom_indicator_color[4]
     else
-        legend_color[1] = RADAR_OUTLINE_WIDGET_COLOR[1]
-        legend_color[2] = RADAR_OUTLINE_WIDGET_COLOR[2]
-        legend_color[3] = RADAR_OUTLINE_WIDGET_COLOR[3]
-        legend_color[4] = RADAR_OUTLINE_WIDGET_COLOR[4]
+        local legend_indicator_color = _configured_radar_color("radar_legend_indicator",
+            RADAR_LEGEND_INDICATOR_WIDGET_COLOR)
+
+        legend_color[1] = legend_indicator_color[1]
+        legend_color[2] = legend_indicator_color[2]
+        legend_color[3] = legend_indicator_color[3]
+        legend_color[4] = legend_indicator_color[4]
     end
 
     content.overview_scale_x_left_icon = ITEM_VERTICAL_ARROW_UP_ICON
@@ -1372,7 +1411,7 @@ local EXPEDITION_UNMARKED_COLORS = {
 local function _expedition_unmarked_color(target)
     local kind = target and target.kind
 
-    return EXPEDITION_UNMARKED_COLORS[kind] or DEFAULT_EXPEDITION_UNMARKED_COLOR
+    return _configured_marker_color(kind, EXPEDITION_UNMARKED_COLORS[kind] or DEFAULT_EXPEDITION_UNMARKED_COLOR)
 end
 
 local function _copy_visual(visual)
@@ -1571,7 +1610,7 @@ local function _boss_distance_text(target, draw_cache)
     return _distance_text_from_squared_distance(target and target.distance_sq_3d, " m")
 end
 
-local BOSS_DISTANCE_TEXT_WIDGET_COLOR = { 255, 255, 225, 0 }
+local BOSS_DISTANCE_TEXT_WIDGET_COLOR = MARKER_VALUE_TEXT_WIDGET_COLOR
 
 local function _player_smart_tag_distance_text(target, draw_cache)
     local show_distance_text = draw_cache and draw_cache.show_player_tag_distance_text or
@@ -1653,11 +1692,13 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
         end
 
         result.value_text = value_text
-        result.value_text_color = value_text ~= nil and { 255, 255, 225, 0 } or nil
+        result.value_text_color = value_text ~= nil and
+            _configured_radar_color("marker_value_text", MARKER_VALUE_TEXT_WIDGET_COLOR) or nil
 
         if radar_distance_text ~= nil then
             result.secondary_value_text = radar_distance_text
-            result.secondary_value_text_color = BOSS_DISTANCE_TEXT_WIDGET_COLOR
+            result.secondary_value_text_color = _configured_radar_color("marker_distance_text",
+                BOSS_DISTANCE_TEXT_WIDGET_COLOR)
             result.secondary_value_text_anchor = "bottom_center"
             result.secondary_value_text_offset_y = -3
         end
@@ -1670,7 +1711,7 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
     if player_smart_tag_distance_text ~= nil then
         local result = _copy_visual(visual)
         result.value_text = player_smart_tag_distance_text
-        result.value_text_color = BOSS_DISTANCE_TEXT_WIDGET_COLOR
+        result.value_text_color = _configured_radar_color("marker_distance_text", BOSS_DISTANCE_TEXT_WIDGET_COLOR)
         result.value_text_anchor = "bottom_center"
         result.value_text_offset_x = 3
         result.value_text_offset_y = -3
@@ -1683,7 +1724,7 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
     if boss_distance_text ~= nil then
         local result = _copy_visual(visual)
         result.value_text = boss_distance_text
-        result.value_text_color = BOSS_DISTANCE_TEXT_WIDGET_COLOR
+        result.value_text_color = _configured_radar_color("marker_distance_text", BOSS_DISTANCE_TEXT_WIDGET_COLOR)
         result.value_text_anchor = "bottom_center"
         result.value_text_offset_x = 3
         result.value_text_offset_y = -3
@@ -1696,7 +1737,7 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
     if expedition_marker_distance_text ~= nil then
         local result = _copy_visual(visual)
         result.value_text = expedition_marker_distance_text
-        result.value_text_color = BOSS_DISTANCE_TEXT_WIDGET_COLOR
+        result.value_text_color = _configured_radar_color("marker_distance_text", BOSS_DISTANCE_TEXT_WIDGET_COLOR)
         result.value_text_anchor = "bottom_center"
         result.value_text_offset_x = 3
         result.value_text_offset_y = -3
@@ -1716,14 +1757,14 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
 
     local result = _copy_visual(visual)
     result.value_text = nearby_highlight_distance_text
-    result.value_text_color = BOSS_DISTANCE_TEXT_WIDGET_COLOR
+    result.value_text_color = _configured_radar_color("marker_distance_text", BOSS_DISTANCE_TEXT_WIDGET_COLOR)
     result.value_text_anchor = "bottom_center"
     result.value_text_offset_y = -3
 
     return result
 end
 
-local function _artwork_mode_icon_visual(kind, draw_cache)
+local function _artwork_mode(kind, draw_cache)
     local mode = nil
 
     if draw_cache then
@@ -1739,11 +1780,23 @@ local function _artwork_mode_icon_visual(kind, draw_cache)
         mode = get_marker_display_mode and get_marker_display_mode(mod, kind) or nil
     end
 
+    return mode
+end
+
+local function _artwork_mode_icon_visual(kind, draw_cache)
+    local mode = _artwork_mode(kind, draw_cache)
+
     if mode ~= "icon" then
         return nil
     end
 
-    return ARTWORK_MODE_ICON_PRESENTATIONS[kind]
+    local visual = ARTWORK_MODE_ICON_PRESENTATIONS[kind]
+
+    if visual ~= nil then
+        visual.color = _configured_marker_color(kind, visual.color)
+    end
+
+    return visual
 end
 
 local function _expedition_objective_visual(target, draw_cache)
@@ -1821,9 +1874,10 @@ local function _enemy_radar_visual(target, draw_cache)
     local icon_size = tonumber(definition.icon_size) or definition_size or background_size
     local bracket_size = tonumber(definition.bracket_size)
     local icon = definition.icon
-    local icon_color = _any_to_widget_color(definition.icon_color)
+    local icon_color = _any_to_widget_color(_configured_enemy_icon_color(kind, definition.icon_color))
     local background_icon = definition.background_icon
-    local background_color = definition.background_color and _any_to_widget_color(definition.background_color) or nil
+    local background_color = definition.background_color and
+        _any_to_widget_color(_configured_enemy_background_color(kind, definition.background_color)) or nil
     local should_compose = definition.category ~= "horde"
         and background_icon ~= nil
         and background_color ~= nil
@@ -1996,6 +2050,12 @@ local function _target_visual(target, draw_cache)
             )
         end
 
+        if _artwork_mode(target_kind, draw_cache) ~= "artwork" then
+            presentation.color = _configured_marker_color(target_kind, presentation.color)
+        end
+
+        presentation.accent_color = _configured_marker_background_color(target_kind, presentation.accent_color)
+
         return _apply_target_specific_visual_overrides(target, presentation, draw_cache)
     end
 
@@ -2013,7 +2073,6 @@ local function _target_visual(target, draw_cache)
 
         return _apply_target_specific_visual_overrides(target, {
             icon = interaction_icon,
-            color = WHITE_WIDGET_COLOR,
             size = 14,
         }, draw_cache)
     end
@@ -2385,15 +2444,20 @@ local function _draw_internal(self, ui_renderer, snapshot)
         local zoom_color = _overview_scale_text_scratch.color
 
         if _current_radar_style() == "auspex" then
-            zoom_color[1] = _scaled_alpha(210, normal_zoom_alpha)
-            zoom_color[2] = 0
-            zoom_color[3] = 255
-            zoom_color[4] = 0
+            local zoom_indicator_color = _configured_radar_color("radar_zoom_indicator", RADAR_ZOOM_INDICATOR_WIDGET_COLOR)
+
+            zoom_color[1] = _scaled_alpha(zoom_indicator_color[1], normal_zoom_alpha)
+            zoom_color[2] = zoom_indicator_color[2]
+            zoom_color[3] = zoom_indicator_color[3]
+            zoom_color[4] = zoom_indicator_color[4]
         else
-            zoom_color[1] = _scaled_alpha(RADAR_OUTLINE_WIDGET_COLOR[1], normal_zoom_alpha)
-            zoom_color[2] = RADAR_OUTLINE_WIDGET_COLOR[2]
-            zoom_color[3] = RADAR_OUTLINE_WIDGET_COLOR[3]
-            zoom_color[4] = RADAR_OUTLINE_WIDGET_COLOR[4]
+            local legend_indicator_color = _configured_radar_color("radar_legend_indicator",
+                RADAR_LEGEND_INDICATOR_WIDGET_COLOR)
+
+            zoom_color[1] = _scaled_alpha(legend_indicator_color[1], normal_zoom_alpha)
+            zoom_color[2] = legend_indicator_color[2]
+            zoom_color[3] = legend_indicator_color[3]
+            zoom_color[4] = legend_indicator_color[4]
         end
 
         local icon_style = widget.style.normal_zoom_icon

@@ -10,6 +10,9 @@ return function(env)
     local rawget = rawget
     local string_format = string.format
     local string_sub = string.sub
+    local RadarColorSettings = mod:io_dofile("Radar/scripts/mods/Radar/Radar_color_settings")
+
+    RadarColorSettings.install_runtime(mod)
 
     SCAN_INTERVAL = 0.25
 
@@ -1386,6 +1389,9 @@ return function(env)
         _migrate_expedition_marker_display_mode_settings()
         _migrate_split_enemy_category_settings()
         _migrate_player_visibility_settings()
+        if mod.migrate_radar_color_settings then
+            mod:migrate_radar_color_settings()
+        end
 
         local debug_mode = mod:get("debug_mode") == true
 

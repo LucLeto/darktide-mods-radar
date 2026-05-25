@@ -1811,6 +1811,7 @@ return function(env)
         local get_marker_scale_group = mod.get_marker_scale_group
         local highlight_setting_by_group = NEARBY_HIGHLIGHT_SETTING_BY_GROUP
         local screen_highlight_color_for_kind = _screen_highlight_color_for_kind
+        local get_occluded_highlight_color = mod.get_occluded_highlight_color
         local screen_highlight_anchor_position = _screen_highlight_anchor_position
         local screen_highlight_projection_fallback_position = _screen_highlight_projection_fallback_position
         local darkened_color_array = _darkened_color_array
@@ -1863,7 +1864,9 @@ return function(env)
                                 world_position = world_position,
                                 fallback_world_position = fallback_world_position or world_position,
                                 color = color,
-                                occluded_color = darkened_color_array(color, NEARBY_OUTLINE_OCCLUDED_MULTIPLIER),
+                                occluded_color = get_occluded_highlight_color and
+                                    get_occluded_highlight_color(mod, kind, NEARBY_OUTLINE_OCCLUDED_MULTIPLIER) or
+                                    darkened_color_array(color, NEARBY_OUTLINE_OCCLUDED_MULTIPLIER),
                                 distance_sq_3d = distance_sq,
                             }
                         end
