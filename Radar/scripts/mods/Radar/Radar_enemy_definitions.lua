@@ -86,6 +86,7 @@ return function(env)
     mod._screen_highlight_targets = {}
     mod._unclustered_radar_targets = {}
     mod._highlight_source_radar_targets = {}
+    mod._pickup_reachability_cache = {}
     mod._idol_destroyed_collectible_keys = {}
     mod._idol_destroyed_units = {}
     mod._last_safe_zone_section_index = nil

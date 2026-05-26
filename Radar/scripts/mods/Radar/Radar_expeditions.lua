@@ -1065,6 +1065,11 @@ return function(env)
         local existing = tracked_units[unit]
         local now = _safe_gameplay_time() or 0
         local position = _safe_unit_position(unit)
+        local apply_pickup_reachability = _apply_pickup_reachability_to_meta
+
+        if apply_pickup_reachability then
+            meta = apply_pickup_reachability(unit, kind, source, meta, position)
+        end
 
         if existing then
             existing.kind = kind

@@ -110,6 +110,16 @@ end
 
 local WHITE_WIDGET_COLOR = { 255, 255, 255, 255 }
 local RADAR_OUTLINE_WIDGET_COLOR = { 255, 213, 226, 206 }
+local PICKUP_REACHABILITY_COLOR_BY_STATE = {
+    probably_ok_above_navmesh = { 255, 255, 225, 64 },
+    reachable_nearby = { 255, 255, 150, 40 },
+    suspect_no_navmesh_nearby = { 255, 255, 64, 64 },
+}
+local PICKUP_REACHABILITY_ACCENT_COLOR_BY_STATE = {
+    probably_ok_above_navmesh = { 180, 255, 225, 64 },
+    reachable_nearby = { 210, 255, 150, 40 },
+    suspect_no_navmesh_nearby = { 240, 255, 32, 32 },
+}
 local RADAR_LEGEND_INDICATOR_WIDGET_COLOR = { 255, 213, 226, 206 }
 local MARKER_VALUE_TEXT_WIDGET_COLOR = { 255, 255, 225, 0 }
 local RADAR_ZOOM_INDICATOR_WIDGET_COLOR = { 210, 0, 255, 0 }
@@ -443,6 +453,12 @@ local PRESENTATIONS = {
     pickup_unknown = {
         icon = "content/ui/materials/icons/traits/empty",
         size = 14,
+    },
+    pickup_reachability_nav_point = {
+        icon = "content/ui/materials/icons/presets/preset_11",
+        color = _widget_color(255, 80, 210, 255),
+        accent_color = _widget_color(180, 80, 210, 255),
+        size = 8,
     },
     medicae_station = {
         icon = "content/ui/materials/hud/interactions/icons/respawn",
@@ -1438,6 +1454,32 @@ local function _copy_visual(visual)
     return copy
 end
 
+local function _apply_pickup_reachability_visual(target, visual, draw_cache)
+    if not target or not visual then
+        return visual
+    end
+
+    local meta = target.meta or nil
+    local state = meta and meta.reachability_state or nil
+    local should_highlight = mod.should_highlight_pickup_reachability_state and
+        mod:should_highlight_pickup_reachability_state(state)
+
+    if not should_highlight then
+        return visual
+    end
+
+    local color = PICKUP_REACHABILITY_COLOR_BY_STATE[state]
+    if not color then
+        return visual
+    end
+
+    local result = _copy_visual(visual)
+    result.color = color
+    result.accent_color = PICKUP_REACHABILITY_ACCENT_COLOR_BY_STATE[state] or _with_alpha_widget(color, 220)
+
+    return result
+end
+
 local function _is_tech_remnant_kind(kind)
     return kind == "material_expeditions_loot" or kind == "material_expeditions_loot_player_drop"
 end
@@ -2210,6 +2252,7 @@ local function _draw_internal(self, ui_renderer, snapshot)
     local UIWidget_draw = UIWidget.draw
     local apply_marker_widget = _apply_marker_widget
     local target_visual = _target_visual
+    local apply_pickup_reachability_visual = _apply_pickup_reachability_visual
     local target_icon_size = _target_icon_size
     local target_bracket_size = _target_bracket_size
     local should_draw_marker_brackets = _should_draw_marker_brackets
@@ -2284,7 +2327,7 @@ local function _draw_internal(self, ui_renderer, snapshot)
             )
 
             if px and py then
-                local visual = target_visual(target, draw_cache)
+                local visual = apply_pickup_reachability_visual(target, target_visual(target, draw_cache), draw_cache)
                 local marker_size = target_icon_size(target, visual, draw_cache)
                 local bracket_size = target_bracket_size(target, visual, draw_cache, marker_size)
                 local marker_center_x = snap_center(center_x + px)

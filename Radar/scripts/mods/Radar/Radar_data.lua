@@ -2154,6 +2154,37 @@ return {
                     },
                 },
                 {
+                    setting_id = "pickup_reachability_group",
+                    type = "group",
+                    sub_widgets = {
+                        {
+                            setting_id = "enable_pickup_reachability_check",
+                            type = "checkbox",
+                            default_value = false,
+                        },
+                        {
+                            setting_id = "show_suspect_pickups",
+                            type = "checkbox",
+                            default_value = true,
+                        },
+                        {
+                            setting_id = "highlight_suspect_pickups",
+                            type = "checkbox",
+                            default_value = true,
+                        },
+                        {
+                            setting_id = "hide_unreachable_pickups",
+                            type = "checkbox",
+                            default_value = false,
+                        },
+                        {
+                            setting_id = "debug_pickup_reachability",
+                            type = "checkbox",
+                            default_value = false,
+                        },
+                    },
+                },
+                {
                     setting_id = "debug_group",
                     type = "group",
                     tab = TAB_DEBUG,

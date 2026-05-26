@@ -30,6 +30,20 @@ return function(env)
     local DARK_RITES_CIRCUMSTANCE_VARIANT_PREFIX = DARK_RITES_CIRCUMSTANCE_PREFIX .. "_"
     local LEGACY_SKULLS_CIRCUMSTANCE_VARIANT_PREFIX = LEGACY_SKULLS_CIRCUMSTANCE_PREFIX .. "_"
     local _scratch_highlight_enabled_by_kind = {}
+    local _nav_queries = nil
+    local _nav_queries_load_attempted = false
+
+    local PICKUP_REACHABILITY_REFRESH_INTERVAL = 3
+    local PICKUP_REACHABILITY_MOVE_EPSILON_SQ = 0.04
+    local PICKUP_REACHABILITY_IGNORED_KINDS = {
+        crate_unknown = true,
+        expedition_loot_converter = true,
+        luggable_socket = true,
+        medical_crate_deployable = true,
+        medicae_station = true,
+        pickup_ammo_cache_deployable = true,
+        pickup_heretic_idol = true,
+    }
 
     local function _reuse_screen_highlight_output()
         local highlights = mod._screen_highlight_targets
@@ -426,6 +440,308 @@ return function(env)
         end
 
         return nil
+    end
+
+    local function _pickup_reachability_log_once(key, text)
+        if mod:get("debug_pickup_reachability") ~= true then
+            return
+        end
+
+        local logged_units = mod._logged_units or {}
+        mod._logged_units = logged_units
+
+        local log_key = "pickup_reachability:" .. tostring(key)
+        if logged_units[log_key] then
+            return
+        end
+
+        logged_units[log_key] = true
+        mod:info(text)
+    end
+
+    local function _safe_nav_queries()
+        if _nav_queries_load_attempted then
+            return _nav_queries
+        end
+
+        _nav_queries_load_attempted = true
+
+        local require_fn = require
+        if not require_fn then
+            _pickup_reachability_log_once("no_require", "[Radar] pickup reachability unavailable: require is missing")
+            return nil
+        end
+
+        local ok, nav_queries = pcall(require_fn, "scripts/utilities/nav_queries")
+        if ok and nav_queries then
+            _nav_queries = nav_queries
+        else
+            _pickup_reachability_log_once("require_failed",
+                "[Radar] pickup reachability unavailable: scripts/utilities/nav_queries could not be loaded")
+        end
+
+        return _nav_queries
+    end
+
+    local function _safe_nav_world_and_traverse_logic()
+        local nav_mesh = Managers and Managers.state and Managers.state.nav_mesh or nil
+        if not nav_mesh then
+            return nil, nil
+        end
+
+        local nav_world = nil
+        local nav_world_fn = nav_mesh.nav_world
+        if nav_world_fn then
+            local ok_nav_world, value = pcall(nav_world_fn, nav_mesh)
+            if ok_nav_world then
+                nav_world = value
+            end
+        end
+
+        if not nav_world then
+            return nil, nil
+        end
+
+        local traverse_logic = nil
+        local traverse_logic_fn = nav_mesh.client_traverse_logic
+        if traverse_logic_fn then
+            local ok_traverse_logic, value = pcall(traverse_logic_fn, nav_mesh)
+            if ok_traverse_logic then
+                traverse_logic = value
+            end
+        end
+
+        return nav_world, traverse_logic
+    end
+
+    local function _position_to_vector3(position)
+        local x, y, z = _vector3_components(position)
+
+        if not _is_finite_number(x) or not _is_finite_number(y) or not _is_finite_number(z) then
+            return nil
+        end
+
+        local vector3 = Vector3
+        if not vector3 then
+            return nil
+        end
+
+        local ok, result = pcall(vector3, x, y, z)
+        if ok then
+            return result
+        end
+
+        return nil
+    end
+
+    local function _position_distance_sq(a, b)
+        if not a or not b then
+            return math_huge
+        end
+
+        local dx = (a.x or 0) - (b.x or 0)
+        local dy = (a.y or 0) - (b.y or 0)
+        local dz = (a.z or 0) - (b.z or 0)
+
+        return dx * dx + dy * dy + dz * dz
+    end
+
+    local function _nav_position_on_mesh(nav_queries, nav_world, pickup_vector, above, below, traverse_logic)
+        local position_on_mesh = nav_queries and nav_queries.position_on_mesh or nil
+        if not position_on_mesh then
+            return nil
+        end
+
+        local ok, result = pcall(position_on_mesh, nav_world, pickup_vector, above, below, traverse_logic)
+        if ok and result then
+            return _copy_vector3(result)
+        end
+
+        if not ok then
+            _pickup_reachability_log_once("position_on_mesh_failed",
+                "[Radar] pickup reachability query failed: position_on_mesh")
+        end
+
+        return nil
+    end
+
+    local function _nav_position_on_mesh_with_outside_position(nav_queries, nav_world, traverse_logic, pickup_vector)
+        local position_on_mesh_with_outside_position = nav_queries and
+            nav_queries.position_on_mesh_with_outside_position or nil
+        if not position_on_mesh_with_outside_position then
+            return nil
+        end
+
+        local ok, result = pcall(
+            position_on_mesh_with_outside_position,
+            nav_world,
+            traverse_logic,
+            pickup_vector,
+            1.5,
+            2.2,
+            2.7,
+            0.1
+        )
+        if ok and result then
+            return _copy_vector3(result)
+        end
+
+        if not ok then
+            _pickup_reachability_log_once("outside_position_failed",
+                "[Radar] pickup reachability query failed: position_on_mesh_with_outside_position")
+        end
+
+        return nil
+    end
+
+    local function _is_pickup_reachability_candidate(kind, source, meta)
+        if source ~= "interactee_system" then
+            return false
+        end
+
+        if kind == nil or PICKUP_REACHABILITY_IGNORED_KINDS[kind] then
+            return false
+        end
+
+        if type(meta) ~= "table" then
+            return false
+        end
+
+        if meta.interaction_type == "chest" then
+            return false
+        end
+
+        if meta.pickup_name ~= nil and meta.pickup_name ~= "" then
+            return true
+        end
+
+        local ui_interaction_type = meta.ui_interaction_type
+        return ui_interaction_type == "pickup" or ui_interaction_type == "pickup_hidden"
+    end
+
+    function mod:get_pickup_reachability_enabled()
+        return self:get("enable_pickup_reachability_check") == true
+    end
+
+    function mod:should_highlight_pickup_reachability_state(state)
+        if not state or state == "ok_on_navmesh" then
+            return false
+        end
+
+        return self:get_pickup_reachability_enabled()
+            and self:get("highlight_suspect_pickups") ~= false
+    end
+
+    function mod:should_hide_pickup_reachability_state(state)
+        if state ~= "suspect_no_navmesh_nearby" then
+            return false
+        end
+
+        if not self:get_pickup_reachability_enabled() then
+            return false
+        end
+
+        return self:get("hide_unreachable_pickups") == true
+            or self:get("show_suspect_pickups") == false
+    end
+
+    function mod:classify_pickup_reachability(unit, position)
+        local nav_queries = _safe_nav_queries()
+        if not nav_queries then
+            return nil, nil
+        end
+
+        local nav_world, traverse_logic = _safe_nav_world_and_traverse_logic()
+        if not nav_world then
+            _pickup_reachability_log_once("no_nav_world",
+                "[Radar] pickup reachability unavailable: client nav world is missing")
+            return nil, nil
+        end
+
+        local pickup_pos = position or _safe_unit_position(unit)
+        local pickup_vector = _position_to_vector3(pickup_pos)
+        if not pickup_pos or not pickup_vector then
+            return nil, nil
+        end
+
+        local direct = _nav_position_on_mesh(nav_queries, nav_world, pickup_vector, 0.5, 0.5, traverse_logic)
+        if direct then
+            return "ok_on_navmesh", direct
+        end
+
+        local projected = _nav_position_on_mesh(nav_queries, nav_world, pickup_vector, 0.5, 2.2, traverse_logic)
+        if projected then
+            local vertical_delta = (pickup_pos.z or 0) - (projected.z or 0)
+
+            if vertical_delta > 0 and vertical_delta <= 1.6 then
+                return "probably_ok_above_navmesh", projected
+            end
+        end
+
+        local nearby = _nav_position_on_mesh_with_outside_position(nav_queries, nav_world, traverse_logic, pickup_vector)
+        if nearby then
+            return "reachable_nearby", nearby
+        end
+
+        return "suspect_no_navmesh_nearby", nil
+    end
+
+    local function _cached_pickup_reachability(unit, position)
+        if not unit or not position then
+            return nil, nil
+        end
+
+        local cache = mod._pickup_reachability_cache or {}
+        mod._pickup_reachability_cache = cache
+
+        local now = _safe_gameplay_time() or 0
+        local cached = cache[unit]
+        if cached
+            and cached.state ~= nil
+            and now - (cached.t or 0) <= PICKUP_REACHABILITY_REFRESH_INTERVAL
+            and _position_distance_sq(cached.position, position) <= PICKUP_REACHABILITY_MOVE_EPSILON_SQ then
+            return cached.state, cached.nav_position
+        end
+
+        local state, nav_position = mod:classify_pickup_reachability(unit, position)
+        if state == nil then
+            return nil, nil
+        end
+
+        cache[unit] = {
+            state = state,
+            nav_position = nav_position,
+            position = _copy_vector3(position),
+            t = now,
+        }
+
+        _pickup_reachability_log_once(
+            tostring(unit) .. ":" .. tostring(state),
+            "[Radar] pickup reachability | state=" .. tostring(state) .. " unit=" .. tostring(unit)
+        )
+
+        return state, nav_position
+    end
+
+    function _apply_pickup_reachability_to_meta(unit, kind, source, meta, position)
+        if not mod:get_pickup_reachability_enabled() then
+            return meta
+        end
+
+        if not _is_pickup_reachability_candidate(kind, source, meta) then
+            return meta
+        end
+
+        local state, nav_position = _cached_pickup_reachability(unit, position)
+        if not state then
+            return meta
+        end
+
+        meta = meta or {}
+        meta.reachability_state = state
+        meta.reachability_position = nav_position
+
+        return meta
     end
 
     function _safe_unit_node_position(unit, node_name)

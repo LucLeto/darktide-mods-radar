@@ -1159,6 +1159,10 @@ return function(env)
             return false
         end
 
+        if kind == "pickup_reachability_nav_point" then
+            return false
+        end
+
         if _is_player_smart_tag_kind(kind) then
             return false
         end
@@ -1592,6 +1596,13 @@ return function(env)
                 end
             end
 
+            if meta
+                and meta.reachability_state ~= nil
+                and mod.should_hide_pickup_reachability_state
+                and mod:should_hide_pickup_reachability_state(meta.reachability_state) then
+                return
+            end
+
             local distance_sq_horizontal = _distance_squared_horizontal(player_pos, position)
             local infinite_range = _cached_infinite_radar_range(kind)
             local ignore_range = infinite_range or _cached_ignore_radar_range(kind)
@@ -1664,9 +1675,36 @@ return function(env)
             targets[target_count] = target
         end
 
+        local function append_reachability_debug_target(unit, data)
+            if mod:get("debug_pickup_reachability") ~= true then
+                return
+            end
+
+            local meta = data and data.meta or nil
+            if meta and meta.reachability_state == "ok_on_navmesh" then
+                return
+            end
+
+            local nav_position = meta and meta.reachability_position or nil
+            if not nav_position then
+                return
+            end
+
+            append_target("pickup_reachability:" .. tostring(unit), {
+                kind = "pickup_reachability_nav_point",
+                position = nav_position,
+                source = "pickup_reachability",
+                meta = {
+                    parent_kind = data and data.kind or nil,
+                    reachability_state = meta.reachability_state,
+                },
+            })
+        end
+
         for unit, data in pairs(tracked_units) do
             if _is_trackable_unit_alive(unit, data and data.kind) then
                 append_target(unit, data)
+                append_reachability_debug_target(unit, data)
             end
         end
 
@@ -1822,6 +1860,7 @@ return function(env)
         mod._radar_targets = {}
         mod._radar_snapshot = nil
         mod._radar_target_pool = {}
+        mod._pickup_reachability_cache = {}
         mod._last_update_t = nil
         mod._last_scan_signature = nil
         mod._last_block_signature = nil
