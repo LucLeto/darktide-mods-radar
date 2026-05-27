@@ -112,6 +112,7 @@ local WHITE_WIDGET_COLOR = { 255, 255, 255, 255 }
 local RADAR_OUTLINE_WIDGET_COLOR = { 255, 213, 226, 206 }
 local RADAR_LEGEND_INDICATOR_WIDGET_COLOR = { 255, 213, 226, 206 }
 local MARKER_VALUE_TEXT_WIDGET_COLOR = { 255, 255, 225, 0 }
+local VERTICAL_ARROW_WIDGET_COLOR = { 255, 255, 255, 255 }
 local RADAR_ZOOM_INDICATOR_WIDGET_COLOR = { 210, 0, 255, 0 }
 
 local function _any_to_widget_color(color, fallback)
@@ -1280,10 +1281,6 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         _style_color_table(title_icon_style),
         visual and visual.color or nil
     ) or nil
-    local arrow_color = arrow_icon_style and _copy_into_widget_color(
-        _style_color_table(arrow_icon_style),
-        WHITE_WIDGET_COLOR
-    ) or nil
     local vertical_state = target and target.vertical_state or nil
     local arrow_icon = nil
 
@@ -1292,6 +1289,11 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
     elseif vertical_state == "down" then
         arrow_icon = ITEM_VERTICAL_ARROW_DOWN_ICON
     end
+
+    local arrow_color = arrow_icon_style and arrow_icon and _copy_into_widget_color(
+        _style_color_table(arrow_icon_style),
+        _configured_radar_color("vertical_arrow", VERTICAL_ARROW_WIDGET_COLOR)
+    ) or nil
 
     widget.content.icon = visual and visual.icon or nil
     widget.content.overlay_icon = visual and visual.overlay_icon or nil

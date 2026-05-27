@@ -188,7 +188,7 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Radar style | **Square**, **Circle**, or **Auspex**. |
 | Radar outline | **Solid**, **Dotted**, or **Off**. Only used by the **Square** and **Circle** radar styles. |
 | Radar guides | **Crosshair**, **View guides**, **Range rings**, **Auspex**, or **Off**. Only used by the **Square** and **Circle** radar styles. |
-| Radar Colors | ARGB sliders for Radar UI colors such as background, outline, guides, Auspex layers, marker text, and overview legend indicators. |
+| Radar Colors | ARGB sliders for Radar UI colors such as background, outline, guides, Auspex layers, marker text, vertical arrows, and overview legend indicators. |
 | Animated radar sweep | Enables or disables the animated sweep used by the **Auspex** radar style and **Auspex** guides. |
 | Nearby highlight range (m) | Adjustable from **5 m** to **20 m**. Controls how close supported items must be before their screen-space bracket highlights appear. |
 | Highlight thickness | Adjusts the line thickness used by nearby screen-space highlight brackets. |
@@ -654,7 +654,7 @@ Color sliders are placed near the setting they affect:
 
 | Area | Examples |
 | --- | --- |
-| Radar Colors | Radar background, outline, guides, Auspex layers, marker text, and overview legend indicators |
+| Radar Colors | Radar background, outline, guides, Auspex layers, marker text, vertical arrows, and overview legend indicators |
 | Marker icon colors | Pickup, objective, expedition, event, enemy, and other icon-mode marker colors |
 | Marker background colors | Marked enemy and boss background or bracket colors where applicable |
 | Nearby highlight colors | Per-marker highlight colors for marker groups that support nearby screen-space highlights |
