@@ -492,7 +492,6 @@ return function(env)
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_renegade_gunner",
             {
-                toggle_with = "renegade_gunner",
                 icon_size = 8,
                 background_size = 30,
                 bracket_size = 13,
@@ -541,7 +540,6 @@ return function(env)
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_chaos_hound",
             {
-                toggle_with = "chaos_hound",
                 icon_size = 10,
                 background_size = 36,
                 bracket_size = 15,
@@ -590,8 +588,6 @@ return function(env)
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_renegade_executor",
             {
-                toggle_with = "renegade_executor",
-                alias_only = true,
                 icon_size = 10,
                 background_size = 30,
                 bracket_size = 13,
@@ -628,8 +624,6 @@ return function(env)
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_renegade_berzerker",
             {
-                toggle_with = "renegade_berzerker",
-                alias_only = true,
                 icon_size = 10,
                 background_size = 30,
                 bracket_size = 13,
@@ -738,7 +732,6 @@ return function(env)
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_renegade_flamer",
             {
-                toggle_with = "renegade_flamer",
                 icon_size = 12,
                 background_size = 36,
                 bracket_size = 15,
@@ -763,7 +756,6 @@ return function(env)
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_cultist_mutant",
             {
-                toggle_with = "cultist_mutant",
                 icon_size = 10,
                 background_size = 36,
                 bracket_size = 15,
@@ -788,8 +780,6 @@ return function(env)
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_chaos_ogryn_executor",
             {
-                toggle_with = "chaos_ogryn_executor",
-                alias_only = true,
                 icon_size = 12,
                 background_size = 36,
                 bracket_size = 15,
@@ -846,7 +836,6 @@ return function(env)
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_cultist_ritualist",
             {
-                toggle_with = "cultist_ritualist",
                 priority_group = "misc",
                 icon_size = 10,
                 background_size = 30,
@@ -1103,6 +1092,14 @@ return function(env)
         return "icon_only"
     end
 
+    local function _normalize_player_display_style(value)
+        if value == "icon_only" or value == "marked_icon" or value == "dot_only" or value == "marked_dot" then
+            return value
+        end
+
+        return "marked_icon"
+    end
+
     function mod:get_marker_scale_group(kind)
         if not kind then
             return nil
@@ -1178,7 +1175,7 @@ return function(env)
         local value = self:get(setting_id)
 
         if setting_id == "show_enemy_horde" then
-            if value == true or value == "icon_only" or value == "marked_icon" then
+            if value == true or value == "icon" or value == "icon_only" or value == "marked_icon" then
                 return "icon_only"
             end
 
@@ -1205,21 +1202,6 @@ return function(env)
         local setting_id = category and ENEMY_RADAR_SCALE_SETTING_BY_CATEGORY[category] or nil
 
         return _percent_scale_from_setting(self, setting_id)
-    end
-
-    function mod:get_target_icon_scale_factor(kind)
-        local scale = 1.0
-        local group_name = self:get_marker_scale_group(kind)
-
-        if group_name then
-            scale = scale * self:get_marker_scale_factor(group_name)
-        end
-
-        if kind and string_sub(tostring(kind), 1, 6) == "enemy_" then
-            scale = scale * self:get_enemy_category_scale_factor(kind)
-        end
-
-        return scale
     end
 
     function mod:get_target_selection_priority(kind)
@@ -1380,11 +1362,16 @@ return function(env)
 
         local legacy_value = mod:get("show_teammates")
         if legacy_value ~= nil then
-            mod:set("show_players", legacy_value ~= false)
+            mod:set("show_players", legacy_value == false and "off" or
+                _normalize_player_display_style(mod:get("player_display_style")))
         end
     end
 
     function mod.on_all_mods_loaded()
+        if mod.migrate_marker_enabled_dropdown_settings then
+            mod:migrate_marker_enabled_dropdown_settings()
+        end
+
         _migrate_marker_display_mode_settings()
         _migrate_expedition_marker_display_mode_settings()
         _migrate_split_enemy_category_settings()

@@ -659,6 +659,7 @@ local function _build_draw_cache()
     local draw_cache = _draw_cache
     local get = mod.get
     local get_show_player_center_dot = mod.get_show_player_center_dot
+    local get_player_display_style = mod.get_player_display_style
     local get_show_ability_marked_enemies = mod.get_show_ability_marked_enemies
     local get_expedition_loot_marker_mode = mod.get_expedition_loot_marker_mode
     local get_show_expedition_loot_value_text = mod.get_show_expedition_loot_value_text
@@ -676,10 +677,12 @@ local function _build_draw_cache()
     table_clear(draw_cache.nearby_highlight_distance_text_enabled_by_kind)
 
     draw_cache.icon_scale = _icon_scale_factor()
-    draw_cache.player_display_style = _normalized_player_display_style(get(mod, "player_display_style"))
+    draw_cache.player_display_style = get_player_display_style and get_player_display_style(mod) or
+        _normalized_player_display_style(get(mod, "player_display_style"))
     draw_cache.player_tag_display_style = _normalized_enemy_display_style(get(mod, "player_tag_display_style"))
+    local show_player_center_dot = get(mod, "show_player_center_dot")
     draw_cache.show_player_center_dot = get_show_player_center_dot and get_show_player_center_dot(mod) or
-        get(mod, "show_player_center_dot") ~= false
+        (show_player_center_dot ~= false and show_player_center_dot ~= "off")
     draw_cache.show_player_tag_distance_text = get(mod, "show_player_tag_distance_text") == true
     draw_cache.boss_display_style = _normalized_enemy_display_style(get(mod, "boss_display_style"))
     draw_cache.show_ability_marked_enemies = get_show_ability_marked_enemies and
@@ -925,7 +928,13 @@ end
 
 local function _display_style_for_kind(kind, draw_cache)
     if kind == "player_teammate" then
-        return draw_cache and draw_cache.player_display_style or
+        if draw_cache and draw_cache.player_display_style then
+            return draw_cache.player_display_style
+        end
+
+        local get_player_display_style = mod.get_player_display_style
+
+        return get_player_display_style and get_player_display_style(mod) or
             _normalized_player_display_style(mod:get("player_display_style"))
     end
 

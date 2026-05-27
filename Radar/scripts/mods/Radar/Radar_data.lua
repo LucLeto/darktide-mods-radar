@@ -10,6 +10,21 @@ local DROPDOWN_ICON_ENEMY = "content/ui/materials/hud/interactions/icons/enemy"
 local DROPDOWN_ICON_PLAYER = "content/ui/materials/icons/classes/veteran"
 local DROPDOWN_ICON_TECH_REMNANT = "content/ui/materials/icons/currencies/tech_remnant_big"
 
+local PLAYER_MARKER_STYLE_DROPDOWN_ICON = {
+    icon_only = DROPDOWN_ICON_PLAYER,
+    marked_icon = DROPDOWN_ICON_PLAYER,
+    dot_only = DROPDOWN_ICON_DEFAULT,
+    marked_dot = DROPDOWN_ICON_DEFAULT,
+}
+
+local function _normalized_player_marker_style(value)
+    if value == "icon_only" or value == "marked_icon" or value == "dot_only" or value == "marked_dot" then
+        return value
+    end
+
+    return "marked_icon"
+end
+
 local REQUIRED_ICON_PACKAGES = {
     "packages/ui/views/inventory_view/inventory_view",
     "packages/ui/views/inventory_weapons_view/inventory_weapons_view",
@@ -450,14 +465,110 @@ local function _dropdown_option(text, value, icon, icon_colour)
     return option
 end
 
+local function _player_marker_style_dropdown_option(text, value)
+    return _dropdown_option(text, value, PLAYER_MARKER_STYLE_DROPDOWN_ICON[value] or DROPDOWN_ICON_PLAYER,
+        DROPDOWN_ICON_COLOUR_WHITE)
+end
+
+local function _player_marker_style_options(include_off)
+    local options = {
+        _player_marker_style_dropdown_option("display_style_icon_only", "icon_only"),
+        _player_marker_style_dropdown_option("display_style_marked_icon", "marked_icon"),
+        _player_marker_style_dropdown_option("display_style_dot_only", "dot_only"),
+        _player_marker_style_dropdown_option("display_style_marked_dot", "marked_dot"),
+    }
+
+    if include_off then
+        options[#options + 1] = _dropdown_option("radar_outline_off", "off")
+    end
+
+    return options
+end
+
+local function _player_markers_dropdown_value()
+    local value = mod:get("show_players")
+
+    if value == nil then
+        value = mod:get("show_teammates")
+    end
+
+    if value == false or value == "off" then
+        return "off"
+    end
+
+    if _normalized_player_marker_style(value) == value then
+        return value
+    end
+
+    return _normalized_player_marker_style(mod:get("player_display_style"))
+end
+
+local function _set_player_markers_dropdown_value(new_value)
+    if new_value == "off" then
+        mod:set("show_players", "off")
+        return
+    end
+
+    local style = _normalized_player_marker_style(new_value)
+
+    mod:set("show_players", style)
+    mod:set("player_display_style", style)
+end
+
 local function _marker_enabled_options(setting_id)
     local presentation = MARKER_DROPDOWN_PRESENTATIONS[setting_id] or DEFAULT_DROPDOWN_PRESENTATION
     local icon_colour = _dropdown_marker_icon_colour(setting_id, presentation.icon_colour)
 
     return {
-        _dropdown_option("marker_display_mode_icon", true, presentation.icon, icon_colour),
-        _dropdown_option("radar_outline_off", false),
+        _dropdown_option("marker_display_mode_icon", "icon", presentation.icon, icon_colour),
+        _dropdown_option("radar_outline_off", "off"),
     }
+end
+
+local function _marker_enabled_dropdown_value(value, default_value)
+    if value == nil then
+        return default_value
+    end
+
+    if value == false or value == "off" then
+        return "off"
+    end
+
+    return "icon"
+end
+
+local function _migrate_marker_enabled_dropdown_setting(setting_id)
+    local value = mod:get(setting_id)
+
+    if setting_id == "show_players" then
+        if value == false or value == "off" then
+            mod:set(setting_id, "off")
+            return
+        end
+
+        if value == true or value == "icon" then
+            mod:set(setting_id, _normalized_player_marker_style(mod:get("player_display_style")))
+            return
+        end
+
+        if _normalized_player_marker_style(value) == value then
+            mod:set("player_display_style", value)
+        end
+
+        return
+    end
+
+    if value == true then
+        mod:set(setting_id, "icon")
+    elseif value == false then
+        mod:set(setting_id, "off")
+    end
+end
+
+function mod:migrate_marker_enabled_dropdown_settings()
+    for setting_id in pairs(MARKER_DROPDOWN_PRESENTATIONS) do
+        _migrate_marker_enabled_dropdown_setting(setting_id)
+    end
 end
 
 local function _tab_overrides(tooltip_key)
@@ -996,26 +1107,31 @@ local function _apply_marker_enabled_dropdowns(widgets)
         elseif widget.type == "checkbox" and widget.setting_id and MARKER_DROPDOWN_PRESENTATIONS[widget.setting_id] then
             local setting_id = widget.setting_id
             local default_value = widget.default_value == nil and true or widget.default_value
+            local default_dropdown_value = default_value == false and "off" or "icon"
+            local original_get = widget.get
+
+            _migrate_marker_enabled_dropdown_setting(setting_id)
 
             widget.type = "dropdown"
-            widget.default_value = default_value
-            widget.options = _marker_enabled_options(setting_id)
-
-            if widget.get == nil then
+            if setting_id == "show_players" then
+                widget.default_value = "marked_icon"
+                widget.options = _player_marker_style_options(true)
+                widget.get = _player_markers_dropdown_value
+                widget.change = _set_player_markers_dropdown_value
+            else
+                widget.default_value = default_dropdown_value
+                widget.options = _marker_enabled_options(setting_id)
                 widget.get = function()
                     local value = mod:get(setting_id)
 
-                    if value == nil then
-                        return default_value
+                    if value == nil and original_get then
+                        value = original_get()
                     end
 
-                    return value ~= false and value ~= "off"
+                    return _marker_enabled_dropdown_value(value, default_dropdown_value)
                 end
-            end
-
-            if widget.change == nil then
                 widget.change = function(new_value)
-                    mod:set(setting_id, new_value == true)
+                    mod:set(setting_id, new_value == "off" and "off" or "icon")
                 end
             end
         end
@@ -1996,6 +2112,12 @@ return {
                     tab_overrides = TAB_OVERRIDES_PLAYERS,
                     sub_widgets = {
                         {
+                            setting_id = "show_player_center_dot",
+                            tooltip = "show_player_center_dot_tooltip",
+                            type = "checkbox",
+                            default_value = true,
+                        },
+                        {
                             setting_id = "player_teammates_group",
                             type = "group",
                             sub_widgets = {
@@ -2004,27 +2126,6 @@ return {
                                     setting_id = "show_players",
                                     title = "show_teammates",
                                     tooltip = "show_teammates_tooltip",
-                                    type = "checkbox",
-                                    default_value = true,
-                                    get = function()
-                                        if mod.get_show_players then
-                                            return mod:get_show_players()
-                                        end
-
-                                        local value = mod:get("show_players")
-                                        if value == nil then
-                                            value = mod:get("show_teammates")
-                                        end
-
-                                        return value ~= false
-                                    end,
-                                    change = function(new_value)
-                                        mod:set("show_players", new_value)
-                                    end,
-                                },
-                                {
-                                    setting_id = "show_player_center_dot",
-                                    tooltip = "show_player_center_dot_tooltip",
                                     type = "checkbox",
                                     default_value = true,
                                 },
@@ -2048,29 +2149,6 @@ return {
                                     change = function(new_value)
                                         mod:set("player_marker_range_mode", new_value)
                                     end,
-                                },
-                                {
-                                    setting_id = "player_display_style",
-                                    type = "dropdown",
-                                    default_value = "marked_icon",
-                                    options = {
-                                        {
-                                            text = "display_style_icon_only",
-                                            value = "icon_only",
-                                        },
-                                        {
-                                            text = "display_style_marked_icon",
-                                            value = "marked_icon",
-                                        },
-                                        {
-                                            text = "display_style_dot_only",
-                                            value = "dot_only",
-                                        },
-                                        {
-                                            text = "display_style_marked_dot",
-                                            value = "marked_dot",
-                                        },
-                                    },
                                 },
                             },
                         },

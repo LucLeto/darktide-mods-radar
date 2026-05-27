@@ -13,7 +13,6 @@ return function(env)
     local string_find = string.find
     local string_format = string.format
     local string_lower = string.lower
-    local string_match = string.match
     local table_sort = table.sort
     local table_clear = table.clear or function(t)
         for k in pairs(t) do
@@ -83,17 +82,6 @@ return function(env)
         end
 
         return nil
-    end
-
-    function _has_active_expedition_player_drop(unit)
-        if not unit then
-            return false
-        end
-
-        local loot_handler = _safe_expedition_loot_handler()
-        local dropped_loot_by_pickup_unit = loot_handler and rawget(loot_handler, "_dropped_loot_by_pickup_unit")
-
-        return dropped_loot_by_pickup_unit ~= nil and dropped_loot_by_pickup_unit[unit] ~= nil
     end
 
     function _is_in_expedition_safe_zone()
@@ -574,13 +562,6 @@ return function(env)
         return self:get(setting_id) ~= false
     end
 
-    function mod:get_current_radar_game_mode()
-        local mission_name = _safe_mission_name()
-        local mechanism_name = _safe_mechanism_name()
-
-        return _classify_radar_game_mode(mission_name, mechanism_name)
-    end
-
     local function _is_radar_enabled_for_current_mode(mission_name, mechanism_name)
         local game_mode_id = _classify_radar_game_mode(mission_name, mechanism_name)
 
@@ -743,7 +724,9 @@ return function(env)
                 return mod:get_show_players()
             end
 
-            return get_setting(mod, "show_players") ~= false
+            local show_players = get_setting(mod, "show_players")
+
+            return show_players ~= false and show_players ~= "off"
         end
 
         if enemy_display_mode ~= nil then
@@ -766,7 +749,9 @@ return function(env)
             return true
         end
 
-        return get_setting(mod, setting_id) ~= false
+        local value = get_setting(mod, setting_id)
+
+        return value ~= false and value ~= "off"
     end
 
     local function _is_expedition_section_filtered_item_kind(kind)
@@ -814,16 +799,14 @@ return function(env)
         return unit_section_index == active_section_index
     end
 
-    local function _pickup_meta(pickup_name, pickup_data, interaction_type, ui_interaction_type, interaction_icon,
-                                description, unit_name, marked_by_player_slot)
+    local function _pickup_meta(pickup_name, interaction_type, ui_interaction_type, interaction_icon, description,
+                                marked_by_player_slot)
         return {
             pickup_name = pickup_name,
-            pickup_group = pickup_data and pickup_data.group or nil,
             interaction_type = interaction_type,
             ui_interaction_type = ui_interaction_type,
             interaction_icon = interaction_icon,
             description = description,
-            unit_name = unit_name,
             marked_by_player_slot = marked_by_player_slot,
         }
     end
@@ -831,8 +814,7 @@ return function(env)
     local function _classify_pickup_like(interaction_type, ui_interaction_type, icon, description, unit_name, pickup_name,
                                          pickup_data, marked_by_player_slot)
         local pickup_group = pickup_data and pickup_data.group or nil
-        local meta = _pickup_meta(pickup_name, pickup_data, interaction_type, ui_interaction_type, icon, description,
-            unit_name,
+        local meta = _pickup_meta(pickup_name, interaction_type, ui_interaction_type, icon, description,
             marked_by_player_slot)
 
         -- default items
@@ -1008,7 +990,6 @@ return function(env)
 
         if kind == "material_expeditions_loot" then
             meta.remnant_value = _expedition_loot_value_for_pickup_name(pickup_name)
-            meta.remnant_tier = pickup_name and string_match(pickup_name, "tier_(%d+)$") or nil
             meta.is_player_drop = false
         elseif kind == "material_expeditions_loot_player_drop" then
             meta.remnant_value = _safe_expedition_player_drop_amount(unit)
@@ -1275,27 +1256,21 @@ return function(env)
         location_threat = true,
     }
 
-    local PLAYER_SMART_TAG_CALLOUT_TEXT = {
-        location_attention = "Attention",
-        location_ping = "Over there!",
-        location_threat = "Heretic!",
-    }
-
     local function _safe_smart_tag_template_name(tag)
         local template_fn = tag and tag.template
 
         if not template_fn then
-            return nil, nil
+            return nil
         end
 
         local ok_template, template = pcall(template_fn, tag)
         if not ok_template or not template then
-            return nil, nil
+            return nil
         end
 
         local template_name = template.name or template.marker_type or nil
 
-        return _safe_lower_string(template_name), template
+        return _safe_lower_string(template_name)
     end
 
     local function _safe_smart_tag_target_position(tag)
@@ -1435,7 +1410,7 @@ return function(env)
         table_clear(seen_tag_ids)
 
         for tag_id, tag in pairs(all_tags) do
-            local template_name, template = _safe_smart_tag_template_name(tag)
+            local template_name = _safe_smart_tag_template_name(tag)
 
             if template_name and PLAYER_SMART_TAG_KINDS[template_name] then
                 seen_tag_ids[tag_id] = true
@@ -1445,15 +1420,6 @@ return function(env)
                 if position and _is_valid_expedition_player_smart_tag_for_current_section(tag_id, target_unit) then
                     local tagger_player = _safe_smart_tag_tagger_player(tag)
                     local player_slot = _safe_player_slot(tagger_player)
-                    local player_name = nil
-
-                    if tagger_player and tagger_player.name then
-                        local ok_name, resolved_name = pcall(tagger_player.name, tagger_player)
-
-                        if ok_name then
-                            player_name = resolved_name
-                        end
-                    end
 
                     _track_point(
                         string_format("player_smart_tag:%s", tostring(tag_id)),
@@ -1461,13 +1427,8 @@ return function(env)
                         position,
                         "smart_tag_location",
                         {
-                            callout_text = PLAYER_SMART_TAG_CALLOUT_TEXT[template_name],
                             marked_by_player_slot = player_slot,
-                            player = player_name,
                             player_slot = player_slot,
-                            smart_tag_id = tag_id,
-                            smart_tag_marker_type = template and template.marker_type or template_name,
-                            smart_tag_template_name = template_name,
                         }
                     )
                 end

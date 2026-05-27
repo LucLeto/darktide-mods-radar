@@ -946,14 +946,10 @@ return function(env)
                         if kind and _is_trackable_unit_alive(unit, kind) then
                             local ability_marker_names = nil
                             local ability_marker_bracket_color = nil
-                            local ability_marker_primary_name = nil
-                            local ability_marker_priority = nil
 
                             if show_ability_marked_enemies then
                                 ability_marker_names,
-                                ability_marker_bracket_color,
-                                ability_marker_primary_name,
-                                ability_marker_priority = _supported_ability_marker_state_for_unit(
+                                ability_marker_bracket_color = _supported_ability_marker_state_for_unit(
                                         unit,
                                         outline_extension_map,
                                         local_player_unit,
@@ -963,12 +959,8 @@ return function(env)
 
                             _track_unit(unit, kind, "unit_data_system", {
                                 breed_name = breed_name,
-                                resolved_breed_name = resolved_breed_name,
                                 marked_by_player_slot = track_enemy_tags and _marked_by_player_slot_for_unit(unit) or nil,
                                 ability_marked = ability_marker_names ~= nil,
-                                ability_outline_names = ability_marker_names,
-                                ability_outline_primary_name = ability_marker_primary_name,
-                                ability_outline_priority = ability_marker_priority,
                                 ability_outline_bracket_color = ability_marker_bracket_color,
                             })
                         end
@@ -998,7 +990,6 @@ return function(env)
                 local collectible_data = _safe_destructible_collectible_data(extension)
                 local collectible_id = collectible_data and collectible_data.id or nil
                 local collectible_section_id = collectible_data and collectible_data.section_id or nil
-                local collectible_name = collectible_data and collectible_data.name or nil
                 local collectible_key = _idol_collectible_key(collectible_section_id, collectible_id)
                 local prop_data_name = nil
                 local unit_data_breed_name = nil
@@ -1030,15 +1021,7 @@ return function(env)
 
                     _track_unit(unit, kind, "destructible_system", {
                         collectible_type = collectible_type,
-                        unit_name = _safe_lower_string(_safe_unit_name(unit)),
-                        prop_data_name = prop_data_name,
-                        unit_data_breed_name = unit_data_breed_name,
-                        is_live_event_skulls_totem = is_live_event_skulls_totem,
-                        extension_visible = extension_visible,
-                        unit_visible = unit_visible,
-                        health_alive = health_alive,
                         collectible_id = collectible_id,
-                        collectible_name = collectible_name,
                         collectible_section_id = collectible_section_id,
                         marked_by_player_slot = track_item_tags and _marked_by_player_slot_for_unit(unit) or nil,
                     })
@@ -1300,14 +1283,12 @@ return function(env)
         end
 
         local total_value = 0
-        local cluster_count = 0
         local marked_by_player_slot = nil
 
         for i = 1, #cluster_members do
             local member = cluster_members[i]
             local meta = member and member.meta or nil
 
-            cluster_count = cluster_count + 1
             total_value = total_value + _expedition_loot_target_value(member)
 
             if meta and meta.marked_by_player_slot ~= nil and marked_by_player_slot == nil then
@@ -1329,11 +1310,8 @@ return function(env)
             source = "expedition_loot_cluster",
             meta = {
                 is_tech_remnant_cluster = true,
-                remnant_cluster_count = cluster_count,
                 remnant_cluster_value = total_value,
                 remnant_value = total_value,
-                remnant_show_value_text = cluster_count > 1,
-                remnant_value_text = tostring(total_value),
                 marked_by_player_slot = marked_by_player_slot,
             },
             distance_sq = _distance_squared_horizontal(player_pos, position),
@@ -2283,7 +2261,16 @@ return function(env)
     end
 
     function mod:get_player_display_style()
-        local value = tostring(self:get("player_display_style") or "marked_icon")
+        local value = self:get("show_players")
+
+        if value ~= "icon_only"
+            and value ~= "marked_icon"
+            and value ~= "dot_only"
+            and value ~= "marked_dot" then
+            value = self:get("player_display_style")
+        end
+
+        value = tostring(value or "marked_icon")
 
         if value ~= "icon_only"
             and value ~= "marked_icon"
@@ -2302,11 +2289,13 @@ return function(env)
             value = self:get("show_teammates")
         end
 
-        return value ~= false
+        return value ~= false and value ~= "off"
     end
 
     function mod:get_show_player_center_dot()
-        return self:get("show_player_center_dot") ~= false
+        local value = self:get("show_player_center_dot")
+
+        return value ~= false and value ~= "off"
     end
 
     function mod:get_player_marker_range_mode()
@@ -2321,10 +2310,6 @@ return function(env)
 
     function mod:get_radar_snapshot()
         return self._radar_snapshot
-    end
-
-    function mod:get_screen_highlight_targets()
-        return self._screen_highlight_targets or {}
     end
 
     function mod:get_show_only_tagged_enemies()
@@ -2531,18 +2516,6 @@ return function(env)
             value = 100
         elseif value > OVERVIEW_RADAR_MARKER_LIMIT then
             value = OVERVIEW_RADAR_MARKER_LIMIT
-        end
-
-        return math_floor(value)
-    end
-
-    function mod:get_background_opacity()
-        local value = tonumber(self:get("radar_background_opacity")) or tonumber(self:get("background_opacity")) or 90
-
-        if value < 0 then
-            value = 0
-        elseif value > 255 then
-            value = 255
         end
 
         return math_floor(value)

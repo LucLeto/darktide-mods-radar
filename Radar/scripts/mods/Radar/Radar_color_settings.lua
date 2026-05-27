@@ -820,7 +820,7 @@ function ColorSettings.install_runtime(mod)
         return self:get_configurable_color(prefix, fallback)
     end
 
-    function mod:get_enemy_radar_background_color(kind, fallback)
+    function mod:get_enemy_radar_background_color(_kind, fallback)
         if fallback == nil then
             return nil
         end
