@@ -159,6 +159,7 @@ _add_radar_color("radar_colors_group", "auspex_frame_dotted", _color(190, 0, 255
 _add_radar_color("radar_colors_group", "auspex_inner_glow", _color(80, 0, 255, 0), "auspex_inner_glow_color")
 _add_radar_color("radar_colors_group", "marker_value_text", _color(255, 255, 225, 0), "marker_value_text_color")
 _add_radar_color("radar_colors_group", "marker_distance_text", _color(255, 255, 225, 0), "marker_distance_text_color")
+_add_radar_color("radar_colors_group", "vertical_arrow", WHITE, "vertical_arrow_color")
 _add_radar_color("radar_colors_group", "radar_legend_indicator", RADAR_OUTLINE, "radar_legend_indicator_color")
 _add_radar_color("radar_colors_group", "radar_zoom_indicator", _color(210, 0, 255, 0),
     "radar_zoom_indicator_color")
