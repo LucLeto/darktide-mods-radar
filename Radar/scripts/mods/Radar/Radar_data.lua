@@ -42,6 +42,7 @@ local REQUIRED_ICON_PACKAGES = {
     "packages/ui/material_sets/circumstances",
     "packages/ui/views/crafting_view/crafting_view",
     "packages/ui/views/penance_overview_view/penance_overview_view",
+    "packages/ui/views/expedition_play_view/expedition_play_view",
 }
 
 local ARTWORK_DROPDOWN_PRESENTATIONS = {

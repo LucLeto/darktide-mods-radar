@@ -1425,6 +1425,7 @@ return function(env)
         load_package("packages/ui/material_sets/circumstances")
         load_package("packages/ui/views/crafting_view/crafting_view")
         load_package("packages/ui/views/penance_overview_view/penance_overview_view")
+        load_package("packages/ui/views/expedition_play_view/expedition_play_view")
 
         if debug_mode then
             mod:info("Packages loaded")
