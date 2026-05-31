@@ -29,6 +29,7 @@ return function(env)
     local LEGACY_SKULLS_CIRCUMSTANCE_PREFIX = "skulls_event_01"
     local DARK_RITES_CIRCUMSTANCE_VARIANT_PREFIX = DARK_RITES_CIRCUMSTANCE_PREFIX .. "_"
     local LEGACY_SKULLS_CIRCUMSTANCE_VARIANT_PREFIX = LEGACY_SKULLS_CIRCUMSTANCE_PREFIX .. "_"
+    local PSYKHANIUM_MISSION_NAME = "tg_shooting_range"
     local _scratch_highlight_enabled_by_kind = {}
 
     local function _reuse_screen_highlight_output()
@@ -775,25 +776,35 @@ return function(env)
             or _string_starts_with(circumstance_name, LEGACY_SKULLS_CIRCUMSTANCE_VARIANT_PREFIX)
     end
 
+    local function _is_psykhanium_mission(mission_name)
+        return mission_name == PSYKHANIUM_MISSION_NAME
+    end
+
     function _reset_dark_rites_marker_scan_cache()
         mod._dark_rites_marker_scan_cache_valid = false
         mod._dark_rites_marker_scan_allowed = true
         mod._dark_rites_marker_cached_circumstance_name = nil
+        mod._dark_rites_marker_cached_mission_name = nil
     end
 
     function _is_dark_rites_marker_scan_allowed()
         local circumstance_name = _safe_circumstance_name()
+        local mission_name = _safe_lower_string(_safe_mission_name())
 
         if mod._dark_rites_marker_scan_cache_valid == true
-            and mod._dark_rites_marker_cached_circumstance_name == circumstance_name then
+            and mod._dark_rites_marker_cached_circumstance_name == circumstance_name
+            and mod._dark_rites_marker_cached_mission_name == mission_name then
             return mod._dark_rites_marker_scan_allowed == true
         end
 
-        local scan_allowed = circumstance_name == nil or _is_skulls_live_event_circumstance(circumstance_name)
+        local scan_allowed = circumstance_name == nil
+            or _is_skulls_live_event_circumstance(circumstance_name)
+            or _is_psykhanium_mission(mission_name)
 
         mod._dark_rites_marker_scan_cache_valid = true
         mod._dark_rites_marker_scan_allowed = scan_allowed
         mod._dark_rites_marker_cached_circumstance_name = circumstance_name
+        mod._dark_rites_marker_cached_mission_name = mission_name
 
         return scan_allowed
     end

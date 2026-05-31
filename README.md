@@ -127,7 +127,7 @@ Supported artwork-based markers now use dropdowns instead of simple booleans. Ea
 - **Artwork** uses the original item artwork or pickup art.
 - **Icon** uses a simplified HUD icon material with a configurable ARGB tint.
 - **Off** hides that specific marker entirely.
-- Existing saved boolean settings are migrated automatically, with old `true` values becoming **Artwork** and old `false` values becoming **Off**.
+- Existing saved boolean settings are migrated automatically. Older artwork-capable markers migrate old `true` values to **Artwork** and old `false` values to **Off**; event markers that gained artwork support later preserve old enabled settings as **Icon**.
 
 ### Common pickups and materials
 
@@ -152,6 +152,15 @@ Supported artwork-based markers now use dropdowns instead of simple booleans. Ea
 | Artillery Locator Beacon | <img src="doc/img/pocketable_artillery_strike.png"  width="80" alt="Artillery artwork mode" /> | <img src="doc/img/pocketable_artillery_strike_alternative.png"  width="80" alt="Artillery icon mode" /> | Hidden |
 | Modified Grenade | <img src="doc/img/pocketable_big_grenade.png"  width="80" alt="Modified grenade artwork mode" /> | <img src="doc/img/pocketable_big_grenade_alternative.png"  width="80" alt="Modified grenade icon mode" /> | Hidden |
 | Fire-Support Signal Marker | <img src="doc/img/pocketable_valkyrie_hover.png"  width="80" alt="Valkyrie hover artwork mode" /> | <img src="doc/img/pocketable_valkyrie_hover_alternative.png"  width="80" alt="Valkyrie hover icon mode" /> | Hidden |
+
+### Live-event items with display modes
+
+| Marker | Artwork | Icon | Off |
+| --- | --- | --- | --- |
+| Tainted Skulls | <img src="doc/img/material_skulls_live_event_small.png"  width="80" alt="Tainted Skull artwork mode" /> | <img src="doc/img/pickup_tainted_skull.png"  width="80" alt="Tainted Skull icon mode" /> | Hidden |
+| Holy Relics, Small | <img src="doc/img/material_saints_live_event_small.png"  width="80" alt="Small Holy Relic artwork mode" /> | <img src="doc/img/pickup_saints.png"  width="80" alt="Holy Relic icon mode" /> | Hidden |
+| Holy Relics, Medium | <img src="doc/img/material_saints_live_event_medium.png"  width="80" alt="Medium Holy Relic artwork mode" /> | <img src="doc/img/pickup_saints.png"  width="80" alt="Holy Relic icon mode" /> | Hidden |
+| Holy Relics, Large | <img src="doc/img/material_saints_live_event_large.png"  width="80" alt="Large Holy Relic artwork mode" /> | <img src="doc/img/pickup_saints.png"  width="80" alt="Holy Relic icon mode" /> | Hidden |
 
 ### Tech-Remnant cluster example
 
@@ -225,6 +234,7 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Common Pickups | Crates | **Artwork**, **Icon**, **Off** |
 | Collectable Materials | Diamantine, Plasteel | **Artwork**, **Icon**, **Off** |
 | Expeditions-Specific Items | Salvage, Tech-Remnants, Dropped Tech-Remnants, Servo-Triggered Mine, Purgation Snare, Voltaic Snare, Void Shell, Bombing Run Signal Marker, Artillery Locator Beacon, Modified Grenade, Fire-Support Signal Marker | **Artwork**, **Icon**, **Off** |
+| Event-Related Items | Tainted Skulls, Holy Relics | **Artwork**, **Icon**, **Off** |
 | Expedition POIs | Sites of Interest, Deadsider Sanctuaries, Data Reliquary Harvesters, Main Objective, Valkyrie Extraction Zone, Valkyrie Arrival Zone | **Icon only**, **Icon + Distance m**, **Off** |
 | Enemy bosses | Daemonhost, Monstrosities, Captains, Karnak Twins | **Icon only**, **Marked icon** |
 | Enemy groups | Common enemies and Shooters | **Icon only**, **Marked icon**, **Off** |
@@ -343,12 +353,12 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 
 | Option | What it controls |
 | --- | --- |
-| Event-Related Items | Group of toggles for live-event pickups and event objectives. |
-| Tainted Skulls | Shows tainted skull pickups from skull live-event circumstances. |
+| Event-Related Items | Group of controls for live-event pickups and event objectives. |
+| Tainted Skulls | Shows tainted skull pickups from skull live-event circumstances as artwork, simplified icon, or hidden. |
 | Dark Rites Totems | Shows destroyable Dark Rites ritual totems while they are still active. |
 | Dark Rites Servo Skulls | Shows the spawned Dark Rites servo skull objective interactable. |
 | Tainted Communications Device | Shows corrupted auspex scanner event pickups. |
-| Holy Relics | Shows Holy Relics event pickups. |
+| Holy Relics | Shows Holy Relics event pickups as artwork, simplified icon, or hidden. Artwork mode distinguishes small, medium, and large relic pickups. |
 | Stolen Rations | Shows Stolen Rations event pickups. |
 
 ### Positioning and Toggle Use
@@ -624,11 +634,13 @@ These markers are driven by expedition navigation data rather than standard pick
 
 | Preview | Marker | Notes |
 | --- | --- | --- |
-| <img src="doc/img/pickup_tainted_skull.png"  width="80" alt="Tainted Skull marker" /> | Tainted Skulls | Green skull marker. |
+| <img src="doc/img/material_skulls_live_event_small.png"  width="80" alt="Tainted Skull artwork marker" /> | Tainted Skulls | Supports **Artwork**, **Icon**, and **Off**. Artwork mode uses the skull live-event pickup art; icon mode uses the green skull marker. |
 | <img src="doc/img/dark_rites_totem.png"  width="80" alt="Dark Rites Totem marker" /> | Dark Rites Totems | Green heretics icon marker for destroyable Dark Rites ritual totems. |
 | <img src="doc/img/dark_rites_servo_skull.png"  width="80" alt="Dark Rites Servo Skull marker" /> | Dark Rites Servo Skulls | Green ability icon marker for spawned Dark Rites servo skull objective interactables. |
 | <img src="doc/img/pocketable_corrupted_auspex_scanner.png"  width="80" alt="Tainted Communications Device marker" /> | Tainted Communications Device | Orange auspex scanner marker. |
-| <img src="doc/img/pickup_saints.png"  width="80" alt="Holy Relics marker" /> | Holy Relics | Gold relic marker. |
+| <img src="doc/img/material_saints_live_event_small.png"  width="80" alt="Small Holy Relic artwork marker" /> | Holy Relics, Small | Supports **Artwork**, **Icon**, and **Off**. Artwork mode uses the small relic pickup art. |
+| <img src="doc/img/material_saints_live_event_medium.png"  width="80" alt="Medium Holy Relic artwork marker" /> | Holy Relics, Medium | Supports **Artwork**, **Icon**, and **Off**. Artwork mode uses the medium relic pickup art. |
+| <img src="doc/img/material_saints_live_event_large.png"  width="80" alt="Large Holy Relic artwork marker" /> | Holy Relics, Large | Supports **Artwork**, **Icon**, and **Off**. Artwork mode uses the large relic pickup art. |
 | <img src="doc/img/pickup_stolen_rations.png"  width="80" alt="Stolen Rations marker" /> | Stolen Rations | Green crate marker. |
 
 ### Debug Marker
@@ -669,6 +681,7 @@ Examples:
 - Crates use the pickup artwork tile.
 - Diamantine, Plasteel, Salvage, Tech-Remnants, and Dropped Tech-Remnants keep their resource artwork.
 - Expeditions pocketables such as Void Shell, the landmines, and the strike markers keep their existing item artwork.
+- Tainted Skulls and Holy Relics use live-event artwork. Holy Relics resolve small, medium, and large pickup art from the actual pickup name.
 
 ### Icon mode
 
@@ -690,6 +703,8 @@ Icon mode swaps supported markers to simplified HUD icon materials with configur
 | Purgation Snare | `content/ui/materials/hud/interactions/icons/landmine_fire` | `(255, 255, 110, 0)` |
 | Voltaic Snare | `content/ui/materials/hud/interactions/icons/landmine_shock` | `(255, 80, 160, 255)` |
 | Void Shell | `content/ui/materials/hud/interactions/icons/void_shield` | `(255, 181, 166, 66)` |
+| Tainted Skulls | `content/ui/materials/hud/interactions/icons/enemy` | `(255, 150, 190, 60)` |
+| Holy Relics | `content/ui/materials/icons/circumstances/live_event_01` | `(255, 192, 160, 0)` |
 
 ### Semantic recolors for regular markers
 
@@ -717,8 +732,8 @@ The remaining formerly white pickup icons were recolored so marker families read
 | Enemy marked backgrounds and brackets | Marked enemy presentations, including bosses and per-enemy radar markers | `(220, 255, 0, 0)` |
 | `content/ui/materials/icons/item_types/devices` | Mortis Relic | `(255, 110, 95, 125)` |
 | `content/ui/materials/hud/interactions/icons/barrel_explosive` | Promethium Barrel | `(255, 255, 110, 0)` |
-| `content/ui/materials/icons/circumstances/live_event_01` | Holy Relics | `(255, 192, 160, 0)` |
-| `content/ui/materials/hud/interactions/icons/enemy` | Martyr's Skull, Tainted Skulls | `(255, 255, 215, 0)`, `(255, 150, 190, 60)` |
+| `content/ui/materials/icons/circumstances/live_event_01` | Holy Relics icon mode | `(255, 192, 160, 0)` |
+| `content/ui/materials/hud/interactions/icons/enemy` | Martyr's Skull, Tainted Skulls icon mode | `(255, 255, 215, 0)`, `(255, 150, 190, 60)` |
 | `content/ui/materials/icons/achievements/categories/category_heretics` | Dark Rites Totems | `(255, 150, 190, 60)` |
 | `content/ui/materials/icons/abilities/default` | Dark Rites Servo Skulls | `(255, 150, 190, 60)` |
 
