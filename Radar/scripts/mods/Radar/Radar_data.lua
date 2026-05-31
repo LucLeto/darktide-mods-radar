@@ -36,6 +36,8 @@ local REQUIRED_ICON_PACKAGES = {
     "packages/ui/views/player_character_options_view/player_character_options_view",
     "packages/ui/views/talent_builder_view/talent_builder_view",
     "packages/ui/views/live_events_view/live_events_view",
+    "packages/content/live_events/saints/live_event_saints_ui_assets",
+    "packages/content/live_events/skulls/live_event_skulls_ui_assets",
     "packages/ui/views/group_finder_view/group_finder_view",
     "packages/ui/views/mission_board_view/mission_board_view",
     "packages/ui/views/scanner_display_view/scanner_display_view",
@@ -129,6 +131,18 @@ local ARTWORK_DROPDOWN_PRESENTATIONS = {
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/void_shield",
         icon_colour = { 255, 181, 166, 66 },
+    },
+    show_tainted_skull = {
+        artwork_icon = "content/ui/materials/icons/currencies/live_events/skulls_live_event_small",
+        artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
+        icon = "content/ui/materials/hud/interactions/icons/enemy",
+        icon_colour = { 255, 150, 190, 60 },
+    },
+    show_saints = {
+        artwork_icon = "content/ui/materials/icons/currencies/live_events/saints_live_event_small",
+        artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
+        icon = "content/ui/materials/icons/circumstances/live_event_01",
+        icon_colour = { 255, 192, 160, 0 },
     },
 }
 
@@ -415,10 +429,6 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
         icon = DROPDOWN_ICON_DEFAULT,
         icon_colour = DROPDOWN_ICON_COLOUR_WHITE,
     },
-    show_tainted_skull = {
-        icon = "content/ui/materials/hud/interactions/icons/enemy",
-        icon_colour = { 255, 150, 190, 60 },
-    },
     show_dark_rites_totem = {
         icon = "content/ui/materials/icons/achievements/categories/category_heretics",
         icon_colour = { 255, 150, 190, 60 },
@@ -430,10 +440,6 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
     show_pocketable_corrupted_auspex_scanner = {
         icon = "content/ui/materials/icons/pocketables/hud/auspex_scanner",
         icon_colour = { 255, 255, 120, 0 },
-    },
-    show_saints = {
-        icon = "content/ui/materials/icons/circumstances/live_event_01",
-        icon_colour = { 255, 192, 160, 0 },
     },
     show_stolen_rations = {
         icon = "content/ui/materials/icons/pickups/default",
@@ -598,17 +604,18 @@ local TAB_OVERRIDES_ENEMIES = _tab_overrides("radar_tab_enemies_tooltip")
 local TAB_OVERRIDES_PLAYERS = _tab_overrides("radar_tab_players_tooltip")
 local TAB_OVERRIDES_DEBUG = _tab_overrides("radar_tab_debug_tooltip")
 
-local function _artwork_icon_off_dropdown(setting_id)
+local function _artwork_icon_off_dropdown(setting_id, default_value)
     local presentation = ARTWORK_DROPDOWN_PRESENTATIONS[setting_id] or DEFAULT_DROPDOWN_PRESENTATION
     local artwork_icon = presentation.artwork_icon or presentation.icon
     local artwork_colour = presentation.artwork_colour or presentation.icon_colour or DROPDOWN_ICON_COLOUR_WHITE
     local icon = presentation.icon
     local icon_colour = _dropdown_marker_icon_colour(setting_id, presentation.icon_colour)
+    default_value = default_value or "artwork"
 
     return {
         setting_id = setting_id,
         type = "dropdown",
-        default_value = "artwork",
+        default_value = default_value,
         options = {
             _dropdown_option("marker_display_mode_artwork", "artwork", artwork_icon, artwork_colour),
             _dropdown_option("marker_display_mode_icon", "icon", icon, icon_colour),
@@ -617,11 +624,15 @@ local function _artwork_icon_off_dropdown(setting_id)
         get = function()
             local value = mod:get(setting_id)
 
+            if value == nil then
+                return default_value
+            end
+
             if value == "icon" or value == "off" or value == "artwork" then
                 return value
             end
 
-            return value == false and "off" or "artwork"
+            return value == false and "off" or default_value
         end,
         change = function(new_value)
             mod:set(setting_id, new_value)
@@ -2200,11 +2211,7 @@ return {
                             default_value = false,
                         },
                         _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_event"),
-                        {
-                            setting_id = "show_tainted_skull",
-                            type = "checkbox",
-                            default_value = true,
-                        },
+                        _artwork_icon_off_dropdown("show_tainted_skull", "artwork"),
                         {
                             setting_id = "show_dark_rites_totem",
                             type = "checkbox",
@@ -2220,11 +2227,7 @@ return {
                             type = "checkbox",
                             default_value = true,
                         },
-                        {
-                            setting_id = "show_saints",
-                            type = "checkbox",
-                            default_value = true,
-                        },
+                        _artwork_icon_off_dropdown("show_saints", "artwork"),
                         {
                             setting_id = "show_stolen_rations",
                             type = "checkbox",
