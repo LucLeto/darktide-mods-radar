@@ -258,6 +258,31 @@ local function _sync_screen_scenegraph(self)
     end
 end
 
+local TAINTED_SKULL_LIVE_EVENT_ICON = "content/ui/materials/icons/currencies/live_events/skulls_live_event_small"
+local SAINTS_LIVE_EVENT_SMALL_ICON = "content/ui/materials/icons/currencies/live_events/saints_live_event_small"
+local SAINTS_LIVE_EVENT_MEDIUM_ICON = "content/ui/materials/icons/currencies/live_events/saints_live_event_medium"
+local SAINTS_LIVE_EVENT_LARGE_ICON = "content/ui/materials/icons/currencies/live_events/saints_live_event_large"
+
+local SAINTS_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME = {
+    live_event_saints_01_pickup_small = {
+        icon = SAINTS_LIVE_EVENT_SMALL_ICON,
+        color = WHITE_WIDGET_COLOR,
+        size = 14,
+    },
+    live_event_saints_01_pickup_medium = {
+        icon = SAINTS_LIVE_EVENT_MEDIUM_ICON,
+        color = WHITE_WIDGET_COLOR,
+        size = 14,
+    },
+    live_event_saints_01_pickup_large = {
+        icon = SAINTS_LIVE_EVENT_LARGE_ICON,
+        color = WHITE_WIDGET_COLOR,
+        size = 14,
+    },
+}
+local DEFAULT_SAINTS_ARTWORK_PRESENTATION =
+    SAINTS_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME.live_event_saints_01_pickup_small
+
 local ARTWORK_MODE_ICON_PRESENTATIONS = {
     crate_unknown = {
         icon = "content/ui/materials/icons/generic/loot",
@@ -327,6 +352,16 @@ local ARTWORK_MODE_ICON_PRESENTATIONS = {
     pocketable_void_shield = {
         icon = "content/ui/materials/hud/interactions/icons/void_shield",
         color = _widget_color(255, 181, 166, 66),
+        size = 14,
+    },
+    pickup_tainted_skull = {
+        icon = "content/ui/materials/hud/interactions/icons/enemy",
+        color = _widget_color(255, 150, 190, 60),
+        size = 14,
+    },
+    pickup_saints = {
+        icon = "content/ui/materials/icons/circumstances/live_event_01",
+        color = _widget_color(255, 192, 160, 0),
         size = 14,
     },
 }
@@ -471,8 +506,8 @@ local PRESENTATIONS = {
         size = 14,
     },
     pickup_tainted_skull = {
-        icon = "content/ui/materials/hud/interactions/icons/enemy",
-        color = _widget_color(255, 150, 190, 60),
+        icon = TAINTED_SKULL_LIVE_EVENT_ICON,
+        color = WHITE_WIDGET_COLOR,
         size = 14,
     },
     dark_rites_totem = {
@@ -485,11 +520,7 @@ local PRESENTATIONS = {
         color = _widget_color(255, 150, 190, 60),
         size = 14,
     },
-    pickup_saints = {
-        icon = "content/ui/materials/icons/circumstances/live_event_01",
-        color = _widget_color(255, 192, 160, 0),
-        size = 14,
-    },
+    pickup_saints = DEFAULT_SAINTS_ARTWORK_PRESENTATION,
     pickup_stolen_rations = {
         icon = "content/ui/materials/icons/pickups/default",
         color = _widget_color(255, 150, 190, 60),
@@ -1810,6 +1841,14 @@ local function _artwork_mode_icon_visual(kind, draw_cache)
     return visual
 end
 
+local function _pickup_saints_artwork_presentation(target)
+    local meta = target and target.meta or nil
+    local pickup_name = meta and meta.pickup_name or nil
+
+    return (pickup_name and SAINTS_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME[pickup_name])
+        or DEFAULT_SAINTS_ARTWORK_PRESENTATION
+end
+
 local function _expedition_objective_visual(target, draw_cache)
     local meta = target and target.meta or nil
     local marked_by_player_slot = meta and meta.marked_by_player_slot or nil
@@ -2052,6 +2091,12 @@ local function _target_visual(target, draw_cache)
     local presentation = rawget(PRESENTATIONS, target_kind)
 
     if presentation ~= nil then
+        local display_mode = _artwork_mode(target_kind, draw_cache)
+
+        if target_kind == "pickup_saints" and display_mode == "artwork" then
+            presentation = _pickup_saints_artwork_presentation(target)
+        end
+
         if debug_mode then
             _log_once(
                 LogBuckets.visuals,
@@ -2061,7 +2106,7 @@ local function _target_visual(target, draw_cache)
             )
         end
 
-        if _artwork_mode(target_kind, draw_cache) ~= "artwork" then
+        if display_mode ~= "artwork" then
             presentation.color = _configured_marker_color(target_kind, presentation.color)
         end
 

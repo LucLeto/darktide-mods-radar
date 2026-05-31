@@ -83,6 +83,7 @@ return function(env)
     mod._dark_rites_marker_scan_cache_valid = false
     mod._dark_rites_marker_scan_allowed = true
     mod._dark_rites_marker_cached_circumstance_name = nil
+    mod._dark_rites_marker_cached_mission_name = nil
     mod._screen_highlight_targets = {}
     mod._unclustered_radar_targets = {}
     mod._highlight_source_radar_targets = {}
@@ -153,6 +154,7 @@ return function(env)
         pocketable_breach_charge = "show_pocketable_breach_charge",
         pocketable_corrupted_auspex_scanner = "show_pocketable_corrupted_auspex_scanner",
         pocketable_expedition_loot_crate = "show_pocketable_expedition_loot_crate",
+        pickup_saints = "show_saints",
         pocketable_airstrike = "show_pocketable_airstrike",
         pocketable_artillery_strike = "show_pocketable_artillery_strike",
         pocketable_big_grenade = "show_pocketable_big_grenade",
@@ -222,6 +224,13 @@ return function(env)
         pocketable_landmine_fire = "show_pocketable_landmine_fire",
         pocketable_landmine_shock = "show_pocketable_landmine_shock",
         pocketable_void_shield = "show_pocketable_void_shield",
+        pickup_tainted_skull = "show_tainted_skull",
+        pickup_saints = "show_saints",
+    }
+
+    local ARTWORK_MODE_DEFAULT_BY_SETTING = {
+        show_tainted_skull = "artwork",
+        show_saints = "artwork",
     }
 
     local MARKER_SCALE_GROUP_BY_KIND = {
@@ -948,6 +957,8 @@ return function(env)
         "show_pocketable_landmine_fire",
         "show_pocketable_landmine_shock",
         "show_pocketable_void_shield",
+        "show_tainted_skull",
+        "show_saints",
     }
 
     EXPEDITION_MARKER_DISPLAY_MODE_SETTING_IDS = {
@@ -1052,13 +1063,21 @@ return function(env)
         consumable = true,
     }
 
-    local function _normalize_marker_display_mode(value)
+    local function _normalize_marker_display_mode(value, default_value)
+        if value == nil then
+            return default_value or "artwork"
+        end
+
         if value == false or value == "off" then
             return "off"
         end
 
         if value == "icon" then
             return "icon"
+        end
+
+        if value == true then
+            return default_value or "artwork"
         end
 
         return "artwork"
@@ -1268,7 +1287,7 @@ return function(env)
             return nil
         end
 
-        return _normalize_marker_display_mode(mod:get(setting_id))
+        return _normalize_marker_display_mode(mod:get(setting_id), ARTWORK_MODE_DEFAULT_BY_SETTING[setting_id])
     end
 
     function mod:get_expedition_marker_display_mode(kind)
@@ -1292,7 +1311,7 @@ return function(env)
             local value = mod_get(mod, setting_id)
 
             if value == true then
-                mod_set(mod, setting_id, "artwork")
+                mod_set(mod, setting_id, ARTWORK_MODE_DEFAULT_BY_SETTING[setting_id] or "artwork")
             elseif value == false then
                 mod_set(mod, setting_id, "off")
             end
@@ -1419,6 +1438,8 @@ return function(env)
         load_package("packages/ui/views/player_character_options_view/player_character_options_view")
         load_package("packages/ui/views/talent_builder_view/talent_builder_view")
         load_package("packages/ui/views/live_events_view/live_events_view")
+        load_package("packages/content/live_events/saints/live_event_saints_ui_assets")
+        load_package("packages/content/live_events/skulls/live_event_skulls_ui_assets")
         load_package("packages/ui/views/group_finder_view/group_finder_view")
         load_package("packages/ui/views/mission_board_view/mission_board_view")
         load_package("packages/ui/views/scanner_display_view/scanner_display_view")
