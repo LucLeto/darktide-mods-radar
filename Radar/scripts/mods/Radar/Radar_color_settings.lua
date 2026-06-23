@@ -635,6 +635,7 @@ _add_marker({
 
 _add_marker({
     kind = "pickup_martyr_skull",
+    aliases = { "martyr_skull_riddle_interactable" },
     anchor = "show_martyr_skull",
     default = _color(255, 255, 215, 0),
     supports_highlight = true,

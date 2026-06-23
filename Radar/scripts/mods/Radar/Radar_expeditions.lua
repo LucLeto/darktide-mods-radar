@@ -891,6 +891,17 @@ return function(env)
                 { x = 60.767, y = -5.137, z = -11.409 },
             },
         },
+        dm_rise = {
+            ["default|default|loc_interactable_power"] = {
+                { x = -120.004, y = -79.463, z = -21.270 },
+                { x = -125.952, y = -85.401, z = -21.270 },
+            },
+            ["moveable_platform|default|loc_interactable_elevator_controls"] = {
+                { x = -120.148, y = -73.951, z = -23.000 },
+                { x = -120.148, y = -73.951, z = -11.000 },
+                { x = -131.461, y = -85.265, z = -11.000 },
+            },
+        },
         fm_armoury = {
             ["default|default|loc_interactable_gate|#id[97214c4425c8caf6]"] = {
                 { x = -264.935, y = -117.707, z = -11.452 },
@@ -939,6 +950,29 @@ return function(env)
                 { x = 7.496, y = 96.885, z = -48.768 },
             },
         },
+        km_enforcer = {
+            ["default|default|loc_interactable_prison_cells"] = {
+                { x = -391.067, y = -57.326, z = 18.635 },
+            },
+            ["default|puzzle|loc_interactable_lever_small"] = {
+                { x = -340.266, y = -57.970, z = 19.202 },
+            },
+            ["default|default|loc_interactable_signal"] = {
+                { x = -365.904, y = -34.790, z = 18.626 },
+            },
+            ["default|puzzle|loc_interactable_security_gate"] = {
+                { x = -394.273, y = -65.442, z = 18.559 },
+                { x = -392.187, y = -63.042, z = 18.559 },
+                { x = -392.708, y = -63.642, z = 18.559 },
+                { x = -393.700, y = -64.783, z = 18.559 },
+            },
+            ["default|default|loc_interactable_button|#id[97214c4425c8caf6]"] = {
+                { x = -374.960, y = -26.918, z = 18.626 },
+            },
+            ["default|default|loc_interactable_button|#id[dfbf44eee4048cb3]"] = {
+                { x = -404.777, y = -48.632, z = 19.460 },
+            },
+        },
         km_station = {
             ["default|puzzle|loc_interactable_valve"] = {
                 { x = -1.340, y = -176.501, z = -8.621 },
@@ -965,8 +999,16 @@ return function(env)
             { x = 142.246, y = -170.633, z = -14.345, label = "prison_cell_door_a" },
             { x = 136.254, y = -170.615, z = -14.345, label = "prison_cell_door_b" },
         },
+        dm_rise = {
+            require_all = true,
+            { x = -130.224, y = -89.331, z = -23.000, label = "skull_path_door_a" },
+            { x = -132.732, y = -81.211, z = -23.000, label = "skull_path_door_b" },
+        },
         fm_cargo = {
             { x = -103.178, y = -52.162, z = 1.044, label = "skull_door" },
+        },
+        km_enforcer = {
+            { x = -405.051, y = -49.056, z = 17.710, label = "skull_room_door" },
         },
     }
 
