@@ -1223,6 +1223,7 @@ return function(env)
         dark_rites_servo_skull = 0.1,
         pocketable_corrupted_auspex_scanner = 0.08,
         pickup_saints = 0.12,
+        pickup_leftover = 0.12,
         pickup_stolen_rations = 0.08,
     }
 

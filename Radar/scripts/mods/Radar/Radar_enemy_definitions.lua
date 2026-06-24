@@ -67,6 +67,7 @@ return function(env)
         dark_rites_servo_skull = { 255, 150, 190, 60 },
         pocketable_corrupted_auspex_scanner = { 255, 255, 120, 0 },
         pickup_saints = { 255, 192, 160, 0 },
+        pickup_leftover = { 255, 150, 190, 60 },
         pickup_stolen_rations = { 255, 150, 190, 60 },
     }
 
@@ -155,6 +156,7 @@ return function(env)
         pocketable_corrupted_auspex_scanner = "show_pocketable_corrupted_auspex_scanner",
         pocketable_expedition_loot_crate = "show_pocketable_expedition_loot_crate",
         pickup_saints = "show_saints",
+        pickup_leftover = "show_leftover",
         pocketable_airstrike = "show_pocketable_airstrike",
         pocketable_artillery_strike = "show_pocketable_artillery_strike",
         pocketable_big_grenade = "show_pocketable_big_grenade",
@@ -226,11 +228,13 @@ return function(env)
         pocketable_void_shield = "show_pocketable_void_shield",
         pickup_tainted_skull = "show_tainted_skull",
         pickup_saints = "show_saints",
+        pickup_leftover = "show_leftover",
     }
 
     local ARTWORK_MODE_DEFAULT_BY_SETTING = {
         show_tainted_skull = "artwork",
         show_saints = "artwork",
+        show_leftover = "artwork",
     }
 
     local MARKER_SCALE_GROUP_BY_KIND = {
@@ -296,6 +300,7 @@ return function(env)
         dark_rites_servo_skull = "event_group",
         pocketable_corrupted_auspex_scanner = "event_group",
         pickup_saints = "event_group",
+        pickup_leftover = "event_group",
         pickup_stolen_rations = "event_group",
         pickup_unknown = "debug_group",
     }
@@ -646,8 +651,8 @@ return function(env)
             "show_enemy_cultist_assault",
             {
                 icon_size = 7,
-                background_size = 24,
-                bracket_size = 11,
+                background_size = 28,
+                bracket_size = 12,
             }
         ),
         cultist_shocktrooper = _enemy_radar_def(
@@ -670,8 +675,8 @@ return function(env)
             "show_enemy_renegade_assault",
             {
                 icon_size = 7,
-                background_size = 24,
-                bracket_size = 11,
+                background_size = 28,
+                bracket_size = 12,
             }
         ),
         renegade_rifleman = _enemy_radar_def(
@@ -682,8 +687,8 @@ return function(env)
             "show_enemy_renegade_rifleman",
             {
                 icon_size = 7,
-                background_size = 24,
-                bracket_size = 11,
+                background_size = 28,
+                bracket_size = 12,
             }
         ),
         renegade_shocktrooper = _enemy_radar_def(
@@ -893,7 +898,7 @@ return function(env)
             {
                 icon_size = 8,
                 background_size = 16,
-                bracket_size = 9,
+                bracket_size = 8,
             }
         ),
         renegade_melee = _enemy_radar_def(
@@ -905,7 +910,31 @@ return function(env)
             {
                 icon_size = 8,
                 background_size = 16,
-                bracket_size = 9,
+                bracket_size = 8,
+            }
+        ),
+        cultist_vanguard = _enemy_radar_def(
+            "common",
+            "content/ui/materials/icons/presets/preset_04",
+            ENEMY_RADAR_DEFAULT_DREG_COLOR,
+            ENEMY_RADAR_DEFAULT_COLOR,
+            "show_enemy_cultist_vanguard",
+            {
+                icon_size = 10,
+                background_size = 32,
+                bracket_size = 14,
+            }
+        ),
+        renegade_vanguard = _enemy_radar_def(
+            "common",
+            "content/ui/materials/icons/presets/preset_04",
+            ENEMY_RADAR_DEFAULT_SCAB_COLOR,
+            ENEMY_RADAR_DEFAULT_COLOR,
+            "show_enemy_renegade_vanguard",
+            {
+                icon_size = 10,
+                background_size = 32,
+                bracket_size = 14,
             }
         ),
         chaos_armored_infected = _enemy_radar_def(
@@ -959,6 +988,7 @@ return function(env)
         "show_pocketable_void_shield",
         "show_tainted_skull",
         "show_saints",
+        "show_leftover",
     }
 
     EXPEDITION_MARKER_DISPLAY_MODE_SETTING_IDS = {
@@ -1045,6 +1075,9 @@ return function(env)
         medical_crate_deployable = "medical_crate_deployable",
         skulls_01_pickup = "pickup_tainted_skull",
         communications_hack_device = "pocketable_corrupted_auspex_scanner",
+        live_event_leftover_01_pickup_small = "pickup_leftover",
+        live_event_leftover_01_pickup_medium = "pickup_leftover",
+        live_event_leftover_01_pickup_large = "pickup_leftover",
         stolen_rations_01_pickup_small = "pickup_stolen_rations",
         stolen_rations_01_pickup_medium = "pickup_stolen_rations",
     }
@@ -1343,6 +1376,8 @@ return function(env)
                 setting_ids = {
                     "show_enemy_cultist_melee",
                     "show_enemy_renegade_melee",
+                    "show_enemy_cultist_vanguard",
+                    "show_enemy_renegade_vanguard",
                 },
             },
             {
@@ -1446,7 +1481,7 @@ return function(env)
         load_package("packages/ui/material_sets/circumstances")
         load_package("packages/ui/views/crafting_view/crafting_view")
         load_package("packages/ui/views/penance_overview_view/penance_overview_view")
-        load_package("packages/ui/views/expedition_play_view/expedition_play_view")
+        load_package("packages/ui/views/expedition_view/expedition_view")
 
         if debug_mode then
             mod:info("Packages loaded")

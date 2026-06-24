@@ -244,6 +244,7 @@ _add_enemy_kinds("enemy_scab_marker", {
     "enemy_renegade_executor",
     "enemy_renegade_berzerker",
     "enemy_renegade_assault",
+    "enemy_renegade_vanguard",
     "enemy_renegade_rifleman",
     "enemy_renegade_shocktrooper",
     "enemy_renegade_sniper",
@@ -261,6 +262,7 @@ _add_enemy_kinds("enemy_dreg_marker", {
     "enemy_cultist_shocktrooper",
     "enemy_cultist_mutant",
     "enemy_cultist_melee",
+    "enemy_cultist_vanguard",
 })
 _add_enemy_kinds("enemy_tox_marker", {
     "enemy_cultist_grenadier",
@@ -703,6 +705,12 @@ _add_marker({
     kind = "pickup_saints",
     anchor = "show_saints",
     default = _color(255, 192, 160, 0),
+    supports_highlight = true,
+})
+_add_marker({
+    kind = "pickup_leftover",
+    anchor = "show_leftover",
+    default = _color(255, 150, 190, 60),
     supports_highlight = true,
 })
 _add_marker({

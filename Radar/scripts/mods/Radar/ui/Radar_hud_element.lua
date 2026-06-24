@@ -61,6 +61,7 @@ local PLAYER_CLASS_ICONS = {
     ogryn = "content/ui/materials/icons/classes/ogryn",
     adamant = "content/ui/materials/icons/classes/adamant",
     broker = "content/ui/materials/icons/classes/broker",
+    cryptic = "content/ui/materials/icons/classes/cryptic",
 }
 
 local PLAYER_SMART_TAG_PRESENTATIONS = {
@@ -262,6 +263,9 @@ local TAINTED_SKULL_LIVE_EVENT_ICON = "content/ui/materials/icons/currencies/liv
 local SAINTS_LIVE_EVENT_SMALL_ICON = "content/ui/materials/icons/currencies/live_events/saints_live_event_small"
 local SAINTS_LIVE_EVENT_MEDIUM_ICON = "content/ui/materials/icons/currencies/live_events/saints_live_event_medium"
 local SAINTS_LIVE_EVENT_LARGE_ICON = "content/ui/materials/icons/currencies/live_events/saints_live_event_large"
+local LEFTOVER_LIVE_EVENT_SMALL_ICON = "content/ui/materials/icons/currencies/live_events/leftover_live_event_small"
+local LEFTOVER_LIVE_EVENT_MEDIUM_ICON = "content/ui/materials/icons/currencies/live_events/leftover_live_event_medium"
+local LEFTOVER_LIVE_EVENT_LARGE_ICON = "content/ui/materials/icons/currencies/live_events/leftover_live_event_large"
 
 local SAINTS_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME = {
     live_event_saints_01_pickup_small = {
@@ -282,6 +286,26 @@ local SAINTS_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME = {
 }
 local DEFAULT_SAINTS_ARTWORK_PRESENTATION =
     SAINTS_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME.live_event_saints_01_pickup_small
+
+local LEFTOVER_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME = {
+    live_event_leftover_01_pickup_small = {
+        icon = LEFTOVER_LIVE_EVENT_SMALL_ICON,
+        color = WHITE_WIDGET_COLOR,
+        size = 14,
+    },
+    live_event_leftover_01_pickup_medium = {
+        icon = LEFTOVER_LIVE_EVENT_MEDIUM_ICON,
+        color = WHITE_WIDGET_COLOR,
+        size = 16,
+    },
+    live_event_leftover_01_pickup_large = {
+        icon = LEFTOVER_LIVE_EVENT_LARGE_ICON,
+        color = WHITE_WIDGET_COLOR,
+        size = 18,
+    },
+}
+local DEFAULT_LEFTOVER_ARTWORK_PRESENTATION =
+    LEFTOVER_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME.live_event_leftover_01_pickup_small
 
 local ARTWORK_MODE_ICON_PRESENTATIONS = {
     crate_unknown = {
@@ -362,6 +386,11 @@ local ARTWORK_MODE_ICON_PRESENTATIONS = {
     pickup_saints = {
         icon = "content/ui/materials/icons/circumstances/live_event_01",
         color = _widget_color(255, 192, 160, 0),
+        size = 14,
+    },
+    pickup_leftover = {
+        icon = "content/ui/materials/icons/circumstances/live_event_01",
+        color = _widget_color(255, 150, 190, 60),
         size = 14,
     },
 }
@@ -521,6 +550,7 @@ local PRESENTATIONS = {
         size = 14,
     },
     pickup_saints = DEFAULT_SAINTS_ARTWORK_PRESENTATION,
+    pickup_leftover = DEFAULT_LEFTOVER_ARTWORK_PRESENTATION,
     pickup_stolen_rations = {
         icon = "content/ui/materials/icons/pickups/default",
         color = _widget_color(255, 150, 190, 60),
@@ -1849,6 +1879,14 @@ local function _pickup_saints_artwork_presentation(target)
         or DEFAULT_SAINTS_ARTWORK_PRESENTATION
 end
 
+local function _pickup_leftover_artwork_presentation(target)
+    local meta = target and target.meta or nil
+    local pickup_name = meta and meta.pickup_name or nil
+
+    return (pickup_name and LEFTOVER_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME[pickup_name])
+        or DEFAULT_LEFTOVER_ARTWORK_PRESENTATION
+end
+
 local function _expedition_objective_visual(target, draw_cache)
     local meta = target and target.meta or nil
     local marked_by_player_slot = meta and meta.marked_by_player_slot or nil
@@ -2095,6 +2133,8 @@ local function _target_visual(target, draw_cache)
 
         if target_kind == "pickup_saints" and display_mode == "artwork" then
             presentation = _pickup_saints_artwork_presentation(target)
+        elseif target_kind == "pickup_leftover" and display_mode == "artwork" then
+            presentation = _pickup_leftover_artwork_presentation(target)
         end
 
         if debug_mode then
