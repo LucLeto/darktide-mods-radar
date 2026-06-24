@@ -143,7 +143,7 @@ local function _draw_marker_brackets(ui_renderer, x, y, z, size, color, thicknes
     if thickness and thickness > 0 then
         thickness = math_max(1, math_floor(thickness + 0.5))
     else
-        thickness = size >= 16 and 2 or 1
+        thickness = 1
     end
 
     local length = math_max(4, math_floor(size * 0.35))

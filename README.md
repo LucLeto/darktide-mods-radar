@@ -2,6 +2,15 @@
 
 Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide**. It is built to surface the targets that matter most during live missions, nearby pickups, objective items, deployed support tools, environment interactables, expedition points of interest, teammates, player smart tags, tagged targets, supported ability-outlined enemies, and high-priority enemies, while keeping the presentation configurable from the mod options menu. A centered overview mode can also be toggled during missions when you need a wider tactical read.
 
+## What's new in 2.4.0
+
+- Updated the Expedition UI package preload for **Darktide 1.12.0**, removing the startup error caused by the deleted `expedition_play_view` package.
+- Added the **Skitarii** teammate class icon.
+- Added **Dreg Vanguard** and **Scab Vanguard** enemy markers with independent **Icon only**, **Marked icon**, and **Off** settings under Common & Shooters.
+- Added **Heretical Artifacts** live-event pickups with separate small, medium, and large artwork, a simplified icon mode, event scaling, nearby highlights, and configurable colors.
+- Tuned common and shooter marker dimensions for clearer composition at different enemy icon scales.
+- Fixed marked-enemy brackets becoming two pixels thick when their scaled size crossed 16 pixels. Standard radar marker brackets now remain consistently one pixel thick, while configurable nearby-highlight thickness is unchanged.
+
 ## Feature Overview
 
 - Tracks nearby pickups, materials, mission items, deployables, environment interactables, live-event pickups and objectives, expedition POIs, teammates, player smart tags, tagged targets, supported ability-outlined enemies, and high-priority enemies on a single camera-oriented radar or the temporary centered overview.
@@ -161,6 +170,9 @@ Supported artwork-based markers now use dropdowns instead of simple booleans. Ea
 | Holy Relics, Small | <img src="doc/img/material_saints_live_event_small.png"  width="80" alt="Small Holy Relic artwork mode" /> | <img src="doc/img/pickup_saints.png"  width="80" alt="Holy Relic icon mode" /> | Hidden |
 | Holy Relics, Medium | <img src="doc/img/material_saints_live_event_medium.png"  width="80" alt="Medium Holy Relic artwork mode" /> | <img src="doc/img/pickup_saints.png"  width="80" alt="Holy Relic icon mode" /> | Hidden |
 | Holy Relics, Large | <img src="doc/img/material_saints_live_event_large.png"  width="80" alt="Large Holy Relic artwork mode" /> | <img src="doc/img/pickup_saints.png"  width="80" alt="Holy Relic icon mode" /> | Hidden |
+| Heretical Artifacts, Small | <img src="doc/img/material_leftover_live_event_small.png"  width="80" alt="Small Heretical Artifact artwork mode" /> | <img src="doc/img/pickup_leftover.png"  width="80" alt="Heretical Artifact icon mode" /> | Hidden |
+| Heretical Artifacts, Medium | <img src="doc/img/material_leftover_live_event_medium.png"  width="80" alt="Medium Heretical Artifact artwork mode" /> | <img src="doc/img/pickup_leftover.png"  width="80" alt="Heretical Artifact icon mode" /> | Hidden |
+| Heretical Artifacts, Large | <img src="doc/img/material_leftover_live_event_large.png"  width="80" alt="Large Heretical Artifact artwork mode" /> | <img src="doc/img/pickup_leftover.png"  width="80" alt="Heretical Artifact icon mode" /> | Hidden |
 
 ### Tech-Remnant cluster example
 
@@ -234,11 +246,11 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Common Pickups | Crates | **Artwork**, **Icon**, **Off** |
 | Collectable Materials | Diamantine, Plasteel | **Artwork**, **Icon**, **Off** |
 | Expeditions-Specific Items | Salvage, Tech-Remnants, Dropped Tech-Remnants, Servo-Triggered Mine, Purgation Snare, Voltaic Snare, Void Shell, Bombing Run Signal Marker, Artillery Locator Beacon, Modified Grenade, Fire-Support Signal Marker | **Artwork**, **Icon**, **Off** |
-| Event-Related Items | Tainted Skulls, Holy Relics | **Artwork**, **Icon**, **Off** |
+| Event-Related Items | Tainted Skulls, Holy Relics, Heretical Artifacts | **Artwork**, **Icon**, **Off** |
 | Expedition POIs | Sites of Interest, Deadsider Sanctuaries, Data Reliquary Harvesters, Main Objective, Valkyrie Extraction Zone, Valkyrie Arrival Zone | **Icon only**, **Icon + Distance m**, **Off** |
 | Enemy bosses | Daemonhost, Monstrosities, Captains, Karnak Twins | **Icon only**, **Marked icon** |
 | Enemy groups | Common enemies and Shooters | **Icon only**, **Marked icon**, **Off** |
-| Individual enemy toggles | Elite, Special, and Misc enemies listed below | **Icon only**, **Marked icon**, **Off** |
+| Individual enemy toggles | Dreg and Scab Bruisers, Vanguards, Shooters, Elite, Special, and Misc enemies listed below | **Icon only**, **Marked icon**, **Off** |
 
 ### Per-category icon size controls
 
@@ -276,8 +288,8 @@ Each major option group now includes an **Icon size (%)** slider. These sliders 
 | Captains | Shows captain markers. |
 | Karnak Twins | Shows the dedicated Karnak Twins marker. |
 | Horde enemies | Single toggle for horde markers. Horde enemies stay on or off rather than using per-unit display modes. |
-| Common enemies | Shared display-style dropdown for common enemy markers. |
-| Shooters | Shared display-style dropdown for shooter enemy markers. |
+| Common enemies | Independent display-style dropdowns for Dreg Bruisers, Scab Bruisers, Dreg Vanguards, and Scab Vanguards. |
+| Shooters | Independent display-style dropdowns for Dreg Stalkers, Scab Stalkers, and Scab Shooters. |
 | Elite enemies | Per-unit display-style dropdowns for Dreg Gunners, Ragers, Shotgunners, Scab Gunners, Maulers, Plasma Gunners, Ragers, Shotgunners, and Ogryn elites. |
 | Special enemies | Per-unit display-style dropdowns for Bombers, Flamers, Mutants, Poxbursters, Hounds, Snipers, and Trappers. |
 | Ritualist | Dedicated toggle under the misc enemy category. |
@@ -359,6 +371,7 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Dark Rites Servo Skulls | Shows the spawned Dark Rites servo skull objective interactable. |
 | Tainted Communications Device | Shows corrupted auspex scanner event pickups. |
 | Holy Relics | Shows Holy Relics event pickups as artwork, simplified icon, or hidden. Artwork mode distinguishes small, medium, and large relic pickups. |
+| Heretical Artifacts | Shows Heretical Artifacts event pickups as artwork, simplified icon, or hidden. Artwork mode distinguishes small, medium, and large pickups. |
 | Stolen Rations | Shows Stolen Rations event pickups. |
 
 ### Positioning and Toggle Use
@@ -427,6 +440,8 @@ Left: **Icon only**. Right: **Marked icon**.
 | --- | --- | --- |
 | <img src="doc/img/cultist_melee.png"  width="80" alt="Dreg Bruiser marker" /> | Dreg Bruiser | Individual common enemy display-style dropdown. |
 | <img src="doc/img/renegade_melee.png"  width="80" alt="Scab Bruiser marker" /> | Scab Bruiser | Individual common enemy display-style dropdown. |
+| <img src="doc/img/cultist_vanguard.png"  width="80" alt="Dreg Vanguard marker" /> | Dreg Vanguard | Shield-melee common enemy with an independent display-style dropdown and Dreg coloring. |
+| <img src="doc/img/renegade_vanguard.png"  width="80" alt="Scab Vanguard marker" /> | Scab Vanguard | Shield-melee common enemy with an independent display-style dropdown and Scab coloring. |
 
 ### Shooter Enemies
 
@@ -509,10 +524,16 @@ Left to right:
 Supported class icon mappings in the HUD:
 
 <p>
-  <img src="doc/img/player_teammates_classes.png" width="320" alt="Supported teammate class icons" />
+  <img src="doc/img/player_veteran.png" width="48" alt="Veteran teammate class icon" />
+  <img src="doc/img/player_zealot.png" width="48" alt="Zealot teammate class icon" />
+  <img src="doc/img/player_psyker.png" width="48" alt="Psyker teammate class icon" />
+  <img src="doc/img/player_ogryn.png" width="48" alt="Ogryn teammate class icon" />
+  <img src="doc/img/player_adamant.png" width="48" alt="Arbitrator teammate class icon" />
+  <img src="doc/img/player_broker.png" width="48" alt="Hive Scum teammate class icon" />
+  <img src="doc/img/player_cryptic.png" width="48" alt="Skitarii teammate class icon" />
 </p>
 
-From left to right: **Veteran**, **Zealot**, **Psyker**, **Ogryn**, **Arbitrator**, **Hive Scum**.
+From left to right: **Veteran**, **Zealot**, **Psyker**, **Ogryn**, **Arbitrator**, **Hive Scum**, **Skitarii**.
 
 ### Player Tags
 
@@ -641,6 +662,9 @@ These markers are driven by expedition navigation data rather than standard pick
 | <img src="doc/img/material_saints_live_event_small.png"  width="80" alt="Small Holy Relic artwork marker" /> | Holy Relics, Small | Supports **Artwork**, **Icon**, and **Off**. Artwork mode uses the small relic pickup art. |
 | <img src="doc/img/material_saints_live_event_medium.png"  width="80" alt="Medium Holy Relic artwork marker" /> | Holy Relics, Medium | Supports **Artwork**, **Icon**, and **Off**. Artwork mode uses the medium relic pickup art. |
 | <img src="doc/img/material_saints_live_event_large.png"  width="80" alt="Large Holy Relic artwork marker" /> | Holy Relics, Large | Supports **Artwork**, **Icon**, and **Off**. Artwork mode uses the large relic pickup art. |
+| <img src="doc/img/material_leftover_live_event_small.png"  width="80" alt="Small Heretical Artifact artwork marker" /> | Heretical Artifacts, Small | Supports **Artwork**, **Icon**, and **Off**. Artwork mode uses the small artifact pickup art. |
+| <img src="doc/img/material_leftover_live_event_medium.png"  width="80" alt="Medium Heretical Artifact artwork marker" /> | Heretical Artifacts, Medium | Supports **Artwork**, **Icon**, and **Off**. Artwork mode uses the medium artifact pickup art. |
+| <img src="doc/img/material_leftover_live_event_large.png"  width="80" alt="Large Heretical Artifact artwork marker" /> | Heretical Artifacts, Large | Supports **Artwork**, **Icon**, and **Off**. Artwork mode uses the large artifact pickup art. |
 | <img src="doc/img/pickup_stolen_rations.png"  width="80" alt="Stolen Rations marker" /> | Stolen Rations | Green crate marker. |
 
 ### Debug Marker
@@ -681,7 +705,7 @@ Examples:
 - Crates use the pickup artwork tile.
 - Diamantine, Plasteel, Salvage, Tech-Remnants, and Dropped Tech-Remnants keep their resource artwork.
 - Expeditions pocketables such as Void Shell, the landmines, and the strike markers keep their existing item artwork.
-- Tainted Skulls and Holy Relics use live-event artwork. Holy Relics resolve small, medium, and large pickup art from the actual pickup name.
+- Tainted Skulls, Holy Relics, and Heretical Artifacts use live-event artwork. Holy Relics and Heretical Artifacts resolve small, medium, and large pickup art from the actual pickup name.
 
 ### Icon mode
 
@@ -705,6 +729,7 @@ Icon mode swaps supported markers to simplified HUD icon materials with configur
 | Void Shell | `content/ui/materials/hud/interactions/icons/void_shield` | `(255, 181, 166, 66)` |
 | Tainted Skulls | `content/ui/materials/hud/interactions/icons/enemy` | `(255, 150, 190, 60)` |
 | Holy Relics | `content/ui/materials/icons/circumstances/live_event_01` | `(255, 192, 160, 0)` |
+| Heretical Artifacts | `content/ui/materials/icons/circumstances/live_event_01` | `(255, 150, 190, 60)` |
 
 ### Semantic recolors for regular markers
 
@@ -733,6 +758,7 @@ The remaining formerly white pickup icons were recolored so marker families read
 | `content/ui/materials/icons/item_types/devices` | Mortis Relic | `(255, 110, 95, 125)` |
 | `content/ui/materials/hud/interactions/icons/barrel_explosive` | Promethium Barrel | `(255, 255, 110, 0)` |
 | `content/ui/materials/icons/circumstances/live_event_01` | Holy Relics icon mode | `(255, 192, 160, 0)` |
+| `content/ui/materials/icons/circumstances/live_event_01` | Heretical Artifacts icon mode | `(255, 150, 190, 60)` |
 | `content/ui/materials/hud/interactions/icons/enemy` | Martyr's Skull, Tainted Skulls icon mode | `(255, 255, 215, 0)`, `(255, 150, 190, 60)` |
 | `content/ui/materials/icons/achievements/categories/category_heretics` | Dark Rites Totems | `(255, 150, 190, 60)` |
 | `content/ui/materials/icons/abilities/default` | Dark Rites Servo Skulls | `(255, 150, 190, 60)` |
@@ -762,6 +788,8 @@ Not every radar marker uses a configurable fixed ARGB color:
 - Player smart tags support optional distance text, but no longer use player-tag elevation arrows or related elevation hiding behavior. Enemy markers can use vertical arrows separately through their own category options.
 - Supported ability-marked and smart-tag outlined enemies can optionally be treated as radar-visible targets, and shared `special_target` outline handling is gated to the local owning context so unrelated outlines do not leak into radar visibility. Enemy vertical arrow toggles only affect arrow display, not whether those enemies are eligible for radar visibility.
 - Nearby highlights now support thickness, per-marker ARGB highlight colors, and optional distance labels, and their placement was adjusted to stay aligned more reliably under scaled HUD layouts.
+- Standard marked-enemy brackets remain one pixel thick at every marker size, avoiding abrupt visual weight changes when category scaling crosses a size threshold. The separate nearby-highlight thickness setting is unaffected.
 - **Tagged enemies only** and **Tagged items only** are filters, not new marker families. They reuse the game's active tag state and let tagged targets ignore the normal radar range limit while tagged.
 - Expedition POIs and section-scoped expedition items are filtered to the active expedition section. POI categories can independently show icon-only markers, include meter distance text, or be hidden. Sanctuary-state transitions trigger cleanup so stale safe-zone markers do not leak into open zones, while active player-dropped Tech-Remnants can still be shown.
+- Darktide 1.12.0 compatibility uses the current `packages/ui/views/expedition_view/expedition_view` package instead of the removed `expedition_play_view` package.
 - Marker previews in this readme were generated from the included template assets and documentation images so the legend matches the mod's configured presentations as closely as possible.
