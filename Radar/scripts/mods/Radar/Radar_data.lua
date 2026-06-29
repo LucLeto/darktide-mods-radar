@@ -44,7 +44,7 @@ local REQUIRED_ICON_PACKAGES = {
     "packages/ui/material_sets/circumstances",
     "packages/ui/views/crafting_view/crafting_view",
     "packages/ui/views/penance_overview_view/penance_overview_view",
-    "packages/ui/views/expedition_play_view/expedition_play_view",
+    "packages/ui/views/expedition_view/expedition_view",
 }
 
 local ARTWORK_DROPDOWN_PRESENTATIONS = {
@@ -144,6 +144,12 @@ local ARTWORK_DROPDOWN_PRESENTATIONS = {
         icon = "content/ui/materials/icons/circumstances/live_event_01",
         icon_colour = { 255, 192, 160, 0 },
     },
+    show_leftover = {
+        artwork_icon = "content/ui/materials/icons/currencies/live_events/leftover_live_event_small",
+        artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
+        icon = "content/ui/materials/icons/circumstances/live_event_01",
+        icon_colour = { 255, 150, 190, 60 },
+    },
 }
 
 local ENEMY_DROPDOWN_PRESENTATIONS = {
@@ -153,6 +159,14 @@ local ENEMY_DROPDOWN_PRESENTATIONS = {
     },
     show_enemy_renegade_melee = {
         icon = DROPDOWN_ICON_DEFAULT,
+        icon_colour = DROPDOWN_ICON_COLOUR_WHITE,
+    },
+    show_enemy_cultist_vanguard = {
+        icon = "content/ui/materials/icons/presets/preset_04",
+        icon_colour = DROPDOWN_ICON_COLOUR_DREG,
+    },
+    show_enemy_renegade_vanguard = {
+        icon = "content/ui/materials/icons/presets/preset_04",
         icon_colour = DROPDOWN_ICON_COLOUR_WHITE,
     },
     show_enemy_cultist_assault = {
@@ -586,14 +600,14 @@ local function _tab_overrides(tooltip_key)
     }
 end
 
-local TAB_GENERAL = "General"
-local TAB_LAYOUT = "Layout"
-local TAB_PICKUPS = "Pickups"
-local TAB_OBJECTIVES = "Objectives"
-local TAB_EXPEDITIONS = "Expeditions"
-local TAB_ENEMIES = "Enemies"
-local TAB_PLAYERS = "Players"
-local TAB_DEBUG = "Debug"
+local TAB_GENERAL = mod:localize("tab_general")
+local TAB_LAYOUT = mod:localize("tab_layout")
+local TAB_PICKUPS = mod:localize("tab_pickups")
+local TAB_OBJECTIVES = mod:localize("tab_objectives")
+local TAB_EXPEDITIONS = mod:localize("tab_expeditions")
+local TAB_ENEMIES = mod:localize("tab_enemies")
+local TAB_PLAYERS = mod:localize("tab_players")
+local TAB_DEBUG = mod:localize("tab_debug")
 
 local TAB_OVERRIDES_GENERAL = _tab_overrides("radar_tab_general_tooltip")
 local TAB_OVERRIDES_LAYOUT = _tab_overrides("radar_tab_layout_tooltip")
@@ -2061,6 +2075,8 @@ return {
                                 _icon_scale_slider("enemy_common_icon_scale", "enemy_common_icon_scale"),
                                 _icon_marked_off_dropdown("show_enemy_cultist_melee", common_enemy_display_default),
                                 _icon_marked_off_dropdown("show_enemy_renegade_melee", common_enemy_display_default),
+                                _icon_marked_off_dropdown("show_enemy_cultist_vanguard", common_enemy_display_default),
+                                _icon_marked_off_dropdown("show_enemy_renegade_vanguard", common_enemy_display_default),
                                 _enemy_vertical_arrows_checkbox("show_enemy_common_vertical_arrows"),
                                 _icon_scale_slider("enemy_shooter_icon_scale", "enemy_shooter_icon_scale"),
                                 _icon_marked_off_dropdown("show_enemy_cultist_assault", shooter_enemy_display_default),
@@ -2228,6 +2244,7 @@ return {
                             default_value = true,
                         },
                         _artwork_icon_off_dropdown("show_saints", "artwork"),
+                        _artwork_icon_off_dropdown("show_leftover", "artwork"),
                         {
                             setting_id = "show_stolen_rations",
                             type = "checkbox",
