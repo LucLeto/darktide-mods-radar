@@ -10,7 +10,6 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 - Added **Heretical Artifacts** live-event pickups with separate small, medium, and large artwork, a simplified icon mode, event scaling, nearby highlights, and configurable colors.
 - Tuned common and shooter marker dimensions for clearer composition at different enemy icon scales.
 - Fixed marked-enemy brackets becoming two pixels thick when their scaled size crossed 16 pixels. Standard radar marker brackets now remain consistently one pixel thick, while configurable nearby-highlight thickness is unchanged.
-- Updated player-marked Expedition POIs for the Darktide 1.12.0 Auspex changes. Marked locations now use the marking players' slot colors in a segmented ring supporting up to four players.
 
 ## Feature Overview
 
@@ -23,7 +22,7 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 - Supports anchor-based **radar positioning** with offsets, movement keybinds, configurable movement step size, and an optional unrestricted positioning fallback for ultrawide or advanced layouts.
 - Supports **Artwork**, **Icon**, and **Off** display modes for the supported artwork-based pickup families, with automatic migration from older boolean settings.
 - Adds optional nearby screen-space highlight brackets for supported non-enemy marker groups, with configurable thickness, per-marker highlight colors, and optional distance labels on the screen highlight, the radar marker, or both.
-- Adds dedicated **Expedition POI** support for numbered **Sites of Interest**, **Deadsider Sanctuaries**, **Data Reliquary Harvesters**, **Main Objective**, **Valkyrie Extraction Zone**, and **Valkyrie Arrival Zone**, with per-category **Icon only**, **Icon + Distance m**, and **Off** display modes. Player-marked navigation POIs show an evenly divided ring containing the slot colors of up to four marking players.
+- Adds dedicated **Expedition POI** support for numbered **Sites of Interest**, **Deadsider Sanctuaries**, **Data Reliquary Harvesters**, **Main Objective**, **Valkyrie Extraction Zone**, and **Valkyrie Arrival Zone**, with per-category **Icon only**, **Icon + Distance m**, and **Off** display modes.
 - Supports tech-remnant loot modes for **Default**, **Scale by value**, and **Merge nearby piles**, plus optional cluster value text and radius tuning.
 - Includes optional distance text for bosses, player tags, nearby marker highlights, and expedition POIs, per-enemy-category vertical arrow toggles, **Infinite** boss and teammate range modes, **debug logs**, and an **unknown pickups** toggle for discovery and troubleshooting.
 
@@ -129,15 +128,6 @@ Expedition POI settings use dropdown display modes instead of simple on/off togg
 | Main Objective | **Icon only** |
 | Valkyrie Extraction Zone | **Icon only** |
 | Valkyrie Arrival Zone | **Icon only** |
-
-### Player-marked POI rings
-
-When players mark an Expedition navigation POI through the Auspex map, Radar surrounds its icon with the same segmented marker material used by the game:
-
-- One marking player fills the complete ring with that player's bright slot color.
-- Two to four marking players divide the ring into equal colored sections, ordered consistently by player slot.
-- If the local player is one of several markers, the center icon uses the local player's slot color. Otherwise, Radar uses the lowest marked player slot for the center icon.
-- The ring follows POI icon scaling and updates immediately when its display mode, marked players, or size changes.
 
 ## Artwork, Icon, Off display modes
 
@@ -401,7 +391,6 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 - Event-related markers use elevated marker priority so event objectives stay visible when dense enemy markers are nearby.
 - **Expedition POIs**, **environment markers**, and **tech-remnant clusters** follow their own category-specific rules so outdated markers clear correctly and context-sensitive markers only appear when relevant.
 - Expedition POIs can be shown as **Icon only**, **Icon + Distance m**, or **Off** per category. Existing boolean settings migrate to **Icon only** for enabled markers and **Off** for disabled markers.
-- Player-marked Expedition navigation POIs use a segmented ring with up to four player-slot colors. One marker fills the ring; multiple markers divide it into equal sections.
 - Expedition section filtering also handles **Deadsider Sanctuary** transitions. Store fixtures and sanctuary-only markers are cleared when moving back into open expedition zones, while active player-dropped Tech-Remnants remain eligible for radar display.
 
 ## Target Markers
@@ -611,14 +600,14 @@ Player tags intentionally stay flatter and cleaner than supported item markers. 
 | Preview | Marker | Notes |
 | --- | --- | --- |
 | <img src="doc/img/expedition_unmarked_xi_2_4x.png" width="48" alt="Expedition unmarked XI 2 marker" /> <img src="doc/img/expedition_unmarked_n_4_4x.png" width="48" alt="Expedition unmarked N 4 marker" /> <img src="doc/img/expedition_unmarked_m_1_4x.png" width="48" alt="Expedition unmarked M 1 marker" /> | Sites of Interest | Unmarked expedition opportunity markers, using scanner-map glyphs with location numbering. |
-| <img src="doc/img/expedition_marked_blue_m_1_4x.png" width="48" alt="Site of Interest marked by one player" /> <img src="doc/img/expedition_marked_purple_xi_2_4x.png" width="48" alt="Site of Interest marked by two players" /> <img src="doc/img/expedition_marked_yellow_n_4_4x.png" width="48" alt="Site of Interest marked by three players" /> | Sites of Interest, player-marked | One player fills the ring; additional marking players divide it into equal slot-colored sections. Up to four player colors are supported. |
+| <img src="doc/img/expedition_marked_yellow_n_4_4x.png" width="48" alt="Expedition marked yellow N 4 marker" /> <img src="doc/img/expedition_marked_purple_xi_2_4x.png" width="48" alt="Expedition marked purple XI 2 marker" /> <img src="doc/img/expedition_marked_blue_m_1_4x.png" width="48" alt="Expedition marked blue M 1 marker" /> | Sites of Interest, player-marked | Player-marked expedition opportunity markers, using the same glyph and number combinations with the expedition marked colors. |
 | <img src="doc/img/expedition_objective_transition.png"  width="80" alt="Expedition transition marker" /> | Deadsider Sanctuaries | Transition marker for sanctuary travel and section movement. |
 | <img src="doc/img/expedition_loot_converter.png"  width="80" alt="Expedition loot converter marker" /> | Data Reliquary Harvesters | Uses the expedition harvester icon and is only shown while inside the sanctuary where the converter is relevant. |
 | <img src="doc/img/expedition_objective_main_objective.png"  width="80" alt="Expedition main objective marker" /> | Main Objective | Main expedition objective location marker. |
 | <img src="doc/img/expedition_objective_extraction.png"  width="80" alt="Expedition extraction marker" /> | Valkyrie Extraction Zone | Extraction location marker. |
 | <img src="doc/img/expedition_objective_arrival.png"  width="80" alt="Expedition arrival marker" /> | Valkyrie Arrival Zone | Arrival location marker. |
 
-These markers are driven by expedition navigation data rather than standard pickup scanning. **Sites of Interest** can appear as unmarked opportunity markers or player-marked variants. Marked navigation POIs use a full player-colored ring for one marker and equal player-slot-colored sections for two to four markers, while the remaining expedition POIs use dedicated objective-style icons. Each POI category supports **Icon only**, **Icon + Distance m**, and **Off**. Sites of Interest default to distance text, while the other POI categories default to icon-only markers. Expedition POIs can optionally ignore the normal radar range limit, are filtered to the currently active expedition section, and clear outdated location markers when the active section or Deadsider Sanctuary state changes.
+These markers are driven by expedition navigation data rather than standard pickup scanning. **Sites of Interest** can appear as unmarked opportunity markers or player-marked variants, while the remaining expedition POIs use dedicated objective-style icons. Each POI category supports **Icon only**, **Icon + Distance m**, and **Off**. Sites of Interest default to distance text, while the other POI categories default to icon-only markers. Expedition POIs can optionally ignore the normal radar range limit, are filtered to the currently active expedition section, and clear outdated location markers when the active section or Deadsider Sanctuary state changes.
 
 ### Expeditions-Specific Items
 
