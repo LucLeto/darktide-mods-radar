@@ -92,6 +92,22 @@ local EXPEDITION_OBJECTIVE_KINDS = {
     expedition_objective_arrival = true,
 }
 
+local EXPEDITION_MARKED_RING_MATERIAL = "content/ui/materials/backgrounds/scanner/scanner_map_marker"
+local EXPEDITION_MARKED_RING_SIZE_RATIO = 128 / 84
+local PLAYER_BRIGHT_SLOT_COLORS = UISettings.player_bright_slot_colors or UISettings.player_slot_colors
+local PLAYER_SLOT_MASK_BY_SLOT = {
+    1,
+    2,
+    4,
+    8,
+}
+local MARKED_RING_COLOR_FIELD_BY_INDEX = {
+    "part_1_color",
+    "part_2_color",
+    "part_3_color",
+    "part_4_color",
+}
+
 local function _log_once(bucket, key, message)
     if mod:get("debug_mode") ~= true then
         return
@@ -1336,6 +1352,85 @@ local function _draw_overview_scale_overlay(self, ui_renderer, x, y, z, radar_si
     _draw_overview_scale_text(ui_renderer, scale_text, y_text_center_x, center_y, z + 1, font_size, legend_color)
 end
 
+local function _copy_widget_color_to_material_color(widget_color, material_color)
+    material_color[1] = (tonumber(widget_color[2]) or 255) / 255
+    material_color[2] = (tonumber(widget_color[3]) or 255) / 255
+    material_color[3] = (tonumber(widget_color[4]) or 255) / 255
+    material_color[4] = (tonumber(widget_color[1]) or 255) / 255
+end
+
+local function _clear_material_color(material_color)
+    material_color[1] = 0
+    material_color[2] = 0
+    material_color[3] = 0
+    material_color[4] = 0
+end
+
+local function _apply_marker_marked_ring(widget, visual, icon_offset, icon_size, icon_z)
+    local marked_ring_style = widget.style.marked_ring
+    local marked_player_slots_mask = tonumber(visual and visual.marked_player_slots_mask)
+
+    if not marked_ring_style or not marked_player_slots_mask or marked_player_slots_mask <= 0 then
+        widget.content.marked_ring = nil
+        widget.content.marked_ring_slots_mask = nil
+        widget.content.marked_ring_size = nil
+        return
+    end
+
+    local material_values = marked_ring_style.material_values
+    local color_field_count = 0
+
+    for player_slot = 1, 4 do
+        local slot_mask = PLAYER_SLOT_MASK_BY_SLOT[player_slot]
+
+        if math_floor(marked_player_slots_mask / slot_mask) % 2 == 1 then
+            local player_color = PLAYER_BRIGHT_SLOT_COLORS and PLAYER_BRIGHT_SLOT_COLORS[player_slot]
+
+            if player_color then
+                color_field_count = color_field_count + 1
+
+                local color_field_name = MARKED_RING_COLOR_FIELD_BY_INDEX[color_field_count]
+
+                _copy_widget_color_to_material_color(player_color, material_values[color_field_name])
+            end
+        end
+    end
+
+    if color_field_count == 0 then
+        widget.content.marked_ring = nil
+        widget.content.marked_ring_slots_mask = nil
+        widget.content.marked_ring_size = nil
+        return
+    end
+
+    for color_field_index = color_field_count + 1, 4 do
+        local color_field_name = MARKED_RING_COLOR_FIELD_BY_INDEX[color_field_index]
+
+        _clear_material_color(material_values[color_field_name])
+    end
+
+    local marked_ring_size = math_max(icon_size + 4,
+        math_floor(icon_size * EXPEDITION_MARKED_RING_SIZE_RATIO + 0.5))
+    local marked_ring_offset = marked_ring_style.offset
+    local marked_ring_style_size = marked_ring_style.size
+
+    marked_ring_offset[1] = math_floor(icon_offset[1] + (icon_size - marked_ring_size) * 0.5 + 0.5)
+    marked_ring_offset[2] = math_floor(icon_offset[2] + (icon_size - marked_ring_size) * 0.5 + 0.5)
+    marked_ring_offset[3] = icon_z - 1
+    marked_ring_style_size[1] = marked_ring_size
+    marked_ring_style_size[2] = marked_ring_size
+    material_values.display_mode = color_field_count
+
+    if widget.content.marked_ring_slots_mask ~= marked_player_slots_mask
+        or widget.content.marked_ring_size ~= marked_ring_size then
+        widget.dirty = true
+    end
+
+    widget.content.marked_ring = EXPEDITION_MARKED_RING_MATERIAL
+    widget.content.marked_ring_slots_mask = marked_player_slots_mask
+    widget.content.marked_ring_size = marked_ring_size
+end
+
 local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, bracket_x, bracket_y, bracket_size)
     local icon_style = widget.style.icon
     local overlay_icon_style = widget.style.overlay_icon
@@ -1365,11 +1460,17 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         _configured_radar_color("vertical_arrow", VERTICAL_ARROW_WIDGET_COLOR)
     ) or nil
 
+    local value_text = visual and visual.value_text or ""
+
+    if widget.content.value_text ~= value_text then
+        widget.dirty = true
+    end
+
     widget.content.icon = visual and visual.icon or nil
     widget.content.overlay_icon = visual and visual.overlay_icon or nil
     widget.content.title_icon = visual and visual.title_icon or nil
     widget.content.arrow_icon = arrow_icon
-    widget.content.value_text = visual and visual.value_text or ""
+    widget.content.value_text = value_text
 
     local icon_offset = icon_style.offset
     local icon_size_tbl = icon_style.size
@@ -1385,6 +1486,8 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
     icon_size_tbl[1] = size
     icon_size_tbl[2] = size
     icon_style.color = color
+
+    _apply_marker_marked_ring(widget, visual, icon_offset, size, icon_z)
 
     if target
         and _is_enemy_kind(target.kind)
@@ -1890,6 +1993,8 @@ end
 local function _expedition_objective_visual(target, draw_cache)
     local meta = target and target.meta or nil
     local marked_by_player_slot = meta and meta.marked_by_player_slot or nil
+    local marked_player_slots_mask = PLAYER_BRIGHT_SLOT_COLORS and
+        tonumber(meta and meta.marked_player_slots_mask or nil) or nil
     local player_slot = tonumber(marked_by_player_slot)
     local slot_colors = draw_cache and draw_cache.slot_colors or (UISettings and UISettings.player_slot_colors)
     local player_color = player_slot and slot_colors and slot_colors[player_slot] or nil
@@ -1910,7 +2015,7 @@ local function _expedition_objective_visual(target, draw_cache)
         end
     end
 
-    if player_slot then
+    if player_slot and not marked_player_slots_mask then
         accent_color = _with_alpha_widget(player_color or widget_color, 180)
     end
 
@@ -1919,6 +2024,7 @@ local function _expedition_objective_visual(target, draw_cache)
         title_icon = meta and meta.objective_title_icon or nil,
         color = widget_color,
         accent_color = accent_color,
+        marked_player_slots_mask = marked_player_slots_mask,
         size = 15,
     }
 end

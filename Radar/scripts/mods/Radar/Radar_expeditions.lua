@@ -1438,17 +1438,90 @@ return function(env)
         _prune_player_smart_tag_states(seen_tag_ids)
     end
 
-    local function _safe_navigation_handler_marked_by_slot(navigation_handler, level_index)
-        local player_slot_by_level_marked = navigation_handler and navigation_handler.player_slot_by_level_marked
+    local PLAYER_SLOT_MASK_BY_SLOT = {
+        1,
+        2,
+        4,
+        8,
+    }
 
-        if not player_slot_by_level_marked or level_index == nil then
+    local function _marked_player_slots_result(marked_slots, marked_level_index)
+        local local_player_slot = tonumber(_safe_player_slot(_local_player()))
+        local preferred_local_slot = nil
+        local first_numeric_slot = nil
+        local first_raw_slot = nil
+        local marked_player_slots_mask = 0
+
+        for player_slot, level_index in pairs(marked_slots) do
+            if marked_level_index == nil or level_index == marked_level_index then
+                first_raw_slot = first_raw_slot or player_slot
+
+                local numeric_slot = tonumber(player_slot)
+
+                if numeric_slot then
+                    if first_numeric_slot == nil or numeric_slot < first_numeric_slot then
+                        first_numeric_slot = numeric_slot
+                    end
+
+                    if numeric_slot == local_player_slot then
+                        preferred_local_slot = numeric_slot
+                    end
+
+                    local slot_mask = PLAYER_SLOT_MASK_BY_SLOT[numeric_slot]
+
+                    if slot_mask then
+                        marked_player_slots_mask = marked_player_slots_mask + slot_mask
+                    end
+                end
+            end
+        end
+
+        return preferred_local_slot or first_numeric_slot or first_raw_slot,
+            marked_player_slots_mask ~= 0 and marked_player_slots_mask or nil
+    end
+
+    local function _safe_navigation_handler_marked_by_slot(navigation_handler, level_index)
+        if not navigation_handler or level_index == nil then
             return nil
         end
 
-        local ok, player_slot = pcall(player_slot_by_level_marked, navigation_handler, level_index)
+        local player_slots_by_level_marked = navigation_handler.player_slots_by_level_marked
 
-        if ok then
-            return player_slot
+        if type(player_slots_by_level_marked) == "function" then
+            local ok_slots, player_slots, num_player_slots = pcall(
+                player_slots_by_level_marked,
+                navigation_handler,
+                level_index
+            )
+            local numeric_num_player_slots = tonumber(num_player_slots)
+
+            if ok_slots and type(player_slots) == "table"
+                and numeric_num_player_slots and numeric_num_player_slots > 0 then
+                return _marked_player_slots_result(player_slots)
+            end
+        end
+
+        local player_slot_by_level_marked = navigation_handler.player_slot_by_level_marked
+
+        if type(player_slot_by_level_marked) == "function" then
+            local ok_slot, player_slot = pcall(player_slot_by_level_marked, navigation_handler, level_index)
+
+            if ok_slot then
+                local numeric_slot = tonumber(player_slot)
+                local slot_mask = numeric_slot and PLAYER_SLOT_MASK_BY_SLOT[numeric_slot] or nil
+
+                return player_slot, slot_mask
+            end
+        end
+
+        local get_marked_player_slots = navigation_handler.get_marked_player_slots
+
+        if type(get_marked_player_slots) == "function" then
+            local ok_marked_slots, marked_slots = pcall(get_marked_player_slots, navigation_handler)
+
+            if ok_marked_slots and type(marked_slots) == "table" then
+                return _marked_player_slots_result(marked_slots, level_index)
+            end
         end
 
         return nil
@@ -1537,6 +1610,9 @@ return function(env)
                     safe_expedition_section_index_by_level_index(game_mode, level_index) or nil
 
                 if position and is_active_section and not is_completed then
+                    local marked_by_player_slot, marked_player_slots_mask =
+                        safe_navigation_handler_marked_by_slot(navigation_handler, level_index)
+
                     track_point(
                         string_format("%s:%s", tostring(kind), tostring(level_index)),
                         kind,
@@ -1545,8 +1621,8 @@ return function(env)
                         {
                             objective_icon = _expedition_opportunity_icon(level_index),
                             objective_title_icon = _expedition_opportunity_title_icon(location_id),
-                            marked_by_player_slot = safe_navigation_handler_marked_by_slot(navigation_handler,
-                                level_index),
+                            marked_by_player_slot = marked_by_player_slot,
+                            marked_player_slots_mask = marked_player_slots_mask,
                             expedition_level_index = level_index,
                             expedition_section_index = section_index,
                             objective_location_id = location_id,
@@ -1611,6 +1687,8 @@ return function(env)
             local entry = entries[index]
             local level_index = entry.level_index
             local position = entry.position
+            local marked_by_player_slot, marked_player_slots_mask =
+                safe_navigation_handler_marked_by_slot(navigation_handler, level_index)
 
             track_point(
                 string_format("%s:%s", tostring(kind), tostring(level_index)),
@@ -1619,7 +1697,8 @@ return function(env)
                 "expedition_navigation",
                 {
                     objective_icon = EXPEDITION_OBJECTIVE_ICON_DEFAULTS[kind],
-                    marked_by_player_slot = safe_navigation_handler_marked_by_slot(navigation_handler, level_index),
+                    marked_by_player_slot = marked_by_player_slot,
+                    marked_player_slots_mask = marked_player_slots_mask,
                     expedition_level_index = level_index,
                     expedition_section_index = entry.section_index,
                     objective_location_id = index,
@@ -1653,6 +1732,8 @@ return function(env)
 
             if position then
                 local level_index = _safe_expedition_level_index(level_data and level_data.level or nil)
+                local marked_by_player_slot, marked_player_slots_mask =
+                    _safe_navigation_handler_marked_by_slot(navigation_handler, level_index)
 
                 _track_point(
                     string_format("%s:%s:%s", tostring(kind), tostring(level_index or i),
@@ -1662,7 +1743,8 @@ return function(env)
                     "expedition_level_tag",
                     {
                         objective_icon = EXPEDITION_OBJECTIVE_ICON_DEFAULTS[kind],
-                        marked_by_player_slot = _safe_navigation_handler_marked_by_slot(navigation_handler, level_index),
+                        marked_by_player_slot = marked_by_player_slot,
+                        marked_player_slots_mask = marked_player_slots_mask,
                         expedition_level_index = level_index,
                         objective_tag = level_tag,
                         reference_name = level_data and level_data.reference_name or nil,

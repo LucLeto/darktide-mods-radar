@@ -42,6 +42,9 @@ local WidgetVisibility = {
     has_arrow_icon = function(content)
         return content.arrow_icon ~= nil and content.arrow_icon ~= ""
     end,
+    has_marked_ring = function(content)
+        return content.marked_ring ~= nil and content.marked_ring ~= ""
+    end,
     has_background_material = function(content)
         return content.background_material ~= nil and content.background_material ~= ""
     end,
@@ -216,6 +219,27 @@ local function _marker_definition()
     return UIWidget.create_definition({
         {
             pass_type = "texture",
+            value_id = "marked_ring",
+            style_id = "marked_ring",
+            style = {
+                hdr = true,
+                vertical_alignment = "top",
+                horizontal_alignment = "left",
+                offset = { 0, 0, 9 },
+                size = { 23, 23 },
+                material_values = {
+                    display_mode = 1,
+                    part_1_color = { 0, 0, 0, 0 },
+                    part_2_color = { 0, 0, 0, 0 },
+                    part_3_color = { 0, 0, 0, 0 },
+                    part_4_color = { 0, 0, 0, 0 },
+                },
+                color = _white_widget_color(),
+            },
+            visibility_function = WidgetVisibility.has_marked_ring,
+        },
+        {
+            pass_type = "texture",
             value_id = "icon",
             style_id = "icon",
             style = {
@@ -299,6 +323,9 @@ local function _clear_overview_scale_widget(widget)
 end
 
 local function _clear_marker_widget(widget)
+    widget.content.marked_ring = nil
+    widget.content.marked_ring_slots_mask = nil
+    widget.content.marked_ring_size = nil
     widget.content.icon = nil
     widget.content.overlay_icon = nil
     widget.content.title_icon = nil
