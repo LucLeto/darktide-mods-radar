@@ -787,6 +787,13 @@ Not every radar marker uses a configurable fixed ARGB color:
 - **[Darktide Mod Framework](https://www.nexusmods.com/warhammer40kdarktide/mods/8)**
 - **[Darktide Mod Loader](https://www.nexusmods.com/warhammer40kdarktide/mods/19)**
 
+## Contributing
+
+### Traditional Chinese localization
+
+When editing Traditional Chinese (`zh-tw`) strings, consult the [Darktide translation glossary](https://github.com/SyuanTsai/Warhammer-40-000-DARKTIDE-Mods/blob/main/Referneces/Translation.md).
+When the glossary lists multiple translations, preserve the existing context-specific terminology unless there is a clear reason to change it.
+
 ## Notes
 
 - The radar is intended for active gameplay and suppresses itself outside valid runtime states such as hub and menu contexts.
