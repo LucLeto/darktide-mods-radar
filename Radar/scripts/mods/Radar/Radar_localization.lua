@@ -436,7 +436,7 @@ local _color_label_texts = {
         ja = "Auspex 背景色",
         ko = "Auspex 배경 색상",
         ["zh-cn"] = "Auspex 背景颜色",
-        ["zh-tw"] = "Auspex 背景顏色",
+        ["zh-tw"] = "占卜儀背景顏色",
     },
     auspex_noise = {
         en = "Auspex noise color",
@@ -450,7 +450,7 @@ local _color_label_texts = {
         ja = "Auspex ノイズ色",
         ko = "Auspex 노이즈 색상",
         ["zh-cn"] = "Auspex 噪点颜色",
-        ["zh-tw"] = "Auspex 雜訊顏色",
+        ["zh-tw"] = "占卜儀雜訊顏色",
     },
     auspex_scan_noise = {
         en = "Auspex scan noise color",
@@ -464,7 +464,7 @@ local _color_label_texts = {
         ja = "Auspex スキャンノイズ色",
         ko = "Auspex 스캔 노이즈 색상",
         ["zh-cn"] = "Auspex 扫描噪点颜色",
-        ["zh-tw"] = "Auspex 掃描雜訊顏色",
+        ["zh-tw"] = "占卜儀掃描雜訊顏色",
     },
     auspex_sweep = {
         en = "Auspex sweep color",
@@ -478,7 +478,7 @@ local _color_label_texts = {
         ja = "Auspex スイープ色",
         ko = "Auspex 스윕 색상",
         ["zh-cn"] = "Auspex 扫描线颜色",
-        ["zh-tw"] = "Auspex 掃描線顏色",
+        ["zh-tw"] = "占卜儀掃描線顏色",
     },
     auspex_frame = {
         en = "Auspex frame color",
@@ -492,7 +492,7 @@ local _color_label_texts = {
         ja = "Auspex フレーム色",
         ko = "Auspex 프레임 색상",
         ["zh-cn"] = "Auspex 边框颜色",
-        ["zh-tw"] = "Auspex 框架顏色",
+        ["zh-tw"] = "占卜儀框架顏色",
     },
     auspex_dotted_frame = {
         en = "Auspex dotted frame color",
@@ -506,7 +506,7 @@ local _color_label_texts = {
         ja = "Auspex 点線フレーム色",
         ko = "Auspex 점선 프레임 색상",
         ["zh-cn"] = "Auspex 虚线边框颜色",
-        ["zh-tw"] = "Auspex 虛線框架顏色",
+        ["zh-tw"] = "占卜儀虛線框架顏色",
     },
     auspex_inner_glow = {
         en = "Auspex inner glow color",
@@ -520,7 +520,7 @@ local _color_label_texts = {
         ja = "Auspex 内側グロー色",
         ko = "Auspex 내부 광원 색상",
         ["zh-cn"] = "Auspex 内发光颜色",
-        ["zh-tw"] = "Auspex 內發光顏色",
+        ["zh-tw"] = "占卜儀內發光顏色",
     },
     marker_value_text = {
         en = "Marker value text color",
@@ -590,7 +590,7 @@ local _color_label_texts = {
         ja = "Auspex 凡例インジケーター色",
         ko = "Auspex 범례 표시 색상",
         ["zh-cn"] = "Auspex 图例指示器颜色",
-        ["zh-tw"] = "Auspex 圖例指示器顏色",
+        ["zh-tw"] = "占卜儀圖例指示器顏色",
     },
     enemy_boss_marker = {
         en = "Boss enemy marker color",
@@ -646,7 +646,7 @@ local _color_label_texts = {
         ja = "Scab 敵の色",
         ko = "Scab 적 색상",
         ["zh-cn"] = "Scab 敌人颜色",
-        ["zh-tw"] = "Scab 敵人顏色",
+        ["zh-tw"] = "血痂敵人顏色",
     },
     enemy_dreg = {
         en = "Dreg enemy color",
@@ -660,7 +660,7 @@ local _color_label_texts = {
         ja = "Dreg 敵の色",
         ko = "Dreg 적 색상",
         ["zh-cn"] = "Dreg 敌人颜色",
-        ["zh-tw"] = "Dreg 敵人顏色",
+        ["zh-tw"] = "渣滓敵人顏色",
     },
     enemy_tox = {
         en = "Tox enemy color",
@@ -716,7 +716,7 @@ local _color_label_texts = {
         ja = "Scab フレイマー色",
         ko = "Scab 화염방사병 색상",
         ["zh-cn"] = "Scab 火焰兵颜色",
-        ["zh-tw"] = "Scab 火焰兵顏色",
+        ["zh-tw"] = "血痂火焰兵顏色",
     },
     enemy_horde = {
         en = "Horde enemy color",
@@ -1258,7 +1258,7 @@ return {
         ja = "主目標、副目標、殉教者の頭蓋骨アイテム、イベントマーカー。",
         ko = "주 목표, 보조 목표, 순교자의 해골 아이템 및 이벤트 마커입니다.",
         ["zh-cn"] = "主要目标、次要目标、Martyr's Skull 物品和事件标记。",
-        ["zh-tw"] = "主要目標、次要目標、Martyr's Skull 物品與事件標記。",
+        ["zh-tw"] = "主要目標、次要目標、殉道者之顱物品與事件標記。",
     },
     radar_tab_expeditions_tooltip = {
         en = "Expedition POIs, Tech-Remnants, hazards, tools, and expedition-specific items.",
@@ -1962,7 +1962,7 @@ return {
         ja = "アウスペクス",
         ko = "아우스펙스",
         ["zh-cn"] = "奥斯派克斯",
-        ["zh-tw"] = "奧斯派克斯",
+        ["zh-tw"] = "占卜儀",
     },
     auspex_animated_sweep = {
         en = "Animated radar sweep",
@@ -1990,7 +1990,7 @@ return {
         ja = "Auspex レーダースタイルと、選択されている場合は Auspex ガイドに適用されます。",
         ko = "Auspex 레이더 스타일과, 선택된 경우 Auspex 가이드에 적용됩니다.",
         ["zh-cn"] = "影响 Auspex 雷达样式，并在选中时影响 Auspex 引导线。",
-        ["zh-tw"] = "影響 Auspex 雷達樣式，並在選取時影響 Auspex 引導線。",
+        ["zh-tw"] = "影響占卜儀雷達樣式，並在選取時影響占卜儀引導線。",
     },
     radar_outline = {
         en = "Radar outline",
@@ -2654,7 +2654,7 @@ return {
         ja = "弾薬備蓄",
         ko = "탄약 보관함",
         ["zh-cn"] = "弹药储存包 (大弹药)",
-        ["zh-tw"] = "彈藥儲備",
+        ["zh-tw"] = "彈藥儲存包",
     },
     show_grenades = {
         en = "Grenade",
@@ -2710,7 +2710,7 @@ return {
         ja = "集中スティム",
         ko = "집중 스팀",
         ["zh-cn"] = "专注针剂 (黄针)",
-        ["zh-tw"] = "專注針劑",
+        ["zh-tw"] = "專注興奮劑",
     },
     show_pocketable_syringe_corruption = {
         en = "Med Stimm",
@@ -2724,7 +2724,7 @@ return {
         ja = "医療スティム",
         ko = "메드 스팀",
         ["zh-cn"] = "医疗针剂 (绿针)",
-        ["zh-tw"] = "醫療針劑",
+        ["zh-tw"] = "醫療興奮劑",
     },
     show_pocketable_syringe_power = {
         en = "Combat Stimm",
@@ -2738,7 +2738,7 @@ return {
         ja = "戦闘スティム",
         ko = "전투 스팀",
         ["zh-cn"] = "战斗针剂 (红针)",
-        ["zh-tw"] = "戰鬥針劑",
+        ["zh-tw"] = "戰鬥興奮劑",
     },
     show_pocketable_syringe_speed = {
         en = "Celerity Stimm",
@@ -2752,7 +2752,7 @@ return {
         ja = "迅速スティム",
         ko = "신속 스팀",
         ["zh-cn"] = "迅捷针剂 (蓝针)",
-        ["zh-tw"] = "迅捷針劑",
+        ["zh-tw"] = "敏捷興奮劑",
     },
 
     materials_group = {
@@ -2795,7 +2795,7 @@ return {
         ja = "ダイアマンティン",
         ko = "다이아만틴",
         ["zh-cn"] = "金刚砂",
-        ["zh-tw"] = "金剛砂",
+        ["zh-tw"] = "金剛晶石",
     },
     show_plasteel = {
         en = "Plasteel",
@@ -2993,7 +2993,7 @@ return {
         ja = "グリモア",
         ko = "그리모어",
         ["zh-cn"] = "魔法书",
-        ["zh-tw"] = "魔典",
+        ["zh-tw"] = "法術書",
     },
     show_pocketable_scripture = {
         en = "Scripture",
@@ -3007,7 +3007,7 @@ return {
         ja = "聖典",
         ko = "경전",
         ["zh-cn"] = "圣经",
-        ["zh-tw"] = "聖典",
+        ["zh-tw"] = "聖書",
     },
 
     expeditions_specific_group = {
@@ -3499,7 +3499,7 @@ return {
         ja = "殉教者の頭蓋骨",
         ko = "순교자의 해골",
         ["zh-cn"] = "殉道者头骨",
-        ["zh-tw"] = "殉道者頭骨",
+        ["zh-tw"] = "殉道者之顱",
     },
     show_martyr_skull_riddle_interactables = {
     	en = "Riddle interactables",
@@ -4026,7 +4026,7 @@ return {
         ja = "スキャブ・ヴァンガード",
         ko = "스캡 선봉대",
         ["zh-cn"] = "疤兵先锋",
-        ["zh-tw"] = "疤兵先鋒",
+        ["zh-tw"] = "血痂先鋒",
     },
     show_enemy_cultist_assault = _localized_game_text("loc_breed_display_name_cultist_assault"),
     show_enemy_renegade_assault = _localized_game_text("loc_breed_display_name_renegade_assault"),
@@ -5805,7 +5805,7 @@ return {
         ja = "スキャブ・ヴァンガードのマーカーをレーダー上でどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 스캡 선봉대 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上疤兵先锋标记的显示方式: 仅图标、已标记图标或禁用。",
-        ["zh-tw"] = "選擇雷達上疤兵先鋒標記的顯示方式: 僅圖示、已標記圖示或停用。",
+        ["zh-tw"] = "選擇雷達上血痂先鋒標記的顯示方式: 僅圖示、已標記圖示或停用。",
     },
     show_enemy_cultist_assault_tooltip = _enemy_marker_display_tooltip("loc_breed_display_name_cultist_assault"),
     show_enemy_renegade_assault_tooltip = _enemy_marker_display_tooltip("loc_breed_display_name_renegade_assault"),
