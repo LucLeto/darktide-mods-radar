@@ -561,7 +561,7 @@ Radar detects friendly companions belonging to the local player and teammates. T
 | Preview | Companion | Notes |
 | --- | --- | --- |
 | <img src="doc/img/player_companion_cyber_mastiff.png" width="80" alt="Cyber Mastiff companion marker" /> | Cyber Mastiff | Uses Darktide's official companion glyph. When it pins and mauls a disable-capable enemy, it is drawn above that enemy; the enemy icon and background become transparent while any enabled marker brackets remain visible. |
-| <img src="doc/img/player_companion_servo_skull.png" width="80" alt="Default Servo Skull companion marker" /> | Default / Hack Servo Skull | Uses the normal Servo Skull base marker. While actively solving a hacking puzzle, it adds a white corrupted-auspex annotation and remains visible near its owner. |
+| <img src="doc/img/player_companion_servo_skull.png" width="80" alt="Default Servo Skull companion marker" /> | Default / Hack Servo Skull | Uses the normal Servo Skull base marker. While actively solving a hacking puzzle, it adds a white auspex annotation and remains visible near its owner. |
 | <img src="doc/img/player_companion_medicae_servo_skull.png" width="80" alt="Medicae Servo Skull companion marker" /> | Medicae Servo Skull | Adds a green medkit annotation. It remains visible and is drawn above the player it is actively reviving. |
 | <img src="doc/img/player_companion_purgator_servo_skull.png" width="80" alt="Purgator Flamer Servo Skull companion marker" /> | Purgator / Flamer Servo Skull | Adds an orange flame annotation and remains visible near its owner while its flamethrower action is active. |
 
@@ -801,7 +801,7 @@ The remaining formerly white pickup icons were recolored so marker families read
 | --- | --- | --- |
 | Cyber Mastiff | Companion glyph `U+E051` rendered with Darktide's `hud_body` font | Owning player's bright slot color |
 | Servo Skull base | `content/ui/materials/icons/abilities/default` | Owning player's bright slot color |
-| Active hacking annotation | `content/ui/materials/hud/interactions/icons/pocketable_corrupted_auspex_scanner` | `(255, 255, 255, 255)` |
+| Active hacking annotation | `content/ui/materials/icons/pocketables/hud/auspex_scanner` | `(255, 255, 255, 255)` |
 | Medicae annotation | `content/ui/materials/hud/interactions/icons/pocketable_medkit` | `(255, 38, 205, 26)` |
 | Purgator / Flamer annotation | `content/ui/materials/icons/presets/preset_20` | `(255, 255, 102, 0)` |
 

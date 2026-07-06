@@ -108,7 +108,7 @@ local PLAYER_COMPANION_PRESENTATIONS = {
 }
 local SERVO_SKULL_ANNOTATIONS = {
     hacking = {
-        icon = "content/ui/materials/hud/interactions/icons/pocketable_corrupted_auspex_scanner",
+        icon = "content/ui/materials/icons/pocketables/hud/auspex_scanner",
         color = { 255, 255, 255, 255 },
     },
     medicae = {
