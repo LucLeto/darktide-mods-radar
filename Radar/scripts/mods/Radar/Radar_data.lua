@@ -2181,6 +2181,23 @@ return {
                             },
                         },
                         {
+                            setting_id = "player_companions_group",
+                            type = "group",
+                            sub_widgets = {
+                                _icon_scale_slider("player_companions_icon_scale", nil),
+                                {
+                                    setting_id = "show_cyber_mastiff",
+                                    type = "checkbox",
+                                    default_value = true,
+                                },
+                                {
+                                    setting_id = "show_servo_skulls",
+                                    type = "checkbox",
+                                    default_value = true,
+                                },
+                            },
+                        },
+                        {
                             setting_id = "player_tags_group",
                             type = "group",
                             sub_widgets = {

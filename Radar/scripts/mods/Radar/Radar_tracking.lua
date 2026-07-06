@@ -3,6 +3,7 @@ return function(env)
 
     local mod = mod
 
+    local GameSession = GameSession
     local pcall = pcall
     local pairs = pairs
     local rawget = rawget
@@ -62,6 +63,7 @@ return function(env)
     local _scratch_seen_interactees = {}
     local _scratch_seen_chests = {}
     local _scratch_seen_destructibles = {}
+    local _scratch_mastiff_disabled_enemy_units = {}
     local OVERVIEW_MIN_ZOOM_RANGE = 25
     local OVERVIEW_MAX_ZOOM_RANGE = 500
     local OVERVIEW_DEFAULT_ZOOM_RANGE = OVERVIEW_MAX_ZOOM_RANGE
@@ -76,6 +78,10 @@ return function(env)
     local NORMAL_RADAR_RESET_ZOOM_RANGE = NORMAL_RADAR_MIN_ZOOM_RANGE
     local NORMAL_RADAR_ZOOM_MODIFIER_GRACE = 0.12
     local NORMAL_RADAR_ZOOM_INDICATOR_DURATION = 1
+    local SERVO_SKULL_OWNER_HIDE_DISTANCE_SQ = 2.5 * 2.5
+    local COMPANION_TARGET_OVERLAP_DISTANCE_SQ = 2 * 2
+    local COMPANION_ACTION_RENDER_LAYER = 6
+    local SERVO_SKULL_STATES = CompanionServoSkullSettings.STATES
     local OVERVIEW_CAPTURED_ACTIONS_BY_DIRECTION = {
         up = {
             tactical_overlay_scroll_up = true,
@@ -754,7 +760,164 @@ return function(env)
         return nil, nil, nil, nil
     end
 
+    local function _player_companion_kind(unit, has_extension)
+        if not unit or not has_extension or not _safe_unit_alive(unit) then
+            return nil
+        end
+
+        local unit_data_extension = has_extension(unit, "unit_data_system")
+        local breed_fn = unit_data_extension and unit_data_extension.breed
+
+        if not breed_fn then
+            return nil
+        end
+
+        local ok_breed, breed = pcall(breed_fn, unit_data_extension)
+        local tags = ok_breed and breed and breed.tags or nil
+
+        if not tags or tags.companion ~= true then
+            return nil
+        end
+
+        local breed_name = breed.name
+
+        if breed_name == "companion_dog" then
+            return "player_companion_dog"
+        elseif breed_name == "companion_servo_skull" then
+            return "player_companion_servo_skull"
+        end
+
+        return nil
+    end
+
+    local function _companion_dog_target_uses_disable_action(unit, has_extension)
+        local unit_data_extension = has_extension and has_extension(unit, "unit_data_system")
+        local breed_fn = unit_data_extension and unit_data_extension.breed
+
+        if not breed_fn then
+            return false
+        end
+
+        local ok_breed, breed = pcall(breed_fn, unit_data_extension)
+        local pounce_setting = ok_breed and breed and breed.companion_pounce_setting or nil
+
+        return pounce_setting and pounce_setting.companion_pounce_action == "human" or false
+    end
+
+    local function _safe_spawned_companion_unit(companion_spawner_extension, special_rule)
+        local lookup_fn = companion_spawner_extension and companion_spawner_extension.spawned_unit_lookup
+
+        if not lookup_fn then
+            return nil
+        end
+
+        local ok_lookup, unit = pcall(lookup_fn, companion_spawner_extension, special_rule)
+
+        return ok_lookup and unit or nil
+    end
+
+    local function _safe_unit_game_object_field(unit, field_name)
+        local state = Managers and Managers.state
+        local game_session_manager = state and state.game_session
+        local unit_spawner_manager = state and state.unit_spawner
+        local game_session_fn = game_session_manager and game_session_manager.game_session
+        local game_object_id_fn = unit_spawner_manager and unit_spawner_manager.game_object_id
+        local game_object_field = GameSession and GameSession.game_object_field
+        local game_object_exists = GameSession and GameSession.game_object_exists
+
+        if not game_session_fn or not game_object_id_fn or not game_object_field then
+            return nil
+        end
+
+        local ok_session, game_session = pcall(game_session_fn, game_session_manager)
+        local ok_id, game_object_id = pcall(game_object_id_fn, unit_spawner_manager, unit)
+
+        if not ok_session or not game_session or not ok_id or game_object_id == nil then
+            return nil
+        end
+
+        if game_object_exists then
+            local ok_exists, exists = pcall(game_object_exists, game_session, game_object_id)
+
+            if not ok_exists or not exists then
+                return nil
+            end
+        end
+
+        local ok_field, value = pcall(game_object_field, game_session, game_object_id, field_name)
+
+        return ok_field and value or nil
+    end
+
+    local function _safe_unit_from_game_object_id(game_object_id)
+        if game_object_id == nil then
+            return nil
+        end
+
+        local state = Managers and Managers.state
+        local unit_spawner_manager = state and state.unit_spawner
+        local unit_fn = unit_spawner_manager and unit_spawner_manager.unit
+
+        if not unit_fn then
+            return nil
+        end
+
+        local ok_unit, unit = pcall(unit_fn, unit_spawner_manager, game_object_id)
+
+        return ok_unit and _safe_unit_alive(unit) and unit or nil
+    end
+
+    local function _distance_squared_horizontal(a, b)
+        if not a or not b then
+            return math_huge
+        end
+
+        local ax, ay = a.x, a.y
+        local bx, by = b.x, b.y
+
+        if not _is_finite_number(ax) or not _is_finite_number(ay) then
+            return math_huge
+        end
+
+        if not _is_finite_number(bx) or not _is_finite_number(by) then
+            return math_huge
+        end
+
+        local dx = ax - bx
+        local dy = ay - by
+
+        return dx * dx + dy * dy
+    end
+
+    local function _safe_companion_dog_target(unit)
+        local blackboard = BLACKBOARDS and BLACKBOARDS[unit]
+        local pounce_component = blackboard and blackboard.pounce
+        local pounce_target = pounce_component and pounce_component.pounce_target or nil
+
+        if pounce_target
+            and (pounce_component.has_pounce_target or pounce_component.has_pounce_started)
+            and _safe_unit_alive(pounce_target) then
+            return pounce_target, true
+        end
+
+        local target_unit_id = _safe_unit_game_object_field(unit, "target_unit_id")
+        local target_unit = _safe_unit_from_game_object_id(target_unit_id)
+
+        if pounce_component then
+            return target_unit, false
+        end
+
+        return target_unit, nil
+    end
+
+    local function _servo_skull_state_is(state, state_name)
+        return state == state_name or state == SERVO_SKULL_STATES[state_name]
+    end
+
     local function _refresh_player_units()
+        local mastiff_disabled_enemy_units = _scratch_mastiff_disabled_enemy_units
+        table_clear(mastiff_disabled_enemy_units)
+
         local player_manager = _player_manager()
         if not player_manager or not player_manager.players then
             return
@@ -764,9 +927,118 @@ return function(env)
         local players = player_manager:players()
         local script_unit = ScriptUnit
         local has_extension = script_unit and script_unit.has_extension
+        local show_cyber_mastiff = mod:get("show_cyber_mastiff") ~= false
+        local scan_player_companions = show_cyber_mastiff
+            or mod:get("show_servo_skulls") ~= false
 
         for _, player in pairs(players) do
             local unit = player.player_unit
+
+            if scan_player_companions and unit and _safe_unit_alive(unit) then
+                local player_slot = _safe_player_slot(player)
+                local owner_marker_visible
+
+                if player == local_player then
+                    owner_marker_visible = mod:get_show_player_center_dot()
+                else
+                    owner_marker_visible = mod:get_show_players()
+                end
+
+                local companion_spawner_extension = has_extension and
+                    has_extension(unit, "companion_spawner_system") or nil
+                local owned_units = player.owned_units
+                local hack_skull = nil
+                local medicae_skull = nil
+                local flamer_skull = nil
+                local servo_skull_roles_resolved = false
+
+                if type(owned_units) == "table" then
+                    for owned_unit, _ in pairs(owned_units) do
+                        local companion_kind = _player_companion_kind(owned_unit, has_extension)
+
+                        if companion_kind then
+                            local servo_skull_role = nil
+                            local servo_skull_following_owner = false
+                            local companion_action = nil
+                            local companion_action_target = nil
+                            local companion_pounce_active = nil
+
+                            if companion_kind == "player_companion_servo_skull" then
+                                if not servo_skull_roles_resolved then
+                                    hack_skull = _safe_spawned_companion_unit(
+                                        companion_spawner_extension,
+                                        "cryptic_servo_skull_hack"
+                                    )
+                                    medicae_skull = _safe_spawned_companion_unit(
+                                        companion_spawner_extension,
+                                        "cryptic_servo_skull_inject_ally"
+                                    )
+                                    flamer_skull = _safe_spawned_companion_unit(
+                                        companion_spawner_extension,
+                                        "cryptic_servo_skull_flamethrower"
+                                    )
+                                    servo_skull_roles_resolved = true
+                                end
+
+                                if owned_unit == medicae_skull then
+                                    servo_skull_role = "medicae"
+                                elseif owned_unit == flamer_skull then
+                                    servo_skull_role = "flamer"
+                                elseif owned_unit == hack_skull then
+                                    servo_skull_role = "default"
+                                end
+
+                                local servo_skull_state = _safe_unit_game_object_field(owned_unit, "state")
+
+                                if _servo_skull_state_is(servo_skull_state, "hacking") then
+                                    companion_action = "hacking"
+                                elseif _servo_skull_state_is(servo_skull_state, "inject_ally") then
+                                    companion_action = "inject_ally"
+                                elseif _servo_skull_state_is(servo_skull_state, "flamethrower")
+                                    or _servo_skull_state_is(servo_skull_state, "flamethrower_shooting") then
+                                    companion_action = "flamethrower"
+                                elseif _servo_skull_state_is(servo_skull_state, "following")
+                                    or _servo_skull_state_is(servo_skull_state, "following_shooting")
+                                    or _servo_skull_state_is(servo_skull_state, "following_shooting_ability") then
+                                    servo_skull_following_owner = true
+                                end
+                            elseif companion_kind == "player_companion_dog" then
+                                companion_action_target, companion_pounce_active =
+                                    _safe_companion_dog_target(owned_unit)
+
+                                if show_cyber_mastiff
+                                    and companion_action_target
+                                    and companion_pounce_active ~= false
+                                    and _companion_dog_target_uses_disable_action(
+                                        companion_action_target,
+                                        has_extension
+                                    ) then
+                                    local companion_position = _safe_unit_position(owned_unit)
+                                    local target_position = _safe_unit_position(companion_action_target)
+
+                                    if companion_position
+                                        and target_position
+                                        and _distance_squared_horizontal(companion_position, target_position) <=
+                                        COMPANION_TARGET_OVERLAP_DISTANCE_SQ then
+                                        mastiff_disabled_enemy_units[companion_action_target] = true
+                                    end
+                                end
+                            end
+
+                            _track_unit(owned_unit, companion_kind, "player_companion", {
+                                player_slot = player_slot,
+                                owner_unit = unit,
+                                owner_marker_visible = owner_marker_visible,
+                                servo_skull_following_owner = servo_skull_following_owner,
+                                servo_skull_role = servo_skull_role,
+                                companion_action = companion_action,
+                                companion_action_target = companion_action_target,
+                            })
+                        end
+                    end
+                end
+            end
+
             if unit and _safe_unit_alive(unit) and player ~= local_player then
                 local archetype_name = nil
                 local player_name = nil
@@ -1088,28 +1360,6 @@ return function(env)
         end
     end
 
-    local function _distance_squared_horizontal(a, b)
-        if not a or not b then
-            return math_huge
-        end
-
-        local ax, ay = a.x, a.y
-        local bx, by = b.x, b.y
-
-        if not _is_finite_number(ax) or not _is_finite_number(ay) then
-            return math_huge
-        end
-
-        if not _is_finite_number(bx) or not _is_finite_number(by) then
-            return math_huge
-        end
-
-        local dx = ax - bx
-        local dy = ay - by
-
-        return dx * dx + dy * dy
-    end
-
     local function _vertical_delta(a, b)
         if not a or not b then
             return nil
@@ -1138,7 +1388,9 @@ return function(env)
             return false
         end
 
-        if kind == "player_teammate" then
+        if kind == "player_teammate"
+            or kind == "player_companion_dog"
+            or kind == "player_companion_servo_skull" then
             return false
         end
 
@@ -1514,6 +1766,7 @@ return function(env)
                 is_priority_target = kind == "enemy_daemonhost" or _is_boss_marker_kind(kind) or
                     ENEMY_RADAR_DEFINITION_BY_KIND[kind] ~= nil or
                     (is_event_marker_kind and is_event_marker_kind(mod, kind) == true) or
+                    kind == "player_teammate" or
                     kind == "material_expeditions_loot_player_drop" or
                     kind == "location_attention" or
                     kind == "location_ping" or
@@ -1555,9 +1808,34 @@ return function(env)
             local ability_marked_enemy = show_ability_marked_enemies
                 and _is_enemy_kind(kind)
                 and _target_has_ability_outline_mark(meta)
+            local companion_action = meta and meta.companion_action or nil
+            local companion_action_target = meta and meta.companion_action_target or nil
+            local companion_target_position = companion_action_target and
+                _safe_unit_position(companion_action_target) or nil
+            local companion_overlapping_target = kind == "player_companion_dog"
+                and companion_target_position ~= nil
+                and _distance_squared_horizontal(position, companion_target_position) <=
+                COMPANION_TARGET_OVERLAP_DISTANCE_SQ
+            local companion_action_active = companion_action == "hacking"
+                or companion_action == "inject_ally"
+                or companion_action == "flamethrower"
+                or companion_overlapping_target
 
             if not position or not kind or (not _cached_kind_enabled(kind) and not ability_marked_enemy) then
                 return
+            end
+
+            if kind == "player_companion_servo_skull"
+                and meta
+                and meta.owner_marker_visible
+                and meta.servo_skull_following_owner then
+                local owner_position = _safe_unit_position(meta.owner_unit)
+
+                if owner_position
+                    and _distance_squared_horizontal(owner_position, position) <=
+                    SERVO_SKULL_OWNER_HIDE_DISTANCE_SQ then
+                    return
+                end
             end
 
             if not _passes_tag_visibility_filter(kind, source, meta, only_tagged_enemies, only_tagged_items) then
@@ -1617,7 +1895,9 @@ return function(env)
             local render_layer = 0
             local selection_priority = 0
 
-            if _cached_priority_target(kind) then
+            if companion_action_active then
+                render_layer = COMPANION_ACTION_RENDER_LAYER
+            elseif _cached_priority_target(kind) then
                 render_layer = _cached_render_layer(kind)
                 selection_priority = _cached_selection_priority(kind)
             end
@@ -1638,6 +1918,8 @@ return function(env)
             target.ignore_radar_range = ignore_range
             target.render_layer = render_layer
             target.selection_priority = selection_priority
+            target.disabled_by_mastiff = _scratch_mastiff_disabled_enemy_units[unit] == true
+                and _is_enemy_kind(kind)
 
             targets[target_count] = target
         end

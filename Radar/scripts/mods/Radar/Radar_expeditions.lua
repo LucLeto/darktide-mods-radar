@@ -729,6 +729,13 @@ return function(env)
             return show_players ~= false and show_players ~= "off"
         end
 
+        if kind == "player_companion_dog" or kind == "player_companion_servo_skull" then
+            local companion_setting_id = KIND_TO_SETTING[kind]
+            local companion_setting = companion_setting_id and get_setting(mod, companion_setting_id)
+
+            return companion_setting ~= false and companion_setting ~= "off"
+        end
+
         if enemy_display_mode ~= nil then
             return enemy_display_mode ~= "off"
         end
@@ -759,7 +766,9 @@ return function(env)
             return false
         end
 
-        if kind == "player_teammate" then
+        if kind == "player_teammate"
+            or kind == "player_companion_dog"
+            or kind == "player_companion_servo_skull" then
             return false
         end
 

@@ -133,6 +133,8 @@ return function(env)
         enemy_captain = "show_captains",
         enemy_karnak_twin = "show_karnak_twins",
         player_teammate = "show_players",
+        player_companion_dog = "show_cyber_mastiff",
+        player_companion_servo_skull = "show_servo_skulls",
         location_attention = "show_player_tags",
         location_ping = "show_player_tags",
         location_threat = "show_player_tags",
@@ -292,6 +294,8 @@ return function(env)
         pickup_ammo_cache_deployable = "deployables_group",
         medical_crate_deployable = "deployables_group",
         player_teammate = "players_group",
+        player_companion_dog = "player_companions_group",
+        player_companion_servo_skull = "player_companions_group",
         location_attention = "players_group",
         location_ping = "players_group",
         location_threat = "players_group",
@@ -317,6 +321,7 @@ return function(env)
         deployables_group = "deployables_icon_scale",
         enemies_group = "enemies_icon_scale",
         players_group = "players_icon_scale",
+        player_companions_group = "player_companions_icon_scale",
         event_group = "event_icon_scale",
         debug_group = "debug_icon_scale",
     }
@@ -388,6 +393,7 @@ return function(env)
     }
     local PLAYER_SMART_TAG_SELECTION_PRIORITY = 300
     local PLAYER_SMART_TAG_RENDER_LAYER = 3
+    local PLAYER_TEAMMATE_RENDER_LAYER = 1
     local EVENT_MARKER_SELECTION_PRIORITY = 600
     local EVENT_MARKER_RENDER_LAYER = 7
     local EXPEDITION_PLAYER_DROP_SELECTION_PRIORITY = 650
@@ -1288,6 +1294,10 @@ return function(env)
     function mod:get_target_render_layer(kind)
         if self:is_event_marker_kind(kind) then
             return EVENT_MARKER_RENDER_LAYER
+        end
+
+        if kind == "player_teammate" then
+            return PLAYER_TEAMMATE_RENDER_LAYER
         end
 
         if kind == "material_expeditions_loot_player_drop" then
