@@ -1032,6 +1032,7 @@ return function(env)
         expeditions_specific_group = "nearby_highlight_distance_text_expeditions_specific",
         martyr_s_skull_group = "nearby_highlight_distance_text_martyr_s_skull",
         environment_group = "nearby_highlight_distance_text_environment",
+        deployables_group = "nearby_highlight_distance_text_deployables",
         event_group = "nearby_highlight_distance_text_event",
     }
 
