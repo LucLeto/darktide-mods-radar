@@ -1,4 +1,5 @@
 local mod = get_mod("Radar")
+local UIFontSettings = require("scripts/managers/ui/ui_font_settings")
 local UIWidget = require("scripts/managers/ui/ui_widget")
 
 local string_format = string.format
@@ -32,6 +33,9 @@ end
 local WidgetVisibility = {
     has_icon = function(content)
         return content.icon ~= nil and content.icon ~= ""
+    end,
+    has_glyph_icon = function(content)
+        return content.glyph_icon ~= nil and content.glyph_icon ~= ""
     end,
     has_overlay_icon = function(content)
         return content.overlay_icon ~= nil and content.overlay_icon ~= ""
@@ -252,6 +256,25 @@ local function _marker_definition()
             visibility_function = WidgetVisibility.has_icon,
         },
         {
+            pass_type = "text",
+            value = "<glyph_icon>",
+            value_id = "glyph_icon",
+            style_id = "glyph_icon",
+            style = {
+                drop_shadow = false,
+                font_size = 16,
+                font_type = UIFontSettings.hud_body.font_type,
+                vertical_alignment = "top",
+                horizontal_alignment = "left",
+                text_horizontal_alignment = "center",
+                text_vertical_alignment = "center",
+                offset = { 0, 0, 10 },
+                size = { 16, 16 },
+                text_color = _white_widget_color(),
+            },
+            visibility_function = WidgetVisibility.has_glyph_icon,
+        },
+        {
             pass_type = "texture",
             value_id = "overlay_icon",
             style_id = "overlay_icon",
@@ -327,6 +350,7 @@ local function _clear_marker_widget(widget)
     widget.content.marked_ring_slots_mask = nil
     widget.content.marked_ring_size = nil
     widget.content.icon = nil
+    widget.content.glyph_icon = ""
     widget.content.overlay_icon = nil
     widget.content.title_icon = nil
     widget.content.arrow_icon = nil

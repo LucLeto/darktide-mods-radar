@@ -1,11 +1,12 @@
 # Radar
 
-Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide**. It is built to surface the targets that matter most during live missions, nearby pickups, objective items, deployed support tools, environment interactables, expedition points of interest, teammates, player smart tags, tagged targets, supported ability-outlined enemies, and high-priority enemies, while keeping the presentation configurable from the mod options menu. A centered overview mode can also be toggled during missions when you need a wider tactical read.
+Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide**. It is built to surface the targets that matter most during live missions, nearby pickups, objective items, deployed support tools, environment interactables, expedition points of interest, teammates and their companions, player smart tags, tagged targets, supported ability-outlined enemies, and high-priority enemies, while keeping the presentation configurable from the mod options menu. A centered overview mode can also be toggled during missions when you need a wider tactical read.
 
 ## What's new in 2.4.0
 
 - Updated the Expedition UI package preload for **Darktide 1.12.0**, removing the startup error caused by the deleted `expedition_play_view` package.
 - Added the **Skitarii** teammate class icon.
+- Added owner-colored player companion markers for the Arbitrator's **Cyber Mastiff** and the Skitarii's **Servo Skulls**, including Medicae, Purgator/Flamer, and active hacking annotations.
 - Added **Dreg Vanguard** and **Scab Vanguard** enemy markers with independent **Icon only**, **Marked icon**, and **Off** settings under Common & Shooters.
 - Added **Heretical Artifacts** live-event pickups with separate small, medium, and large artwork, a simplified icon mode, event scaling, nearby highlights, and configurable colors.
 - Tuned common and shooter marker dimensions for clearer composition at different enemy icon scales.
@@ -14,11 +15,11 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 
 ## Feature Overview
 
-- Tracks nearby pickups, materials, mission items, deployables, environment interactables, live-event pickups and objectives, expedition POIs, teammates, player smart tags, tagged targets, supported ability-outlined enemies, and high-priority enemies on a single camera-oriented radar or the temporary centered overview.
+- Tracks nearby pickups, materials, mission items, deployables, environment interactables, live-event pickups and objectives, expedition POIs, teammates, player companions, player smart tags, tagged targets, supported ability-outlined enemies, and high-priority enemies on a single camera-oriented radar or the temporary centered overview.
 - Supports **Square**, **Circle**, and **Auspex** radar styles. Square and Circle use configurable **outline** and **guide** options, including the Auspex background guide, while **Auspex** adds its dedicated scanner frame treatment.
 - Lets you tune **radar size**, normal radar **range**, centered overview **zoom range**, **Radar Colors**, **maximum marker count**, **nearby highlight range**, supported vertical arrow and hiding behavior, and the dedicated nearby-highlight presentation settings.
-- Supports per-category **Icon size (%)** sliders across item, player, enemy, event, and debug marker groups, plus dedicated enemy sub-category scaling.
-- Supports separate display, range, and vertical arrow controls for **bosses**, **enemy groups**, **teammates**, **player smart tags**, **tagged-only enemy and item filtering**, supported **ability outlines**, and the local **player center dot**, including **Infinite** marker range modes for bosses and teammates.
+- Supports per-category **Icon size (%)** sliders across item, player, player companion, enemy, event, and debug marker groups, plus dedicated enemy sub-category scaling.
+- Supports separate display, range, and vertical arrow controls for **bosses**, **enemy groups**, **teammates**, **player companions**, **player smart tags**, **tagged-only enemy and item filtering**, supported **ability outlines**, and the local **player center dot**, including **Infinite** marker range modes for bosses and teammates.
 - Includes mission-ready keybinds for **toggle radar on or off**, **toggle overview mode**, temporary radar zoom, and radar movement, plus per-mode enable toggles for **Regular Missions**, **Havoc**, **Mortis Trials**, and **Expeditions**.
 - Supports anchor-based **radar positioning** with offsets, movement keybinds, configurable movement step size, and an optional unrestricted positioning fallback for ultrawide or advanced layouts.
 - Supports **Artwork**, **Icon**, and **Off** display modes for the supported artwork-based pickup families, with automatic migration from older boolean settings.
@@ -232,6 +233,9 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Player marker range | **Normal** or **Infinite**. Lets teammate markers follow the normal radar range or stay visible at any distance. |
 | Player center dot | Shows or hides your own center point on the radar. |
 | Player marker style | **Icon only**, **Marked icon**, **Dot only**, or **Marked dot**. |
+| Player companions - Icon size (%) | Resizes Cyber Mastiff and Servo Skull markers independently from player markers. Default: **100%**. |
+| Show Cyber Mastiff | Shows or hides friendly Arbitrator Cyber Mastiff markers. |
+| Show Servo Skulls | Shows or hides friendly Skitarii Servo Skull markers. |
 | Player Tags | Shows or hides player smart tags and pings on the radar. |
 | Show player tag distance text | Shows the current distance in meters next to player tag markers. |
 | Ability-marked enemies | Also includes supported ability-marked and smart-tag outlined enemies such as keystone, passive, and callout-driven outline states. |
@@ -286,6 +290,7 @@ Each major option group now includes an **Icon size (%)** slider. These sliders 
 | Enemy Special | Special enemies |
 | Enemy Misc | Ritualists |
 | Players | Teammate markers |
+| Player Companions | Cyber Mastiffs and Servo Skulls |
 | Event-Related Items | Event pickups and event objectives, including Dark Rites totems and servo skulls |
 | Debugging | Unknown pickup markers and debug visuals |
 
@@ -394,7 +399,10 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 
 ### Marker Rules
 
-- **Enemies**, **teammates**, and **player smart tags** each use their own display rules and style settings. Teammates also have a **Player marker range** mode, so they can follow the normal radar range or remain visible at any distance. The local **center dot** has its own toggle and is not affected by teammate range mode.
+- **Enemies**, **teammates**, **player companions**, and **player smart tags** each use their own display rules and settings. Teammates also have a **Player marker range** mode, so they can follow the normal radar range or remain visible at any distance. The local **center dot** has its own toggle and is not affected by teammate range mode.
+- Companion markers use their owning player's bright slot color. Player markers take priority over following companions at the same position, while Servo Skulls performing an active task and Cyber Mastiffs pinning an enemy are drawn above the assisted or disabled unit.
+- Following Servo Skulls are hidden when they are very close to their visible owner marker. Hacking, reviving, and active Purgator/Flamer skulls remain visible near their owner.
+- While a Cyber Mastiff is mauling an enemy that uses Darktide's actual companion-disable behavior, that enemy's icon and background are made transparent so the Mastiff remains readable; enabled enemy marker brackets remain visible.
 - Supported enemies can also be surfaced through active ability-mark or smart-tag outline states when **Ability-marked enemies** is enabled.
 - **Tagged enemies only** and **Tagged items only** restrict visibility to actively tagged targets, and those tagged targets ignore the usual radar range limit while the tag remains active.
 - Supported item markers and enemy markers from enabled enemy categories can show vertical **up** and **down** arrows. They use the shared vertical arrow range and shared vertical hide threshold, while nearby highlight brackets and optional distance text remain item-focused presentation features.
@@ -545,6 +553,19 @@ Supported class icon mappings in the HUD:
 </p>
 
 From left to right: **Veteran**, **Zealot**, **Psyker**, **Ogryn**, **Arbitrator**, **Hive Scum**, **Skitarii**.
+
+### Player Companions
+
+Radar detects friendly companions belonging to the local player and teammates. Their base marker uses the owning player's bright slot color, making multiple companions easy to associate with their owner.
+
+| Preview | Companion | Notes |
+| --- | --- | --- |
+| <img src="doc/img/player_companion_cyber_mastiff.png" width="80" alt="Cyber Mastiff companion marker" /> | Cyber Mastiff | Uses Darktide's official companion glyph. When it pins and mauls a disable-capable enemy, it is drawn above that enemy; the enemy icon and background become transparent while any enabled marker brackets remain visible. |
+| <img src="doc/img/player_companion_servo_skull.png" width="80" alt="Default Servo Skull companion marker" /> | Default / Hack Servo Skull | Uses the normal Servo Skull base marker. While actively solving a hacking puzzle, it adds a white auspex annotation and remains visible near its owner. |
+| <img src="doc/img/player_companion_medicae_servo_skull.png" width="80" alt="Medicae Servo Skull companion marker" /> | Medicae Servo Skull | Adds a green medkit annotation. It remains visible and is drawn above the player it is actively reviving. |
+| <img src="doc/img/player_companion_purgator_servo_skull.png" width="80" alt="Purgator Flamer Servo Skull companion marker" /> | Purgator / Flamer Servo Skull | Adds an orange flame annotation and remains visible near its owner while its flamethrower action is active. |
+
+Companion marker size is controlled by the dedicated **Player companions - Icon size (%)** slider, with **100%** as the default. **Show Cyber Mastiff** and **Show Servo Skulls** control the two companion families independently.
 
 ### Player Tags
 
@@ -706,7 +727,7 @@ Color sliders are placed near the setting they affect:
 | Marker background colors | Marked enemy and boss background or bracket colors where applicable |
 | Nearby highlight colors | Per-marker highlight colors for marker groups that support nearby screen-space highlights |
 
-Artwork mode uses original item artwork and is not tinted by these sliders. Player teammate markers and the local player center dot use runtime player/HUD colors instead of fixed configurable marker colors.
+Artwork mode uses original item artwork and is not tinted by these sliders. Player teammate markers, player companions, and the local player center dot use runtime player/HUD colors instead of fixed configurable marker colors.
 
 ### Artwork mode
 
@@ -774,11 +795,24 @@ The remaining formerly white pickup icons were recolored so marker families read
 | `content/ui/materials/icons/achievements/categories/category_heretics` | Dark Rites Totems | `(255, 150, 190, 60)` |
 | `content/ui/materials/icons/abilities/default` | Dark Rites Servo Skulls | `(255, 150, 190, 60)` |
 
+### Player companion marker sources
+
+| Marker element | Glyph or material | Color |
+| --- | --- | --- |
+| Cyber Mastiff | Companion glyph `U+E051` rendered with Darktide's `hud_body` font | Owning player's bright slot color |
+| Servo Skull base | `content/ui/materials/icons/abilities/default` | Owning player's bright slot color |
+| Active hacking annotation | `content/ui/materials/icons/pocketables/hud/auspex_scanner` | `(255, 255, 255, 255)` |
+| Medicae annotation | `content/ui/materials/hud/interactions/icons/pocketable_medkit` | `(255, 38, 205, 26)` |
+| Purgator / Flamer annotation | `content/ui/materials/icons/presets/preset_20` | `(255, 255, 102, 0)` |
+
+Servo Skull role and activity annotations are placed at the bottom-right of the owner-colored base marker and scale together with the companion marker.
+
 ### Runtime-dynamic colors
 
 Not every radar marker uses a configurable fixed ARGB color:
 
 - **Teammates** use the class icon for the detected archetype and take their color from the active HUD slot color at runtime.
+- **Player companions** use their owner's bright HUD slot color. Servo Skull annotations retain their fixed semantic colors.
 - **The radar center dot** also uses the local player's HUD color.
 - **Player smart tags** use their own tag presentations: attention and location tags follow player-slot colors, while threat tags keep their built-in warning color.
 
