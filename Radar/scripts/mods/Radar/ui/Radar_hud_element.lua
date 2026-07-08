@@ -95,6 +95,31 @@ local EXPEDITION_OBJECTIVE_KINDS = {
 local EXPEDITION_MARKED_RING_MATERIAL = "content/ui/materials/backgrounds/scanner/scanner_map_marker"
 local EXPEDITION_MARKED_RING_SIZE_RATIO = 128 / 84
 local PLAYER_BRIGHT_SLOT_COLORS = UISettings.player_bright_slot_colors or UISettings.player_slot_colors
+local PLAYER_COMPANION_VISUAL_CACHE = {}
+local PLAYER_COMPANION_PRESENTATIONS = {
+    player_companion_dog = {
+        glyph = "\238\129\145", -- U+E051, official companion glyph
+        size = 10,
+    },
+    player_companion_servo_skull = {
+        icon = "content/ui/materials/icons/abilities/default",
+        size = 10,
+    },
+}
+local SERVO_SKULL_ANNOTATIONS = {
+    hacking = {
+        icon = "content/ui/materials/icons/pocketables/hud/auspex_scanner",
+        color = { 255, 255, 255, 255 },
+    },
+    medicae = {
+        icon = "content/ui/materials/hud/interactions/icons/pocketable_medkit",
+        color = { 255, 38, 205, 26 },
+    },
+    flamer = {
+        icon = "content/ui/materials/icons/presets/preset_20",
+        color = { 255, 255, 102, 0 },
+    },
+}
 local PLAYER_SLOT_MASK_BY_SLOT = {
     1,
     2,
@@ -1438,11 +1463,18 @@ end
 
 local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, bracket_x, bracket_y, bracket_size)
     local icon_style = widget.style.icon
+    local glyph_icon_style = widget.style.glyph_icon
     local overlay_icon_style = widget.style.overlay_icon
     local title_icon_style = widget.style.title_icon
     local arrow_icon_style = widget.style.arrow_icon
     local size = tonumber(icon_size) or _scaled_icon_size(visual and visual.size or 14)
+    local glyph_icon = visual and visual.glyph or ""
+    local suppress_enemy_fill = target and target.disabled_by_mastiff == true
     local color = _copy_into_widget_color(_style_color_table(icon_style), visual and visual.color or nil)
+    local glyph_color = glyph_icon ~= "" and glyph_icon_style and _copy_into_widget_color(
+        glyph_icon_style.text_color,
+        visual and visual.color or nil
+    ) or nil
     local overlay_color = overlay_icon_style and _copy_into_widget_color(
         _style_color_table(overlay_icon_style),
         visual and visual.overlay_color or nil
@@ -1465,13 +1497,22 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         _configured_radar_color("vertical_arrow", VERTICAL_ARROW_WIDGET_COLOR)
     ) or nil
 
+    if suppress_enemy_fill then
+        color[1] = 0
+
+        if overlay_color then
+            overlay_color[1] = 0
+        end
+    end
+
     local value_text = visual and visual.value_text or ""
 
-    if widget.content.value_text ~= value_text then
+    if widget.content.glyph_icon ~= glyph_icon or widget.content.value_text ~= value_text then
         widget.dirty = true
     end
 
     widget.content.icon = visual and visual.icon or nil
+    widget.content.glyph_icon = glyph_icon
     widget.content.overlay_icon = visual and visual.overlay_icon or nil
     widget.content.title_icon = visual and visual.title_icon or nil
     widget.content.arrow_icon = arrow_icon
@@ -1491,6 +1532,19 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
     icon_size_tbl[1] = size
     icon_size_tbl[2] = size
     icon_style.color = color
+
+    if glyph_icon_style and glyph_icon ~= "" then
+        local glyph_offset = glyph_icon_style.offset
+        local glyph_size = glyph_icon_style.size
+
+        glyph_offset[1] = icon_offset[1]
+        glyph_offset[2] = icon_offset[2]
+        glyph_offset[3] = icon_z
+        glyph_size[1] = size
+        glyph_size[2] = size
+        glyph_icon_style.font_size = size
+        glyph_icon_style.text_color = glyph_color or color
+    end
 
     _apply_marker_marked_ring(widget, visual, icon_offset, size, icon_z)
 
@@ -1526,9 +1580,18 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         local icon_center_x = icon_offset[1] + math_floor(size * 0.5)
         local icon_center_y = icon_offset[2] + math_floor(size * 0.5)
 
-        overlay_offset[1] = icon_center_x - math_floor(overlay_size * 0.5)
-        overlay_offset[2] = icon_center_y - math_floor(overlay_size * 0.5)
-        overlay_offset[3] = icon_z + 1
+        if visual and visual.overlay_anchor == "bottom_right" then
+            local overlap = math_floor(overlay_size * 0.5 + 1) + 2
+
+            overlay_offset[1] = icon_offset[1] + size - overlap
+            overlay_offset[2] = icon_offset[2] + size - overlap
+            overlay_offset[3] = icon_z + 3
+        else
+            overlay_offset[1] = icon_center_x - math_floor(overlay_size * 0.5)
+            overlay_offset[2] = icon_center_y - math_floor(overlay_size * 0.5)
+            overlay_offset[3] = icon_z + 1
+        end
+
         overlay_size_tbl[1] = overlay_size
         overlay_size_tbl[2] = overlay_size
         overlay_icon_style.color = overlay_color
@@ -2151,6 +2214,69 @@ local function _player_smart_tag_visual(target, draw_cache)
     }
 end
 
+local function _player_companion_visual(target, draw_cache)
+    local kind = target and target.kind or nil
+    local presentation = kind and PLAYER_COMPANION_PRESENTATIONS[kind] or nil
+
+    if not presentation then
+        return nil
+    end
+
+    local meta = target.meta or nil
+    local player_slot = tonumber(meta and meta.player_slot or nil)
+    local servo_skull_role = meta and meta.servo_skull_role or nil
+    local companion_action = meta and meta.companion_action or nil
+    local annotation_key = companion_action == "hacking" and "hacking" or servo_skull_role
+    local annotation = annotation_key and SERVO_SKULL_ANNOTATIONS[annotation_key] or nil
+    local role_key = annotation and annotation_key or "default"
+    local kind_cache = PLAYER_COMPANION_VISUAL_CACHE[kind]
+
+    if not kind_cache then
+        kind_cache = {}
+        PLAYER_COMPANION_VISUAL_CACHE[kind] = kind_cache
+    end
+
+    local role_cache = kind_cache[role_key]
+
+    if not role_cache then
+        role_cache = {}
+        kind_cache[role_key] = role_cache
+    end
+
+    local slot_key = player_slot or 0
+    local visual = role_cache[slot_key]
+
+    if visual then
+        return visual
+    end
+
+    local slot_colors = PLAYER_BRIGHT_SLOT_COLORS
+        or (draw_cache and draw_cache.slot_colors)
+        or (UISettings and UISettings.player_slot_colors)
+    local player_color = player_slot and slot_colors and slot_colors[player_slot] or nil
+    local widget_color = _any_to_widget_color(player_color, WHITE_WIDGET_COLOR)
+
+    visual = {
+        icon = presentation.icon,
+        glyph = presentation.glyph,
+        color = widget_color,
+        accent_color = _with_alpha_widget(widget_color, 180),
+        size = presentation.size,
+    }
+
+    if annotation then
+        visual.overlay_icon = annotation.icon
+        visual.overlay_color = annotation.color
+        visual.overlay_anchor = "bottom_right"
+        visual.background_base_size = presentation.size
+        visual.overlay_base_size = 8
+    end
+
+    role_cache[slot_key] = visual
+
+    return visual
+end
+
 local function _target_visual(target, draw_cache)
     if not target then
         return nil
@@ -2169,6 +2295,12 @@ local function _target_visual(target, draw_cache)
 
     if player_smart_tag_visual then
         return _apply_target_specific_visual_overrides(target, player_smart_tag_visual, draw_cache)
+    end
+
+    local player_companion_visual = _player_companion_visual(target, draw_cache)
+
+    if player_companion_visual then
+        return player_companion_visual
     end
 
     if target_kind == "player_teammate" then

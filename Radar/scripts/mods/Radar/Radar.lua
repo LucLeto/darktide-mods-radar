@@ -1,6 +1,7 @@
 local mod = get_mod("Radar")
 local Pickups = require("scripts/settings/pickup/pickups")
 local PlayerUnitStatus = require("scripts/utilities/attack/player_unit_status")
+local CompanionServoSkullSettings = require("scripts/settings/companion/companion_servo_skull_settings")
 
 local function _install(resource_path, env)
     local installer = mod:io_dofile(resource_path)
@@ -16,6 +17,7 @@ local shared_env = {
     mod = mod,
     Pickups = Pickups,
     PlayerUnitStatus = PlayerUnitStatus,
+    CompanionServoSkullSettings = CompanionServoSkullSettings,
 }
 
 setmetatable(shared_env, { __index = _G })
