@@ -1841,7 +1841,7 @@ local function _distance_text_from_squared_distance(distance_sq_3d, suffix)
     return math_floor(math_sqrt(distance_sq_3d) + 0.5) .. (suffix or " m")
 end
 
-local DEPLETED_MEDICAE_STATION_WIDGET_COLOR = _widget_color(255, 190, 190, 190)
+local UNPOWERED_MEDICAE_STATION_WIDGET_COLOR = _widget_color(255, 190, 190, 190)
 
 local function _target_alive_unit(target)
     local unit = target and target.unit or nil
@@ -1882,7 +1882,7 @@ local function _clamped_charge_text(charges, max_charges, fallback_max_charges)
     return tostring(math_floor(amount + 0.5))
 end
 
-local function _health_station_charge_amount(has_extension, unit)
+local function _health_station_charge_state(has_extension, unit)
     local health_station_extension = has_extension(unit, HEALTH_STATION_SYSTEM_NAME)
     local charge_amount = health_station_extension and health_station_extension.charge_amount or nil
 
@@ -1890,7 +1890,16 @@ local function _health_station_charge_amount(has_extension, unit)
         return nil
     end
 
-    return charge_amount(health_station_extension)
+    local charges = charge_amount(health_station_extension)
+    local numeric_charges = tonumber(charges)
+    local battery_in_slot = health_station_extension.battery_in_slot
+    local is_unpowered = false
+
+    if numeric_charges and numeric_charges <= 0 and type(battery_in_slot) == "function" then
+        is_unpowered = battery_in_slot(health_station_extension) == false
+    end
+
+    return charges, is_unpowered
 end
 
 local function _health_station_charge_text(target, draw_cache)
@@ -1901,14 +1910,14 @@ local function _health_station_charge_text(target, draw_cache)
         return nil
     end
 
-    local ok_charges, charges = pcall(_health_station_charge_amount, has_extension, unit)
+    local ok_charges, charges, is_unpowered = pcall(_health_station_charge_state, has_extension, unit)
     if not ok_charges then
         return nil
     end
 
     local max_charges = draw_cache and draw_cache.health_station_max_charges or HEALTH_STATION_MAX_CHARGES
 
-    return _clamped_charge_text(charges, max_charges, HEALTH_STATION_MAX_CHARGES)
+    return _clamped_charge_text(charges, max_charges, HEALTH_STATION_MAX_CHARGES), is_unpowered
 end
 
 local function _target_pickup_name(target)
@@ -2191,7 +2200,7 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
         return result
     end
 
-    local resource_charge_text = _resource_charge_text(target, draw_cache)
+    local resource_charge_text, resource_unpowered = _resource_charge_text(target, draw_cache)
 
     if resource_charge_text ~= nil then
         local result = _copy_visual(visual)
@@ -2201,8 +2210,8 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
         local marker_distance_text_color = draw_cache and draw_cache.marker_distance_text_color or
             _configured_radar_color("marker_distance_text", BOSS_DISTANCE_TEXT_WIDGET_COLOR)
 
-        if kind == "medicae_station" and resource_charge_text == "0" then
-            result.color = DEPLETED_MEDICAE_STATION_WIDGET_COLOR
+        if kind == "medicae_station" and resource_unpowered == true then
+            result.color = UNPOWERED_MEDICAE_STATION_WIDGET_COLOR
 
             if radar_distance_text ~= nil then
                 result.value_text = radar_distance_text
