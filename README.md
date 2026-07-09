@@ -9,8 +9,11 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 - Added owner-colored player companion markers for the Arbitrator's **Cyber Mastiff** and the Skitarii's **Servo Skulls**, including Medicae, Purgator/Flamer, and active hacking annotations.
 - Added **Dreg Vanguard** and **Scab Vanguard** enemy markers with independent **Icon only**, **Marked icon**, and **Off** settings under Common & Shooters.
 - Added **Heretical Artifacts** live-event pickups with separate small, medium, and large artwork, a simplified icon mode, event scaling, nearby highlights, and configurable colors.
+- Added optional charge annotations for **Medicae Stations** and deployed **Ammo Crates**.
+- Added a radar-scaled healing-radius ring for deployed **Medical Crates**.
 - Tuned common and shooter marker dimensions for clearer composition at different enemy icon scales.
 - Fixed marked-enemy brackets becoming two pixels thick when their scaled size crossed 16 pixels. Standard radar marker brackets now remain consistently one pixel thick, while configurable nearby-highlight thickness is unchanged.
+- Unpowered Medicae Stations now use a light grey radar marker while depleted stations follow the game's normal marker visibility.
 - Updated player-marked Expedition POIs for the Darktide 1.12.0 Auspex changes. Marked locations now use the marking players' slot colors in a segmented ring supporting up to four players.
 
 ## Feature Overview
@@ -24,6 +27,7 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 - Supports anchor-based **radar positioning** with offsets, movement keybinds, configurable movement step size, and an optional unrestricted positioning fallback for ultrawide or advanced layouts.
 - Supports **Artwork**, **Icon**, and **Off** display modes for the supported artwork-based pickup families, with automatic migration from older boolean settings.
 - Adds optional nearby screen-space highlight brackets for supported non-enemy marker groups, with configurable thickness, per-marker highlight colors, and optional distance labels on the screen highlight, the radar marker, or both.
+- Adds optional remaining-charge annotations for Medicae Stations and deployed Ammo Crates, plus a scaled healing-radius ring for deployed Medical Crates.
 - Adds dedicated **Expedition POI** support for numbered **Sites of Interest**, **Deadsider Sanctuaries**, **Data Reliquary Harvesters**, **Main Objective**, **Valkyrie Extraction Zone**, and **Valkyrie Arrival Zone**, with per-category **Icon only**, **Icon + Distance m**, and **Off** display modes. Player-marked navigation POIs show an evenly divided ring containing the slot colors of up to four marking players.
 - Supports tech-remnant loot modes for **Default**, **Scale by value**, and **Merge nearby piles**, plus optional cluster value text and radius tuning.
 - Includes optional distance text for bosses, player tags, nearby marker highlights, and expedition POIs, per-enemy-category vertical arrow toggles, **Infinite** boss and teammate range modes, **debug logs**, and an **unknown pickups** toggle for discovery and troubleshooting.
@@ -76,6 +80,19 @@ Nearby highlights add small screen-space brackets for supported non-enemy marker
 <p>
   <img src="doc/img/highlight_example.png" width="70%" alt="Nearby highlight example" />
 </p>
+
+### Resource charges and deployed medical radius
+
+Medicae Stations and deployed Ammo Crates can show their remaining team-resource charges as a small number near the top-right of the marker. If nearby radar-marker distance text is also enabled for that marker group, distance text stays below the icon.
+
+<p>
+  <img src="doc/img/medicae_station_charges.png" width="80" alt="Medicae Station marker with remaining charges" />
+  <img src="doc/img/medicae_station_unpowered.png" width="80" alt="Unpowered Medicae Station marker" />
+  <img src="doc/img/pickup_ammo_cache_deployable_charges.png" width="80" alt="Deployed Ammo Crate marker with remaining charges" />
+  <img src="doc/img/pickup_medkit_radius.png" width="80" alt="Deployed Medical Crate marker with healing-radius ring" />
+</p>
+
+Deployed Medical Crates add a circular healing-radius indicator behind the marker. The ring scales with the current radar range so the radar area reflects the in-game healing radius, and it is hidden when the full ring would extend outside the radar bounds.
 
 ### Vertical item and enemy arrows
 
@@ -226,6 +243,8 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Highlight thickness | Adjusts the line thickness used by nearby screen-space highlight brackets. |
 | Show distance above nearby highlights | Shows item distance text above supported nearby screen-space highlights. |
 | Show distance on radar markers | Shows distance text on supported nearby radar markers. |
+| Medicae Station Charges | Shows remaining healing charges on Medicae Station radar markers when their marker is visible. |
+| Ammo Crate Charges | Shows remaining resupply charges on deployed Ammo Crate radar markers when their marker is visible. |
 | Boss marker style | **Icon only** or **Marked icon**. |
 | Boss marker range | **Normal** or **Infinite**. Lets boss-type markers follow the normal radar range or stay visible at any distance. |
 | Show boss distance text | Shows yellow distance text in meters for bosses except the daemonhost. |
@@ -343,6 +362,7 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Expeditions-Specific Items | Highlights nearby salvage, tech-remnants, expedition pocketables, and related expedition pickups. |
 | Martyr's Skull Items | Highlights nearby martyr's skull items and their orange power cell markers. |
 | Environment | Highlights nearby medicae stations, power sockets, and heretic idols. |
+| Deployed Items | Adds nearby radar-marker distance text for deployed ammo and medical crates. |
 | Event-Related Items | Highlights nearby event pickups and event objectives, including Dark Rites totems and servo skulls. |
 
 ### Tech-Remnant controls
@@ -373,8 +393,19 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | --- | --- |
 | Environment | Group of toggles for interactable world objects that are useful to spot on the radar. |
 | Medicae Station | Shows medicae station and equivalent health station interactions. |
+| Medicae Station Charges | Shows the remaining healing charges on visible Medicae Station markers. Unpowered stations with a missing battery use a light grey marker, while fully depleted stations follow the game's marker visibility. |
 | Power Socket | Shows luggable power socket targets. |
 | Heretic Idol | Shows active heretic idols while they are still present. |
+
+### Deployed Items Controls
+
+| Option | What it controls |
+| --- | --- |
+| Deployed Items | Group of controls for player-deployed team support tools. |
+| Show distance on radar markers | Shows distance text below nearby deployed Ammo Crate and Medical Crate radar markers. |
+| Ammo Crate | Shows deployed Ammo Crate markers. |
+| Ammo Crate Charges | Shows remaining resupply charges on visible deployed Ammo Crate markers. |
+| Medical Crate | Shows deployed Medical Crate markers with a radar-scaled healing-radius ring. |
 
 ### Event Controls
 
@@ -406,6 +437,9 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 - Supported enemies can also be surfaced through active ability-mark or smart-tag outline states when **Ability-marked enemies** is enabled.
 - **Tagged enemies only** and **Tagged items only** restrict visibility to actively tagged targets, and those tagged targets ignore the usual radar range limit while the tag remains active.
 - Supported item markers and enemy markers from enabled enemy categories can show vertical **up** and **down** arrows. They use the shared vertical arrow range and shared vertical hide threshold, while nearby highlight brackets and optional distance text remain item-focused presentation features.
+- Medicae Stations and deployed Ammo Crates can show their remaining team-resource charges as a small top-right number. If nearby radar-marker distance text is enabled for the same marker, the distance remains below the icon.
+- Medicae Stations use the normal green marker while powered and usable. Unpowered stations with a missing battery use a light grey marker. Depleted stations without remaining charges follow the game's normal marker visibility.
+- Deployed Medical Crates include a circular healing-radius indicator that scales with the configured radar range. The ring is hidden when the full radius would extend outside the radar bounds.
 - Event-related markers use elevated marker priority so event objectives stay visible when dense enemy markers are nearby.
 - **Expedition POIs**, **environment markers**, and **tech-remnant clusters** follow their own category-specific rules so outdated markers clear correctly and context-sensitive markers only appear when relevant.
 - Expedition POIs can be shown as **Icon only**, **Icon + Distance m**, or **Off** per category. Existing boolean settings migrate to **Icon only** for enabled markers and **Off** for disabled markers.
@@ -672,7 +706,7 @@ These markers are driven by expedition navigation data rather than standard pick
 
 | Preview | Marker | Notes |
 | --- | --- | --- |
-| <img src="doc/img/medicae_station.png"  width="80" alt="Medicae Station marker" /> | Medicae Station | Green medical interaction marker used for medicae stations and equivalent health-station interactions. |
+| <img src="doc/img/medicae_station.png"  width="80" alt="Medicae Station marker" /> | Medicae Station | Green medical interaction marker used for medicae stations and equivalent health-station interactions. Can show remaining healing charges as a top-right number. Unpowered stations with a missing battery use a light grey marker. |
 | <img src="doc/img/luggable_socket.png"  width="80" alt="Power Socket marker" /> | Power Socket | Yellow power socket marker for luggable socket targets. |
 | <img src="doc/img/heretic_idol.png"  width="80" alt="Heretic Idol marker" /> | Heretic Idol | Sickly green idol marker shown while the idol is still active. Active idols now appear reliably on the radar. |
 
@@ -680,8 +714,8 @@ These markers are driven by expedition navigation data rather than standard pick
 
 | Preview | Marker | Notes |
 | --- | --- | --- |
-| <img src="doc/img/pickup_ammo_cache_deployable.png"  width="80" alt="Deployable ammo crate marker" /> | Ammo Crate | Ammo-yellow deployable ammo crate marker. |
-| <img src="doc/img/pickup_medkit.png"  width="80" alt="Deployable medical crate marker" /> | Medical Crate | Green deployable medical crate marker. |
+| <img src="doc/img/pickup_ammo_cache_deployable.png"  width="80" alt="Deployable ammo crate marker" /> | Ammo Crate | Ammo-yellow deployable ammo crate marker. Can show remaining resupply charges as a top-right number. |
+| <img src="doc/img/pickup_medkit.png"  width="80" alt="Deployable medical crate marker" /> | Medical Crate | Green deployable medical crate marker with a circular healing-radius indicator that scales with radar range. |
 
 ### Event-Related Items
 
@@ -773,10 +807,13 @@ The remaining formerly white pickup icons were recolored so marker families read
 | Ammo Stash | `(255, 240, 210, 80)` | Large ammo pickup |
 | Large Ammunition Crate | `(255, 240, 210, 80)` | Expeditions ammo container |
 | Deployable Ammo Crate | `(255, 240, 210, 80)` | Team deployable ammo |
+| Deployed Medical Crate | `(255, 38, 205, 26)` | Team deployable healing |
+| Deployed Medical Crate Radius Ring | `(140, 38, 205, 26)` | Healing area indicator |
 | Grenade | `(255, 205, 156, 77)` | Grenade pickup |
 | Pocketable Ammo Crate | `(255, 240, 210, 80)` | Ammo pickup family tint |
 | Pocketable Medical Crate | `(255, 38, 205, 26)` | Medical supply tint |
 | Medicae Station | `(255, 38, 205, 26)` | Environment medical interaction |
+| Unpowered Medicae Station | `(255, 190, 190, 190)` | Missing battery / chargeable health station state |
 | Power Socket | `(255, 255, 245, 80)` | Environment power interaction |
 | Heretic Idol | `(255, 150, 190, 60)` | Environment idol marker |
 
