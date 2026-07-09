@@ -1952,6 +1952,11 @@ return {
                             default_value = true,
                         },
                         {
+                            setting_id = "show_medicae_station_charges",
+                            type = "checkbox",
+                            default_value = true,
+                        },
+                        {
                             setting_id = "show_luggable_socket",
                             type = "checkbox",
                             default_value = true,
@@ -1970,8 +1975,14 @@ return {
                     tab_overrides = TAB_OVERRIDES_PICKUPS,
                     sub_widgets = {
                         _icon_scale_slider("deployables_icon_scale"),
+                        _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_deployables"),
                         {
                             setting_id = "show_ammo_crate_deployable",
+                            type = "checkbox",
+                            default_value = true,
+                        },
+                        {
+                            setting_id = "show_ammo_crate_deployable_charges",
                             type = "checkbox",
                             default_value = true,
                         },

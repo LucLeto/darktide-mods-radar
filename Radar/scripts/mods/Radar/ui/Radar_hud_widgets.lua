@@ -49,6 +49,9 @@ local WidgetVisibility = {
     has_marked_ring = function(content)
         return content.marked_ring ~= nil and content.marked_ring ~= ""
     end,
+    has_radius_icon = function(content)
+        return content.radius_icon ~= nil and content.radius_icon ~= ""
+    end,
     has_background_material = function(content)
         return content.background_material ~= nil and content.background_material ~= ""
     end,
@@ -223,6 +226,20 @@ local function _marker_definition()
     return UIWidget.create_definition({
         {
             pass_type = "texture",
+            value_id = "radius_icon",
+            style_id = "radius_icon",
+            style = {
+                hdr = true,
+                vertical_alignment = "top",
+                horizontal_alignment = "left",
+                offset = { 0, 0, 8 },
+                size = { 16, 16 },
+                color = _white_widget_color(),
+            },
+            visibility_function = WidgetVisibility.has_radius_icon,
+        },
+        {
+            pass_type = "texture",
             value_id = "marked_ring",
             style_id = "marked_ring",
             style = {
@@ -346,6 +363,8 @@ local function _clear_overview_scale_widget(widget)
 end
 
 local function _clear_marker_widget(widget)
+    widget.content.radius_icon = nil
+    widget.content.radius_icon_size = nil
     widget.content.marked_ring = nil
     widget.content.marked_ring_slots_mask = nil
     widget.content.marked_ring_size = nil

@@ -15,6 +15,7 @@ local rawget = rawget
 local tonumber = tonumber
 local tostring = tostring
 local type = type
+local math_abs = math.abs
 local math_clamp = math.clamp
 local math_floor = math.floor
 local math_max = math.max
@@ -94,6 +95,9 @@ local EXPEDITION_OBJECTIVE_KINDS = {
 
 local EXPEDITION_MARKED_RING_MATERIAL = "content/ui/materials/backgrounds/scanner/scanner_map_marker"
 local EXPEDITION_MARKED_RING_SIZE_RATIO = 128 / 84
+local MEDICAL_CRATE_RADIUS_MATERIAL = "content/ui/materials/backgrounds/scanner/scanner_drill_wireframe_small"
+local MEDICAL_CRATE_HEALING_RADIUS = 4
+local MEDICAL_CRATE_RADIUS_WIDGET_COLOR = { 140, 38, 205, 26 }
 local PLAYER_BRIGHT_SLOT_COLORS = UISettings.player_bright_slot_colors or UISettings.player_slot_colors
 local PLAYER_COMPANION_VISUAL_CACHE = {}
 local PLAYER_COMPANION_PRESENTATIONS = {
@@ -154,6 +158,7 @@ local WHITE_WIDGET_COLOR = { 255, 255, 255, 255 }
 local RADAR_OUTLINE_WIDGET_COLOR = { 255, 213, 226, 206 }
 local RADAR_LEGEND_INDICATOR_WIDGET_COLOR = { 255, 213, 226, 206 }
 local MARKER_VALUE_TEXT_WIDGET_COLOR = { 255, 255, 225, 0 }
+local BOSS_DISTANCE_TEXT_WIDGET_COLOR = MARKER_VALUE_TEXT_WIDGET_COLOR
 local VERTICAL_ARROW_WIDGET_COLOR = { 255, 255, 255, 255 }
 local RADAR_ZOOM_INDICATOR_WIDGET_COLOR = { 210, 0, 255, 0 }
 
@@ -474,7 +479,7 @@ local PRESENTATIONS = {
     pickup_large_ammunition_crate = {
         icon = "content/ui/materials/hud/interactions/icons/pocketable_ammo",
         color = _widget_color(255, 240, 210, 80),
-        size = 14,
+        size = 18,
     },
     pickup_grenade = {
         icon = "content/ui/materials/hud/interactions/icons/grenade",
@@ -484,17 +489,20 @@ local PRESENTATIONS = {
     pickup_ammo_cache_deployable = {
         icon = "content/ui/materials/hud/interactions/icons/pocketable_ammo",
         color = _widget_color(255, 240, 210, 80),
-        size = 7,
+        size = 18,
     },
     pickup_medkit = {
         icon = "content/ui/materials/hud/interactions/icons/pocketable_medkit",
         color = _widget_color(255, 38, 205, 26),
-        size = 7,
+        size = 18,
     },
     medical_crate_deployable = {
         icon = "content/ui/materials/hud/interactions/icons/pocketable_medkit",
         color = _widget_color(255, 38, 205, 26),
-        size = 14,
+        radius_icon = MEDICAL_CRATE_RADIUS_MATERIAL,
+        radius_color = MEDICAL_CRATE_RADIUS_WIDGET_COLOR,
+        radius_meters = MEDICAL_CRATE_HEALING_RADIUS,
+        size = 18,
     },
     pickup_coordinates_paper = {
         icon = "content/ui/materials/icons/system/escape/credits",
@@ -725,6 +733,11 @@ local PRESENTATIONS = {
 }
 
 local MAX_RADAR_MARKERS = RadarHudWidgets.MAX_RADAR_MARKERS
+local HEALTH_STATION_MAX_CHARGES = 4
+local AMMO_CACHE_DEPLOYABLE_MAX_CHARGES = 4
+local AMMO_CACHE_DEPLOYABLE_PICKUP_NAME = "ammo_cache_deployable"
+local HEALTH_STATION_SYSTEM_NAME = "health_station_system"
+local GAME_OBJECT_FIELD_CHARGES = "charges"
 
 local function _normalized_player_display_style(value)
     value = tostring(value or "marked_icon")
@@ -757,9 +770,21 @@ local _draw_cache = {
     show_player_tag_distance_text = false,
     show_boss_distance_text = false,
     show_ability_marked_enemies = false,
+    show_medicae_station_charges = false,
+    show_ammo_crate_deployable_charges = false,
     show_nearby_highlight_distance_text_on_screen = false,
     nearby_highlight_range_sq = 0,
     nearby_highlight_thickness = 0,
+    script_unit_has_extension = nil,
+    health_station_max_charges = HEALTH_STATION_MAX_CHARGES,
+    game_session_manager = nil,
+    unit_spawner_manager = nil,
+    game_session_fn = nil,
+    game_object_id_fn = nil,
+    game_object_field = nil,
+    game_object_exists = nil,
+    marker_value_text_color = MARKER_VALUE_TEXT_WIDGET_COLOR,
+    marker_distance_text_color = BOSS_DISTANCE_TEXT_WIDGET_COLOR,
 }
 
 local function _build_draw_cache()
@@ -799,6 +824,8 @@ local function _build_draw_cache()
     draw_cache.show_expedition_loot_value_text = get_show_expedition_loot_value_text and
         get_show_expedition_loot_value_text(mod) or false
     draw_cache.show_boss_distance_text = get(mod, "show_boss_distance_text") == true
+    draw_cache.show_medicae_station_charges = get(mod, "show_medicae_station_charges") ~= false
+    draw_cache.show_ammo_crate_deployable_charges = get(mod, "show_ammo_crate_deployable_charges") ~= false
     draw_cache.show_nearby_highlight_distance_text_on_screen = show_nearby_highlight_distance_text_on_screen and
         show_nearby_highlight_distance_text_on_screen(mod) or false
     local nearby_highlight_range = get_nearby_highlight_range and get_nearby_highlight_range(mod) or 10
@@ -807,6 +834,42 @@ local function _build_draw_cache()
         get_nearby_highlight_thickness(mod) or 0
     draw_cache.slot_colors = UISettings and UISettings.player_slot_colors or nil
     draw_cache.debug_mode = get(mod, "debug_mode") == true
+    draw_cache.marker_value_text_color = _configured_radar_color("marker_value_text", MARKER_VALUE_TEXT_WIDGET_COLOR)
+    draw_cache.marker_distance_text_color = _configured_radar_color("marker_distance_text",
+        BOSS_DISTANCE_TEXT_WIDGET_COLOR)
+
+    draw_cache.script_unit_has_extension = nil
+    draw_cache.health_station_max_charges = HEALTH_STATION_MAX_CHARGES
+
+    if draw_cache.show_medicae_station_charges then
+        local script_unit = ScriptUnit
+        draw_cache.script_unit_has_extension = script_unit and script_unit.has_extension or nil
+
+        local health_station_class = rawget(_G, "HealthStationExtension")
+        draw_cache.health_station_max_charges = health_station_class and health_station_class.MAX_CHARGES or
+            HEALTH_STATION_MAX_CHARGES
+    end
+
+    draw_cache.game_session_manager = nil
+    draw_cache.unit_spawner_manager = nil
+    draw_cache.game_session_fn = nil
+    draw_cache.game_object_id_fn = nil
+    draw_cache.game_object_field = nil
+    draw_cache.game_object_exists = nil
+
+    if draw_cache.show_ammo_crate_deployable_charges then
+        local state = Managers and Managers.state
+        local game_session_manager = state and state.game_session or nil
+        local unit_spawner_manager = state and state.unit_spawner or nil
+        local game_session_api = GameSession
+
+        draw_cache.game_session_manager = game_session_manager
+        draw_cache.unit_spawner_manager = unit_spawner_manager
+        draw_cache.game_session_fn = game_session_manager and game_session_manager.game_session or nil
+        draw_cache.game_object_id_fn = unit_spawner_manager and unit_spawner_manager.game_object_id or nil
+        draw_cache.game_object_field = game_session_api and game_session_api.game_object_field or nil
+        draw_cache.game_object_exists = game_session_api and game_session_api.game_object_exists or nil
+    end
 
     return draw_cache
 end
@@ -1158,6 +1221,9 @@ local function _draw_marker_value_text(ui_renderer, value_text, x, y, z, icon_si
     if anchor == "top_center" then
         text_x = math_floor(x0 + half_icon_size - text_box_width * 0.5 + 0.5)
         text_y = math_floor(y0 - text_box_height - 2 + 0.5)
+    elseif anchor == "top_right" then
+        text_x = math_floor(x0 + icon_size - text_box_width * 0.5 + 0.5)
+        text_y = math_floor(y0 - text_box_height * 0.5 + 0.5)
     elseif anchor == "bottom_center" then
         text_x = math_floor(x0 + half_icon_size - text_box_width * 0.5 + 0.5)
         text_y = math_floor(y0 + icon_size + 2 + 0.5)
@@ -1461,13 +1527,17 @@ local function _apply_marker_marked_ring(widget, visual, icon_offset, icon_size,
     widget.content.marked_ring_size = marked_ring_size
 end
 
-local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, bracket_x, bracket_y, bracket_size)
+local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, bracket_x, bracket_y, bracket_size,
+                                    radius_icon_size)
     local icon_style = widget.style.icon
+    local radius_icon_style = widget.style.radius_icon
     local glyph_icon_style = widget.style.glyph_icon
     local overlay_icon_style = widget.style.overlay_icon
     local title_icon_style = widget.style.title_icon
     local arrow_icon_style = widget.style.arrow_icon
     local size = tonumber(icon_size) or _scaled_icon_size(visual and visual.size or 14)
+    local radius_icon = visual and visual.radius_icon or nil
+    local radius_size = radius_icon and tonumber(radius_icon_size) or nil
     local glyph_icon = visual and visual.glyph or ""
     local suppress_enemy_fill = target and target.disabled_by_mastiff == true
     local color = _copy_into_widget_color(_style_color_table(icon_style), visual and visual.color or nil)
@@ -1507,10 +1577,21 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
 
     local value_text = visual and visual.value_text or ""
 
-    if widget.content.glyph_icon ~= glyph_icon or widget.content.value_text ~= value_text then
+    if radius_size ~= nil then
+        radius_size = math_max(1, math_floor(radius_size + 0.5))
+    else
+        radius_icon = nil
+    end
+
+    if widget.content.radius_icon ~= radius_icon
+        or widget.content.radius_icon_size ~= radius_size
+        or widget.content.glyph_icon ~= glyph_icon
+        or widget.content.value_text ~= value_text then
         widget.dirty = true
     end
 
+    widget.content.radius_icon = radius_icon
+    widget.content.radius_icon_size = radius_size
     widget.content.icon = visual and visual.icon or nil
     widget.content.glyph_icon = glyph_icon
     widget.content.overlay_icon = visual and visual.overlay_icon or nil
@@ -1532,6 +1613,21 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
     icon_size_tbl[1] = size
     icon_size_tbl[2] = size
     icon_style.color = color
+
+    if radius_icon_style and radius_icon and radius_size then
+        local radius_offset = radius_icon_style.offset
+        local radius_size_tbl = radius_icon_style.size
+
+        radius_offset[1] = math_floor(icon_offset[1] + size * 0.5 - radius_size * 0.5 + 0.5)
+        radius_offset[2] = math_floor(icon_offset[2] + size * 0.5 - radius_size * 0.5 + 0.5)
+        radius_offset[3] = icon_z - 3
+        radius_size_tbl[1] = radius_size
+        radius_size_tbl[2] = radius_size
+        radius_icon_style.color = _copy_into_widget_color(
+            _style_color_table(radius_icon_style),
+            visual and visual.radius_color or visual and visual.color or nil
+        )
+    end
 
     if glyph_icon_style and glyph_icon ~= "" then
         local glyph_offset = glyph_icon_style.offset
@@ -1750,6 +1846,168 @@ local function _distance_text_from_squared_distance(distance_sq_3d, suffix)
     return math_floor(math_sqrt(distance_sq_3d) + 0.5) .. (suffix or " m")
 end
 
+local UNPOWERED_MEDICAE_STATION_WIDGET_COLOR = _widget_color(255, 190, 190, 190)
+
+local function _target_alive_unit(target)
+    local unit = target and target.unit or nil
+    local alive = ALIVE
+
+    if unit ~= nil and alive and alive[unit] then
+        return unit
+    end
+
+    return nil
+end
+
+local function _clamped_charge_text(charges, max_charges, fallback_max_charges)
+    local amount = tonumber(charges)
+
+    if not _is_finite_number(amount) then
+        return nil
+    end
+
+    local max_amount = tonumber(max_charges)
+
+    if not _is_finite_number(max_amount) then
+        max_amount = tonumber(fallback_max_charges) or HEALTH_STATION_MAX_CHARGES
+    end
+
+    if max_amount < 0 then
+        max_amount = 0
+    end
+
+    max_amount = math_floor(max_amount + 0.5)
+
+    if amount < 0 then
+        amount = 0
+    elseif amount > max_amount then
+        amount = max_amount
+    end
+
+    return tostring(math_floor(amount + 0.5))
+end
+
+local function _health_station_charge_state(has_extension, unit)
+    local health_station_extension = has_extension(unit, HEALTH_STATION_SYSTEM_NAME)
+    local charge_amount = health_station_extension and health_station_extension.charge_amount or nil
+
+    if type(charge_amount) ~= "function" then
+        return nil
+    end
+
+    local charges = charge_amount(health_station_extension)
+    local numeric_charges = tonumber(charges)
+    local battery_in_slot = health_station_extension.battery_in_slot
+    local is_unpowered = false
+
+    if numeric_charges and numeric_charges <= 0 and type(battery_in_slot) == "function" then
+        is_unpowered = battery_in_slot(health_station_extension) == false
+    end
+
+    return charges, is_unpowered
+end
+
+local function _health_station_charge_text(target, draw_cache)
+    local unit = _target_alive_unit(target)
+    local has_extension = draw_cache and draw_cache.script_unit_has_extension or nil
+
+    if not unit or not has_extension then
+        return nil
+    end
+
+    local ok_charges, charges, is_unpowered = pcall(_health_station_charge_state, has_extension, unit)
+    if not ok_charges then
+        return nil
+    end
+
+    local max_charges = draw_cache and draw_cache.health_station_max_charges or HEALTH_STATION_MAX_CHARGES
+
+    return _clamped_charge_text(charges, max_charges, HEALTH_STATION_MAX_CHARGES), is_unpowered
+end
+
+local function _target_pickup_name(target)
+    local meta = target and target.meta or nil
+    local pickup_name = meta and meta.pickup_name or nil
+
+    if pickup_name ~= nil then
+        return string_lower(tostring(pickup_name))
+    end
+
+    return nil
+end
+
+local function _unit_game_object_field(game_session_manager, unit_spawner_manager, game_session_fn, game_object_id_fn,
+                                       game_object_exists, game_object_field, unit, field_name)
+    local game_session = game_session_fn(game_session_manager)
+
+    if not game_session then
+        return nil
+    end
+
+    local game_object_id = game_object_id_fn(unit_spawner_manager, unit)
+
+    if game_object_id == nil then
+        return nil
+    end
+
+    if game_object_exists and not game_object_exists(game_session, game_object_id) then
+        return nil
+    end
+
+    return game_object_field(game_session, game_object_id, field_name)
+end
+
+local function _safe_unit_game_object_field(unit, field_name, draw_cache)
+    local game_session_manager = draw_cache and draw_cache.game_session_manager or nil
+    local unit_spawner_manager = draw_cache and draw_cache.unit_spawner_manager or nil
+    local game_session_fn = draw_cache and draw_cache.game_session_fn or nil
+    local game_object_id_fn = draw_cache and draw_cache.game_object_id_fn or nil
+    local game_object_field = draw_cache and draw_cache.game_object_field or nil
+    local game_object_exists = draw_cache and draw_cache.game_object_exists or nil
+
+    if not unit or not field_name or not game_session_fn or not game_object_id_fn or not game_object_field then
+        return nil
+    end
+
+    local ok_field, value = pcall(_unit_game_object_field, game_session_manager, unit_spawner_manager,
+        game_session_fn, game_object_id_fn, game_object_exists, game_object_field, unit, field_name)
+
+    return ok_field and value or nil
+end
+
+local function _ammo_cache_deployable_charge_text(target, draw_cache)
+    local pickup_name = _target_pickup_name(target)
+
+    if pickup_name ~= nil and pickup_name ~= AMMO_CACHE_DEPLOYABLE_PICKUP_NAME then
+        return nil
+    end
+
+    local unit = _target_alive_unit(target)
+    local charges = unit and _safe_unit_game_object_field(unit, GAME_OBJECT_FIELD_CHARGES, draw_cache) or nil
+
+    return _clamped_charge_text(charges, AMMO_CACHE_DEPLOYABLE_MAX_CHARGES, AMMO_CACHE_DEPLOYABLE_MAX_CHARGES)
+end
+
+local function _resource_charge_text(target, draw_cache)
+    local kind = target and target.kind or nil
+
+    if kind == "medicae_station" then
+        if draw_cache and draw_cache.show_medicae_station_charges == false then
+            return nil
+        end
+
+        return _health_station_charge_text(target, draw_cache)
+    elseif kind == "pickup_ammo_cache_deployable" then
+        if draw_cache and draw_cache.show_ammo_crate_deployable_charges == false then
+            return nil
+        end
+
+        return _ammo_cache_deployable_charge_text(target, draw_cache)
+    end
+
+    return nil
+end
+
 local function _cached_nearby_highlight_enabled(kind, draw_cache)
     if kind == nil then
         return false
@@ -1853,8 +2111,6 @@ local function _boss_distance_text(target, draw_cache)
     return _distance_text_from_squared_distance(target and target.distance_sq_3d, " m")
 end
 
-local BOSS_DISTANCE_TEXT_WIDGET_COLOR = MARKER_VALUE_TEXT_WIDGET_COLOR
-
 local function _player_smart_tag_distance_text(target, draw_cache)
     local show_distance_text = draw_cache and draw_cache.show_player_tag_distance_text or
         (mod:get("show_player_tag_distance_text") == true)
@@ -1942,6 +2198,43 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
             result.secondary_value_text = radar_distance_text
             result.secondary_value_text_color = _configured_radar_color("marker_distance_text",
                 BOSS_DISTANCE_TEXT_WIDGET_COLOR)
+            result.secondary_value_text_anchor = "bottom_center"
+            result.secondary_value_text_offset_y = -3
+        end
+
+        return result
+    end
+
+    local resource_charge_text, resource_unpowered = _resource_charge_text(target, draw_cache)
+
+    if resource_charge_text ~= nil then
+        local result = _copy_visual(visual)
+        local radar_distance_text = _radar_nearby_highlight_item_distance_text(target, draw_cache)
+        local marker_value_text_color = draw_cache and draw_cache.marker_value_text_color or
+            _configured_radar_color("marker_value_text", MARKER_VALUE_TEXT_WIDGET_COLOR)
+        local marker_distance_text_color = draw_cache and draw_cache.marker_distance_text_color or
+            _configured_radar_color("marker_distance_text", BOSS_DISTANCE_TEXT_WIDGET_COLOR)
+
+        if kind == "medicae_station" and resource_unpowered == true then
+            result.color = UNPOWERED_MEDICAE_STATION_WIDGET_COLOR
+
+            if radar_distance_text ~= nil then
+                result.value_text = radar_distance_text
+                result.value_text_color = marker_distance_text_color
+                result.value_text_anchor = "bottom_center"
+                result.value_text_offset_y = -3
+            end
+
+            return result
+        end
+
+        result.value_text = resource_charge_text
+        result.value_text_color = marker_value_text_color
+        result.value_text_anchor = "top_right"
+
+        if radar_distance_text ~= nil then
+            result.secondary_value_text = radar_distance_text
+            result.secondary_value_text_color = marker_distance_text_color
             result.secondary_value_text_anchor = "bottom_center"
             result.secondary_value_text_offset_y = -3
         end
@@ -2534,6 +2827,47 @@ local function _top_left_from_center(center_value, size)
     return snapped_center - math_floor(snapped_size * 0.5)
 end
 
+local function _target_radius_icon_size(_target, visual, projection_radius, radar_range, px, py, radar_style)
+    if not visual or visual.radius_icon == nil then
+        return nil
+    end
+
+    local radius_meters = tonumber(visual.radius_meters)
+    local range = tonumber(radar_range)
+    local projection = tonumber(projection_radius)
+    local marker_x = tonumber(px)
+    local marker_y = tonumber(py)
+
+    if not radius_meters or radius_meters <= 0
+        or not range or range <= 0
+        or not projection or projection <= 0
+        or not marker_x or not marker_y then
+        return nil
+    end
+
+    local radius_pixels = radius_meters * projection / range
+
+    if not _is_finite_number(radius_pixels) or radius_pixels <= 0 then
+        return nil
+    end
+
+    local available_radius = projection - radius_pixels
+
+    if available_radius < 0 then
+        return nil
+    end
+
+    if radar_style == "circle" then
+        if marker_x * marker_x + marker_y * marker_y > available_radius * available_radius then
+            return nil
+        end
+    elseif math_abs(marker_x) > available_radius or math_abs(marker_y) > available_radius then
+        return nil
+    end
+
+    return math_max(1, math_floor(radius_pixels * 2 + 0.5))
+end
+
 local function _draw_internal(self, ui_renderer, snapshot)
     RadarHudWidgets.ensure_overview_scale_widget(self)
     RadarHudWidgets.ensure_marker_widgets(self)
@@ -2550,6 +2884,7 @@ local function _draw_internal(self, ui_renderer, snapshot)
     local apply_marker_widget = _apply_marker_widget
     local target_visual = _target_visual
     local target_icon_size = _target_icon_size
+    local target_radius_icon_size = _target_radius_icon_size
     local target_bracket_size = _target_bracket_size
     local should_draw_marker_brackets = _should_draw_marker_brackets
     local draw_marker_brackets = RadarHudRenderer.draw_marker_brackets
@@ -2558,6 +2893,7 @@ local function _draw_internal(self, ui_renderer, snapshot)
     local top_left_from_center = _top_left_from_center
     local base_icon_z = z + 5
     local projection_radius = radius - 8
+    local radar_style = _current_radar_style()
     local live_camera_rotation = mod.get_hud_player_camera_rotation and mod:get_hud_player_camera_rotation(self)
     local projection_rotation = live_camera_rotation or (snapshot and snapshot.player_rotation) or nil
 
@@ -2625,6 +2961,8 @@ local function _draw_internal(self, ui_renderer, snapshot)
             if px and py then
                 local visual = target_visual(target, draw_cache)
                 local marker_size = target_icon_size(target, visual, draw_cache)
+                local radius_icon_size = visual and visual.radius_icon and
+                    target_radius_icon_size(target, visual, projection_radius, range, px, py, radar_style) or nil
                 local bracket_size = target_bracket_size(target, visual, draw_cache, marker_size)
                 local marker_center_x = snap_center(center_x + px)
                 local marker_center_y = snap_center(center_y + py)
@@ -2658,7 +2996,7 @@ local function _draw_internal(self, ui_renderer, snapshot)
                 end
 
                 apply_marker_widget(widget, visual, draw_x, draw_y, icon_z, target, marker_size,
-                    bracket_x, bracket_y, bracket_size)
+                    bracket_x, bracket_y, bracket_size, radius_icon_size)
 
                 if debug_mode then
                     _log_once(
