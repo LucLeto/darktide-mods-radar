@@ -218,8 +218,8 @@ return function(env)
     }
 
     local ICON_DISTANCE_MARKER_DISPLAY_MODE_DEFAULT_BY_SETTING = {
-        show_explosive_barrels = "off",
-        show_fire_barrels = "off",
+        show_explosive_barrels = "icon_only",
+        show_fire_barrels = "icon_only",
     }
 
     EXPEDITION_OBJECTIVE_ICON_DEFAULTS = {

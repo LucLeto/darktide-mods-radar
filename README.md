@@ -392,8 +392,8 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Option | What it controls |
 | --- | --- |
 | Environment | Group of toggles for interactable world objects and hazard barrels that are useful to spot on the radar. |
-| Explosive Barrels | Shows static explosive hazard barrels. Supports **Icon**, **Icon + Distance**, and **Off**; defaults to **Off**. |
-| Fire Barrels | Shows static fire/promethium hazard barrels. Supports **Icon**, **Icon + Distance**, and **Off**; defaults to **Off**. |
+| Explosive Barrels | Shows static explosive hazard barrels. Supports **Icon**, **Icon + Distance**, and **Off**; defaults to **Icon**. |
+| Fire Barrels | Shows static fire/promethium hazard barrels. Supports **Icon**, **Icon + Distance**, and **Off**; defaults to **Icon**. |
 | Medicae Station | Shows medicae station and equivalent health station interactions. |
 | Medicae Station Charges | Shows the remaining healing charges on visible Medicae Station markers. Unpowered stations with a missing battery use a light grey marker, while fully depleted stations follow the game's marker visibility. |
 | Power Socket | Shows luggable power socket targets. |
