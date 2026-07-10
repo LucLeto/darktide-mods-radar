@@ -2031,7 +2031,9 @@ return function(env)
                 if vertical_delta ~= nil then
                     local abs_vertical_delta = math_abs(vertical_delta)
 
-                    if not infinite_range and abs_vertical_delta >= item_vertical_hide_threshold then
+                    if not infinite_range
+                        and kind ~= "pickup_heretic_idol"
+                        and abs_vertical_delta >= item_vertical_hide_threshold then
                         return
                     end
 
