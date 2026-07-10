@@ -29,6 +29,7 @@ return function(env)
             t[k] = nil
         end
     end
+    local os_clock = os and os.clock or nil
 
 
     local function _reuse_or_new_table(t)
@@ -65,12 +66,18 @@ return function(env)
     local _scratch_seen_destructibles = {}
     local _scratch_seen_hazard_props = {}
     local _scratch_mastiff_disabled_enemy_units = {}
+    local _scratch_minion_kind_enabled_cache = {}
     local OVERVIEW_MIN_ZOOM_RANGE = 25
     local OVERVIEW_MAX_ZOOM_RANGE = 500
     local OVERVIEW_DEFAULT_ZOOM_RANGE = OVERVIEW_MAX_ZOOM_RANGE
     local OVERVIEW_SCREEN_PADDING = 80
     local OVERVIEW_RANGE_TRANSITION_DURATION = 0.28
     local OVERVIEW_RANGE_TRANSITION_SCAN_INTERVAL = 0.05
+    -- Static or slow-changing sources (interactables, chests, destructibles,
+    -- hazard props, deployed smart-tag targets) are rescanned less often than
+    -- enemies and players. Dead/despawned units are still removed at the fast
+    -- cadence by `_prune_units`.
+    local STATIC_SCAN_INTERVAL = SCAN_INTERVAL * 2
     local OVERVIEW_RESET_FIT_EDGE_FRACTION = 0.9
     local OVERVIEW_RADAR_MARKER_LIMIT = 300
     local NORMAL_RADAR_MIN_ZOOM_RANGE = 10
@@ -1355,6 +1362,8 @@ return function(env)
         local local_combat_ability_name = show_ability_marked_enemies
             and _safe_unit_ability_name(local_player_unit, "combat_ability")
             or nil
+        local kind_enabled_cache = _scratch_minion_kind_enabled_cache
+        table_clear(kind_enabled_cache)
 
         for unit, extension in pairs(unit_data_map) do
             if _safe_unit_alive(unit) and extension then
@@ -1367,6 +1376,15 @@ return function(env)
                         local resolved_breed_name = _resolve_enemy_breed_name(unit, breed_name)
                         local kind = _classify_enemy_from_breed(resolved_breed_name)
                         if kind and _is_trackable_unit_alive(unit, kind) then
+                            local kind_enabled = kind_enabled_cache[kind]
+
+                            if kind_enabled == nil then
+                                kind_enabled = _kind_enabled(kind)
+                                kind_enabled_cache[kind] = kind_enabled
+                            end
+
+                            -- Disabled enemy kinds skip tracking work entirely unless an
+                            -- ability mark can still surface the unit on the radar.
                             local ability_marker_names = nil
                             local ability_marker_bracket_color = nil
 
@@ -1380,12 +1398,16 @@ return function(env)
                                     )
                             end
 
-                            _track_unit(unit, kind, "unit_data_system", {
-                                breed_name = breed_name,
-                                marked_by_player_slot = track_enemy_tags and _marked_by_player_slot_for_unit(unit) or nil,
-                                ability_marked = ability_marker_names ~= nil,
-                                ability_outline_bracket_color = ability_marker_bracket_color,
-                            })
+                            if kind_enabled or ability_marker_names ~= nil then
+                                _track_unit(unit, kind, "unit_data_system", {
+                                    breed_name = breed_name,
+                                    marked_by_player_slot = track_enemy_tags and _marked_by_player_slot_for_unit(unit) or nil,
+                                    ability_marked = ability_marker_names ~= nil,
+                                    ability_outline_bracket_color = ability_marker_bracket_color,
+                                })
+                            else
+                                _clear_tracked_unit_from_source(unit, "unit_data_system")
+                            end
                         end
                     end
                 end
@@ -2210,7 +2232,7 @@ return function(env)
         mod._last_scan_signature = signature
 
         mod:info(string_format(
-            "Radar scan | enemies=%d players=%d ammo=%d crates=%d pocketables=%d materials=%d generic=%d tracked=%d radar_targets=%d mission=%s activity=%s mechanism=%s player_state=%s",
+            "Radar scan | enemies=%d players=%d ammo=%d crates=%d pocketables=%d materials=%d generic=%d tracked=%d radar_targets=%d scan_ms=%.2f mission=%s activity=%s mechanism=%s player_state=%s",
             counts.enemies,
             counts.players,
             counts.ammo,
@@ -2220,6 +2242,7 @@ return function(env)
             counts.generic,
             _table_size(mod._tracked_units),
             #mod._radar_targets,
+            tonumber(mod._last_scan_cost_ms) or -1,
             tostring(_safe_mission_name()),
             tostring(_safe_presence_activity()),
             tostring(_safe_mechanism_name()),
@@ -2232,6 +2255,9 @@ return function(env)
         mod._unclustered_radar_targets = {}
         mod._highlight_source_radar_targets = {}
         mod._next_scan_t = 0
+        mod._next_static_scan_t = 0
+        mod._last_scan_cost_ms = nil
+        _invalidate_runtime_state_cache()
         mod._tracked_units = {}
         mod._tracked_points = {}
         mod._logged_units = {}
@@ -2365,13 +2391,29 @@ return function(env)
 
         mod._next_scan_t = scan_clock + scan_interval
 
+        local static_scan_due = scan_clock >= (mod._next_static_scan_t or 0)
+
+        if static_scan_due then
+            mod._next_static_scan_t = scan_clock + STATIC_SCAN_INTERVAL
+        end
+
+        local scan_start_time = mod:get("debug_mode") == true and os_clock and os_clock() or nil
+
         _sync_expedition_item_state()
-        _scan_interactees()
-        _scan_chests()
+
+        if static_scan_due then
+            _scan_interactees()
+            _scan_chests()
+        end
+
         _scan_minions()
-        _scan_destructibles()
-        _scan_hazard_props()
-        _scan_smart_tag_targets()
+
+        if static_scan_due then
+            _scan_destructibles()
+            _scan_hazard_props()
+            _scan_smart_tag_targets()
+        end
+
         _refresh_player_units()
         _scan_expedition_objectives()
         _scan_player_tag_points()
@@ -2381,6 +2423,10 @@ return function(env)
         mod._screen_highlight_targets = _collect_screen_highlight_targets()
         mod._radar_snapshot = _collect_radar_snapshot()
 
+        if scan_start_time then
+            mod._last_scan_cost_ms = (os_clock() - scan_start_time) * 1000
+        end
+
         _debug_log_scan()
     end
 
@@ -2389,7 +2435,9 @@ return function(env)
             mod._gameplay_run = true
             _warm_radar_target_pool(512)
             mod._next_scan_t = 0
+            mod._next_static_scan_t = 0
             mod._last_update_t = nil
+            _invalidate_runtime_state_cache()
             return
         end
 
@@ -2679,16 +2727,8 @@ return function(env)
             return false
         end
 
-        if not _is_radar_keybind_runtime_allowed() then
-            return false
-        end
-
-        local should_capture = self:is_overview_mode_active() or self:is_normal_radar_zoom_modifier_active()
-
-        if not should_capture then
-            return false
-        end
-
+        -- This runs inside the InputService hooks for every action lookup, so
+        -- check the cheap captured-action table before touching runtime state.
         local capture_actions = self._overview_capture_actions
 
         if capture_actions == nil then
@@ -2696,7 +2736,15 @@ return function(env)
             capture_actions = self._overview_capture_actions
         end
 
-        return capture_actions[tostring(action_name)] == true
+        if capture_actions[tostring(action_name)] ~= true then
+            return false
+        end
+
+        if not (self:is_overview_mode_active() or self:is_normal_radar_zoom_modifier_active()) then
+            return false
+        end
+
+        return _is_radar_keybind_runtime_allowed()
     end
 
     function mod:get_player_display_style()

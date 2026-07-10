@@ -763,7 +763,11 @@ local function _normalized_enemy_display_style(value)
 end
 
 local _icon_scale_factor
+local DRAW_CACHE_REFRESH_INTERVAL = 1
 local _draw_cache = {
+    valid = false,
+    color_generation = nil,
+    next_refresh_t = nil,
     marker_display_mode_by_kind = {},
     expedition_marker_display_mode_by_kind = {},
     icon_distance_marker_display_mode_by_kind = {},
@@ -793,8 +797,22 @@ local _draw_cache = {
     marker_distance_text_color = BOSS_DISTANCE_TEXT_WIDGET_COLOR,
 }
 
-local function _build_draw_cache()
+local function _build_draw_cache(t)
     local draw_cache = _draw_cache
+    local color_generation = mod._radar_color_cache_generation
+    local now = tonumber(t)
+
+    -- Every value below derives from mod settings (any change bumps the color
+    -- cache generation) or from globals/managers that the timed refresh keeps
+    -- from going stale, so skip the rebuild on frames where nothing changed.
+    if draw_cache.valid
+        and draw_cache.color_generation == color_generation
+        and now ~= nil
+        and draw_cache.next_refresh_t ~= nil
+        and now < draw_cache.next_refresh_t then
+        return draw_cache
+    end
+
     local get = mod.get
     local get_show_player_center_dot = mod.get_show_player_center_dot
     local get_player_display_style = mod.get_player_display_style
@@ -877,6 +895,10 @@ local function _build_draw_cache()
         draw_cache.game_object_field = game_session_api and game_session_api.game_object_field or nil
         draw_cache.game_object_exists = game_session_api and game_session_api.game_object_exists or nil
     end
+
+    draw_cache.valid = true
+    draw_cache.color_generation = color_generation
+    draw_cache.next_refresh_t = now and (now + DRAW_CACHE_REFRESH_INTERVAL) or nil
 
     return draw_cache
 end
@@ -2923,11 +2945,11 @@ local function _target_radius_icon_size(_target, visual, projection_radius, rada
     return math_max(1, math_floor(radius_pixels * 2 + 0.5))
 end
 
-local function _draw_internal(self, ui_renderer, snapshot)
+local function _draw_internal(self, ui_renderer, snapshot, t)
     RadarHudWidgets.ensure_overview_scale_widget(self)
     RadarHudWidgets.ensure_marker_widgets(self)
 
-    local draw_cache = _build_draw_cache()
+    local draw_cache = _build_draw_cache(t)
     local marker_widgets = self._marker_widgets
     local size = mod:get_radar_size()
     local range = mod:get_radar_range()
@@ -3248,7 +3270,7 @@ HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input
 
     UIRenderer_begin_pass(ui_renderer, self._ui_scenegraph, input_service, dt, render_settings)
 
-    local ok, err = pcall(_draw_internal, self, ui_renderer, snapshot)
+    local ok, err = pcall(_draw_internal, self, ui_renderer, snapshot, t)
 
     UIRenderer_end_pass(ui_renderer)
 
