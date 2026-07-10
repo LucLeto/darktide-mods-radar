@@ -600,8 +600,45 @@ return function(env)
         return _is_radar_enabled_for_current_mode(mission_name, mechanism_name)
     end
 
+    local _runtime_state_cached_t = nil
+    local _runtime_state_allowed = false
+    local _runtime_state_reason = nil
+    local _runtime_state_mission_name = nil
+    local _runtime_state_activity = nil
+    local _runtime_state_mechanism_name = nil
+    local _runtime_state_player_unit = nil
+    local _runtime_state_player_pos = nil
+
+    function _invalidate_runtime_state_cache()
+        _runtime_state_cached_t = nil
+    end
+
+    local function _store_runtime_state(allowed, reason, gameplay_t, mission_name, activity, mechanism_name,
+                                        player_unit, player_pos)
+        _runtime_state_cached_t = gameplay_t
+        _runtime_state_allowed = allowed
+        _runtime_state_reason = reason
+        _runtime_state_mission_name = mission_name
+        _runtime_state_activity = activity
+        _runtime_state_mechanism_name = mechanism_name
+        _runtime_state_player_unit = player_unit
+        _runtime_state_player_pos = player_pos
+
+        return allowed, reason, gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+    end
+
     function _get_runtime_state()
         local gameplay_t = _safe_gameplay_time()
+
+        -- The runtime state is queried several times per frame (scan hook, DMF
+        -- update and HUD draw); reuse the result computed for the current
+        -- gameplay tick instead of re-deriving it from the managers each time.
+        if gameplay_t ~= nil and gameplay_t == _runtime_state_cached_t then
+            return _runtime_state_allowed, _runtime_state_reason, gameplay_t, _runtime_state_mission_name,
+                _runtime_state_activity, _runtime_state_mechanism_name, _runtime_state_player_unit,
+                _runtime_state_player_pos
+        end
+
         local mission_name = _safe_mission_name()
         local activity = _safe_presence_activity()
         local mechanism_name = _safe_mechanism_name()
@@ -609,54 +646,62 @@ return function(env)
         local player_pos = _safe_unit_position(player_unit)
 
         if activity == "loading" then
-            return false, "loading", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+            return _store_runtime_state(false, "loading", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
         end
 
         if mechanism_name == "left_session" or mechanism_name == "hub" then
-            return false, "hub_mechanism", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+            return _store_runtime_state(false, "hub_mechanism", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
         end
 
         if not mission_name then
-            return false, "no_mission", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+            return _store_runtime_state(false, "no_mission", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
         end
 
         if mission_name == "hub_ship" then
-            return false, "hub_mission", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+            return _store_runtime_state(false, "hub_mission", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
         end
 
         if mechanism_name == "onboarding" and mission_name ~= "tg_shooting_range" then
-            return false, "onboarding_non_psykhanium", gameplay_t, mission_name, activity, mechanism_name, player_unit,
-                player_pos
+            return _store_runtime_state(false, "onboarding_non_psykhanium", gameplay_t, mission_name, activity,
+                mechanism_name, player_unit, player_pos)
         end
 
         if _is_hub_runtime(mission_name, activity, mechanism_name) then
-            return false, "hub_runtime", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+            return _store_runtime_state(false, "hub_runtime", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
         end
 
         if not mod:is_radar_runtime_game_mode_allowed() then
-            return false, "game_mode_disabled", gameplay_t, mission_name, activity, mechanism_name, player_unit,
-                player_pos
+            return _store_runtime_state(false, "game_mode_disabled", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
         end
 
         if _is_local_player_using_foreign_unit(player_unit) then
-            return false, "spectating_teammate", gameplay_t, mission_name, activity, mechanism_name, player_unit,
-                player_pos
+            return _store_runtime_state(false, "spectating_teammate", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
         end
 
         if not _is_player_unit_alive(player_unit) then
-            return false, "player_not_alive", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+            return _store_runtime_state(false, "player_not_alive", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
         end
 
         if _is_player_unit_captured(player_unit) then
-            return false, "player_captured", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+            return _store_runtime_state(false, "player_captured", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
         end
 
         if not player_pos then
-            return false, "no_player_position", gameplay_t, mission_name, activity, mechanism_name, player_unit,
-                player_pos
+            return _store_runtime_state(false, "no_player_position", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
         end
 
-        return true, "ok", gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+        return _store_runtime_state(true, "ok", gameplay_t, mission_name, activity, mechanism_name, player_unit,
+            player_pos)
     end
 
     function _is_allowed_runtime()
@@ -1015,36 +1060,45 @@ return function(env)
         return kind, meta
     end
 
+    -- Breed classification is a pure function of static tables, so cache the
+    -- result per breed name (`false` marks breeds without a radar kind) to keep
+    -- the string scans out of the per-minion scan loop.
+    local _enemy_kind_by_breed_cache = {}
+
     function _classify_enemy_from_breed(breed_name)
-        local key = string_lower(breed_name or "")
+        local cache_key = breed_name or ""
+        local cached = _enemy_kind_by_breed_cache[cache_key]
+
+        if cached ~= nil then
+            return cached or nil
+        end
+
+        local key = string_lower(cache_key)
+        local kind = nil
 
         if key == "chaos_daemonhost" or key == "chaos_mutator_daemonhost" or string_find(key, "daemonhost", 1, true) then
-            return "enemy_daemonhost"
-        end
-
-        if TWIN_BREEDS[key] or string_find(key, "twin_captain", 1, true) then
-            return "enemy_karnak_twin"
-        end
-
-        if CAPTAIN_BREEDS[key] or string_find(key, "captain", 1, true) then
-            return "enemy_captain"
-        end
-
-        if MONSTROSITY_BREEDS[key]
+            kind = "enemy_daemonhost"
+        elseif TWIN_BREEDS[key] or string_find(key, "twin_captain", 1, true) then
+            kind = "enemy_karnak_twin"
+        elseif CAPTAIN_BREEDS[key] or string_find(key, "captain", 1, true) then
+            kind = "enemy_captain"
+        elseif MONSTROSITY_BREEDS[key]
             or string_find(key, "beast_of_nurgle", 1, true)
             or string_find(key, "plague_ogryn", 1, true)
             or string_find(key, "chaos_spawn", 1, true)
             or string_find(key, "houndmaster", 1, true) then
-            return "enemy_monstrosity"
+            kind = "enemy_monstrosity"
+        else
+            local definition = ENEMY_RADAR_DEFINITIONS_BY_BREED[key]
+
+            if definition then
+                kind = definition.kind
+            end
         end
 
-        local definition = ENEMY_RADAR_DEFINITIONS_BY_BREED[key]
+        _enemy_kind_by_breed_cache[cache_key] = kind or false
 
-        if definition then
-            return definition.kind
-        end
-
-        return nil
+        return kind
     end
 
     function _track_unit(unit, kind, source, meta)
