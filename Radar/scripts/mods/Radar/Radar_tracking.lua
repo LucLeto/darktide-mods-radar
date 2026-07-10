@@ -2430,11 +2430,11 @@ return function(env)
             _scan_smart_tag_targets()
             _sync_martyr_skull_riddle_solve_state()
             _debug_log_martyr_skull_door_candidates()
-            _scan_martyr_skull_riddle_coordinate_fallbacks()
         end
 
         _refresh_player_units()
         _scan_expedition_objectives()
+        _scan_martyr_skull_riddle_coordinate_fallbacks()
         _scan_player_tag_points()
         _prune_units()
 
