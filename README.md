@@ -298,7 +298,7 @@ Each major option group now includes an **Icon size (%)** slider. These sliders 
 | Expeditions POI | Sites of Interest, sanctuaries, harvesters, main objective, extraction, and arrival markers |
 | Expeditions-Specific Items | Salvage, Tech-Remnants, expedition pocketables, and related expedition pickups |
 | Martyr's Skull Items | Martyr's Skull markers and related power cell markers |
-| Environment | Medicae Station, Power Socket, and Heretic Idol |
+| Environment | Medicae Station, Power Socket, Heretic Idol, Explosive Barrels, and Fire Barrels |
 | Deployed Items | Ammo Crate and Medical Crate deployables |
 | Enemies | High-priority boss markers |
 | Enemy Boss | Daemonhost, Monstrosities, Captains, Karnak Twins |
@@ -361,7 +361,7 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Secondary Objective Items | Highlights nearby grimoires and scriptures. |
 | Expeditions-Specific Items | Highlights nearby salvage, tech-remnants, expedition pocketables, and related expedition pickups. |
 | Martyr's Skull Items | Highlights nearby martyr's skull items and their orange power cell markers. |
-| Environment | Highlights nearby medicae stations, power sockets, and heretic idols. |
+| Environment | Highlights nearby medicae stations, power sockets, heretic idols, and hazard barrels. |
 | Deployed Items | Adds nearby radar-marker distance text for deployed ammo and medical crates. |
 | Event-Related Items | Highlights nearby event pickups and event objectives, including Dark Rites totems and servo skulls. |
 
@@ -391,7 +391,9 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 
 | Option | What it controls |
 | --- | --- |
-| Environment | Group of toggles for interactable world objects that are useful to spot on the radar. |
+| Environment | Group of toggles for interactable world objects and hazard barrels that are useful to spot on the radar. |
+| Explosive Barrels | Shows static explosive hazard barrels. Supports **Icon**, **Icon + Distance**, and **Off**; defaults to **Off**. |
+| Fire Barrels | Shows static fire/promethium hazard barrels. Supports **Icon**, **Icon + Distance**, and **Off**; defaults to **Off**. |
 | Medicae Station | Shows medicae station and equivalent health station interactions. |
 | Medicae Station Charges | Shows the remaining healing charges on visible Medicae Station markers. Unpowered stations with a missing battery use a light grey marker, while fully depleted stations follow the game's marker visibility. |
 | Power Socket | Shows luggable power socket targets. |
@@ -709,6 +711,8 @@ These markers are driven by expedition navigation data rather than standard pick
 | <img src="doc/img/medicae_station.png"  width="80" alt="Medicae Station marker" /> | Medicae Station | Green medical interaction marker used for medicae stations and equivalent health-station interactions. Can show remaining healing charges as a top-right number. Unpowered stations with a missing battery use a light grey marker. |
 | <img src="doc/img/luggable_socket.png"  width="80" alt="Power Socket marker" /> | Power Socket | Yellow power socket marker for luggable socket targets. |
 | <img src="doc/img/heretic_idol.png"  width="80" alt="Heretic Idol marker" /> | Heretic Idol | Sickly green idol marker shown while the idol is still active. Active idols now appear reliably on the radar. |
+| <img src="doc/img/hazard_explosive_barrel.png"  width="80" alt="Explosive Barrel marker" /> | Explosive Barrel | Tan hazard marker for static explosive barrels. Supports **Icon**, **Icon + Distance**, and **Off**. |
+| <img src="doc/img/hazard_fire_barrel.png"  width="80" alt="Fire Barrel marker" /> | Fire Barrel | Orange hazard marker for static fire/promethium barrels. Supports **Icon**, **Icon + Distance**, and **Off**. |
 
 ### Deployed Items
 
@@ -816,6 +820,8 @@ The remaining formerly white pickup icons were recolored so marker families read
 | Unpowered Medicae Station | `(255, 190, 190, 190)` | Missing battery / chargeable health station state |
 | Power Socket | `(255, 255, 245, 80)` | Environment power interaction |
 | Heretic Idol | `(255, 150, 190, 60)` | Environment idol marker |
+| Explosive Barrel | `(255, 205, 156, 77)` | Environment explosive hazard marker |
+| Fire Barrel | `(255, 255, 110, 0)` | Environment fire hazard marker |
 
 ### Other recolored template families
 
@@ -825,7 +831,7 @@ The remaining formerly white pickup icons were recolored so marker families read
 | `party_syringe` family | Concentration, Med, Combat, Celerity Stimms | `(255, 230, 192, 13)`, `(255, 38, 205, 26)`, `(255, 205, 51, 26)`, `(255, 0, 127, 218)` |
 | Enemy marked backgrounds and brackets | Marked enemy presentations, including bosses and per-enemy radar markers | `(220, 255, 0, 0)` |
 | `content/ui/materials/icons/item_types/devices` | Mortis Relic | `(255, 110, 95, 125)` |
-| `content/ui/materials/hud/interactions/icons/barrel_explosive` | Promethium Barrel | `(255, 255, 110, 0)` |
+| `content/ui/materials/hud/interactions/icons/barrel_explosive` | Promethium Barrel, Explosive Barrel, Fire Barrel | `(255, 255, 110, 0)`, `(255, 205, 156, 77)`, `(255, 255, 110, 0)` |
 | `content/ui/materials/icons/circumstances/live_event_01` | Holy Relics icon mode | `(255, 192, 160, 0)` |
 | `content/ui/materials/icons/circumstances/live_event_01` | Heretical Artifacts icon mode | `(255, 150, 190, 60)` |
 | `content/ui/materials/hud/interactions/icons/enemy` | Martyr's Skull, Tainted Skulls icon mode | `(255, 255, 215, 0)`, `(255, 150, 190, 60)` |
