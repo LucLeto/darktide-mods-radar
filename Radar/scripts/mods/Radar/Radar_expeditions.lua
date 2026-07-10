@@ -714,6 +714,7 @@ return function(env)
 
     function _kind_enabled(kind)
         local get_enemy_marker_mode = mod.get_enemy_marker_mode
+        local get_icon_distance_marker_display_mode = mod.get_icon_distance_marker_display_mode
         local get_expedition_marker_display_mode = mod.get_expedition_marker_display_mode
         local get_marker_display_mode = mod.get_marker_display_mode
         local get_setting = mod.get
@@ -738,6 +739,12 @@ return function(env)
 
         if enemy_display_mode ~= nil then
             return enemy_display_mode ~= "off"
+        end
+
+        local icon_distance_display_mode = get_icon_distance_marker_display_mode and
+            get_icon_distance_marker_display_mode(mod, kind) or nil
+        if icon_distance_display_mode ~= nil then
+            return icon_distance_display_mode ~= "off"
         end
 
         local expedition_display_mode = get_expedition_marker_display_mode and
@@ -1054,7 +1061,9 @@ return function(env)
 
         local existing = tracked_units[unit]
         local now = _safe_gameplay_time() or 0
-        local position = _safe_unit_position(unit)
+        local position = meta and _copy_vector3(meta.position) or nil
+
+        position = position or _safe_unit_position(unit)
 
         if existing then
             existing.kind = kind

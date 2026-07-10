@@ -554,6 +554,16 @@ local PRESENTATIONS = {
         color = _widget_color(255, 255, 110, 0),
         size = 14,
     },
+    hazard_explosive_barrel = {
+        icon = "content/ui/materials/hud/interactions/icons/barrel_explosive",
+        color = _widget_color(255, 205, 156, 77),
+        size = 14,
+    },
+    hazard_fire_barrel = {
+        icon = "content/ui/materials/hud/interactions/icons/barrel_explosive",
+        color = _widget_color(255, 255, 110, 0),
+        size = 14,
+    },
     pickup_unknown = {
         icon = "content/ui/materials/icons/traits/empty",
         size = 14,
@@ -756,6 +766,7 @@ local _icon_scale_factor
 local _draw_cache = {
     marker_display_mode_by_kind = {},
     expedition_marker_display_mode_by_kind = {},
+    icon_distance_marker_display_mode_by_kind = {},
     enemy_marker_mode_by_kind = {},
     marker_scale_by_group = {},
     enemy_scale_by_kind = {},
@@ -796,6 +807,7 @@ local function _build_draw_cache()
 
     table_clear(draw_cache.marker_display_mode_by_kind)
     table_clear(draw_cache.expedition_marker_display_mode_by_kind)
+    table_clear(draw_cache.icon_distance_marker_display_mode_by_kind)
     table_clear(draw_cache.enemy_marker_mode_by_kind)
     table_clear(draw_cache.marker_scale_by_group)
     table_clear(draw_cache.enemy_scale_by_kind)
@@ -2157,6 +2169,41 @@ local function _expedition_marker_distance_text(target, draw_cache)
     return _distance_text_from_squared_distance(target and target.distance_sq_3d, " m")
 end
 
+local function _cached_icon_distance_marker_display_mode(kind, draw_cache)
+    if kind == nil then
+        return nil
+    end
+
+    local cache = draw_cache and draw_cache.icon_distance_marker_display_mode_by_kind or nil
+
+    if cache then
+        local cached = cache[kind]
+
+        if cached ~= nil then
+            return cached
+        end
+    end
+
+    local get_icon_distance_marker_display_mode = mod.get_icon_distance_marker_display_mode
+    local mode = get_icon_distance_marker_display_mode and get_icon_distance_marker_display_mode(mod, kind) or nil
+
+    if cache then
+        cache[kind] = mode or false
+    end
+
+    return mode
+end
+
+local function _icon_distance_marker_distance_text(target, draw_cache)
+    local kind = target and target.kind or nil
+
+    if _cached_icon_distance_marker_display_mode(kind, draw_cache) ~= "icon_distance" then
+        return nil
+    end
+
+    return _distance_text_from_squared_distance(target and target.distance_sq_3d, " m")
+end
+
 local function _apply_target_specific_visual_overrides(target, visual, draw_cache)
     if not visual then
         return nil
@@ -2268,6 +2315,19 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
     if expedition_marker_distance_text ~= nil then
         local result = _copy_visual(visual)
         result.value_text = expedition_marker_distance_text
+        result.value_text_color = _configured_radar_color("marker_distance_text", BOSS_DISTANCE_TEXT_WIDGET_COLOR)
+        result.value_text_anchor = "bottom_center"
+        result.value_text_offset_x = 3
+        result.value_text_offset_y = -3
+
+        return result
+    end
+
+    local icon_distance_marker_distance_text = _icon_distance_marker_distance_text(target, draw_cache)
+
+    if icon_distance_marker_distance_text ~= nil then
+        local result = _copy_visual(visual)
+        result.value_text = icon_distance_marker_distance_text
         result.value_text_color = _configured_radar_color("marker_distance_text", BOSS_DISTANCE_TEXT_WIDGET_COLOR)
         result.value_text_anchor = "bottom_center"
         result.value_text_offset_x = 3

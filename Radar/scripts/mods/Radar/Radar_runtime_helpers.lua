@@ -1204,6 +1204,8 @@ return function(env)
         luggable_data_reliquary = 0.18,
         pickup_large_ammunition_crate = 0.1,
         luggable_promethium_barrel = 0.12,
+        hazard_explosive_barrel = 0.12,
+        hazard_fire_barrel = 0.12,
         pocketable_anti_rad_stimm = 0.08,
         pocketable_airstrike = 0.08,
         pocketable_artillery_strike = 0.08,

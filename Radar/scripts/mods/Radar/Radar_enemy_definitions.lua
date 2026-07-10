@@ -48,6 +48,8 @@ return function(env)
         luggable_data_reliquary = { 255, 192, 160, 0 },
         pickup_large_ammunition_crate = { 255, 240, 210, 80 },
         luggable_promethium_barrel = { 255, 255, 110, 0 },
+        hazard_explosive_barrel = { 255, 205, 156, 77 },
+        hazard_fire_barrel = { 255, 255, 110, 0 },
         pocketable_anti_rad_stimm = DEFAULT_COLOR_ARRAY_WHITE,
         pocketable_airstrike = { 255, 95, 125, 70 },
         pocketable_artillery_strike = { 255, 95, 125, 70 },
@@ -152,6 +154,8 @@ return function(env)
         luggable_data_reliquary = "show_data_reliquaries",
         pickup_large_ammunition_crate = "show_large_ammunition_crate",
         luggable_promethium_barrel = "show_promethium_barrel",
+        hazard_explosive_barrel = "show_explosive_barrels",
+        hazard_fire_barrel = "show_fire_barrels",
         pocketable_anti_rad_stimm = "show_anti_rad_stimm",
         pocketable_ammo_crate = "show_pocketable_ammo_crate",
         pocketable_breach_charge = "show_pocketable_breach_charge",
@@ -203,6 +207,16 @@ return function(env)
         show_expedition_objective_extraction = "icon_only",
         show_expedition_objective_arrival = "icon_only",
         show_expedition_loot_converter = "icon_only",
+    }
+
+    local ICON_DISTANCE_MARKER_DISPLAY_MODE_KIND_TO_SETTING = {
+        hazard_explosive_barrel = "show_explosive_barrels",
+        hazard_fire_barrel = "show_fire_barrels",
+    }
+
+    local ICON_DISTANCE_MARKER_DISPLAY_MODE_DEFAULT_BY_SETTING = {
+        show_explosive_barrels = "off",
+        show_fire_barrels = "off",
     }
 
     EXPEDITION_OBJECTIVE_ICON_DEFAULTS = {
@@ -291,6 +305,8 @@ return function(env)
         medicae_station = "environment_group",
         luggable_socket = "environment_group",
         pickup_heretic_idol = "environment_group",
+        hazard_explosive_barrel = "environment_group",
+        hazard_fire_barrel = "environment_group",
         pickup_ammo_cache_deployable = "deployables_group",
         medical_crate_deployable = "deployables_group",
         player_teammate = "players_group",
@@ -1128,6 +1144,10 @@ return function(env)
             return value
         end
 
+        if value == "icon" then
+            return "icon_only"
+        end
+
         if value == false then
             return "off"
         end
@@ -1332,6 +1352,18 @@ return function(env)
         end
 
         return _normalize_marker_display_mode(mod:get(setting_id), ARTWORK_MODE_DEFAULT_BY_SETTING[setting_id])
+    end
+
+    function mod:get_icon_distance_marker_display_mode(kind)
+        local setting_id = ICON_DISTANCE_MARKER_DISPLAY_MODE_KIND_TO_SETTING[kind]
+        if not setting_id then
+            return nil
+        end
+
+        return _normalize_expedition_marker_display_mode(
+            mod:get(setting_id),
+            ICON_DISTANCE_MARKER_DISPLAY_MODE_DEFAULT_BY_SETTING[setting_id]
+        )
     end
 
     function mod:get_expedition_marker_display_mode(kind)

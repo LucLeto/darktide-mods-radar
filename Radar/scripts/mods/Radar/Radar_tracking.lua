@@ -63,6 +63,7 @@ return function(env)
     local _scratch_seen_interactees = {}
     local _scratch_seen_chests = {}
     local _scratch_seen_destructibles = {}
+    local _scratch_seen_hazard_props = {}
     local _scratch_mastiff_disabled_enemy_units = {}
     local OVERVIEW_MIN_ZOOM_RANGE = 25
     local OVERVIEW_MAX_ZOOM_RANGE = 500
@@ -1191,6 +1192,156 @@ return function(env)
         end
     end
 
+    local function _safe_hazard_prop_extension_map()
+        local hazard_prop_system = _safe_extension_system("hazard_prop_system")
+        if not hazard_prop_system then
+            return nil
+        end
+
+        local unit_to_extension_map = hazard_prop_system.unit_to_extension_map
+
+        if type(unit_to_extension_map) == "function" then
+            local ok_map, map = pcall(unit_to_extension_map, hazard_prop_system)
+
+            if ok_map and type(map) == "table" then
+                return map
+            end
+        end
+
+        if type(hazard_prop_system) == "table" then
+            local map = rawget(hazard_prop_system, "_unit_to_extension_map")
+
+            if type(map) == "table" then
+                return map
+            end
+        end
+
+        return nil
+    end
+
+    local function _safe_hazard_prop_content(extension)
+        local content_fn = extension and extension.content
+
+        if type(content_fn) ~= "function" then
+            return nil
+        end
+
+        local ok_content, content = pcall(content_fn, extension)
+
+        return ok_content and content or nil
+    end
+
+    local function _safe_hazard_prop_state(extension)
+        local current_state_fn = extension and extension.current_state
+
+        if type(current_state_fn) ~= "function" then
+            return nil
+        end
+
+        local ok_state, state = pcall(current_state_fn, extension)
+
+        return ok_state and state or nil
+    end
+
+    local function _safe_hazard_prop_broadphase_position(extension)
+        local broadphase_position_fn = extension and extension.broadphase_position
+
+        if type(broadphase_position_fn) ~= "function" then
+            return nil
+        end
+
+        local ok_position, position = pcall(broadphase_position_fn, extension)
+
+        return ok_position and _copy_vector3(position) or nil
+    end
+
+    local function _hazard_prop_position(unit, extension)
+        return _safe_unit_node_position(unit, "c_explosion")
+            or _safe_hazard_prop_broadphase_position(extension)
+            or _safe_unit_position(unit)
+    end
+
+    local function _hazard_prop_state_is_broken(state)
+        local hazard_state = rawget(_G, "hazard_state")
+
+        if type(hazard_state) == "table" and hazard_state.broken ~= nil and state == hazard_state.broken then
+            return true
+        end
+
+        return _safe_lower_string(state) == "broken"
+    end
+
+    local function _hazard_prop_kind_from_content(content)
+        local hazard_content = rawget(_G, "hazard_content")
+
+        if type(hazard_content) == "table" then
+            if hazard_content.explosion ~= nil and content == hazard_content.explosion then
+                return "hazard_explosive_barrel"
+            end
+
+            if hazard_content.fire ~= nil and content == hazard_content.fire then
+                return "hazard_fire_barrel"
+            end
+        end
+
+        local content_key = _safe_lower_string(content)
+
+        if content_key == "explosion" then
+            return "hazard_explosive_barrel"
+        elseif content_key == "fire" then
+            return "hazard_fire_barrel"
+        end
+
+        return nil
+    end
+
+    local function _scan_hazard_props()
+        local hazard_prop_map = _safe_hazard_prop_extension_map()
+        if not hazard_prop_map then
+            return
+        end
+
+        local tracked_units = mod._tracked_units
+        local seen_hazard_props = _scratch_seen_hazard_props
+        local track_item_tags = mod:get_show_only_tagged_items()
+        table_clear(seen_hazard_props)
+
+        for unit, extension in pairs(hazard_prop_map) do
+            if _safe_unit_alive(unit) and extension then
+                seen_hazard_props[unit] = true
+
+                local state = _safe_hazard_prop_state(extension)
+
+                if not _hazard_prop_state_is_broken(state) then
+                    local content = _safe_hazard_prop_content(extension)
+                    local kind = _hazard_prop_kind_from_content(content)
+                    local position = kind and _hazard_prop_position(unit, extension) or nil
+
+                    if position then
+                        _track_unit(unit, kind, "hazard_prop_system", {
+                            content = content,
+                            state = state,
+                            position = position,
+                            marked_by_player_slot = track_item_tags and _marked_by_player_slot_for_unit(unit) or nil,
+                        })
+                    else
+                        _clear_tracked_unit_from_source(unit, "hazard_prop_system")
+                    end
+                else
+                    _clear_tracked_unit_from_source(unit, "hazard_prop_system")
+                end
+            else
+                _clear_tracked_unit_from_source(unit, "hazard_prop_system")
+            end
+        end
+
+        for unit, data in pairs(tracked_units) do
+            if data and data.source == "hazard_prop_system" and not seen_hazard_props[unit] then
+                tracked_units[unit] = nil
+            end
+        end
+    end
+
     local function _scan_minions()
         local unit_data_map = _safe_unit_to_extension_map("unit_data_system")
         if not unit_data_map then
@@ -1348,7 +1499,10 @@ return function(env)
                 if last_seen_t and now - last_seen_t > 2.5 then
                     tracked_units[unit] = nil
                 else
-                    local position = _safe_unit_position(unit) or data.position
+                    local meta = data and data.meta
+                    local position = meta and _copy_vector3(meta.position) or nil
+
+                    position = position or _safe_unit_position(unit) or data.position
 
                     if position then
                         data.position = position
@@ -2214,6 +2368,7 @@ return function(env)
         _scan_chests()
         _scan_minions()
         _scan_destructibles()
+        _scan_hazard_props()
         _scan_smart_tag_targets()
         _refresh_player_units()
         _scan_expedition_objectives()
