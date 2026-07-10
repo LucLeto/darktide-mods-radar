@@ -2,19 +2,14 @@
 
 Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide**. It is built to surface the targets that matter most during live missions, nearby pickups, objective items, deployed support tools, environment interactables, expedition points of interest, teammates and their companions, player smart tags, tagged targets, supported ability-outlined enemies, and high-priority enemies, while keeping the presentation configurable from the mod options menu. A centered overview mode can also be toggled during missions when you need a wider tactical read.
 
-## What's new in 2.4.0
+## What's new in 2.5.0
 
-- Updated the Expedition UI package preload for **Darktide 1.12.0**, removing the startup error caused by the deleted `expedition_play_view` package.
-- Added the **Skitarii** teammate class icon.
-- Added owner-colored player companion markers for the Arbitrator's **Cyber Mastiff** and the Skitarii's **Servo Skulls**, including Medicae, Purgator/Flamer, and active hacking annotations.
-- Added **Dreg Vanguard** and **Scab Vanguard** enemy markers with independent **Icon only**, **Marked icon**, and **Off** settings under Common & Shooters.
-- Added **Heretical Artifacts** live-event pickups with separate small, medium, and large artwork, a simplified icon mode, event scaling, nearby highlights, and configurable colors.
-- Added optional charge annotations for **Medicae Stations** and deployed **Ammo Crates**.
-- Added a radar-scaled healing-radius ring for deployed **Medical Crates**.
-- Tuned common and shooter marker dimensions for clearer composition at different enemy icon scales.
-- Fixed marked-enemy brackets becoming two pixels thick when their scaled size crossed 16 pixels. Standard radar marker brackets now remain consistently one pixel thick, while configurable nearby-highlight thickness is unchanged.
-- Unpowered Medicae Stations now use a light grey radar marker while depleted stations follow the game's normal marker visibility.
-- Updated player-marked Expedition POIs for the Darktide 1.12.0 Auspex changes. Marked locations now use the marking players' slot colors in a segmented ring supporting up to four players.
+- Added radar markers for player companions, including the Arbitrator's **Cyber Mastiff** and the Skitarii's **Servo Skulls**.
+- Added optional remaining-charge annotations for **Medicae Stations** and deployed **Ammo Crates**.
+- Added radar tracking for explosive and fire barrels.
+- Kept **Heretic Idol** markers visible across vertical levels so they remain easier to track in multi-floor areas.
+- Improved Radar performance by reducing per-frame work.
+- Updated the Traditional Chinese localization.
 
 ## Feature Overview
 
