@@ -1955,8 +1955,8 @@ return {
                             default_value = false,
                         },
                         _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_environment"),
-                        _icon_distance_off_dropdown("show_explosive_barrels", "off"),
-                        _icon_distance_off_dropdown("show_fire_barrels", "off"),
+                        _icon_distance_off_dropdown("show_explosive_barrels", "icon_only"),
+                        _icon_distance_off_dropdown("show_fire_barrels", "icon_only"),
                         {
                             setting_id = "show_medicae_station",
                             type = "checkbox",
