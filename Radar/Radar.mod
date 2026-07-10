@@ -12,6 +12,6 @@ return {
 	load_after = {
 		"Alfs_DMF_Extensions",
 	},
-	version = "2.4.1",
+	version = "2.5.0",
 	mod_id = "790",
 }
