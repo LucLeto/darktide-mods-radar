@@ -551,6 +551,18 @@ _add_marker({
     supports_highlight = true,
 })
 _add_marker({
+    kind = "hazard_explosive_barrel",
+    anchor = "show_explosive_barrels",
+    default = _color(255, 205, 156, 77),
+    supports_highlight = true,
+})
+_add_marker({
+    kind = "hazard_fire_barrel",
+    anchor = "show_fire_barrels",
+    default = _color(255, 255, 110, 0),
+    supports_highlight = true,
+})
+_add_marker({
     kind = "pocketable_anti_rad_stimm",
     anchor = "show_anti_rad_stimm",
     default = WHITE,

@@ -383,6 +383,14 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
         icon = "content/ui/materials/hud/interactions/icons/barrel_explosive",
         icon_colour = { 255, 255, 110, 0 },
     },
+    show_explosive_barrels = {
+        icon = "content/ui/materials/hud/interactions/icons/barrel_explosive",
+        icon_colour = { 255, 205, 156, 77 },
+    },
+    show_fire_barrels = {
+        icon = "content/ui/materials/hud/interactions/icons/barrel_explosive",
+        icon_colour = { 255, 255, 110, 0 },
+    },
     show_large_ammunition_crate = {
         icon = "content/ui/materials/hud/interactions/icons/pocketable_ammo",
         icon_colour = { 255, 240, 210, 80 },
@@ -1077,8 +1085,10 @@ local function _icon_marked_off_dropdown(setting_id, default_value)
     }
 end
 
-local function _expedition_marker_display_mode_dropdown(setting_id, default_value)
-    local presentation = EXPEDITION_DROPDOWN_PRESENTATIONS[setting_id] or DEFAULT_DROPDOWN_PRESENTATION
+local function _icon_distance_off_dropdown(setting_id, default_value, presentations)
+    presentations = presentations or MARKER_DROPDOWN_PRESENTATIONS
+
+    local presentation = presentations[setting_id] or DEFAULT_DROPDOWN_PRESENTATION
     local icon = presentation.icon
     local icon_colour = _dropdown_marker_icon_colour(setting_id, presentation.icon_colour)
 
@@ -1108,6 +1118,10 @@ local function _expedition_marker_display_mode_dropdown(setting_id, default_valu
             mod:set(setting_id, new_value)
         end,
     }
+end
+
+local function _expedition_marker_display_mode_dropdown(setting_id, default_value)
+    return _icon_distance_off_dropdown(setting_id, default_value, EXPEDITION_DROPDOWN_PRESENTATIONS)
 end
 
 local function _expedition_loot_marker_mode_dropdown(setting_id)
@@ -1941,6 +1955,8 @@ return {
                             default_value = false,
                         },
                         _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_environment"),
+                        _icon_distance_off_dropdown("show_explosive_barrels", "off"),
+                        _icon_distance_off_dropdown("show_fire_barrels", "off"),
                         {
                             setting_id = "show_medicae_station",
                             type = "checkbox",
