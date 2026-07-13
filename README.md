@@ -244,6 +244,7 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Boss marker range | **Normal** or **Infinite**. Lets boss-type markers follow the normal radar range or stay visible at any distance. |
 | Show boss distance text | Shows yellow distance text in meters for bosses except the daemonhost. |
 | Teammates | Shows or hides teammate markers on the radar. |
+| Teammate state icons | Replaces teammate class or dot markers with contextual state icons. |
 | Player marker range | **Normal** or **Infinite**. Lets teammate markers follow the normal radar range or stay visible at any distance. |
 | Player center dot | Shows or hides your own center point on the radar. |
 | Player marker style | **Icon only**, **Marked icon**, **Dot only**, or **Marked dot**. |
@@ -427,7 +428,7 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 
 ### Marker Rules
 
-- **Enemies**, **teammates**, **player companions**, and **player smart tags** each use their own display rules and settings. Teammates also have a **Player marker range** mode, so they can follow the normal radar range or remain visible at any distance. The local **center dot** has its own toggle and is not affected by teammate range mode.
+- **Enemies**, **teammates**, **player companions**, and **player smart tags** each use their own display rules and settings. Teammates also have a **Player marker range** mode and an optional **Teammate state icons** override for disabled, rescue, luggable, and dead states. The local **center dot** has its own toggle and always keeps its normal dot icon.
 - Companion markers use their owning player's bright slot color. Player markers take priority over following companions at the same position, while Servo Skulls performing an active task and Cyber Mastiffs pinning an enemy are drawn above the assisted or disabled unit.
 - Following Servo Skulls are hidden when they are very close to their visible owner marker. Hacking, reviving, and active Purgator/Flamer skulls remain visible near their owner.
 - While a Cyber Mastiff is mauling an enemy that uses Darktide's actual companion-disable behavior, that enemy's icon and background are made transparent so the Mastiff remains readable; enabled enemy marker brackets remain visible.
@@ -554,7 +555,7 @@ Left: **Icon only**. Right: **Marked icon**.
 
 | Preview | Marker | Notes |
 | --- | --- | --- |
-| <img src="doc/img/player_teammate_sample.png"  width="80" alt="Teammate marker sample" /> | Teammates | Uses class icons, colored by teammate slot at runtime. Can be shown as **Icon only**, **Marked icon**, **Dot only**, or **Marked dot**. **Player marker range** can be set to **Normal** or **Infinite**, and teammate visibility can be toggled independently from the local player center dot. |
+| <img src="doc/img/player_teammate_sample.png"  width="80" alt="Teammate marker sample" /> | Teammates | Uses class icons, colored by teammate slot at runtime. Can be shown as **Icon only**, **Marked icon**, **Dot only**, or **Marked dot**. Optional contextual state icons replace the selected marker while a teammate is disabled, needs rescue, carries a luggable, or is dead. **Player marker range** can be set to **Normal** or **Infinite**, and teammate visibility can be toggled independently from the unchanged local player center dot. |
 
 Display style example for teammate markers:
 
@@ -570,6 +571,17 @@ Left to right:
 - **Marked icon**
 - **Dot only**
 - **Marked dot**
+
+Contextual state icon examples:
+
+<p>
+  <img src="doc/img/player_state_disabled.png" width="80" alt="Disabled or captured teammate state icon" />
+  <img src="doc/img/player_state_rescue.png" width="80" alt="Teammate requires rescue state icon" />
+  <img src="doc/img/player_state_luggable.png" width="80" alt="Teammate carrying a luggable state icon" />
+  <img src="doc/img/player_state_dead.png" width="80" alt="Dead teammate state icon" />
+</p>
+
+From left to right: **Disabled or captured**, **Requires rescue**, **Carrying a luggable**, **Dead**. Each icon retains the teammate's assigned radar color.
 
 Supported class icon mappings in the HUD:
 
@@ -849,7 +861,7 @@ Servo Skull role and activity annotations are placed at the bottom-right of the 
 
 Not every radar marker uses a configurable fixed ARGB color:
 
-- **Teammates** use the class icon for the detected archetype and take their color from the active HUD slot color at runtime.
+- **Teammates** use the class icon for the detected archetype and take their color from the active HUD slot color at runtime. Enabled state icons retain the same slot color.
 - **Player companions** use their owner's bright HUD slot color. Servo Skull annotations retain their fixed semantic colors.
 - **The radar center dot** also uses the local player's HUD color.
 - **Player smart tags** use their own tag presentations: attention and location tags follow player-slot colors, while threat tags keep their built-in warning color.

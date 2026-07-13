@@ -2185,6 +2185,12 @@ return {
                                     default_value = true,
                                 },
                                 {
+                                    setting_id = "show_player_state_icons",
+                                    tooltip = "show_player_state_icons_tooltip",
+                                    type = "checkbox",
+                                    default_value = true,
+                                },
+                                {
                                     setting_id = "player_marker_range_mode",
                                     type = "dropdown",
                                     default_value = "normal",
