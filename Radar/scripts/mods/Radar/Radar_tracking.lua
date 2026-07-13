@@ -4,6 +4,7 @@ return function(env)
     local mod = mod
 
     local GameSession = GameSession
+    local PlayerUnitVisualLoadout = PlayerUnitVisualLoadout
     local pcall = pcall
     local pairs = pairs
     local rawget = rawget
@@ -52,6 +53,7 @@ return function(env)
 
     local function _reset_tracked_units_table()
         mod._tracked_units = _reuse_or_new_table(mod._tracked_units)
+        mod._radar_player_unit_by_player = _reuse_or_new_table(mod._radar_player_unit_by_player)
     end
 
     local _scratch_kind_enabled_cache = {}
@@ -65,6 +67,7 @@ return function(env)
     local _scratch_seen_chests = {}
     local _scratch_seen_destructibles = {}
     local _scratch_seen_hazard_props = {}
+    local _scratch_seen_radar_players = {}
     local _scratch_mastiff_disabled_enemy_units = {}
     local _scratch_minion_kind_enabled_cache = {}
     local OVERVIEW_MIN_ZOOM_RANGE = 25
@@ -922,6 +925,71 @@ return function(env)
         return state == state_name or state == SERVO_SKULL_STATES[state_name]
     end
 
+    local PLAYER_CAPTURE_DISABLING_TYPES = {
+        grabbed = true,
+        consumed = true,
+        mutant_charged = true,
+        netted = true,
+        pounced = true,
+    }
+    local SLOT_LUGGABLE = "slot_luggable"
+
+    local function _safe_player_component(unit_data_extension, component_name)
+        if not unit_data_extension or not unit_data_extension.read_component then
+            return nil
+        end
+
+        local ok, component = pcall(unit_data_extension.read_component, unit_data_extension, component_name)
+
+        return ok and component or nil
+    end
+
+    local function _player_radar_state(unit, has_extension)
+        local unit_data_extension = has_extension and has_extension(unit, "unit_data_system") or nil
+        local character_state_component = _safe_player_component(unit_data_extension, "character_state")
+        local state_name = character_state_component and character_state_component.state_name or nil
+
+        -- Hogtied is the rescue lifecycle after death, so it must replace a
+        -- dead icon even while the health extension still reports not alive.
+        if state_name == "hogtied" then
+            return "rescue"
+        end
+
+        if state_name == "dead" or _safe_health_alive(unit) == false then
+            return "dead"
+        end
+
+        if state_name == "knocked_down" or state_name == "ledge_hanging" then
+            return "rescue"
+        end
+
+        local disabled_state_component = _safe_player_component(unit_data_extension, "disabled_character_state")
+        local disabling_type = disabled_state_component
+            and disabled_state_component.is_disabled
+            and disabled_state_component.disabling_type or nil
+
+        if PLAYER_CAPTURE_DISABLING_TYPES[disabling_type] then
+            return "captured"
+        end
+
+        local inventory_component = _safe_player_component(unit_data_extension, "inventory")
+
+        if inventory_component and inventory_component.wielded_slot == SLOT_LUGGABLE then
+            local visual_loadout_extension = has_extension and has_extension(unit, "visual_loadout_system") or nil
+            local slot_equipped = PlayerUnitVisualLoadout and PlayerUnitVisualLoadout.slot_equipped
+
+            if visual_loadout_extension and slot_equipped then
+                local ok, equipped = pcall(slot_equipped, inventory_component, visual_loadout_extension, SLOT_LUGGABLE)
+
+                if ok and equipped then
+                    return "luggable"
+                end
+            end
+        end
+
+        return nil
+    end
+
     local function _refresh_player_units()
         local mastiff_disabled_enemy_units = _scratch_mastiff_disabled_enemy_units
         table_clear(mastiff_disabled_enemy_units)
@@ -935,14 +1003,40 @@ return function(env)
         local players = player_manager:players()
         local script_unit = ScriptUnit
         local has_extension = script_unit and script_unit.has_extension
+        local radar_player_unit_by_player = mod._radar_player_unit_by_player or {}
+        local seen_radar_players = _scratch_seen_radar_players
+        local scan_player_states = mod:get("show_player_state_icons") ~= false
+            and mod:get_show_players()
         local show_cyber_mastiff = mod:get("show_cyber_mastiff") ~= false
         local scan_player_companions = show_cyber_mastiff
             or mod:get("show_servo_skulls") ~= false
 
+        mod._radar_player_unit_by_player = radar_player_unit_by_player
+        table_clear(seen_radar_players)
+
         for _, player in pairs(players) do
             local unit = player.player_unit
+            local unit_alive = unit and _safe_unit_alive(unit)
+            local player_radar_state = unit_alive
+                and player ~= local_player
+                and scan_player_states
+                and _player_radar_state(unit, has_extension) or nil
 
-            if scan_player_companions and unit and _safe_unit_alive(unit) then
+            if player ~= local_player then
+                seen_radar_players[player] = true
+
+                if unit_alive then
+                    local previous_unit = radar_player_unit_by_player[player]
+
+                    if previous_unit and previous_unit ~= unit then
+                        _clear_tracked_unit_from_source(previous_unit, "player_manager")
+                    end
+
+                    radar_player_unit_by_player[player] = unit
+                end
+            end
+
+            if scan_player_companions and unit_alive then
                 local player_slot = _safe_player_slot(player)
                 local owner_marker_visible
 
@@ -1047,7 +1141,7 @@ return function(env)
                 end
             end
 
-            if unit and _safe_unit_alive(unit) and player ~= local_player then
+            if unit_alive and player ~= local_player then
                 local archetype_name = nil
                 local player_name = nil
                 local player_slot = _safe_player_slot(player)
@@ -1074,7 +1168,15 @@ return function(env)
                     player = player_name,
                     player_slot = player_slot,
                     archetype_name = archetype_name,
+                    player_radar_state = player_radar_state,
                 })
+            end
+        end
+
+        for player, unit in pairs(radar_player_unit_by_player) do
+            if not seen_radar_players[player] then
+                _clear_tracked_unit_from_source(unit, "player_manager")
+                radar_player_unit_by_player[player] = nil
             end
         end
     end
@@ -2264,6 +2366,7 @@ return function(env)
         mod._radar_targets = {}
         mod._radar_snapshot = nil
         mod._radar_target_pool = {}
+        mod._radar_player_unit_by_player = {}
         mod._last_update_t = nil
         mod._last_scan_signature = nil
         mod._last_block_signature = nil
@@ -2545,6 +2648,8 @@ return function(env)
 
         if setting_id == "overview_zoom_in_key" or setting_id == "overview_zoom_out_key" then
             _refresh_overview_input_capture()
+        elseif setting_id == "show_player_state_icons" then
+            mod._next_scan_t = 0
         end
     end
 

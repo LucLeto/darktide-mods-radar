@@ -65,6 +65,13 @@ local PLAYER_CLASS_ICONS = {
     cryptic = "content/ui/materials/icons/classes/cryptic",
 }
 
+local PLAYER_STATE_ICONS = {
+    dead = "content/ui/materials/icons/player_states/dead",
+    rescue = "content/ui/materials/hud/interactions/icons/help",
+    captured = "content/ui/materials/icons/player_states/incapacitated",
+    luggable = "content/ui/materials/icons/player_states/lugged",
+}
+
 local PLAYER_SMART_TAG_PRESENTATIONS = {
     location_attention = {
         icon = "content/ui/materials/hud/interactions/icons/attention",
@@ -1766,6 +1773,7 @@ local _self_visual = {
     color = nil,
     size = 4,
 }
+local PLAYER_STATE_ICON_SIZE = 15
 
 local EXPEDITION_UNMARKED_COLORS = {
     expedition_loot_converter = _widget_color(255, 192, 160, 0),
@@ -2676,20 +2684,23 @@ local function _target_visual(target, draw_cache)
     if target_kind == "player_teammate" then
         local archetype_name = meta and meta.archetype_name and string_lower(tostring(meta.archetype_name)) or nil
         local player_slot = meta and tonumber(meta.player_slot) or nil
+        local player_radar_state = meta and meta.player_radar_state or nil
+        local state_icon = PLAYER_STATE_ICONS[player_radar_state]
         local slot_colors = draw_cache and draw_cache.slot_colors or (UISettings and UISettings.player_slot_colors)
         local player_color = player_slot and slot_colors and slot_colors[player_slot] or nil
         local display_style = draw_cache and draw_cache.player_display_style or mod:get_player_display_style()
         local use_dot = display_style == "dot_only" or display_style == "marked_dot"
 
-        local icon = use_dot and DEFAULT_INTERACTION_ICON or PLAYER_CLASS_ICONS[archetype_name]
+        local icon = state_icon or (use_dot and DEFAULT_INTERACTION_ICON or PLAYER_CLASS_ICONS[archetype_name])
         local widget_color = _any_to_widget_color(player_color)
 
         if debug_mode then
             _log_once(
                 LogBuckets.visuals,
-                "player:" .. tostring(archetype_name) .. ":" .. tostring(player_slot),
-                string_format("[Radar] visual player | archetype=%s slot=%s icon=%s", tostring(archetype_name),
-                    tostring(player_slot), tostring(icon))
+                "player:" .. tostring(archetype_name) .. ":" .. tostring(player_slot) .. ":" ..
+                tostring(player_radar_state),
+                string_format("[Radar] visual player | archetype=%s slot=%s state=%s icon=%s",
+                    tostring(archetype_name), tostring(player_slot), tostring(player_radar_state), tostring(icon))
             )
         end
 
@@ -2697,7 +2708,7 @@ local function _target_visual(target, draw_cache)
             icon = icon,
             color = widget_color,
             accent_color = _with_alpha_widget(widget_color, 180),
-            size = use_dot and 14 or 15,
+            size = state_icon and PLAYER_STATE_ICON_SIZE or (use_dot and 14 or 15),
         }
     end
 
