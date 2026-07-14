@@ -6,6 +6,7 @@ local UISettings = require("scripts/settings/ui/ui_settings")
 local UIWidget = require("scripts/managers/ui/ui_widget")
 local RadarHudRenderer = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_hud_renderer")
 local RadarHudWidgets = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_hud_widgets")
+local RadarStrikemapGeometry = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_strikemap_geometry")
 
 local Color = Color
 local Vector3 = Vector3
@@ -2986,6 +2987,19 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
     local projection_rotation = live_camera_rotation or (snapshot and snapshot.player_rotation) or nil
 
     RadarHudRenderer.draw_radar_frame(self, ui_renderer, x, y, z + 1, size, projection_rotation)
+
+    RadarStrikemapGeometry.draw(
+        ui_renderer,
+        snapshot,
+        center_x,
+        center_y,
+        z + 3,
+        projection_radius,
+        range,
+        projection_rotation,
+        radar_style,
+        t
+    )
 
     local next_widget_index = 1
     local max_markers = mod:get_max_radar_markers()

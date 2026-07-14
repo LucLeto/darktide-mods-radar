@@ -2398,6 +2398,10 @@ return function(env)
         mod._overview_marker_high_drawn = 0
         mod._last_overview_marker_debug_signature = nil
 
+        if mod.reset_strikemap_integration then
+            mod:reset_strikemap_integration()
+        end
+
         _refresh_overview_input_capture()
     end
 
