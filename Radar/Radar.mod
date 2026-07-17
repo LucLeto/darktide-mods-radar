@@ -10,7 +10,9 @@ return {
 	end,
 	packages = {},
 	load_after = {
+		"dmf",
 		"Alfs_DMF_Extensions",
+		"strikemap",
 	},
 	version = "2.6.0",
 	mod_id = "790",

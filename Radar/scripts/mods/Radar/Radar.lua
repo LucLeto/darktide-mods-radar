@@ -30,6 +30,10 @@ _install("Radar/scripts/mods/Radar/Radar_expeditions", shared_env)
 _install("Radar/scripts/mods/Radar/Radar_tracking", shared_env)
 _install("Radar/scripts/mods/Radar/Radar_navmesh", shared_env)
 
+-- Optional Strikemap geometry integration. Radar never requires Strikemap;
+-- the module resolves the dependency lazily and falls back safely on its own.
+mod:io_dofile("Radar/scripts/mods/Radar/compatibility/Radar_strikemap")
+
 -- save scroll position
 -- Author: Alfthebigheaded
 local last_scroll_amount = 0

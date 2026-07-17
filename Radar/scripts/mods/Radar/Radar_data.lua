@@ -1386,6 +1386,40 @@ return {
                     },
                 },
                 {
+                    setting_id = "strikemap_integration_group",
+                    type = "group",
+                    tab = TAB_GENERAL,
+                    tab_overrides = TAB_OVERRIDES_GENERAL,
+                    sub_widgets = {
+                        {
+                            setting_id = "use_strikemap_geometry",
+                            type = "checkbox",
+                            default_value = false,
+                        },
+                        {
+                            setting_id = "strikemap_geometry_current_floor_opacity",
+                            type = "numeric",
+                            default_value = 110,
+                            range = { 0, 255 },
+                            decimals_number = 0,
+                            step_size_value = 5,
+                        },
+                        {
+                            setting_id = "strikemap_geometry_other_floor_opacity",
+                            type = "numeric",
+                            default_value = 45,
+                            range = { 0, 255 },
+                            decimals_number = 0,
+                            step_size_value = 5,
+                        },
+                        {
+                            setting_id = "strikemap_geometry_in_overview",
+                            type = "checkbox",
+                            default_value = true,
+                        },
+                    },
+                },
+                {
                     setting_id = "position_group",
                     type = "group",
                     tab = TAB_LAYOUT,
