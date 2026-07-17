@@ -28,6 +28,7 @@ _install("Radar/scripts/mods/Radar/Radar_enemy_definitions", shared_env)
 _install("Radar/scripts/mods/Radar/Radar_runtime_helpers", shared_env)
 _install("Radar/scripts/mods/Radar/Radar_expeditions", shared_env)
 _install("Radar/scripts/mods/Radar/Radar_tracking", shared_env)
+_install("Radar/scripts/mods/Radar/Radar_navmesh", shared_env)
 
 -- save scroll position
 -- Author: Alfthebigheaded

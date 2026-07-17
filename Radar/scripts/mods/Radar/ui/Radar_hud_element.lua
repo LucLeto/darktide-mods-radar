@@ -6,6 +6,7 @@ local UISettings = require("scripts/settings/ui/ui_settings")
 local UIWidget = require("scripts/managers/ui/ui_widget")
 local RadarHudRenderer = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_hud_renderer")
 local RadarHudWidgets = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_hud_widgets")
+local RadarNavmesh = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_navmesh_renderer")
 
 local Color = Color
 local Vector3 = Vector3
@@ -2985,7 +2986,16 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
     local live_camera_rotation = mod.get_hud_player_camera_rotation and mod:get_hud_player_camera_rotation(self)
     local projection_rotation = live_camera_rotation or (snapshot and snapshot.player_rotation) or nil
 
-    RadarHudRenderer.draw_radar_frame(self, ui_renderer, x, y, z + 1, size, projection_rotation)
+    if RadarNavmesh.is_active() then
+        -- Split the frame so the map-geometry layer sits above the radar background but stays
+        -- beneath outlines, guides, auspex effects and every marker (brackets z+4, icons z+5).
+        RadarHudRenderer.draw_radar_frame_background(self, ui_renderer, x, y, z + 1, size, projection_rotation)
+        RadarNavmesh.draw(ui_renderer, t, snapshot and snapshot.player_position, projection_rotation,
+            center_x, center_y, projection_radius, range, z + 2)
+        RadarHudRenderer.draw_radar_frame_foreground(self, ui_renderer, x, y, z + 1, size, projection_rotation)
+    else
+        RadarHudRenderer.draw_radar_frame(self, ui_renderer, x, y, z + 1, size, projection_rotation)
+    end
 
     local next_widget_index = 1
     local max_markers = mod:get_max_radar_markers()

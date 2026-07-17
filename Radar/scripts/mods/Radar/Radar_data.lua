@@ -1606,6 +1606,45 @@ return {
                     sub_widgets = _color_setting_groups("radar_colors_group"),
                 },
                 {
+                    -- The "radar_navmesh" ARGB color group (including the geometry opacity
+                    -- slider) is inserted after the checkbox by _insert_color_settings.
+                    setting_id = "radar_map_geometry_group",
+                    type = "group",
+                    tab = TAB_LAYOUT,
+                    tab_overrides = TAB_OVERRIDES_LAYOUT,
+                    sub_widgets = {
+                        {
+                            setting_id = "show_navmesh",
+                            type = "checkbox",
+                            default_value = false,
+                        },
+                        {
+                            setting_id = "navmesh_range_above",
+                            type = "numeric",
+                            default_value = 3,
+                            range = { 1, 30 },
+                            decimals_number = 0,
+                            step_size_value = 1,
+                        },
+                        {
+                            setting_id = "navmesh_range_below",
+                            type = "numeric",
+                            default_value = 7,
+                            range = { 1, 30 },
+                            decimals_number = 0,
+                            step_size_value = 1,
+                        },
+                        {
+                            setting_id = "navmesh_max_triangles",
+                            type = "numeric",
+                            default_value = 6000,
+                            range = { 1000, 20000 },
+                            decimals_number = 0,
+                            step_size_value = 500,
+                        },
+                    },
+                },
+                {
                     setting_id = "nearby_highlight_group",
                     type = "group",
                     tab = TAB_LAYOUT,
