@@ -1386,40 +1386,6 @@ return {
                     },
                 },
                 {
-                    setting_id = "strikemap_integration_group",
-                    type = "group",
-                    tab = TAB_GENERAL,
-                    tab_overrides = TAB_OVERRIDES_GENERAL,
-                    sub_widgets = {
-                        {
-                            setting_id = "use_strikemap_geometry",
-                            type = "checkbox",
-                            default_value = false,
-                        },
-                        {
-                            setting_id = "strikemap_geometry_current_floor_opacity",
-                            type = "numeric",
-                            default_value = 110,
-                            range = { 0, 255 },
-                            decimals_number = 0,
-                            step_size_value = 5,
-                        },
-                        {
-                            setting_id = "strikemap_geometry_other_floor_opacity",
-                            type = "numeric",
-                            default_value = 45,
-                            range = { 0, 255 },
-                            decimals_number = 0,
-                            step_size_value = 5,
-                        },
-                        {
-                            setting_id = "strikemap_geometry_in_overview",
-                            type = "checkbox",
-                            default_value = true,
-                        },
-                    },
-                },
-                {
                     setting_id = "position_group",
                     type = "group",
                     tab = TAB_LAYOUT,
@@ -1640,17 +1606,26 @@ return {
                     sub_widgets = _color_setting_groups("radar_colors_group"),
                 },
                 {
-                    -- The "radar_navmesh" ARGB color group (including the geometry opacity
-                    -- slider) is inserted after the checkbox by _insert_color_settings.
+                    -- The "radar_navmesh" ARGB color groups (including each band's opacity
+                    -- slider) are inserted after the source dropdown by _insert_color_settings.
                     setting_id = "radar_map_geometry_group",
                     type = "group",
                     tab = TAB_LAYOUT,
                     tab_overrides = TAB_OVERRIDES_LAYOUT,
                     sub_widgets = {
                         {
-                            setting_id = "show_navmesh",
-                            type = "checkbox",
-                            default_value = false,
+                            setting_id = "map_geometry_source",
+                            type = "dropdown",
+                            default_value = "off",
+                            options = {
+                                _dropdown_option("radar_outline_off", "off"),
+                                _dropdown_option("map_geometry_source_live", "live"),
+                                _dropdown_option("map_geometry_source_strikemap", "strikemap"),
+                                _dropdown_option("map_geometry_source_auto", "auto"),
+                            },
+                            get = function()
+                                return mod.get_map_geometry_source and mod:get_map_geometry_source() or "off"
+                            end,
                         },
                         {
                             setting_id = "navmesh_range_above",
@@ -1675,6 +1650,27 @@ return {
                             range = { 1000, 20000 },
                             decimals_number = 0,
                             step_size_value = 500,
+                        },
+                        {
+                            setting_id = "strikemap_geometry_current_floor_opacity",
+                            type = "numeric",
+                            default_value = 110,
+                            range = { 0, 255 },
+                            decimals_number = 0,
+                            step_size_value = 5,
+                        },
+                        {
+                            setting_id = "strikemap_geometry_other_floor_opacity",
+                            type = "numeric",
+                            default_value = 45,
+                            range = { 0, 255 },
+                            decimals_number = 0,
+                            step_size_value = 5,
+                        },
+                        {
+                            setting_id = "strikemap_geometry_in_overview",
+                            type = "checkbox",
+                            default_value = true,
                         },
                     },
                 },

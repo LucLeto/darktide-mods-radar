@@ -553,16 +553,27 @@ end
 
 local RadarStrikemapGeometry = {}
 
-RadarStrikemapGeometry.draw = function(ui_renderer, snapshot, center_x, center_y, z, projection_radius, range,
-                                       rotation, radar_style, t)
-    if mod:get("use_strikemap_geometry") ~= true then
-        if StrikemapCompatibility._status ~= "disabled" then
-            StrikemapCompatibility:reset("disabled")
-        end
-
-        return
+-- True when this layer will draw this frame: the map-geometry source selects
+-- Strikemap ("strikemap" or "auto"), the layer is allowed in the current view,
+-- and a validated map context is available. The hud element uses this to give
+-- the single geometry slot to exactly one layer; in "auto" the live navmesh
+-- takes over whenever this returns false. get_map_context() handles the
+-- disabled state, retries and sticky failures internally and is cheap when
+-- cached, so this is safe to call every frame.
+RadarStrikemapGeometry.is_active = function(t)
+    if _triangle_supported == false then
+        return false
     end
 
+    if mod:is_overview_mode_active() and mod:get("strikemap_geometry_in_overview") == false then
+        return false
+    end
+
+    return StrikemapCompatibility:get_map_context(t) ~= nil
+end
+
+RadarStrikemapGeometry.draw = function(ui_renderer, snapshot, center_x, center_y, z, projection_radius, range,
+                                       rotation, radar_style, t)
     local player_pos = snapshot and snapshot.player_position or nil
 
     if not player_pos then

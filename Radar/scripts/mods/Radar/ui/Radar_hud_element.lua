@@ -2987,29 +2987,31 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
     local live_camera_rotation = mod.get_hud_player_camera_rotation and mod:get_hud_player_camera_rotation(self)
     local projection_rotation = live_camera_rotation or (snapshot and snapshot.player_rotation) or nil
 
-    if RadarNavmesh.is_active() then
+    -- One shared map-geometry slot, owned by exactly one layer per frame as decided by the
+    -- "map_geometry_source" setting: Strikemap's floor plan when selected and available, the
+    -- live navmesh scan otherwise ("auto" prefers Strikemap and falls back to the live scan).
+    -- RadarNavmesh.is_active must run even while suppressed so it can release its cached
+    -- geometry the moment the Strikemap layer takes over.
+    local strikemap_geometry_active = RadarStrikemapGeometry.is_active(t)
+    local navmesh_geometry_active = RadarNavmesh.is_active(strikemap_geometry_active)
+
+    if strikemap_geometry_active or navmesh_geometry_active then
         -- Split the frame so the map-geometry layer sits above the radar background but stays
         -- beneath outlines, guides, auspex effects and every marker (brackets z+4, icons z+5).
         RadarHudRenderer.draw_radar_frame_background(self, ui_renderer, x, y, z + 1, size, projection_rotation)
-        RadarNavmesh.draw(ui_renderer, t, snapshot and snapshot.player_position, projection_rotation,
-            center_x, center_y, projection_radius, range, z + 2)
+
+        if strikemap_geometry_active then
+            RadarStrikemapGeometry.draw(ui_renderer, snapshot, center_x, center_y, z + 2,
+                projection_radius, range, projection_rotation, radar_style, t)
+        else
+            RadarNavmesh.draw(ui_renderer, t, snapshot and snapshot.player_position, projection_rotation,
+                center_x, center_y, projection_radius, range, z + 2)
+        end
+
         RadarHudRenderer.draw_radar_frame_foreground(self, ui_renderer, x, y, z + 1, size, projection_rotation)
     else
         RadarHudRenderer.draw_radar_frame(self, ui_renderer, x, y, z + 1, size, projection_rotation)
     end
-
-    RadarStrikemapGeometry.draw(
-        ui_renderer,
-        snapshot,
-        center_x,
-        center_y,
-        z + 3,
-        projection_radius,
-        range,
-        projection_rotation,
-        radar_style,
-        t
-    )
 
     local next_widget_index = 1
     local max_markers = mod:get_max_radar_markers()

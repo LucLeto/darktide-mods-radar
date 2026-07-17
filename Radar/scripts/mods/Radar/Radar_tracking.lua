@@ -3213,6 +3213,26 @@ return function(env)
         return value
     end
 
+    function mod:get_map_geometry_source()
+        local value = self:get("map_geometry_source")
+
+        if value == nil then
+            -- Migrate the pre-merge per-feature toggles once; the dropdown
+            -- persists the value on its first change.
+            if self:get("use_strikemap_geometry") == true then
+                value = "strikemap"
+            elseif self:get("show_navmesh") == true then
+                value = "live"
+            end
+        end
+
+        if value ~= "live" and value ~= "strikemap" and value ~= "auto" then
+            value = "off"
+        end
+
+        return value
+    end
+
     function mod:get_radar_guides()
         local value = tostring(self:get("radar_guides") or "crosshair")
 

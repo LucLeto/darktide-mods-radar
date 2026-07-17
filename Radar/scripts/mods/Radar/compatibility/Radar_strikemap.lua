@@ -94,7 +94,18 @@ function StrikemapCompatibility:_set_status(status, detail)
 end
 
 function StrikemapCompatibility:is_integration_enabled()
-    return mod:get("use_strikemap_geometry") == true
+    -- The shared map-geometry source selector decides which layer may draw;
+    -- Strikemap participates for "strikemap" and as the preferred source in
+    -- "auto" (the live navmesh layer takes over when this one is unavailable).
+    local get_map_geometry_source = mod.get_map_geometry_source
+
+    if not get_map_geometry_source then
+        return false
+    end
+
+    local source = get_map_geometry_source(mod)
+
+    return source == "strikemap" or source == "auto"
 end
 
 function StrikemapCompatibility:is_available()
@@ -441,7 +452,7 @@ mod.on_setting_changed = function(setting_id, ...)
         previous_on_setting_changed(setting_id, ...)
     end
 
-    if setting_id == "use_strikemap_geometry" then
+    if setting_id == "map_geometry_source" then
         if StrikemapCompatibility:is_integration_enabled() then
             StrikemapCompatibility:reset()
         else

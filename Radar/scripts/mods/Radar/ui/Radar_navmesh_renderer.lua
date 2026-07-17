@@ -1111,11 +1111,15 @@ local RadarNavmesh = {}
 
 local _was_active = false
 
--- True when the geometry layer should do any work at all: enabled and not fully transparent.
--- Opacity 0 skips selection, projection and drawing entirely. On the frame the layer turns off
--- the cached mission geometry is released; it is rebuilt lazily when re-enabled.
-function RadarNavmesh.is_active()
-    local active = Gui_triangle ~= nil and mod:get("show_navmesh") == true and _any_band_visible()
+-- True when the geometry layer should do any work at all: selected as the map-geometry source
+-- ("live" always; "auto" only while the Strikemap layer is not drawing, which `suppressed`
+-- reports) and not fully transparent. Opacity 0 skips selection, projection and drawing
+-- entirely. On the frame the layer turns off the cached mission geometry is released; it is
+-- rebuilt lazily when re-enabled, so an "auto" user parked on Strikemap pays no navmesh cost.
+function RadarNavmesh.is_active(suppressed)
+    local source = mod.get_map_geometry_source and mod:get_map_geometry_source() or "off"
+    local selected = source == "live" or (source == "auto" and not suppressed)
+    local active = Gui_triangle ~= nil and selected and _any_band_visible()
 
     if _was_active and not active then
         if mod.clear_navmesh_geometry then
