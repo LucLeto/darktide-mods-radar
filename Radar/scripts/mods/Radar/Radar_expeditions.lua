@@ -112,7 +112,6 @@ return function(env)
             return false
         end
 
-        -- Safe-zone store data marks sanctuary shop fixtures without also matching player-dropped deployables.
         local get_unit_store_data = game_mode.get_unit_store_data
         if type(get_unit_store_data) == "function" then
             local ok_store_data, store_data = pcall(get_unit_store_data, game_mode, unit)
@@ -631,9 +630,6 @@ return function(env)
     function _get_runtime_state()
         local gameplay_t = _safe_gameplay_time()
 
-        -- The runtime state is queried several times per frame (scan hook, DMF
-        -- update and HUD draw); reuse the result computed for the current
-        -- gameplay tick instead of re-deriving it from the managers each time.
         if gameplay_t ~= nil and gameplay_t == _runtime_state_cached_t then
             return _runtime_state_allowed, _runtime_state_reason, gameplay_t, _runtime_state_mission_name,
                 _runtime_state_activity, _runtime_state_mechanism_name, _runtime_state_player_unit,
@@ -841,8 +837,6 @@ return function(env)
             return true
         end
 
-        -- Player-drop loot bookkeeping lives on the server; clients still identify the pickup by
-        -- pickup_type, so section filtering must not require the server-only dropped-loot table.
         local game_mode = _safe_game_mode()
         local active_section_index = _safe_expedition_active_section_index(game_mode)
 
@@ -1457,7 +1451,6 @@ return function(env)
         local meta = _pickup_meta(pickup_name, interaction_type, ui_interaction_type, icon, description,
             marked_by_player_slot)
 
-        -- default items
         if interaction_type == "chest" then
             return "crate_unknown", meta
         end
@@ -1673,9 +1666,6 @@ return function(env)
         return kind, meta
     end
 
-    -- Breed classification is a pure function of static tables, so cache the
-    -- result per breed name (`false` marks breeds without a radar kind) to keep
-    -- the string scans out of the per-minion scan loop.
     local _enemy_kind_by_breed_cache = {}
 
     function _classify_enemy_from_breed(breed_name)

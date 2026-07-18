@@ -76,10 +76,6 @@ return function(env)
     local OVERVIEW_SCREEN_PADDING = 80
     local OVERVIEW_RANGE_TRANSITION_DURATION = 0.28
     local OVERVIEW_RANGE_TRANSITION_SCAN_INTERVAL = 0.05
-    -- Static or slow-changing sources (interactables, chests, destructibles,
-    -- hazard props, deployed smart-tag targets) are rescanned less often than
-    -- enemies and players. Dead/despawned units are still removed at the fast
-    -- cadence by `_prune_units`.
     local STATIC_SCAN_INTERVAL = SCAN_INTERVAL * 2
     local OVERVIEW_RESET_FIT_EDGE_FRACTION = 0.9
     local OVERVIEW_RADAR_MARKER_LIMIT = 300
@@ -541,8 +537,6 @@ return function(env)
             default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 122, 204, 245 },
             default_priority = 2,
         },
-        -- `special_target` is shared by multiple abilities. Only apply the fallback color when the
-        -- local veteran stance is active so we do not miscolor Adamant Verispex.
         special_target = {
             default_priority = 3,
         },
@@ -559,8 +553,6 @@ return function(env)
         return SUPPORTED_ABILITY_OUTLINE_CONFIG_BY_NAME[tostring(outline_name)]
     end
 
-    -- `special_target` is shared, so only honor it when the local player is in a
-    -- positively identified owning state.
     local function _special_target_local_context(player_unit)
         if not _safe_unit_alive(player_unit) then
             return nil
@@ -761,8 +753,6 @@ return function(env)
             return marker_names, bracket_color, primary_marker_name, primary_marker_priority
         end
 
-        -- Ogryn taunt is buff-driven rather than outline-driven, so only honor it for local players
-        -- who actually have the taunt combat ability equipped.
         if local_combat_ability_name == OGRYN_TAUNT_SHOUT_ABILITY_NAME
             and _unit_has_supported_ogryn_taunt_marker(unit) then
             return { OGRYN_TAUNT_SHOUT_ABILITY_NAME }, nil, OGRYN_TAUNT_SHOUT_ABILITY_NAME, 0
@@ -949,8 +939,6 @@ return function(env)
         local character_state_component = _safe_player_component(unit_data_extension, "character_state")
         local state_name = character_state_component and character_state_component.state_name or nil
 
-        -- Hogtied is the rescue lifecycle after death, so it must replace a
-        -- dead icon even while the health extension still reports not alive.
         if state_name == "hogtied" then
             return "rescue"
         end
@@ -1499,8 +1487,6 @@ return function(env)
                                 kind_enabled_cache[kind] = kind_enabled
                             end
 
-                            -- Disabled enemy kinds skip tracking work entirely unless an
-                            -- ability mark can still surface the unit on the radar.
                             local ability_marker_names = nil
                             local ability_marker_bracket_color = nil
 
@@ -2414,6 +2400,10 @@ return function(env)
         mod._overview_marker_high_drawn = 0
         mod._last_overview_marker_debug_signature = nil
 
+        if mod.reset_strikemap_integration then
+            mod:reset_strikemap_integration()
+        end
+
         _refresh_overview_input_capture()
     end
 
@@ -2851,8 +2841,6 @@ return function(env)
             return false
         end
 
-        -- This runs inside the InputService hooks for every action lookup, so
-        -- check the cheap captured-action table before touching runtime state.
         local capture_actions = self._overview_capture_actions
 
         if capture_actions == nil then
@@ -3223,6 +3211,24 @@ return function(env)
 
         if value ~= "solid" and value ~= "dotted" and value ~= "off" then
             value = "solid"
+        end
+
+        return value
+    end
+
+    function mod:get_map_geometry_source()
+        local value = self:get("map_geometry_source")
+
+        if value == nil then
+            if self:get("use_strikemap_geometry") == true then
+                value = "strikemap"
+            elseif self:get("show_navmesh") == true then
+                value = "live"
+            end
+        end
+
+        if value ~= "live" and value ~= "strikemap" and value ~= "auto" then
+            value = "off"
         end
 
         return value
@@ -3610,9 +3616,6 @@ return function(env)
         local forward_x, forward_y = _safe_forward_xy(player_rot)
 
         if forward_x and forward_y then
-            -- Derive a flattened right vector from forward instead of relying on
-            -- Quaternion.right. This matches the compass math more closely and keeps
-            -- the radar in the same 2D basis as the live camera facing.
             local right_x = forward_y
             local right_y = -forward_x
 
