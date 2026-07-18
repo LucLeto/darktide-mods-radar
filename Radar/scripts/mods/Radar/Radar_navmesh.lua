@@ -1,5 +1,7 @@
 local mod = get_mod("Radar")
 
+-- Live map-geometry (navmesh) source
+-- Author: dreams
 return function(env)
     setfenv(1, env)
 

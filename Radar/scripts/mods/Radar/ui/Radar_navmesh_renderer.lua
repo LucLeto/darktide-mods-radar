@@ -1,5 +1,8 @@
 local mod = get_mod("Radar")
 
+-- Live map-geometry (navmesh) renderer
+-- Author: dreams
+
 local Color = Color
 local Vector3 = Vector3
 local Quaternion = Quaternion

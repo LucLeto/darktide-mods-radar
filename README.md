@@ -120,6 +120,8 @@ The **Map geometry source** dropdown in the **Map Geometry** settings group sele
 | **Strikemap floor plan** | Draws the pre-baked floor plan from the [Strikemap](https://www.nexusmods.com/warhammer40kdarktide/mods/1022) mod through its public compatibility API. Requires Strikemap to be installed and active. |
 | **Auto** | Prefers the Strikemap floor plan and falls back to the live scan whenever no Strikemap geometry is available. |
 
+The built-in **Live scan** source, its navmesh reader, and the geometry renderer were contributed by **dreams**.
+
 ### Floor bands
 
 The floor plan is shaded in three height bands relative to your current position, so overlapping levels stay readable:
