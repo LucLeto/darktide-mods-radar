@@ -6,6 +6,8 @@ local UISettings = require("scripts/settings/ui/ui_settings")
 local UIWidget = require("scripts/managers/ui/ui_widget")
 local RadarHudRenderer = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_hud_renderer")
 local RadarHudWidgets = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_hud_widgets")
+local RadarNavmesh = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_navmesh_renderer")
+local RadarStrikemapGeometry = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_strikemap_geometry")
 
 local Color = Color
 local Vector3 = Vector3
@@ -809,9 +811,6 @@ local function _build_draw_cache(t)
     local color_generation = mod._radar_color_cache_generation
     local now = tonumber(t)
 
-    -- Every value below derives from mod settings (any change bumps the color
-    -- cache generation) or from globals/managers that the timed refresh keeps
-    -- from going stale, so skip the rebuild on frames where nothing changed.
     if draw_cache.valid
         and draw_cache.color_generation == color_generation
         and now ~= nil
@@ -2985,7 +2984,24 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
     local live_camera_rotation = mod.get_hud_player_camera_rotation and mod:get_hud_player_camera_rotation(self)
     local projection_rotation = live_camera_rotation or (snapshot and snapshot.player_rotation) or nil
 
-    RadarHudRenderer.draw_radar_frame(self, ui_renderer, x, y, z + 1, size, projection_rotation)
+    local strikemap_geometry_active = RadarStrikemapGeometry.is_active(t)
+    local navmesh_geometry_active = RadarNavmesh.is_active(strikemap_geometry_active)
+
+    if strikemap_geometry_active or navmesh_geometry_active then
+        RadarHudRenderer.draw_radar_frame_background(self, ui_renderer, x, y, z + 1, size, projection_rotation)
+
+        if strikemap_geometry_active then
+            RadarStrikemapGeometry.draw(ui_renderer, snapshot, center_x, center_y, z + 2,
+                projection_radius, range, projection_rotation, radar_style, t)
+        else
+            RadarNavmesh.draw(ui_renderer, t, snapshot and snapshot.player_position, projection_rotation,
+                center_x, center_y, projection_radius, range, z + 2)
+        end
+
+        RadarHudRenderer.draw_radar_frame_foreground(self, ui_renderer, x, y, z + 1, size, projection_rotation)
+    else
+        RadarHudRenderer.draw_radar_frame(self, ui_renderer, x, y, z + 1, size, projection_rotation)
+    end
 
     local next_widget_index = 1
     local max_markers = mod:get_max_radar_markers()

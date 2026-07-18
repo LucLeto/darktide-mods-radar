@@ -1606,6 +1606,57 @@ return {
                     sub_widgets = _color_setting_groups("radar_colors_group"),
                 },
                 {
+                    setting_id = "radar_map_geometry_group",
+                    type = "group",
+                    tab = TAB_LAYOUT,
+                    tab_overrides = TAB_OVERRIDES_LAYOUT,
+                    sub_widgets = {
+                        {
+                            setting_id = "map_geometry_source",
+                            type = "dropdown",
+                            default_value = "off",
+                            options = {
+                                _dropdown_option("radar_outline_off", "off"),
+                                _dropdown_option("map_geometry_source_live", "live"),
+                                _dropdown_option("map_geometry_source_strikemap", "strikemap"),
+                                _dropdown_option("map_geometry_source_auto", "auto"),
+                            },
+                            get = function()
+                                return mod.get_map_geometry_source and mod:get_map_geometry_source() or "off"
+                            end,
+                        },
+                        {
+                            setting_id = "navmesh_range_above",
+                            type = "numeric",
+                            default_value = 7,
+                            range = { 1, 30 },
+                            decimals_number = 0,
+                            step_size_value = 1,
+                        },
+                        {
+                            setting_id = "navmesh_range_below",
+                            type = "numeric",
+                            default_value = 7,
+                            range = { 1, 30 },
+                            decimals_number = 0,
+                            step_size_value = 1,
+                        },
+                        {
+                            setting_id = "navmesh_max_triangles",
+                            type = "numeric",
+                            default_value = 6000,
+                            range = { 1000, 20000 },
+                            decimals_number = 0,
+                            step_size_value = 500,
+                        },
+                        {
+                            setting_id = "strikemap_geometry_in_overview",
+                            type = "checkbox",
+                            default_value = true,
+                        },
+                    },
+                },
+                {
                     setting_id = "nearby_highlight_group",
                     type = "group",
                     tab = TAB_LAYOUT,
