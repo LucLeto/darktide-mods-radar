@@ -1315,8 +1315,6 @@ return function(env)
             return false
         end
 
-        -- Spectating can repoint `local_player.player_unit` to a living teammate.
-        -- Treat that as unavailable for radar visibility and scan gating.
         local owning_player = _player_for_unit(player_unit)
 
         return owning_player ~= nil and owning_player ~= local_player

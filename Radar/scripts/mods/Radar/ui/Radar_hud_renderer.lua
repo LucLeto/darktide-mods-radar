@@ -709,11 +709,47 @@ local AUSPEX_FRAME_OPTIONS_NO_OUTLINE = {
     sweep_inset = 0,
 }
 
-local function _draw_radar_guides(self, ui_renderer, x, y, z, size, is_circle, camera_rotation)
+local AUSPEX_FRAME_OPTIONS_WITH_OUTLINE_BACKGROUND = {
+    background_inset = 5,
+    sweep_inset = 5,
+    material_layers = "background",
+}
+
+local AUSPEX_FRAME_OPTIONS_NO_OUTLINE_BACKGROUND = {
+    background_inset = 0,
+    sweep_inset = 0,
+    material_layers = "background",
+}
+
+local AUSPEX_FRAME_OPTIONS_WITH_OUTLINE_EFFECTS = {
+    background_inset = 5,
+    sweep_inset = 5,
+    material_layers = "effects",
+}
+
+local AUSPEX_FRAME_OPTIONS_NO_OUTLINE_EFFECTS = {
+    background_inset = 0,
+    sweep_inset = 0,
+    material_layers = "effects",
+}
+
+local function _draw_radar_guides(self, ui_renderer, x, y, z, size, is_circle, camera_rotation, phase)
     local guide_style = mod.get_radar_guides and mod:get_radar_guides() or "crosshair"
 
     if guide_style == "off" then
         return
+    end
+
+    local is_backdrop_style = guide_style == "auspex_background"
+
+    if phase == "background" then
+        if not is_backdrop_style then
+            return
+        end
+    elseif phase == "foreground" then
+        if is_backdrop_style then
+            return
+        end
     end
 
     local guide_color = _configured_color("radar_guides", RADAR_GUIDES_WIDGET_COLOR)
@@ -804,12 +840,20 @@ local function _draw_radar_guides(self, ui_renderer, x, y, z, size, is_circle, c
     end
 end
 
-local function _draw_radar_frame_square(ui_renderer, x, y, z, size, outline_style)
+local function _draw_radar_frame_square(ui_renderer, x, y, z, size, outline_style, phase)
     local thickness = 2
-    local fill_color = _configured_color("radar_background", RADAR_BACKGROUND_WIDGET_COLOR)
-    local outline_color = _configured_color("radar_outline", RADAR_OUTLINE_WIDGET_COLOR)
 
-    _draw_square_fill_soft(ui_renderer, x, y, z, size, fill_color)
+    if phase ~= "foreground" then
+        local fill_color = _configured_color("radar_background", RADAR_BACKGROUND_WIDGET_COLOR)
+
+        _draw_square_fill_soft(ui_renderer, x, y, z, size, fill_color)
+    end
+
+    if phase == "background" then
+        return
+    end
+
+    local outline_color = _configured_color("radar_outline", RADAR_OUTLINE_WIDGET_COLOR)
 
     if outline_style == "solid" then
         _draw_square_outline(ui_renderer, x, y, z + 1, size, thickness, outline_color)
@@ -821,12 +865,20 @@ local function _draw_radar_frame_square(ui_renderer, x, y, z, size, outline_styl
     end
 end
 
-local function _draw_radar_frame_circle(ui_renderer, x, y, z, size, outline_style)
+local function _draw_radar_frame_circle(ui_renderer, x, y, z, size, outline_style, phase)
     local center_x, center_y, radius = _circle_metrics(x, y, size)
-    local fill_color = _configured_color("radar_background", RADAR_BACKGROUND_WIDGET_COLOR)
-    local outline_color = _configured_color("radar_outline", RADAR_OUTLINE_WIDGET_COLOR)
 
-    _draw_circle_fill_soft(ui_renderer, center_x, center_y, z, radius, fill_color)
+    if phase ~= "foreground" then
+        local fill_color = _configured_color("radar_background", RADAR_BACKGROUND_WIDGET_COLOR)
+
+        _draw_circle_fill_soft(ui_renderer, center_x, center_y, z, radius, fill_color)
+    end
+
+    if phase == "background" then
+        return
+    end
+
+    local outline_color = _configured_color("radar_outline", RADAR_OUTLINE_WIDGET_COLOR)
 
     if outline_style == "solid" then
         _draw_circle_outline(ui_renderer, center_x, center_y, z + 1, radius, outline_color)
@@ -874,23 +926,28 @@ _draw_auspex_material_layers = function(self, ui_renderer, x, y, z, size, camera
     local noise_size = math_max(1, size - noise_inset * 2)
     local scan_noise_size = math_max(1, size - scan_noise_inset * 2)
     local sweep_size = math_max(1, size - sweep_inset * 2)
-    local draw_noise = options.draw_noise ~= false
-    local draw_scan_noise = options.draw_scan_noise ~= false
+    local material_layers = options.material_layers
+    local draw_background = material_layers ~= "effects"
+    local effects_enabled = material_layers ~= "background"
+    local draw_noise = effects_enabled and options.draw_noise ~= false
+    local draw_scan_noise = effects_enabled and options.draw_scan_noise ~= false
 
-    frame_widget.content.background_material = AUSPEX_BACKGROUND_MATERIAL
+    frame_widget.content.background_material = draw_background and AUSPEX_BACKGROUND_MATERIAL or nil
     frame_widget.content.noise_material = draw_noise and AUSPEX_BACKGROUND_NOISE_MATERIAL or nil
     frame_widget.content.scan_noise_material = draw_scan_noise and AUSPEX_SCAN_NOISE_MATERIAL or nil
-    frame_widget.content.sweep_material = animated_sweep_enabled and AUSPEX_SWEEP_MATERIAL or nil
+    frame_widget.content.sweep_material = effects_enabled and animated_sweep_enabled and AUSPEX_SWEEP_MATERIAL or nil
 
-    _apply_frame_layer_style(
-        frame_widget.style.background,
-        x + background_inset,
-        y + background_inset,
-        z + (options.background_z_offset or 0),
-        background_size,
-        options.background_color or _configured_widget_color("auspex_background", AUSPEX_BACKGROUND_WIDGET_COLOR)
-    )
-    _apply_layer_rotation(frame_widget.style.background, rotation_angle)
+    if draw_background then
+        _apply_frame_layer_style(
+            frame_widget.style.background,
+            x + background_inset,
+            y + background_inset,
+            z + (options.background_z_offset or 0),
+            background_size,
+            options.background_color or _configured_widget_color("auspex_background", AUSPEX_BACKGROUND_WIDGET_COLOR)
+        )
+        _apply_layer_rotation(frame_widget.style.background, rotation_angle)
+    end
     if draw_noise then
         _apply_frame_layer_style(
             frame_widget.style.noise,
@@ -911,27 +968,48 @@ _draw_auspex_material_layers = function(self, ui_renderer, x, y, z, size, camera
             options.scan_noise_color or _configured_widget_color("auspex_scan_noise", AUSPEX_SCAN_NOISE_WIDGET_COLOR)
         )
     end
-    _apply_frame_layer_style(
-        frame_widget.style.sweep,
-        x + sweep_inset,
-        y + sweep_inset,
-        z + 3,
-        sweep_size,
-        animated_sweep_enabled and (options.sweep_color or _configured_widget_color("auspex_sweep", AUSPEX_SWEEP_WIDGET_COLOR))
-        or WHITE_WIDGET_COLOR
-    )
-    _apply_layer_rotation(frame_widget.style.sweep, rotation_angle)
+    if effects_enabled then
+        _apply_frame_layer_style(
+            frame_widget.style.sweep,
+            x + sweep_inset,
+            y + sweep_inset,
+            z + 3,
+            sweep_size,
+            animated_sweep_enabled and (options.sweep_color or _configured_widget_color("auspex_sweep", AUSPEX_SWEEP_WIDGET_COLOR))
+            or WHITE_WIDGET_COLOR
+        )
+        _apply_layer_rotation(frame_widget.style.sweep, rotation_angle)
+    end
 
     UIWidget.draw(frame_widget, ui_renderer)
 end
 
-local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera_rotation)
+local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera_rotation, phase)
     local outline_style = mod.get_radar_outline and mod:get_radar_outline() or "solid"
-    local fill_color = _configured_color("radar_background", RADAR_BACKGROUND_WIDGET_COLOR)
-    local options = outline_style ~= "off" and AUSPEX_FRAME_OPTIONS_WITH_OUTLINE or AUSPEX_FRAME_OPTIONS_NO_OUTLINE
+    local with_outline = outline_style ~= "off"
+    local options
 
-    _draw_square_fill_soft(ui_renderer, x, y, z - 1, size, fill_color)
+    if phase == "background" then
+        options = with_outline and AUSPEX_FRAME_OPTIONS_WITH_OUTLINE_BACKGROUND
+            or AUSPEX_FRAME_OPTIONS_NO_OUTLINE_BACKGROUND
+    elseif phase == "foreground" then
+        options = with_outline and AUSPEX_FRAME_OPTIONS_WITH_OUTLINE_EFFECTS
+            or AUSPEX_FRAME_OPTIONS_NO_OUTLINE_EFFECTS
+    else
+        options = with_outline and AUSPEX_FRAME_OPTIONS_WITH_OUTLINE or AUSPEX_FRAME_OPTIONS_NO_OUTLINE
+    end
+
+    if phase ~= "foreground" then
+        local fill_color = _configured_color("radar_background", RADAR_BACKGROUND_WIDGET_COLOR)
+
+        _draw_square_fill_soft(ui_renderer, x, y, z - 1, size, fill_color)
+    end
+
     _draw_auspex_material_layers(self, ui_renderer, x, y, z, size, camera_rotation, options)
+
+    if phase == "background" then
+        return
+    end
 
     if outline_style == "solid" then
         local thickness = math_max(1, math_floor(size * 0.012 + 0.5))
@@ -954,11 +1032,11 @@ local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera
     end
 end
 
-local function _draw_radar_frame(self, ui_renderer, x, y, z, size, camera_rotation)
+local function _draw_radar_frame_phase(self, ui_renderer, x, y, z, size, camera_rotation, phase)
     local radar_style = _current_radar_style()
 
     if radar_style == "auspex" then
-        _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera_rotation)
+        _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera_rotation, phase)
 
         return
     end
@@ -967,17 +1045,31 @@ local function _draw_radar_frame(self, ui_renderer, x, y, z, size, camera_rotati
     local is_circle = radar_style == "circle"
 
     if is_circle then
-        _draw_radar_frame_circle(ui_renderer, x, y, z, size, outline_style)
+        _draw_radar_frame_circle(ui_renderer, x, y, z, size, outline_style, phase)
     else
-        _draw_radar_frame_square(ui_renderer, x, y, z, size, outline_style)
+        _draw_radar_frame_square(ui_renderer, x, y, z, size, outline_style, phase)
     end
 
-    _draw_radar_guides(self, ui_renderer, x, y, z + 1, size, is_circle, camera_rotation)
+    _draw_radar_guides(self, ui_renderer, x, y, z + 1, size, is_circle, camera_rotation, phase)
+end
+
+local function _draw_radar_frame(self, ui_renderer, x, y, z, size, camera_rotation)
+    _draw_radar_frame_phase(self, ui_renderer, x, y, z, size, camera_rotation, nil)
+end
+
+local function _draw_radar_frame_background(self, ui_renderer, x, y, z, size, camera_rotation)
+    _draw_radar_frame_phase(self, ui_renderer, x, y, z, size, camera_rotation, "background")
+end
+
+local function _draw_radar_frame_foreground(self, ui_renderer, x, y, z, size, camera_rotation)
+    _draw_radar_frame_phase(self, ui_renderer, x, y, z, size, camera_rotation, "foreground")
 end
 
 return {
     draw_box = _draw_box,
     draw_marker_brackets = _draw_marker_brackets,
     draw_radar_frame = _draw_radar_frame,
+    draw_radar_frame_background = _draw_radar_frame_background,
+    draw_radar_frame_foreground = _draw_radar_frame_foreground,
     widget_to_color = _widget_to_color,
 }
