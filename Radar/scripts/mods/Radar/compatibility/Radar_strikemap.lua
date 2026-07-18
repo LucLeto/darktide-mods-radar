@@ -12,28 +12,6 @@ local type = type
 local math_floor = math.floor
 local string_format = string.format
 
--- Radar only consumes Strikemap's documented public compatibility API
--- (see COMPATIBILITY_API.txt in the Strikemap mod):
---
---   local strikemap = get_mod("strikemap")
---   local api = strikemap:get_compatibility_api()   -- session-stable table
---   api.api_version                                 -- must equal 1
---   api.get_status()      -- cheap status table (reused; read immediately)
---   api.get_map_context() -- read-only context, cached per geometry_revision
---   api.register_consumer("Radar") / api.unregister_consumer("Radar")
---
--- The context provides (API v1):
---   mission_name / map_id, revision,
---   triangles       flat number array, 7 numbers per walkable triangle:
---                   x1, y1, x2, y2, x3, y3, z (shared floor height, Z-up
---                   world metres),
---   tri_count, triangle_stride (7), grid_cell,
---   spatial_index   "gx:gy" -> comma-separated string of 1-based indices,
---   bounds          { x0, y0, x1, y1, z0, z1 }.
---
--- The context tables are strictly read-only and shared with Strikemap's own
--- renderer; Radar never mutates them and never touches Strikemap's markers,
--- scans, recording or private state.
 local SUPPORTED_STRIKEMAP_API_VERSION = 1
 local TRIANGLE_STRIDE = 7
 local CONSUMER_ID = "Radar"
@@ -48,9 +26,6 @@ local STRIKEMAP_MOD_NAME_CANDIDATES = {
     "Strike_Map",
 }
 
--- "incompatible" and "error" stay set for the session until the next mission
--- change or setting toggle resets the integration, so a broken dependency is
--- never retried every frame.
 local STICKY_STATUSES = {
     incompatible = true,
     error = true,
@@ -94,9 +69,6 @@ function StrikemapCompatibility:_set_status(status, detail)
 end
 
 function StrikemapCompatibility:is_integration_enabled()
-    -- The shared map-geometry source selector decides which layer may draw;
-    -- Strikemap participates for "strikemap" and as the preferred source in
-    -- "auto" (the live navmesh layer takes over when this one is unavailable).
     local get_map_geometry_source = mod.get_map_geometry_source
 
     if not get_map_geometry_source then
@@ -280,14 +252,11 @@ function StrikemapCompatibility:_refresh(now)
             return nil
         end
 
-        -- The API table is stable for the whole session; cache it.
         self._api = api
     end
 
     self:_register_consumer(api)
 
-    -- Poll the cheap status table before touching the context. The status
-    -- table is reused by Strikemap between calls: read fields, never keep it.
     if type(api.get_status) == "function" then
         local ok_status, status = pcall(api.get_status)
 
@@ -415,10 +384,6 @@ function StrikemapCompatibility:mark_unsupported(reason)
 end
 
 function StrikemapCompatibility:reset(status)
-    -- Mission changes drop the cached context; the resolved API table and the
-    -- consumer registration are session-stable and survive resets. Turning
-    -- the integration off also releases the consumer registration, so
-    -- Strikemap's optional auto geometry-only mode ends with it.
     self._context = nil
     self._context_revision = nil
     self._next_attempt_t = 0

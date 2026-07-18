@@ -811,9 +811,6 @@ local function _build_draw_cache(t)
     local color_generation = mod._radar_color_cache_generation
     local now = tonumber(t)
 
-    -- Every value below derives from mod settings (any change bumps the color
-    -- cache generation) or from globals/managers that the timed refresh keeps
-    -- from going stale, so skip the rebuild on frames where nothing changed.
     if draw_cache.valid
         and draw_cache.color_generation == color_generation
         and now ~= nil
@@ -2987,17 +2984,10 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
     local live_camera_rotation = mod.get_hud_player_camera_rotation and mod:get_hud_player_camera_rotation(self)
     local projection_rotation = live_camera_rotation or (snapshot and snapshot.player_rotation) or nil
 
-    -- One shared map-geometry slot, owned by exactly one layer per frame as decided by the
-    -- "map_geometry_source" setting: Strikemap's floor plan when selected and available, the
-    -- live navmesh scan otherwise ("auto" prefers Strikemap and falls back to the live scan).
-    -- RadarNavmesh.is_active must run even while suppressed so it can release its cached
-    -- geometry the moment the Strikemap layer takes over.
     local strikemap_geometry_active = RadarStrikemapGeometry.is_active(t)
     local navmesh_geometry_active = RadarNavmesh.is_active(strikemap_geometry_active)
 
     if strikemap_geometry_active or navmesh_geometry_active then
-        -- Split the frame so the map-geometry layer sits above the radar background but stays
-        -- beneath outlines, guides, auspex effects and every marker (brackets z+4, icons z+5).
         RadarHudRenderer.draw_radar_frame_background(self, ui_renderer, x, y, z + 1, size, projection_rotation)
 
         if strikemap_geometry_active then

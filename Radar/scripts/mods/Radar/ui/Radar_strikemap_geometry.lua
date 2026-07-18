@@ -25,38 +25,18 @@ local Quaternion_forward = Quaternion and Quaternion.forward
 local Vector3_x = Vector3 and Vector3.x
 local Vector3_y = Vector3 and Vector3.y
 
--- Strikemap compatibility API v1 geometry layout (see COMPATIBILITY_API.txt):
--- context.triangles is a flat number array with 7 numbers per triangle
--- (x1, y1, x2, y2, x3, y3, z) in Z-up world metres; the three vertices share
--- one floor height z. context.spatial_index maps "gx:gy" cell keys
--- (gx = floor(world_x / context.grid_cell)) to comma-separated strings of
--- 1-based triangle indices. All context tables are read-only; the parsed
--- index below is cached on Radar's side only.
 local TRIANGLE_STRIDE = 7
--- Shared floor-band appearance: this layer reads the same "radar_navmesh"
--- band colours (alpha channel = per-band opacity) and the same floors-above/
--- below range settings as the live navmesh layer, so both map-geometry
--- sources are configured in one place. Fallbacks mirror the colour-settings
--- defaults; the current-floor half-height matches the navmesh layer's window.
 local CURRENT_FLOOR_HALF_HEIGHT = 2.5
 local BAND_CURRENT_FALLBACK_COLOR = { 80, 101, 133, 96 }
-local BAND_ABOVE_FALLBACK_COLOR = { 34, 120, 145, 175 }
-local BAND_BELOW_FALLBACK_COLOR = { 60, 92, 104, 120 }
+local BAND_ABOVE_FALLBACK_COLOR = { 32, 120, 150, 185 }
+local BAND_BELOW_FALLBACK_COLOR = { 55, 120, 98, 76 }
 local DEFAULT_RANGE_ABOVE = 3
 local DEFAULT_RANGE_BELOW = 7
 local GRID_CELL_HASH_OFFSET = 4096
 local GRID_CELL_HASH_STRIDE = 8192
--- Safety valve for very large maps at overview zoom ranges; geometry beyond
--- the cap is skipped for the frame instead of stalling the draw pass.
 local MAX_TRIANGLE_DRAWS_PER_FRAME = 3000
--- Points on the square radar edge can be up to range * sqrt(2) world meters
--- away once camera rotation is applied.
 local CULL_RANGE_FACTOR = 1.4143
 
--- Mission geometry is static, so Strikemap's packed spatial index is parsed
--- once per map context into numeric-keyed buckets and reused every frame
--- without further allocations. Triangle coordinates are read directly from
--- the (read-only) context array.
 local _grid = {
     context = nil,
     triangles = nil,
@@ -148,8 +128,6 @@ local function _build_grid(context)
         stamp[i] = 0
     end
 
-    -- Parse Strikemap's packed "gx:gy" -> "1,5,9" index into Radar-side
-    -- buckets; the context itself must never be written to.
     for key, packed in pairs(spatial_index) do
         local gx, gy = string_match(tostring(key), "^(-?%d+):(-?%d+)$")
 
@@ -218,16 +196,11 @@ local function _build_grid(context)
 end
 
 local function _ensure_grid(context)
-    -- Strikemap returns the same context table for the whole mission and
-    -- bumps geometry_revision (handled in the compatibility module) when it
-    -- changes, so identity is a sufficient rebuild trigger.
     if _grid.context ~= context then
         _build_grid(context)
     end
 end
 
--- Sutherland-Hodgman clipping against the square [-limit, limit]^2 using
--- reused scratch buffers, so edge triangles never allocate per frame.
 local _poly_ax, _poly_ay = {}, {}
 local _poly_bx, _poly_by = {}, {}
 
@@ -324,17 +297,9 @@ local function _clip_triangle_to_square(px1, py1, px2, py2, px3, py3, limit)
         return 0
     end
 
-    -- The final polygon ends up back in _poly_ax/_poly_ay.
     return count
 end
 
--- Darktide's screen-space Gui.triangle takes three Vector3 points plus a
--- separate integer sort layer. A 2D screen point (x, y) maps to
--- Vector3(x, 0, y): the vertical screen axis lives in the Z component, NOT Y,
--- and depth comes from the layer argument (unlike Gui.rect, which packs depth
--- into the point's Z). This mirrors Strikemap's own verified in-game geometry
--- rendering exactly. Probe the call once, guarded, and disable safely if the
--- engine build does not expose it.
 local _triangle_supported = nil
 
 local function _probe_triangle(gui)
@@ -359,9 +324,6 @@ local function _submit_triangle(gui, sx1, sy1, sx2, sy2, sx3, sy3, layer, color)
     )
 end
 
--- Configured (a, r, g, b) for one floor band, shared with the navmesh layer
--- via the colour-settings cache. Returns an engine Color, or nil when the
--- band's opacity is zero so fully transparent bands skip their triangles.
 local function _band_color(prefix, fallback)
     local get_radar_color = mod.get_radar_color
     local color = get_radar_color and get_radar_color(mod, prefix, fallback) or fallback
@@ -490,8 +452,6 @@ local function _draw_geometry(ui_renderer, context, player_pos, rotation, center
                                 or (px1 < -limit and px2 < -limit and px3 < -limit)
                                 or (py1 > limit and py2 > limit and py3 > limit)
                                 or (py1 < -limit and py2 < -limit and py3 < -limit)) then
-                            -- Range window first, then band classification;
-                            -- matches the navmesh layer's selection exactly.
                             local dz = triangles[base + 7] - ppz
                             local color = nil
 
@@ -566,13 +526,6 @@ end
 
 local RadarStrikemapGeometry = {}
 
--- True when this layer will draw this frame: the map-geometry source selects
--- Strikemap ("strikemap" or "auto"), the layer is allowed in the current view,
--- and a validated map context is available. The hud element uses this to give
--- the single geometry slot to exactly one layer; in "auto" the live navmesh
--- takes over whenever this returns false. get_map_context() handles the
--- disabled state, retries and sticky failures internally and is cheap when
--- cached, so this is safe to call every frame.
 RadarStrikemapGeometry.is_active = function(t)
     if _triangle_supported == false then
         return false

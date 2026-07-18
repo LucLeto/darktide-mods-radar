@@ -1606,8 +1606,6 @@ return {
                     sub_widgets = _color_setting_groups("radar_colors_group"),
                 },
                 {
-                    -- The "radar_navmesh" ARGB color groups (including each band's opacity
-                    -- slider) are inserted after the source dropdown by _insert_color_settings.
                     setting_id = "radar_map_geometry_group",
                     type = "group",
                     tab = TAB_LAYOUT,
@@ -1630,7 +1628,7 @@ return {
                         {
                             setting_id = "navmesh_range_above",
                             type = "numeric",
-                            default_value = 3,
+                            default_value = 7,
                             range = { 1, 30 },
                             decimals_number = 0,
                             step_size_value = 1,

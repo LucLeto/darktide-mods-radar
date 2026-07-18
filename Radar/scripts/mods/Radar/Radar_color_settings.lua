@@ -163,13 +163,9 @@ _add_radar_color("radar_colors_group", "vertical_arrow", WHITE, "vertical_arrow_
 _add_radar_color("radar_colors_group", "radar_legend_indicator", RADAR_OUTLINE, "radar_legend_indicator_color")
 _add_radar_color("radar_colors_group", "radar_zoom_indicator", _color(210, 0, 255, 0),
     "radar_zoom_indicator_color")
--- Map-geometry layer colours; anchored to the source dropdown so the ARGB sliders (including
--- each band's opacity, the alpha channel) appear inside the Map Geometry settings group. One
--- colour per floor band relative to the player: the current floor reads brightest, floors above
--- are faintest and drawn on top, floors below sit dimmer beneath.
 _add_radar_color("map_geometry_source", "radar_navmesh", _color(80, 101, 133, 96), "radar_navmesh_color")
-_add_radar_color("map_geometry_source", "radar_navmesh_above", _color(34, 120, 145, 175), "radar_navmesh_above_color")
-_add_radar_color("map_geometry_source", "radar_navmesh_below", _color(60, 92, 104, 120), "radar_navmesh_below_color")
+_add_radar_color("map_geometry_source", "radar_navmesh_above", _color(32, 120, 150, 185), "radar_navmesh_above_color")
+_add_radar_color("map_geometry_source", "radar_navmesh_below", _color(55, 120, 98, 76), "radar_navmesh_below_color")
 
 _add_default("enemy_boss_marker", _color(255, 255, 64, 64))
 _add_default("enemy_boss_background", _color(220, 255, 0, 0))

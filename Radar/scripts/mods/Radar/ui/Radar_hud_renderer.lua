@@ -709,8 +709,6 @@ local AUSPEX_FRAME_OPTIONS_NO_OUTLINE = {
     sweep_inset = 0,
 }
 
--- Split variants used when the map-geometry layer is active: the scanner background material is
--- drawn beneath the geometry, the noise/scan/sweep effects above it (same layers as combined).
 local AUSPEX_FRAME_OPTIONS_WITH_OUTLINE_BACKGROUND = {
     background_inset = 5,
     sweep_inset = 5,
@@ -735,9 +733,6 @@ local AUSPEX_FRAME_OPTIONS_NO_OUTLINE_EFFECTS = {
     material_layers = "effects",
 }
 
--- `phase` splits the frame around the map-geometry layer: "background" draws only the fills and
--- backdrop materials, "foreground" only outlines, guides and effects. nil draws everything and
--- matches the original single-pass behavior exactly.
 local function _draw_radar_guides(self, ui_renderer, x, y, z, size, is_circle, camera_rotation, phase)
     local guide_style = mod.get_radar_guides and mod:get_radar_guides() or "crosshair"
 
@@ -745,8 +740,6 @@ local function _draw_radar_guides(self, ui_renderer, x, y, z, size, is_circle, c
         return
     end
 
-    -- The auspex-background guide is a textured backdrop and belongs beneath the geometry
-    -- layer; every other guide style draws above it.
     local is_backdrop_style = guide_style == "auspex_background"
 
     if phase == "background" then
@@ -933,8 +926,6 @@ _draw_auspex_material_layers = function(self, ui_renderer, x, y, z, size, camera
     local noise_size = math_max(1, size - noise_inset * 2)
     local scan_noise_size = math_max(1, size - scan_noise_inset * 2)
     local sweep_size = math_max(1, size - sweep_inset * 2)
-    -- material_layers splits the widget passes around the map-geometry layer: "background"
-    -- draws only the scanner backdrop, "effects" only noise/scan/sweep, nil draws everything.
     local material_layers = options.material_layers
     local draw_background = material_layers ~= "effects"
     local effects_enabled = material_layers ~= "background"
@@ -1066,9 +1057,6 @@ local function _draw_radar_frame(self, ui_renderer, x, y, z, size, camera_rotati
     _draw_radar_frame_phase(self, ui_renderer, x, y, z, size, camera_rotation, nil)
 end
 
--- Background/foreground halves of the frame, used when the map-geometry layer draws in between.
--- Layer numbers are identical to the single-pass _draw_radar_frame; only submission order and
--- pass membership differ.
 local function _draw_radar_frame_background(self, ui_renderer, x, y, z, size, camera_rotation)
     _draw_radar_frame_phase(self, ui_renderer, x, y, z, size, camera_rotation, "background")
 end
