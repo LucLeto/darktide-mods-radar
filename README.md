@@ -2,19 +2,18 @@
 
 Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide**. It is built to surface the targets that matter most during live missions, nearby pickups, objective items, deployed support tools, environment interactables, expedition points of interest, teammates and their companions, player smart tags, tagged targets, supported ability-outlined enemies, and high-priority enemies, while keeping the presentation configurable from the mod options menu. A centered overview mode can also be toggled during missions when you need a wider tactical read.
 
-## What's new in 2.5.0
+## What's new in 2.6.0
 
-- Added radar markers for player companions, including the Arbitrator's **Cyber Mastiff** and the Skitarii's **Servo Skulls**.
-- Added optional remaining-charge annotations for **Medicae Stations** and deployed **Ammo Crates**.
-- Added radar tracking for explosive and fire barrels.
-- Kept **Heretic Idol** markers visible across vertical levels so they remain easier to track in multi-floor areas.
-- Improved Radar performance by reducing per-frame work.
-- Updated the Traditional Chinese localization.
+- Added an optional **Map Geometry** layer that draws the mission's walkable floor plan behind all radar markers, in the normal radar and the centered overview alike.
+- The **Map geometry source** dropdown selects how the floor plan is produced: **Off** (default), a built-in **Live scan** of the mission's navigation mesh, the **Strikemap floor plan** from the [Strikemap](https://www.nexusmods.com/warhammer40kdarktide/mods/1022) mod, or **Auto**, which prefers Strikemap and falls back to the live scan.
+- Geometry is shaded in three height bands relative to your position, current floor, floors above, and floors below, each with its own ARGB color sliders and shared **Floors Above Range** and **Floors Below Range** windows.
+- Radar keeps full ownership of all markers; only the floor plan comes from the selected geometry source, and exactly one source is drawn at a time.
 
 ## Feature Overview
 
 - Tracks nearby pickups, materials, mission items, deployables, environment interactables, live-event pickups and objectives, expedition POIs, teammates, player companions, player smart tags, tagged targets, supported ability-outlined enemies, and high-priority enemies on a single camera-oriented radar or the temporary centered overview.
 - Supports **Square**, **Circle**, and **Auspex** radar styles. Square and Circle use configurable **outline** and **guide** options, including the Auspex background guide, while **Auspex** adds its dedicated scanner frame treatment.
+- Optionally draws the mission's walkable **map geometry** beneath all markers, sourced from a built-in **live scan** of the navigation mesh or from the **Strikemap** mod's pre-baked floor plans, with configurable floor-band colors, floor range windows, and a geometry detail limit.
 - Lets you tune **radar size**, normal radar **range**, centered overview **zoom range**, **Radar Colors**, **maximum marker count**, **nearby highlight range**, supported vertical arrow and hiding behavior, and the dedicated nearby-highlight presentation settings.
 - Supports per-category **Icon size (%)** sliders across item, player, player companion, enemy, event, and debug marker groups, plus dedicated enemy sub-category scaling.
 - Supports separate display, range, and vertical arrow controls for **bosses**, **enemy groups**, **teammates**, **player companions**, **player smart tags**, **tagged-only enemy and item filtering**, supported **ability outlines**, and the local **player center dot**, including **Infinite** marker range modes for bosses and teammates.
@@ -100,6 +99,51 @@ The arrow range and vertical hiding threshold remain global, so enemy arrows reu
   <img src="doc/img/material_expeditions_loot_up.png" width="50" alt="Item marker with up arrow example" />
   <img src="doc/img/material_expeditions_loot_down.png" width="50" alt="Item marker with down arrow example" />
 </p>
+
+## Map geometry
+
+Since 2.6.0, Radar can draw the mission's walkable floor plan as the bottom layer of the radar, above the radar background but beneath the outline, guides, Auspex effects, and every marker. The geometry uses the same position, rotation, range, and zoom as the markers, works with the **Square**, **Circle**, and **Auspex** styles, and also renders in the centered overview mode.
+
+The screenshots below show the centered overview with map geometry in a multi-storey interior and over an open Expedition scavenge zone, where the floor bands separate the canyon levels:
+
+<p>
+  <img src="doc/img/Radar_map_example_2.jpg" width="49%" alt="Centered overview mode drawing map geometry in a multi-storey interior" />
+  <img src="doc/img/Radar_map_example_4.png" width="49%" alt="Centered overview mode drawing map geometry with floor bands over an Expedition scavenge zone" />
+</p>
+
+The **Map geometry source** dropdown in the **Map Geometry** settings group selects how the floor plan is produced. Exactly one source is drawn at a time:
+
+| Source | Behavior |
+| --- | --- |
+| **Off** | Default. No geometry layer; the radar renders exactly as in earlier versions. |
+| **Live scan (built-in)** | Reads the mission's navigation mesh directly. Works in every game mode, including Expeditions, and needs no other mods. |
+| **Strikemap floor plan** | Draws the pre-baked floor plan from the [Strikemap](https://www.nexusmods.com/warhammer40kdarktide/mods/1022) mod through its public compatibility API. Requires Strikemap to be installed and active. |
+| **Auto** | Prefers the Strikemap floor plan and falls back to the live scan whenever no Strikemap geometry is available. |
+
+### Floor bands
+
+The floor plan is shaded in three height bands relative to your current position, so overlapping levels stay readable:
+
+- **Current floor** (within about 2.5 m of your height) renders brightest, in sage green by default.
+- **Floors above** render as a faint cool-blue veil drawn on top, so upper walkways read as "over you" without hiding your own floor.
+- **Floors below** render dimmer in a warm umber beneath your floor.
+
+Each band has its own ARGB sliders under **Map Geometry**; the **A** slider is that band's opacity, and **0** hides the band entirely. **Floors Above Range** and **Floors Below Range** (in meters) limit how far up and down geometry is shown at all. The defaults, **3 m** above and **7 m** below, are tuned for stacked interiors; on open terrain with large height differences, such as Expedition canyons, raise them (for example **15 m**) to keep ramps and upper areas visible. **Geometry Detail Limit** caps how many exact triangles the live scan renders; when an area would exceed it, the smallest on-screen triangles are dropped first.
+
+On the compact radar, the floor plan stays beneath the regular marker presentation, so pickups, tagged targets, teammates, and distance text render unchanged on top of the geometry:
+
+<p>
+  <img src="doc/img/Radar_map_example_1.png" width="240" alt="Compact radar drawing floor-plan geometry beneath markers and distance text" />
+  <img src="doc/img/Radar_map_example_3.png" width="240" alt="Compact radar drawing current-floor geometry beneath tagged enemy and pickup markers" />
+</p>
+
+### Strikemap integration notes
+
+- The combined mode requires an active [Strikemap](https://www.nexusmods.com/warhammer40kdarktide/mods/1022) installation with its compatibility API enabled (**Allow External Mods to Use Strikemap Geometry**, on by default in Strikemap's settings). Radar itself never requires Strikemap.
+- Radar remains responsible for all displayed markers, filtering, and interaction; only the floor plan comes from Strikemap. No Strikemap map data or assets are bundled with Radar, and no additional entity scans are added.
+- The integration fails safely: if Strikemap is missing, disabled, still loading, has no map for the current mission, or exposes an incompatible API version, Radar falls back to its standard background, or to the live scan when the source is **Auto**, and logs the reason once.
+- **Show geometry in overview mode** controls whether the Strikemap floor plan is also drawn in the centered overview.
+- Strikemap's own mission recording and report browser keep working alongside the integration, and its optional geometry-only settings let it hand the live minimap over to Radar entirely.
 
 ## Display and Behavior
 
@@ -234,6 +278,12 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Radar guides | **Crosshair**, **View guides**, **Range rings**, **Auspex**, or **Off**. Only used by the **Square** and **Circle** radar styles. |
 | Radar Colors | ARGB sliders for Radar UI colors such as background, outline, guides, Auspex layers, marker text, vertical arrows, and overview legend indicators. |
 | Animated radar sweep | Enables or disables the animated sweep used by the **Auspex** radar style and **Auspex** guides. |
+| Map geometry source | **Off**, **Live scan (built-in)**, **Strikemap floor plan**, or **Auto**. Draws the mission's walkable floor plan beneath all radar markers; **Auto** prefers Strikemap and falls back to the live scan. |
+| Map geometry colors | ARGB sliders for the current-floor, floor-above, and floor-below bands. Each band's **A** slider is its opacity; **0** hides that band. |
+| Floors Above Range | Adjustable from **1 m** to **30 m**. Geometry more than this far above you is hidden. Raise it on open terrain such as Expedition canyons. |
+| Floors Below Range | Adjustable from **1 m** to **30 m**. Geometry more than this far below you is hidden. |
+| Geometry Detail Limit | Caps how many exact triangles the live scan renders per selection; the smallest on-screen triangles are dropped first when an area exceeds it. |
+| Show geometry in overview mode | Also draws the Strikemap floor plan while centered overview mode is active. |
 | Nearby highlight range (m) | Adjustable from **5 m** to **20 m**. Controls how close supported items must be before their screen-space bracket highlights appear. |
 | Highlight thickness | Adjusts the line thickness used by nearby screen-space highlight brackets. |
 | Show distance above nearby highlights | Shows item distance text above supported nearby screen-space highlights. |
