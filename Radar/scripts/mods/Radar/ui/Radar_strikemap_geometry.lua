@@ -33,10 +33,17 @@ local Vector3_y = Vector3 and Vector3.y
 -- 1-based triangle indices. All context tables are read-only; the parsed
 -- index below is cached on Radar's side only.
 local TRIANGLE_STRIDE = 7
-local DEFAULT_GEOMETRY_WIDGET_COLOR = { 255, 130, 190, 130 }
-local DEFAULT_CURRENT_FLOOR_ALPHA = 110
-local DEFAULT_OTHER_FLOOR_ALPHA = 45
+-- Shared floor-band appearance: this layer reads the same "radar_navmesh"
+-- band colours (alpha channel = per-band opacity) and the same floors-above/
+-- below range settings as the live navmesh layer, so both map-geometry
+-- sources are configured in one place. Fallbacks mirror the colour-settings
+-- defaults; the current-floor half-height matches the navmesh layer's window.
 local CURRENT_FLOOR_HALF_HEIGHT = 2.5
+local BAND_CURRENT_FALLBACK_COLOR = { 80, 101, 133, 96 }
+local BAND_ABOVE_FALLBACK_COLOR = { 34, 120, 145, 175 }
+local BAND_BELOW_FALLBACK_COLOR = { 60, 92, 104, 120 }
+local DEFAULT_RANGE_ABOVE = 3
+local DEFAULT_RANGE_BELOW = 7
 local GRID_CELL_HASH_OFFSET = 4096
 local GRID_CELL_HASH_STRIDE = 8192
 -- Safety valve for very large maps at overview zoom ranges; geometry beyond
@@ -352,46 +359,45 @@ local function _submit_triangle(gui, sx1, sy1, sx2, sy2, sx3, sy3, layer, color)
     )
 end
 
-local function _floor_alpha(setting_id, default_value)
-    local value = tonumber(mod:get(setting_id))
+-- Configured (a, r, g, b) for one floor band, shared with the navmesh layer
+-- via the colour-settings cache. Returns an engine Color, or nil when the
+-- band's opacity is zero so fully transparent bands skip their triangles.
+local function _band_color(prefix, fallback)
+    local get_radar_color = mod.get_radar_color
+    local color = get_radar_color and get_radar_color(mod, prefix, fallback) or fallback
+    local alpha = tonumber(color[1]) or 0
 
-    if value == nil then
-        value = default_value
+    if alpha <= 0 then
+        return nil
     end
 
-    if value < 0 then
-        value = 0
-    elseif value > 255 then
-        value = 255
-    end
-
-    return math_floor(value + 0.5)
+    return Color(alpha, color[2] or 255, color[3] or 255, color[4] or 255)
 end
 
-local function _geometry_base_color(context)
-    local color = context.color
+local function _clamp_band_range(value, default_value)
+    value = tonumber(value) or default_value
 
-    if type(color) == "table" then
-        local r = tonumber(color[2] or color.r)
-        local g = tonumber(color[3] or color.g)
-        local b = tonumber(color[4] or color.b)
-
-        if r and g and b then
-            return r, g, b
-        end
+    if value < 1 then
+        value = 1
+    elseif value > 30 then
+        value = 30
     end
 
-    return DEFAULT_GEOMETRY_WIDGET_COLOR[2], DEFAULT_GEOMETRY_WIDGET_COLOR[3], DEFAULT_GEOMETRY_WIDGET_COLOR[4]
+    return value
 end
 
 local function _draw_geometry(ui_renderer, context, player_pos, rotation, center_x, center_y, z, projection_radius,
                               range, radar_style)
-    local current_alpha = _floor_alpha("strikemap_geometry_current_floor_opacity", DEFAULT_CURRENT_FLOOR_ALPHA)
-    local other_alpha = _floor_alpha("strikemap_geometry_other_floor_opacity", DEFAULT_OTHER_FLOOR_ALPHA)
+    local current_color = _band_color("radar_navmesh", BAND_CURRENT_FALLBACK_COLOR)
+    local above_color = _band_color("radar_navmesh_above", BAND_ABOVE_FALLBACK_COLOR)
+    local below_color = _band_color("radar_navmesh_below", BAND_BELOW_FALLBACK_COLOR)
 
-    if current_alpha <= 0 and other_alpha <= 0 then
+    if not current_color and not above_color and not below_color then
         return
     end
+
+    local range_above = _clamp_band_range(mod:get("navmesh_range_above"), DEFAULT_RANGE_ABOVE)
+    local range_below = _clamp_band_range(mod:get("navmesh_range_below"), DEFAULT_RANGE_BELOW)
 
     _ensure_grid(context)
 
@@ -420,10 +426,6 @@ local function _draw_geometry(ui_renderer, context, player_pos, rotation, center
     local limit_sq = limit * limit
     local radar_scale = limit / range
     local is_circle = radar_style == "circle"
-
-    local base_r, base_g, base_b = _geometry_base_color(context)
-    local current_color = current_alpha > 0 and Color(current_alpha, base_r, base_g, base_b) or nil
-    local other_color = other_alpha > 0 and Color(other_alpha, base_r, base_g, base_b) or nil
 
     local triangles = _grid.triangles
     local cells = _grid.cells
@@ -488,9 +490,20 @@ local function _draw_geometry(ui_renderer, context, player_pos, rotation, center
                                 or (px1 < -limit and px2 < -limit and px3 < -limit)
                                 or (py1 > limit and py2 > limit and py3 > limit)
                                 or (py1 < -limit and py2 < -limit and py3 < -limit)) then
+                            -- Range window first, then band classification;
+                            -- matches the navmesh layer's selection exactly.
                             local dz = triangles[base + 7] - ppz
-                            local color = (dz >= -CURRENT_FLOOR_HALF_HEIGHT and dz <= CURRENT_FLOOR_HALF_HEIGHT)
-                                and current_color or other_color
+                            local color = nil
+
+                            if dz <= range_above and dz >= -range_below then
+                                if dz > CURRENT_FLOOR_HALF_HEIGHT then
+                                    color = above_color
+                                elseif dz < -CURRENT_FLOOR_HALF_HEIGHT then
+                                    color = below_color
+                                else
+                                    color = current_color
+                                end
+                            end
 
                             if color then
                                 if is_circle then
