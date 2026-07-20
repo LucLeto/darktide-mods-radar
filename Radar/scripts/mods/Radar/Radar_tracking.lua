@@ -77,6 +77,17 @@ return function(env)
     local OVERVIEW_RANGE_TRANSITION_DURATION = 0.28
     local OVERVIEW_RANGE_TRANSITION_SCAN_INTERVAL = 0.05
     local STATIC_SCAN_INTERVAL = SCAN_INTERVAL * 2
+    -- Only self-moving targets (enemies, teammates, companions) follow the
+    -- configurable rate. Droppable items (pocketables, deployables, expedition
+    -- drops, tag points) rescan at the fixed DROPPABLE_SCAN_INTERVAL, and fully
+    -- static props (chests, destructibles, hazards) keep the even slower
+    -- STATIC_SCAN_INTERVAL since they never move.
+    local SCAN_INTERVAL_BY_RATE = {
+        low = SCAN_INTERVAL,
+        medium = 0.1,
+        high = 0.05,
+    }
+    local DROPPABLE_SCAN_INTERVAL = SCAN_INTERVAL
     local OVERVIEW_RESET_FIT_EDGE_FRACTION = 0.9
     local OVERVIEW_RADAR_MARKER_LIMIT = 300
     local NORMAL_RADAR_MIN_ZOOM_RANGE = 10
@@ -1596,7 +1607,17 @@ return function(env)
         end
     end
 
-    local function _prune_units()
+    -- Sources whose units move on their own every frame (enemies, teammates,
+    -- companions). Units from any other source only get their stored position
+    -- refreshed on droppable-item ticks, since props never move and droppables
+    -- move rarely.
+    local MOVING_TRACK_SOURCES = {
+        unit_data_system = true,
+        player_manager = true,
+        player_companion = true,
+    }
+
+    local function _prune_units(refresh_item_positions)
         local now = _safe_gameplay_time() or 0
         local tracked_units = mod._tracked_units
 
@@ -1608,7 +1629,7 @@ return function(env)
 
                 if last_seen_t and now - last_seen_t > 2.5 then
                     tracked_units[unit] = nil
-                else
+                elseif refresh_item_positions or MOVING_TRACK_SOURCES[data.source] then
                     local meta = data and data.meta
                     local position = meta and _copy_vector3(meta.position) or nil
 
@@ -2343,6 +2364,7 @@ return function(env)
         mod._unclustered_radar_targets = {}
         mod._highlight_source_radar_targets = {}
         mod._next_scan_t = 0
+        mod._next_droppable_scan_t = 0
         mod._next_static_scan_t = 0
         mod._last_scan_cost_ms = nil
         _invalidate_runtime_state_cache()
@@ -2480,9 +2502,16 @@ return function(env)
 
         local scan_interval = mod._overview_range_transition_active
             and OVERVIEW_RANGE_TRANSITION_SCAN_INTERVAL
+            or SCAN_INTERVAL_BY_RATE[mod:get("radar_scan_rate")]
             or SCAN_INTERVAL
 
         mod._next_scan_t = scan_clock + scan_interval
+
+        local droppable_scan_due = scan_clock >= (mod._next_droppable_scan_t or 0)
+
+        if droppable_scan_due then
+            mod._next_droppable_scan_t = scan_clock + DROPPABLE_SCAN_INTERVAL
+        end
 
         local static_scan_due = scan_clock >= (mod._next_static_scan_t or 0)
 
@@ -2492,10 +2521,12 @@ return function(env)
 
         local scan_start_time = mod:get("debug_mode") == true and os_clock and os_clock() or nil
 
-        _sync_expedition_item_state()
+        if droppable_scan_due then
+            _sync_expedition_item_state()
+            _scan_interactees()
+        end
 
         if static_scan_due then
-            _scan_interactees()
             _scan_chests()
         end
 
@@ -2504,13 +2535,20 @@ return function(env)
         if static_scan_due then
             _scan_destructibles()
             _scan_hazard_props()
+        end
+
+        if droppable_scan_due then
             _scan_smart_tag_targets()
         end
 
         _refresh_player_units()
-        _scan_expedition_objectives()
-        _scan_player_tag_points()
-        _prune_units()
+
+        if droppable_scan_due then
+            _scan_expedition_objectives()
+            _scan_player_tag_points()
+        end
+
+        _prune_units(droppable_scan_due)
 
         mod._radar_targets = _collect_radar_targets()
         mod._screen_highlight_targets = _collect_screen_highlight_targets()
@@ -2528,6 +2566,7 @@ return function(env)
             mod._gameplay_run = true
             _warm_radar_target_pool(512)
             mod._next_scan_t = 0
+            mod._next_droppable_scan_t = 0
             mod._next_static_scan_t = 0
             mod._last_update_t = nil
             _invalidate_runtime_state_cache()

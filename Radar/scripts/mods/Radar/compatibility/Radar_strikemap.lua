@@ -14,9 +14,23 @@ local string_format = string.format
 
 local SUPPORTED_STRIKEMAP_API_VERSION = 1
 local TRIANGLE_STRIDE = 7
+local VECTOR_LAYER_SPECS = {
+    { array_field = "contours", count_field = "contour_count", stride_field = "contour_stride", stride = 5 },
+    { array_field = "stairs", count_field = "stair_count", stride_field = "stair_stride", stride = 6 },
+    { array_field = "hatches", count_field = "hatch_count", stride_field = "hatch_stride", stride = 5 },
+    { array_field = "slopes", count_field = "slope_count", stride_field = "slope_stride", stride = 5 },
+    { array_field = "transitions", count_field = "transition_count", stride_field = "transition_stride", stride = 4 },
+}
 local CONSUMER_ID = "Radar"
 local RETRY_WAITING_INTERVAL = 2
 local RETRY_MAP_UNAVAILABLE_INTERVAL = 5
+-- While a map is active, get_status is polled at this fast interval so newly
+-- scanned floor appears on the radar almost immediately after Strikemap
+-- publishes a new geometry revision. The full context is still only refetched
+-- when the revision actually changes.
+local STATUS_POLL_INTERVAL = 0.25
+-- Slow fallback for API variants whose status does not report a geometry
+-- revision; every poll then refetches and revalidates the full map context.
 local CONTEXT_REFRESH_INTERVAL = 3
 local STRIKEMAP_MOD_NAME_CANDIDATES = {
     "strikemap",
@@ -36,6 +50,9 @@ local StrikemapCompatibility = {
     _status_detail = nil,
     _context = nil,
     _context_revision = nil,
+    _vector_context = nil,
+    _vector_counts = nil,
+    _vector_failed_revision = false,
     _api = nil,
     _consumer_registered = false,
     _next_attempt_t = 0,
@@ -65,6 +82,10 @@ function StrikemapCompatibility:_set_status(status, detail)
         mod:error("[Radar] Strikemap geometry integration failed: %s", tostring(detail))
     elseif status == "waiting" and mod:get("debug_mode") == true then
         mod:info("[Radar] Waiting for the Strikemap compatibility API.")
+    end
+
+    if STICKY_STATUSES[status] then
+        self:_unregister_consumer()
     end
 end
 
@@ -218,6 +239,135 @@ local function _validate_map_context(context)
     return context
 end
 
+local function _validate_vector_context(vector_context, map_revision)
+    if type(vector_context) ~= "table" then
+        return nil, "the Strikemap vector context is not a table"
+    end
+
+    local vector_revision = vector_context.revision
+
+    if vector_revision ~= nil and map_revision ~= nil and vector_revision ~= map_revision then
+        return nil, string_format("the Strikemap vector context revision (%s) does not match the map revision (%s)",
+            tostring(vector_revision), tostring(map_revision))
+    end
+
+    local counts = {}
+
+    for i = 1, #VECTOR_LAYER_SPECS do
+        local spec = VECTOR_LAYER_SPECS[i]
+        local array = vector_context[spec.array_field]
+        local stride_value = vector_context[spec.stride_field]
+
+        if stride_value ~= nil and tonumber(stride_value) ~= spec.stride then
+            return nil, string_format("the Strikemap vector context uses an unsupported %s (%s)",
+                spec.stride_field, tostring(stride_value))
+        end
+
+        local count = tonumber(vector_context[spec.count_field])
+
+        if array == nil then
+            if count ~= nil and count > 0 then
+                return nil, string_format("the Strikemap vector context is missing the %s array", spec.array_field)
+            end
+
+            counts[spec.array_field] = 0
+        else
+            if type(array) ~= "table" then
+                return nil, string_format("the Strikemap vector context %s array is not a table", spec.array_field)
+            end
+
+            count = count or math_floor(#array / spec.stride)
+
+            if count < 0 then
+                return nil, string_format("the Strikemap vector context reports a negative %s", spec.count_field)
+            end
+
+            count = math_floor(count)
+
+            if count > 0 and type(array[count * spec.stride]) ~= "number" then
+                return nil, string_format("the Strikemap vector context %s array is shorter than its %s",
+                    spec.array_field, spec.count_field)
+            end
+
+            counts[spec.array_field] = count
+        end
+    end
+
+    local chains = vector_context.chains
+
+    if chains ~= nil and type(chains) ~= "table" then
+        return nil, "the Strikemap vector context chains field is not a table"
+    end
+
+    local transition_chain = vector_context.transition_chain
+
+    if transition_chain ~= nil then
+        if type(transition_chain) ~= "table" then
+            return nil, "the Strikemap vector context transition_chain field is not a table"
+        end
+
+        for i = 1, counts.transitions do
+            local chain_id = transition_chain[i]
+
+            if chain_id ~= nil and (type(chains) ~= "table" or chains[chain_id] == nil) then
+                return nil, string_format(
+                    "the Strikemap vector context transition_chain[%d] references a missing chain (%s)",
+                    i, tostring(chain_id))
+            end
+        end
+    end
+
+    return vector_context, nil, counts
+end
+
+function StrikemapCompatibility:_mark_vector_failed(revision, detail)
+    self._vector_context = nil
+    self._vector_counts = nil
+    self._vector_failed_revision = revision
+    mod:info(string_format("[Radar] Strikemap vector details disabled for this geometry revision: %s",
+        tostring(detail)))
+end
+
+function StrikemapCompatibility:_refresh_vector_context(api, map_context)
+    self._vector_context = nil
+    self._vector_counts = nil
+
+    local get_vector_context = api.get_vector_context
+
+    if type(get_vector_context) ~= "function" then
+        return
+    end
+
+    local revision = map_context.revision
+
+    if self._vector_failed_revision == revision then
+        return
+    end
+
+    local ok, vector_context = pcall(get_vector_context)
+
+    if not ok then
+        self:_mark_vector_failed(revision, tostring(vector_context))
+
+        return
+    end
+
+    if vector_context == nil then
+        return
+    end
+
+    local valid_vector_context, detail, counts = _validate_vector_context(vector_context, revision)
+
+    if not valid_vector_context then
+        self:_mark_vector_failed(revision, detail)
+
+        return
+    end
+
+    self._vector_context = valid_vector_context
+    self._vector_counts = counts
+end
+
 function StrikemapCompatibility:_refresh(now)
     local api = self._api
 
@@ -296,7 +446,7 @@ function StrikemapCompatibility:_refresh(now)
             local revision = status.geometry_revision
 
             if self._context ~= nil and revision ~= nil and revision == self._context_revision then
-                self._next_refresh_t = now + CONTEXT_REFRESH_INTERVAL
+                self._next_refresh_t = now + STATUS_POLL_INTERVAL
 
                 return self._context
             end
@@ -338,9 +488,12 @@ function StrikemapCompatibility:_refresh(now)
         return nil
     end
 
+    self:_refresh_vector_context(api, valid_context)
+
     self._context = valid_context
     self._context_revision = valid_context.revision
-    self._next_refresh_t = now + CONTEXT_REFRESH_INTERVAL
+    self._next_refresh_t = now
+        + (valid_context.revision ~= nil and STATUS_POLL_INTERVAL or CONTEXT_REFRESH_INTERVAL)
     self:_set_status("active", tostring(valid_context.map_id or valid_context.mission_name))
 
     return valid_context
@@ -373,19 +526,46 @@ function StrikemapCompatibility:get_map_context(t)
     return self:_refresh(now)
 end
 
+function StrikemapCompatibility:get_geometry_contexts(t)
+    local context = self:get_map_context(t)
+
+    if context == nil then
+        return nil, nil, nil, nil
+    end
+
+    return context, self._vector_context, self._context_revision, self._vector_counts
+end
+
+function StrikemapCompatibility:get_api_version()
+    local api = self._api
+
+    return api and tonumber(api.api_version) or nil
+end
+
 function StrikemapCompatibility:mark_error(err)
     self._context = nil
+    self._vector_context = nil
+    self._vector_counts = nil
     self:_set_status("error", tostring(err))
+end
+
+function StrikemapCompatibility:mark_vector_error(err)
+    self:_mark_vector_failed(self._context_revision, tostring(err))
 end
 
 function StrikemapCompatibility:mark_unsupported(reason)
     self._context = nil
+    self._vector_context = nil
+    self._vector_counts = nil
     self:_set_status("incompatible", tostring(reason))
 end
 
 function StrikemapCompatibility:reset(status)
     self._context = nil
     self._context_revision = nil
+    self._vector_context = nil
+    self._vector_counts = nil
+    self._vector_failed_revision = false
     self._next_attempt_t = 0
     self._next_refresh_t = 0
     self._status = status or (self:is_integration_enabled() and "waiting" or "disabled")
