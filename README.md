@@ -6,14 +6,14 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 
 - Added an optional **Map Geometry** layer that draws the mission's walkable floor plan behind all radar markers, in the normal radar and the centered overview alike.
 - The **Map geometry source** dropdown selects how the floor plan is produced: **Off** (default), a built-in **Live scan** of the mission's navigation mesh, the **Strikemap floor plan** from the [Strikemap](https://www.nexusmods.com/warhammer40kdarktide/mods/1022) mod, or **Auto**, which prefers Strikemap and falls back to the live scan.
-- Geometry is shaded in three height bands relative to your position, current floor, floors above, and floors below, each with its own ARGB color sliders and shared **Floors Above Range** and **Floors Below Range** windows.
+- Geometry is shaded in three height bands relative to your position, current floor, floors above, and floors below, each with its own ARGB color sliders. The normal radar uses the shared **Floors Above Range** and **Floors Below Range** windows; centered overview uses 30 m in both directions.
 - Radar keeps full ownership of all markers; only the floor plan comes from the selected geometry source, and exactly one source is drawn at a time.
 
 ## Feature Overview
 
 - Tracks nearby pickups, materials, mission items, deployables, environment interactables, live-event pickups and objectives, expedition POIs, teammates, player companions, player smart tags, tagged targets, supported ability-outlined enemies, and high-priority enemies on a single camera-oriented radar or the temporary centered overview.
 - Supports **Square**, **Circle**, and **Auspex** radar styles. Square and Circle use configurable **outline** and **guide** options, including the Auspex background guide, while **Auspex** adds its dedicated scanner frame treatment.
-- Optionally draws the mission's walkable **map geometry** beneath all markers, sourced from a built-in **live scan** of the navigation mesh or from the **Strikemap** mod's pre-baked floor plans, with configurable floor-band colors, floor range windows, and a geometry detail limit.
+- Optionally draws the mission's walkable **map geometry** beneath all markers, sourced from a built-in **live scan** of the navigation mesh or from the **Strikemap** mod's pre-baked floor plans, with configurable floor-band colors and floor range windows.
 - Lets you tune **radar size**, normal radar **range**, centered overview **zoom range**, **Radar Colors**, **maximum marker count**, **nearby highlight range**, supported vertical arrow and hiding behavior, and the dedicated nearby-highlight presentation settings.
 - Supports per-category **Icon size (%)** sliders across item, player, player companion, enemy, event, and debug marker groups, plus dedicated enemy sub-category scaling.
 - Supports separate display, range, and vertical arrow controls for **bosses**, **enemy groups**, **teammates**, **player companions**, **player smart tags**, **tagged-only enemy and item filtering**, supported **ability outlines**, and the local **player center dot**, including **Infinite** marker range modes for bosses and teammates.
@@ -130,7 +130,7 @@ The floor plan is shaded in three height bands relative to your current position
 - **Floors above** render as a faint cool-blue veil drawn on top, so upper walkways read as "over you" without hiding your own floor.
 - **Floors below** render dimmer in a warm umber beneath your floor.
 
-Each band has its own ARGB sliders under **Map Geometry**; the **A** slider is that band's opacity, and **0** hides the band entirely. **Floors Above Range** and **Floors Below Range** (in meters) limit how far up and down geometry is shown at all. The defaults, **3 m** above and **7 m** below, are tuned for stacked interiors; on open terrain with large height differences, such as Expedition canyons, raise them (for example **15 m**) to keep ramps and upper areas visible. **Geometry Detail Limit** caps how many exact triangles the live scan renders; when an area would exceed it, the smallest on-screen triangles are dropped first.
+Each band has its own ARGB sliders under **Map Geometry**; the **A** slider is that band's opacity, and **0** hides the band entirely. On the normal radar, **Floors Above Range** and **Floors Below Range** (in meters) limit how far up and down geometry is shown. The defaults, **3 m** above and **7 m** below, are tuned for stacked interiors; on open terrain with large height differences, such as Expedition canyons, raise them (for example **15 m**) to keep ramps and upper areas visible. Centered overview mode ignores both sliders and always uses **30 m** above and below.
 
 On the compact radar, the floor plan stays beneath the regular marker presentation, so pickups, tagged targets, teammates, and distance text render unchanged on top of the geometry:
 
@@ -282,9 +282,8 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Animated radar sweep | Enables or disables the animated sweep used by the **Auspex** radar style and **Auspex** guides. |
 | Map geometry source | **Off**, **Live scan (built-in)**, **Strikemap floor plan**, or **Auto**. Draws the mission's walkable floor plan beneath all radar markers; **Auto** prefers Strikemap and falls back to the live scan. |
 | Map geometry colors | ARGB sliders for the current-floor, floor-above, and floor-below bands. Each band's **A** slider is its opacity; **0** hides that band. |
-| Floors Above Range | Adjustable from **1 m** to **30 m**. Geometry more than this far above you is hidden. Raise it on open terrain such as Expedition canyons. |
-| Floors Below Range | Adjustable from **1 m** to **30 m**. Geometry more than this far below you is hidden. |
-| Geometry Detail Limit | Caps how many exact triangles the live scan renders per selection; the smallest on-screen triangles are dropped first when an area exceeds it. |
+| Floors Above Range | Adjustable from **1 m** to **30 m** for the normal radar. Geometry more than this far above you is hidden; centered overview always uses **30 m**. |
+| Floors Below Range | Adjustable from **1 m** to **30 m** for the normal radar. Geometry more than this far below you is hidden; centered overview always uses **30 m**. |
 | Show geometry in overview mode | Also draws the Strikemap floor plan while centered overview mode is active. |
 | Nearby highlight range (m) | Adjustable from **5 m** to **20 m**. Controls how close supported items must be before their screen-space bracket highlights appear. |
 | Highlight thickness | Adjusts the line thickness used by nearby screen-space highlight brackets. |
