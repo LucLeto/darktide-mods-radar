@@ -1333,6 +1333,16 @@ return {
                                     step_size_value = 25,
                                 },
                                 {
+                                    setting_id = "radar_scan_rate",
+                                    type = "dropdown",
+                                    default_value = "low",
+                                    options = {
+                                        _dropdown_option("radar_scan_rate_low", "low"),
+                                        _dropdown_option("radar_scan_rate_medium", "medium"),
+                                        _dropdown_option("radar_scan_rate_high", "high"),
+                                    },
+                                },
+                                {
                                     setting_id = "show_only_tagged_enemies",
                                     type = "checkbox",
                                     default_value = false,
@@ -1642,17 +1652,19 @@ return {
                             step_size_value = 1,
                         },
                         {
-                            setting_id = "navmesh_max_triangles",
-                            type = "numeric",
-                            default_value = 6000,
-                            range = { 1000, 20000 },
-                            decimals_number = 0,
-                            step_size_value = 500,
-                        },
-                        {
                             setting_id = "strikemap_geometry_in_overview",
                             type = "checkbox",
                             default_value = true,
+                        },
+                        {
+                            setting_id = "strikemap_vector_details",
+                            type = "checkbox",
+                            default_value = true,
+                        },
+                        {
+                            setting_id = "strikemap_hatch_above",
+                            type = "checkbox",
+                            default_value = false,
                         },
                     },
                 },
