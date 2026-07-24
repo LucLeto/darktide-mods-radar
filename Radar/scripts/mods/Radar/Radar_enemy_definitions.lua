@@ -94,6 +94,7 @@ return function(env)
     mod._idol_destroyed_collectible_keys = {}
     mod._idol_destroyed_units = {}
     mod._martyr_skull_riddle_solved_by_mission = {}
+    mod._martyr_skull_riddle_fallback_state_by_position = {}
     mod._last_safe_zone_section_index = nil
     mod._last_expedition_in_safe_zone = nil
     mod._player_smart_tag_generation = 0

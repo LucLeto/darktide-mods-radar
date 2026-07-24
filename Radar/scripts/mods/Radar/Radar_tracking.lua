@@ -1189,6 +1189,7 @@ return function(env)
         local player_unit = _player_unit()
         local tracked_units = mod._tracked_units
         local seen_interactees = _scratch_seen_interactees
+        local martyr_skull_riddle_fallback_mission_name = _martyr_skull_riddle_fallback_mission_name()
         local force_hidden_martyr_skull_riddle_interactables = _kind_enabled("martyr_skull_riddle_interactable")
             and _should_scan_hidden_martyr_skull_riddle_interactables()
         table_clear(seen_interactees)
@@ -1200,10 +1201,17 @@ return function(env)
                 local is_active = true
                 local is_used = false
                 local show_marker = true
+                local active_state = nil
+                local used_state = nil
+                local show_marker_state = nil
 
                 local active = extension.active
                 if active then
                     local ok_active, value = pcall(active, extension)
+                    if ok_active and (value == true or value == false) then
+                        active_state = value
+                    end
+
                     if not ok_active or value ~= true then
                         is_active = false
                     end
@@ -1212,6 +1220,10 @@ return function(env)
                 local used = extension.used
                 if used then
                     local ok_used, value = pcall(used, extension)
+                    if ok_used and (value == true or value == false) then
+                        used_state = value
+                    end
+
                     if not ok_used or value == true then
                         is_used = true
                     end
@@ -1221,6 +1233,10 @@ return function(env)
                 if show_marker_fn then
                     if player_unit then
                         local ok_show, value = pcall(show_marker_fn, extension, player_unit)
+                        if ok_show and (value == true or value == false) then
+                            show_marker_state = value
+                        end
+
                         if not ok_show or value ~= true then
                             show_marker = false
                         end
@@ -1229,10 +1245,10 @@ return function(env)
                     end
                 end
 
-                if is_active and not is_used then
-                    local kind = nil
-                    local meta = nil
+                local kind = nil
+                local meta = nil
 
+                if is_active and not is_used then
                     if show_marker then
                         kind, meta = _classify_interactee(extension, unit)
                     elseif force_hidden_martyr_skull_riddle_interactables then
@@ -1253,6 +1269,18 @@ return function(env)
                     end
                 else
                     _clear_tracked_unit_from_source(unit, "interactee_system")
+                end
+
+                if martyr_skull_riddle_fallback_mission_name then
+                    _update_martyr_skull_riddle_fallback_state(
+                        extension,
+                        unit,
+                        active_state,
+                        used_state,
+                        show_marker_state,
+                        kind == "martyr_skull_riddle_interactable",
+                        martyr_skull_riddle_fallback_mission_name
+                    )
                 end
             else
                 _clear_tracked_unit_from_source(unit, "interactee_system")
@@ -2398,6 +2426,7 @@ return function(env)
         mod._idol_destroyed_collectible_keys = {}
         mod._idol_destroyed_units = {}
         mod._martyr_skull_riddle_solved_by_mission = {}
+        mod._martyr_skull_riddle_fallback_state_by_position = {}
         mod._last_safe_zone_section_index = nil
         mod._last_expedition_in_safe_zone = nil
         mod._player_smart_tag_generation = 0

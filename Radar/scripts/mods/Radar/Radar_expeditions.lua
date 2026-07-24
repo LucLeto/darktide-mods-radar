@@ -14,6 +14,7 @@ return function(env)
     local string_find = string.find
     local string_format = string.format
     local string_lower = string.lower
+    local string_match = string.match
     local table_sort = table.sort
     local table_clear = table.clear or function(t)
         for k in pairs(t) do
@@ -1048,6 +1049,36 @@ return function(env)
         },
     }
 
+    local MARTYR_SKULL_RIDDLE_FALLBACK_POSITIONS_BY_MISSION = {}
+
+    for mission_name, mission_signatures in pairs(MARTYR_SKULL_RIDDLE_SIGNATURES_BY_MISSION) do
+        local fallback_positions = nil
+
+        for _, entry in pairs(mission_signatures) do
+            if type(entry) == "table" and entry.fallback == true then
+                fallback_positions = fallback_positions or {}
+
+                for i = 1, #entry do
+                    fallback_positions[#fallback_positions + 1] = entry[i]
+                end
+            end
+        end
+
+        if fallback_positions then
+            MARTYR_SKULL_RIDDLE_FALLBACK_POSITIONS_BY_MISSION[mission_name] = fallback_positions
+        end
+    end
+
+    function _martyr_skull_riddle_fallback_mission_name()
+        local mission_name = _safe_mission_name()
+
+        if mission_name and MARTYR_SKULL_RIDDLE_FALLBACK_POSITIONS_BY_MISSION[mission_name] then
+            return mission_name
+        end
+
+        return nil
+    end
+
     local MARTYR_SKULL_RIDDLE_SOLVE_DOORS_BY_MISSION = {
         cm_habs = {
             require_all = true,
@@ -1666,6 +1697,133 @@ return function(env)
         return kind, meta
     end
 
+    local function _martyr_skull_riddle_fallback_position_for_unit(mission_name, unit)
+        local fallback_positions = MARTYR_SKULL_RIDDLE_FALLBACK_POSITIONS_BY_MISSION[mission_name]
+
+        if not fallback_positions then
+            return nil, false
+        end
+
+        local fallback_state_by_position = mod._martyr_skull_riddle_fallback_state_by_position
+
+        if fallback_state_by_position then
+            for i = 1, #fallback_positions do
+                local position = fallback_positions[i]
+                local state = fallback_state_by_position[position]
+
+                if state and state.unit == unit then
+                    return position, true
+                end
+            end
+        end
+
+        local unit_position = _safe_unit_position(unit)
+
+        if not unit_position then
+            return nil, false
+        end
+
+        for i = 1, #fallback_positions do
+            local position = fallback_positions[i]
+
+            if _distance_squared(unit_position, position) <= MARTYR_SKULL_RIDDLE_POSITION_MATCH_DISTANCE_SQ then
+                return position, false
+            end
+        end
+
+        return nil, false
+    end
+
+    function _update_martyr_skull_riddle_fallback_state(extension, unit, active_state, used_state, show_marker_state,
+                                                         is_verified_riddle, mission_name)
+        local position = nil
+        local is_associated = false
+
+        position, is_associated = _martyr_skull_riddle_fallback_position_for_unit(mission_name, unit)
+
+        if not position then
+            return
+        end
+
+        local fallback_state_by_position = mod._martyr_skull_riddle_fallback_state_by_position
+
+        if not fallback_state_by_position then
+            fallback_state_by_position = {}
+            mod._martyr_skull_riddle_fallback_state_by_position = fallback_state_by_position
+        end
+
+        local state = fallback_state_by_position[position]
+
+        if not is_associated then
+            if is_verified_riddle ~= true then
+                local kind = _classify_interactee(extension, unit, true, true)
+
+                if kind ~= "martyr_skull_riddle_interactable" then
+                    return
+                end
+            end
+
+            local preserve_retirement = state and state.retired == true
+
+            state = state or {}
+            fallback_state_by_position[position] = state
+            state.unit = unit
+            state.seen_active = false
+            state.retired = preserve_retirement
+        elseif not state then
+            return
+        end
+
+        local was_seen_active = state.seen_active == true
+        local was_retired = state.retired == true
+        local was_active_state = state.active_state
+        local was_used_state = state.used_state
+        local was_show_marker_state = state.show_marker_state
+
+        if used_state == true then
+            state.retired = true
+        elseif active_state == true then
+            state.seen_active = true
+            state.retired = false
+        elseif active_state == false and state.seen_active == true then
+            state.retired = true
+        end
+
+        state.active_state = active_state
+        state.used_state = used_state
+        state.show_marker_state = show_marker_state
+
+        if mod:get("debug_mode") == true
+            and (not is_associated
+                or was_seen_active ~= (state.seen_active == true)
+                or was_retired ~= (state.retired == true)
+                or was_active_state ~= active_state
+                or was_used_state ~= used_state
+                or was_show_marker_state ~= show_marker_state) then
+            local position_text = _debug_position_text(position)
+            local key = string_format("martyr_skull_riddle_fallback_state:%s|%s|%s|%s|%s|%s|%s",
+                tostring(mission_name),
+                position_text,
+                tostring(active_state),
+                tostring(used_state),
+                tostring(show_marker_state),
+                tostring(state.seen_active == true),
+                tostring(state.retired == true)
+            )
+
+            _log_once(key, string_format(
+                "Martyr's Skull fallback state: mission=%s position=%s active=%s used=%s show_marker=%s seen_active=%s retired=%s",
+                tostring(mission_name),
+                position_text,
+                tostring(active_state),
+                tostring(used_state),
+                tostring(show_marker_state),
+                tostring(state.seen_active == true),
+                tostring(state.retired == true)
+            ))
+        end
+    end
+
     local _enemy_kind_by_breed_cache = {}
 
     function _classify_enemy_from_breed(breed_name)
@@ -1925,6 +2083,13 @@ return function(env)
         }
     end
 
+    local function _is_martyr_skull_riddle_fallback_retired(position)
+        local fallback_state_by_position = mod._martyr_skull_riddle_fallback_state_by_position
+        local state = fallback_state_by_position and fallback_state_by_position[position]
+
+        return state and state.retired == true or false
+    end
+
     local function _has_live_martyr_skull_riddle_interactable_near_position(position)
         local tracked_units = mod._tracked_units
 
@@ -1975,7 +2140,9 @@ return function(env)
                 for i = 1, #entry do
                     local position = entry[i]
 
-                    if position and not _has_live_martyr_skull_riddle_interactable_near_position(position) then
+                    if position
+                        and not _is_martyr_skull_riddle_fallback_retired(position)
+                        and not _has_live_martyr_skull_riddle_interactable_near_position(position) then
                         _track_point(
                             string_format("martyr_skull_riddle_fallback:%s:%s:%s", tostring(mission_name),
                                 tostring(signature), tostring(i)),
