@@ -22,6 +22,7 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 - Supports **Artwork**, **Icon**, and **Off** display modes for the supported artwork-based pickup families, with automatic migration from older boolean settings.
 - Adds optional nearby screen-space highlight brackets for supported non-enemy marker groups, with configurable thickness, per-marker highlight colors, and optional distance labels on the screen highlight, the radar marker, or both.
 - Adds optional remaining-charge annotations for Medicae Stations and deployed Ammo Crates, plus a scaled healing-radius ring for deployed Medical Crates.
+- Adds dedicated **Martyr's Skull riddle interactable** markers for supported mission-specific keys, levers, switches, buttons, and related puzzle controls. Markers clear automatically when individual steps are used or the riddle is completed.
 - Adds dedicated **Expedition POI** support for numbered **Sites of Interest**, **Deadsider Sanctuaries**, **Data Reliquary Harvesters**, **Main Objective**, **Valkyrie Extraction Zone**, and **Valkyrie Arrival Zone**, with per-category **Icon only**, **Icon + Distance m**, and **Off** display modes. Player-marked navigation POIs show an evenly divided ring containing the slot colors of up to four marking players.
 - Supports tech-remnant loot modes for **Default**, **Scale by value**, and **Merge nearby piles**, plus optional cluster value text and radius tuning.
 - Includes optional distance text for bosses, player tags, nearby marker highlights, and expedition POIs, per-enemy-category vertical arrow toggles, **Infinite** boss and teammate range modes, **debug logs**, and an **unknown pickups** toggle for discovery and troubleshooting.
@@ -344,7 +345,7 @@ Each major option group now includes an **Icon size (%)** slider. These sliders 
 | Secondary Objective Items | Grimoires and Scriptures |
 | Expeditions POI | Sites of Interest, sanctuaries, harvesters, main objective, extraction, and arrival markers |
 | Expeditions-Specific Items | Salvage, Tech-Remnants, expedition pocketables, and related expedition pickups |
-| Martyr's Skull Items | Martyr's Skull markers and related power cell markers |
+| Martyr's Skull Items | Martyr's Skull markers, riddle interactables, and related power cell markers |
 | Environment | Medicae Station, Power Socket, Heretic Idol, Explosive Barrels, and Fire Barrels |
 | Deployed Items | Ammo Crate and Medical Crate deployables |
 | Enemies | High-priority boss markers |
@@ -407,7 +408,7 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Primary Objective Items | Highlights nearby mission luggables and main objective pickups. |
 | Secondary Objective Items | Highlights nearby grimoires and scriptures. |
 | Expeditions-Specific Items | Highlights nearby salvage, tech-remnants, expedition pocketables, and related expedition pickups. |
-| Martyr's Skull Items | Highlights nearby martyr's skull items and their orange power cell markers. |
+| Martyr's Skull Items | Highlights nearby Martyr's Skull items, riddle interactables, and orange power cell markers. |
 | Environment | Highlights nearby medicae stations, power sockets, heretic idols, and hazard barrels. |
 | Deployed Items | Adds nearby radar-marker distance text for deployed ammo and medical crates. |
 | Event-Related Items | Highlights nearby event pickups and event objectives, including Dark Rites totems and servo skulls. |
@@ -433,6 +434,15 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Main Objective | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls expedition main objective locations with the dedicated objective icon. |
 | Valkyrie Extraction Zone | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls extraction points with the dedicated extraction icon. |
 | Valkyrie Arrival Zone | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls arrival points with the dedicated arrival icon. |
+
+### Martyr's Skull Controls
+
+| Option | What it controls |
+| --- | --- |
+| Martyr's Skull Items | Groups the icon-size, nearby-highlight, distance-text, skull, riddle-interactable, and power-cell controls. |
+| Martyr's Skull | Shows the collectible Martyr's Skull. |
+| Riddle interactables | Shows active, supported Martyr's Skull riddle keys, levers, switches, buttons, and related puzzle controls. Completed or used steps clear automatically instead of returning on later scans. |
+| Power Cell | Shows orange power cells used by Martyr's Skull riddles. |
 
 ### Environment Controls
 
@@ -760,6 +770,7 @@ These markers are driven by expedition navigation data rather than standard pick
 | Preview | Marker | Notes |
 | --- | --- | --- |
 | <img src="doc/img/pickup_martyr_skull.png"  width="80" alt="Martyr's Skull marker" /> | Martyr's Skull | Gold skull marker. |
+| <img src="doc/img/martyr_skull_riddle_interactables.png" width="80" alt="Martyr's Skull riddle interactables marker" /> | Riddle Interactables | Gold interaction marker for active Martyr's Skull riddle keys, levers, switches, buttons, and related puzzle controls. Completed or used steps clear automatically. |
 | <img src="doc/img/luggable_power_cell_orange.png"  width="80" alt="Orange Power Cell marker" /> | Power Cell | Orange luggable marker used for the Martyr's Skull group. |
 
 ### Environment Markers
