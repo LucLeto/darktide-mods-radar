@@ -701,6 +701,15 @@ _add_marker({
     label_suffix = "",
     label_role = "minigame_state",
 })
+-- The plate behind the objective frame. One colour for the whole family, since
+-- they share the frame, anchored to the group's icon size slider so it appears
+-- once inside Mission Objective Interactables. Defaults to the near-black the
+-- game uses behind its own objective markers rather than to white.
+local MISSION_OBJECTIVE_BACKGROUND = _color(235, 16, 18, 20)
+
+_add_radar_color("mission_objective_icon_scale", "mission_objective_background_marker", MISSION_OBJECTIVE_BACKGROUND,
+    "marker_background_color", "marker_background_color_slider_tooltip")
+
 _add_marker({
     kind = "mission_objective_console",
     anchor = "show_mission_objective_console",
@@ -915,6 +924,10 @@ function ColorSettings.install_runtime(mod)
         local state = meta and meta.minigame_state or nil
 
         return (state and MINIGAME_COLOR_KIND_BY_STATE[state]) or kind
+    end
+
+    function mod:get_mission_objective_background_color()
+        return self:get_configurable_color("mission_objective_background_marker")
     end
 
     function mod:get_marker_background_color(kind, fallback)

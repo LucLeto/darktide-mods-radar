@@ -459,8 +459,13 @@ the items and their sockets, which you can act on, alongside spawn points and wa
 cannot, so the bare units in it are left off the radar. An objective made of nothing but bare units is
 read the other way round: there the bare units are the step, as with the train controls destroyed to
 stop the train, and all of them are marked. Those steps carry no state of their own at all, so they are
-cleared one at a time by the game's own world marker for each of them going away -- and only for an
-objective the game's marker list has been seen to cover, so a list that says nothing about an objective
+cleared one at a time by the game's own world marker for each of them going away. The same rule picks
+the live target of an objective that files several identical candidates, such as the dormant growth
+sites of a purge event: the game marks only the one that is live. It applies to objective targets that
+are not interactables -- an interactable is deliberately shown before the game marks it -- and holds its
+candidates back for a moment when an objective starts, since the game does not assign its markers in the
+same frame and every candidate would otherwise flash up at once. It applies only for an objective the
+game's marker list has been seen to cover, so a list that says nothing about an objective
 never hides it. Once an objective has appeared in that list it stays trusted for the rest of the
 mission, since otherwise its last remaining step finishing would look the same as an objective the list
 never described. This is decided per objective, since missions run several
@@ -808,13 +813,17 @@ Player tags intentionally stay flatter and cleaner than supported item markers. 
 | Hacking terminals | Decoder device system | Decoder and hacking terminals used for mission progression. A puzzle device is red while it is running unattended, yellow while a player is at it, and the shared objective tint both before it starts and once it is solved. The marker stays until the objective ends. |
 | Consoles | Objective interaction type | Consoles and control machines used for mission progression. |
 | Servo skull objectives | Servo skull interaction | The mission servo skull while you follow it. |
+| Daemonic growth | Objective target system | Growth steps of a purge event, matched on the objective name suffix so every mission running the event is covered, with their own icon. Marked, coloured and cleared exactly as any other objective step. |
 | Other objective interactions | Objective target system | The remaining objective-bound interaction points of the active objective, such as switches, buttons, and destructible steps. Destructibles clear one at a time as each is broken, rather than all at once when the objective ends. |
 
-Each category has its own icon, drawn inside the diamond frame the game itself uses around objective
-markers, so the whole family is distinguishable at a glance from enemy markers and from standard points
+Each category has its own icon, drawn inside the diamond frame and backplate the game itself uses around
+objective markers, so the whole family is distinguishable at a glance from enemy markers and from standard points
 of interest. All five share one frame size and the vanilla objective marker tint, so the radar reads as
 the same family as the on-screen HUD marker. Each icon is sized as a proportion of the frame, so it
-keeps its fit at any icon scale. Each has its own icon color sliders.
+keeps its fit at any icon scale, and an icon that replaces another carries its own size, since the
+game's icons are not drawn to a common visual size. Each has its own icon color sliders, and the frame
+backplate has one shared color, defaulting to the near-black the game uses behind its own objective
+markers.
 
 Scan targets are the one case where the radar has to reconstruct what the game knows. The zone that
 owns them publishes which targets this run selected, and each target carries its own active flag that

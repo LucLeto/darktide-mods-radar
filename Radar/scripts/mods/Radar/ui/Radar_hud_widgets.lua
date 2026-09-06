@@ -40,6 +40,9 @@ local WidgetVisibility = {
     has_overlay_icon = function(content)
         return content.overlay_icon ~= nil and content.overlay_icon ~= ""
     end,
+    has_plate_icon = function(content)
+        return content.plate_icon ~= nil and content.plate_icon ~= ""
+    end,
     has_title_icon = function(content)
         return content.title_icon ~= nil and content.title_icon ~= ""
     end,
@@ -261,6 +264,19 @@ local function _marker_definition()
         },
         {
             pass_type = "texture",
+            value_id = "plate_icon",
+            style_id = "plate_icon",
+            style = {
+                vertical_alignment = "top",
+                horizontal_alignment = "left",
+                offset = { 0, 0, 9 },
+                size = { 16, 16 },
+                color = _white_widget_color(),
+            },
+            visibility_function = WidgetVisibility.has_plate_icon,
+        },
+        {
+            pass_type = "texture",
             value_id = "icon",
             style_id = "icon",
             style = {
@@ -370,6 +386,7 @@ local function _clear_marker_widget(widget)
     widget.content.marked_ring_size = nil
     widget.content.icon = nil
     widget.content.glyph_icon = ""
+    widget.content.plate_icon = nil
     widget.content.overlay_icon = nil
     widget.content.title_icon = nil
     widget.content.arrow_icon = nil

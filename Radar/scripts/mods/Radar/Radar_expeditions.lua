@@ -12,6 +12,7 @@ return function(env)
     local math_floor = math.floor
     local math_sqrt = math.sqrt
     local string_find = string.find
+    local string_sub = string.sub
     local string_format = string.format
     local string_lower = string.lower
     local string_match = string.match
@@ -1681,6 +1682,63 @@ return function(env)
     -- `_active` is not that signal: it only means a player currently has the
     -- puzzle open, so hiding on it made markers disappear while idle and appear
     -- while somebody was already solving them.
+    -- Objectives whose steps are daemonic growth, matched on the objective name
+    -- because nothing else on the unit distinguishes them: they are ordinary
+    -- health-bearing targets with `_ui_target_type=default`. Objective names are
+    -- `objective_<mission>_<event>`, so matching the event suffix covers every
+    -- mission that runs the event without naming each one, and matches strictly
+    -- less than a loose substring would -- an objective merely mentioning the
+    -- event elsewhere in its name is not caught.
+    --
+    -- Only the icon changes: the marker is claimed, coloured and retired exactly
+    -- as any other objective step, so a suffix missing from this list costs a
+    -- distinct icon and nothing else. Confirmed from Silo Cluster
+    -- (`objective_dm_stockpile_corruptor_event`).
+    local MISSION_OBJECTIVE_GROWTH_NAME_SUFFIXES = {
+        "_corruptor_event",
+    }
+
+    local MISSION_OBJECTIVE_GROWTH_NAME_SUFFIX_COUNT = #MISSION_OBJECTIVE_GROWTH_NAME_SUFFIXES
+    local MISSION_OBJECTIVE_GROWTH_ICON = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_parasite"
+    -- Its own fit inside the shared frame. The game's icons are not normalised to
+    -- a common visual size, so a replaced icon carries its own size rather than
+    -- inheriting the one tuned for the icon it replaced. The frame is untouched.
+    local MISSION_OBJECTIVE_GROWTH_ICON_SIZE = 10
+    -- Resolved once per objective name rather than per unit per scan.
+    local _growth_objective_by_name = {}
+
+    function _is_growth_objective_name(objective_name)
+        if type(objective_name) ~= "string" then
+            return false
+        end
+
+        local known = _growth_objective_by_name[objective_name]
+
+        if known == nil then
+            known = false
+
+            for i = 1, MISSION_OBJECTIVE_GROWTH_NAME_SUFFIX_COUNT do
+                local suffix = MISSION_OBJECTIVE_GROWTH_NAME_SUFFIXES[i]
+
+                if #objective_name >= #suffix and string_sub(objective_name, -#suffix) == suffix then
+                    known = true
+                    break
+                end
+            end
+
+            _growth_objective_by_name[objective_name] = known
+
+            -- Reported once per objective, so a run shows exactly which
+            -- objectives a suffix caught rather than leaving the breadth of the
+            -- match to be inferred from the markers.
+            if known then
+                _debug_log_growth_objective(objective_name)
+            end
+        end
+
+        return known
+    end
+
     local MISSION_OBJECTIVE_MINIGAME_SYSTEM = "minigame_system"
     local MISSION_OBJECTIVE_MINIGAME_COMPLETE_STATE = "complete"
     local MISSION_OBJECTIVE_MINIGAME_GAMEPLAY_STATE = "gameplay"
@@ -1695,6 +1753,10 @@ return function(env)
     -- One meta table per unit, reused across scans: the state changes, the table
     -- does not, so a device being solved does not allocate on every pass.
     local _minigame_meta_by_unit = {}
+    -- Declared with the other per-scan marker state rather than beside the
+    -- objective maps that fill it: the meta builder above needs it, and a local
+    -- is invisible before its declaration.
+    local _scratch_growth_objective_units = {}
 
     -- Walks the whole minigame map rather than looking units up one at a time:
     -- a mission carries a handful of these (2 in Core Research, 5 on the train),
@@ -1737,9 +1799,24 @@ return function(env)
     -- when it re-arms reads as something having gone wrong.
     function _minigame_marker_meta(unit, meta)
         local state = _minigame_state_by_unit[unit]
+        local growth = _scratch_growth_objective_units[unit] == true
 
         if state == MISSION_OBJECTIVE_MINIGAME_COMPLETE_STATE then
             state = nil
+        end
+
+        if growth then
+            if meta == nil then
+                meta = _minigame_meta_by_unit[unit]
+
+                if meta == nil then
+                    meta = {}
+                    _minigame_meta_by_unit[unit] = meta
+                end
+            end
+
+            meta.objective_overlay_icon = MISSION_OBJECTIVE_GROWTH_ICON
+            meta.objective_overlay_size = MISSION_OBJECTIVE_GROWTH_ICON_SIZE
         end
 
         if state == nil then
@@ -1754,7 +1831,7 @@ return function(env)
                 cached.minigame_state = nil
             end
 
-            return meta
+            return meta or (growth and _minigame_meta_by_unit[unit] or nil)
         end
 
         if meta == nil then
@@ -2171,6 +2248,14 @@ return function(env)
     -- marker going away switched the filter off instead of retiring the marker.
     -- Once an objective has been seen in the list it stays trusted.
     local _objective_world_marker_seen = {}
+    -- When an objective first went live. The game does not assign its markers in
+    -- the same frame, so for a moment no unit of a new objective has one, which
+    -- is indistinguishable from an objective the marker list never describes.
+    -- Waiting this long before falling back to "show everything" keeps every
+    -- candidate of a just-started event from flashing up at once, while still
+    -- showing the steps of an objective the list genuinely says nothing about.
+    local _objective_first_active_t = {}
+    local OBJECTIVE_MARKER_SETTLE_SECONDS = 2
     local _world_marker_units_available = false
 
     function _is_unit_of_inactive_objective(unit)
@@ -2188,6 +2273,7 @@ return function(env)
         table_clear(actionable_by_unit)
         table_clear(_scratch_objective_has_start_marker)
         table_clear(_scratch_start_marker_by_unit)
+        table_clear(_scratch_growth_objective_units)
 
         table_clear(_scratch_world_marker_units)
 
@@ -2206,6 +2292,10 @@ return function(env)
 
             if objective_name ~= nil then
                 if active_names ~= nil and active_names[objective_name] == true then
+                    if _objective_first_active_t[objective_name] == nil then
+                        _objective_first_active_t[objective_name] = _safe_gameplay_time() or 0
+                    end
+
                     local actionable = _is_actionable_objective_target(unit, interactee_map)
 
                     actionable_by_unit[unit] = actionable
@@ -2216,6 +2306,10 @@ return function(env)
 
                     if _scratch_world_marker_units[unit] then
                         _objective_world_marker_seen[objective_name] = true
+                    end
+
+                    if _is_growth_objective_name(objective_name) then
+                        _scratch_growth_objective_units[unit] = true
                     end
 
                     if _safe_objective_target_field(extension, "_add_marker_on_objective_start") == true then
@@ -2266,20 +2360,45 @@ return function(env)
                     end
                 end
 
-                if keep then
-                    if has_actionable[objective_name] == true then
-                        keep = actionable_by_unit[unit] == true
+                if keep and has_actionable[objective_name] == true
+                    and actionable_by_unit[unit] ~= true then
+                    keep = false
 
-                        if not keep and log_filtered_hints then
-                            _debug_log_filtered_objective_hint(objective_name, unit)
-                        end
-                    elseif _world_marker_units_available
-                        and _objective_world_marker_seen[objective_name] == true then
-                        -- Only trusted for an objective the marker list demonstrably
-                        -- covers: if not one of its units has a marker the list does
-                        -- not describe this objective, and dropping them all would
-                        -- hide the step rather than retire it.
+                    if log_filtered_hints then
+                        _debug_log_filtered_objective_hint(objective_name, unit)
+                    end
+                end
+
+                -- Applied to every objective target that is not an interactee.
+                -- An interactee is shown before the game marks it, which is the
+                -- whole point of the feature, but a target with no interaction
+                -- has no prompt to be early for, and the game marks exactly the
+                -- one that is live: a purge event files four dormant growth eyes
+                -- and the active one under the same objective, all carrying
+                -- health, and only the active one has a marker.
+                --
+                -- Only trusted for an objective the marker list has been seen to
+                -- cover: if none of its units was ever marked the list does not
+                -- describe this objective, and dropping them all would hide the
+                -- step rather than retire it.
+                if keep and interactee_map ~= nil and interactee_map[unit] == nil
+                    and _world_marker_units_available then
+                    if _objective_world_marker_seen[objective_name] == true then
                         keep = _scratch_world_marker_units[unit] == true
+                    else
+                        -- No unit of this objective has been marked yet. That is
+                        -- either an objective the list does not describe, or one
+                        -- whose markers have not been assigned yet, and the two
+                        -- look identical. Hold the candidates back until the
+                        -- settle window has passed rather than showing them all
+                        -- for the first moments of an event.
+                        local first_active = _objective_first_active_t[objective_name]
+                        local now = _safe_gameplay_time()
+
+                        if first_active ~= nil and now ~= nil
+                            and now - first_active < OBJECTIVE_MARKER_SETTLE_SECONDS then
+                            keep = false
+                        end
                     end
                 end
             end
@@ -2333,6 +2452,8 @@ return function(env)
         _debug_probe_marked_objective_markers(_scratch_active_objective_names)
         _debug_probe_objective_world_markers()
         _debug_probe_objective_target_fields()
+        _debug_probe_untracked_world_markers()
+        _debug_probe_nearby_destructibles()
     end
 
     -- Dropping the unit map keeps stale unit references out of the next mission.
@@ -2341,6 +2462,8 @@ return function(env)
         _reset_marked_objective_probe()
         _reset_world_marker_probe()
         _reset_target_field_probe()
+        _reset_untracked_marker_probe()
+        _reset_destructible_probe()
         _reset_active_objective_probe()
         _reset_mission_objective_lifecycle()
         table_clear(_minigame_state_by_unit)
@@ -2350,8 +2473,10 @@ return function(env)
         table_clear(_scratch_seen_mission_objective_units)
         table_clear(_scratch_mission_objective_zone_units)
         table_clear(_scratch_inactive_objective_units)
+        table_clear(_scratch_growth_objective_units)
         table_clear(_scratch_world_marker_units)
         table_clear(_objective_world_marker_seen)
+        table_clear(_objective_first_active_t)
         table_clear(_scratch_objective_has_start_marker)
         table_clear(_scratch_start_marker_by_unit)
         _world_marker_units_available = false
@@ -2405,18 +2530,32 @@ return function(env)
         "health_system",
         "minigame_system",
         "interactee_system",
+        "mission_objective_target_system",
     }
 
     local MISSION_OBJECTIVE_MARKER_PROBE_SYSTEM_COUNT = #MISSION_OBJECTIVE_MARKER_PROBE_SYSTEMS
-    local MISSION_OBJECTIVE_MARKER_PROBE_BUDGET = 80
-    local _marker_probe_logs_left = MISSION_OBJECTIVE_MARKER_PROBE_BUDGET
+    -- Probe limits in one table rather than one local each: this module body is
+    -- at LuaJIT's ceiling of 200 locals in a function, and the debug scaffolding
+    -- is what pushed it there.
+    local PROBE = {
+        marker_budget = 80,
+        active_field_limit = 40,
+        active_budget = 40,
+        target_sample = 6,
+        target_field_limit = 20,
+        target_budget = 40,
+        destructible_left = 30,
+        destructible_seen = {},
+    }
+
+    local _marker_probe_logs_left = PROBE.marker_budget
     local _scratch_marker_probe_owners = {}
     -- `_log_once` reports nothing back, so the budget needs its own record of
     -- which states have already been logged.
     local _marker_probe_seen = {}
 
     function _reset_marked_objective_probe()
-        _marker_probe_logs_left = MISSION_OBJECTIVE_MARKER_PROBE_BUDGET
+        _marker_probe_logs_left = PROBE.marker_budget
         table_clear(_marker_probe_seen)
     end
 
@@ -2466,14 +2605,12 @@ return function(env)
     -- objective itself, so its own fields are reported here to find the one that
     -- says so. Field reads only: this is the class whose methods drive live
     -- mission state.
-    local MISSION_OBJECTIVE_ACTIVE_FIELD_LIMIT = 24
-    local MISSION_OBJECTIVE_ACTIVE_FIELD_BUDGET = 40
-    local _active_objective_probe_logs_left = MISSION_OBJECTIVE_ACTIVE_FIELD_BUDGET
+    local _active_objective_probe_logs_left = PROBE.active_budget
     local _active_objective_probe_seen = {}
     local _scratch_active_objective_fields = {}
 
     function _reset_active_objective_probe()
-        _active_objective_probe_logs_left = MISSION_OBJECTIVE_ACTIVE_FIELD_BUDGET
+        _active_objective_probe_logs_left = PROBE.active_budget
         table_clear(_active_objective_probe_seen)
     end
 
@@ -2488,7 +2625,7 @@ return function(env)
         table_clear(fields)
 
         for key, value in pairs(objective) do
-            if count >= MISSION_OBJECTIVE_ACTIVE_FIELD_LIMIT then
+            if count >= PROBE.active_field_limit then
                 break
             end
 
@@ -2512,7 +2649,11 @@ return function(env)
         end
 
         local field_text = table_concat(fields, " ", 1, count)
-        local key = "active_objective:" .. name .. "|" .. field_text
+        -- Keyed on the objective and its stage, not on the whole field text. A
+        -- timed objective's progression changes every tick, and keying on it let
+        -- two of them consume the entire budget before the objective being
+        -- investigated was ever logged.
+        local key = "active_objective:" .. name .. "|" .. tostring(rawget(objective, "_stage"))
 
         if not _active_objective_probe_seen[key] then
             _active_objective_probe_seen[key] = true
@@ -2532,15 +2673,12 @@ return function(env)
     -- most likely place a distinction the mod cannot otherwise see is recorded --
     -- which of a row of identical containers holds the cargo, or which target of
     -- an event is armed before the others.
-    local MISSION_OBJECTIVE_TARGET_FIELD_SAMPLE = 6
-    local MISSION_OBJECTIVE_TARGET_FIELD_LIMIT = 20
-    local MISSION_OBJECTIVE_TARGET_FIELD_BUDGET = 40
-    local _target_field_probe_logs_left = MISSION_OBJECTIVE_TARGET_FIELD_BUDGET
+    local _target_field_probe_logs_left = PROBE.target_budget
     local _target_field_probe_seen = {}
     local _scratch_target_fields = {}
 
     function _reset_target_field_probe()
-        _target_field_probe_logs_left = MISSION_OBJECTIVE_TARGET_FIELD_BUDGET
+        _target_field_probe_logs_left = PROBE.target_budget
         table_clear(_target_field_probe_seen)
     end
 
@@ -2548,7 +2686,7 @@ return function(env)
     -- marker report already names.
     local function _debug_collect_scalars(container, out, count)
         for key, value in pairs(container) do
-            if count >= MISSION_OBJECTIVE_TARGET_FIELD_LIMIT then
+            if count >= PROBE.target_field_limit then
                 break
             end
 
@@ -2574,6 +2712,84 @@ return function(env)
         return count
     end
 
+    -- The game marks the prerequisite growths of a purge event with its own world
+    -- markers, but those units are in no objective system, so nothing this mod
+    -- scans has ever seen them. This reports the markers the game holds on units
+    -- this mod does NOT track, with the systems that own them, so a marker the
+    -- mod should be following can be identified by what it actually is rather
+    -- than by the objective name it shares with inactive spawn points.
+    local _untracked_marker_probe_logs_left = 40
+    local _untracked_marker_probe_seen = {}
+
+    function _reset_untracked_marker_probe()
+        _untracked_marker_probe_logs_left = 40
+        table_clear(_untracked_marker_probe_seen)
+    end
+
+    function _debug_probe_untracked_world_markers()
+        if _untracked_marker_probe_logs_left <= 0 or not _objective_state_probe_due() then
+            return
+        end
+
+        local world_markers_list = _safe_world_markers_list
+        local markers = world_markers_list ~= nil and world_markers_list() or nil
+
+        if type(markers) ~= "table" then
+            return
+        end
+
+        local tracked_units = mod._tracked_units
+        local mission_text = tostring(_safe_mission_name())
+        local owners = _scratch_marker_probe_owners
+
+        for i = 1, #markers do
+            if _untracked_marker_probe_logs_left <= 0 then
+                break
+            end
+
+            local marker = markers[i]
+            local unit = marker and marker.unit or nil
+
+            if unit ~= nil and tracked_units[unit] == nil then
+                local owner_count = 0
+
+                table_clear(owners)
+
+                for system_index = 1, MISSION_OBJECTIVE_MARKER_PROBE_SYSTEM_COUNT do
+                    local system_name = MISSION_OBJECTIVE_MARKER_PROBE_SYSTEMS[system_index]
+                    local system_map = _safe_unit_to_extension_map(system_name)
+
+                    if type(system_map) == "table" and system_map[unit] ~= nil then
+                        owner_count = owner_count + 1
+                        owners[owner_count] = system_name
+                    end
+                end
+
+                -- Only markers on something with state. A marker on a bare unit
+                -- is a waypoint and says nothing about what to shoot.
+                if owner_count > 0 then
+                    local owner_text = table_concat(owners, ",", 1, owner_count)
+                    local key = "untracked_marker:" .. tostring(marker.type) .. "|" .. owner_text
+                        .. "|" .. tostring(_safe_health_alive(unit))
+
+                    if not _untracked_marker_probe_seen[key] then
+                        _untracked_marker_probe_seen[key] = true
+                        _untracked_marker_probe_logs_left = _untracked_marker_probe_logs_left - 1
+
+                        _log_once(key, string_format(
+                            "Untracked world marker: mission=%s type=%s owners=%s health_alive=%s position=%s",
+                            mission_text,
+                            tostring(marker.type),
+                            owner_text,
+                            tostring(_safe_health_alive(unit)),
+                            _debug_unit_position_text(unit)
+                        ))
+                    end
+                end
+            end
+        end
+    end
+
     function _debug_probe_objective_target_fields()
         if _target_field_probe_logs_left <= 0 or not _objective_state_probe_due() then
             return
@@ -2590,7 +2806,7 @@ return function(env)
         local sampled = 0
 
         for unit, data in pairs(mod._tracked_units) do
-            if sampled >= MISSION_OBJECTIVE_TARGET_FIELD_SAMPLE or _target_field_probe_logs_left <= 0 then
+            if sampled >= PROBE.target_sample or _target_field_probe_logs_left <= 0 then
                 break
             end
 
@@ -2665,6 +2881,32 @@ return function(env)
                 if type(widget) == "table" then
                     count = _debug_collect_materials(widget, "", materials, 0,
                         MISSION_OBJECTIVE_WORLD_MARKER_DEPTH)
+                end
+
+                -- The vanilla marker's own geometry, so our frame and icon can
+                -- be matched to it by measurement rather than by eye: each layer
+                -- carries its own size and offset in the widget style.
+                local style = type(widget) == "table" and widget.style or nil
+
+                if type(style) == "table" then
+                    for style_key, style_entry in pairs(style) do
+                        if count >= MISSION_OBJECTIVE_WORLD_MARKER_FIELD_LIMIT then
+                            break
+                        end
+
+                        if type(style_key) == "string" and type(style_entry) == "table" then
+                            local entry_size = rawget(style_entry, "size")
+                            local entry_offset = rawget(style_entry, "offset")
+
+                            if type(entry_size) == "table" and type(entry_offset) == "table" then
+                                count = count + 1
+                                materials[count] = string_format("%s[size=%s,%s offset=%s,%s]",
+                                    style_key,
+                                    tostring(entry_size[1]), tostring(entry_size[2]),
+                                    tostring(entry_offset[1]), tostring(entry_offset[2]))
+                            end
+                        end
+                    end
                 end
 
                 local material_text = table_concat(materials, " ", 1, count)
@@ -2826,6 +3068,86 @@ return function(env)
             reason,
             position_text
         ))
+    end
+
+    -- Names every objective a growth suffix matched, so an over-broad suffix is
+    -- visible in a debug run instead of only in the markers it changed.
+    function _debug_log_growth_objective(objective_name)
+        if mod:get("debug_mode") ~= true then
+            return
+        end
+
+        _log_once("growth_objective:" .. objective_name, string_format(
+            "Daemonic growth objective matched: mission=%s objective=%s",
+            tostring(_safe_mission_name()),
+            objective_name
+        ))
+    end
+
+    -- The prerequisite growths of a purge event are in no objective system, the
+    -- game holds no world marker for them, and their unit names are hashed ids.
+    -- What is left is the extensions themselves: a growth and a crate are both
+    -- destructibles, but their health and destructible extensions need not carry
+    -- the same values. Distinct field shapes are reported, not distinct units, so
+    -- thirty identical crates cost one line and anything unusual stands out.
+    --
+    -- Debug only, behind the shared two second window, and limited to units close
+    -- to the player.
+    function _reset_destructible_probe()
+        PROBE.destructible_left = 30
+        table_clear(PROBE.destructible_seen)
+    end
+
+    function _debug_probe_nearby_destructibles()
+        if PROBE.destructible_left <= 0 or not _objective_state_probe_due() then
+            return
+        end
+
+        local extension_map = _safe_unit_to_extension_map("destructible_system")
+        local player_position = _safe_unit_position(_player_unit())
+
+        if type(extension_map) ~= "table" or player_position == nil then
+            return
+        end
+
+        local health_map = _safe_unit_to_extension_map("health_system")
+        local mission_text = tostring(_safe_mission_name())
+        local fields = _scratch_target_fields
+
+        for unit, extension in pairs(extension_map) do
+            if PROBE.destructible_left <= 0 then
+                break
+            end
+
+            local position = _safe_unit_position(unit)
+
+            if position ~= nil and _distance_squared(player_position, position) <= 900
+                and _safe_health_alive(unit) == true and type(extension) == "table" then
+                table_clear(fields)
+
+                local count = _debug_collect_scalars(extension, fields, 0)
+                local health_extension = type(health_map) == "table" and health_map[unit] or nil
+
+                if type(health_extension) == "table" then
+                    count = _debug_collect_scalars(health_extension, fields, count)
+                end
+
+                local field_text = table_concat(fields, " ", 1, count)
+                local key = "destructible:" .. field_text
+
+                if not PROBE.destructible_seen[key] then
+                    PROBE.destructible_seen[key] = true
+                    PROBE.destructible_left = PROBE.destructible_left - 1
+
+                    _log_once(key, string_format(
+                        "Nearby destructible: mission=%s position=%s %s",
+                        mission_text,
+                        _debug_unit_position_text(unit),
+                        field_text
+                    ))
+                end
+            end
+        end
     end
 
     -- Names any objective whose bare units were treated as position hints, so a

@@ -231,15 +231,24 @@ check(runtime_source:find("marker_color_kind(mod, kind, target.meta)", 1, true) 
 -- the fit through the icon-scale slider.
 local LF = string.char(10)
 local OBJECTIVE_FRAME_SIZE = tonumber(hud_source:match("local OBJECTIVE_FRAME_SIZE = (%d+)"))
+local OBJECTIVE_ICON_SIZE = tonumber(hud_source:match("local OBJECTIVE_ICON_SIZE = (%d+)"))
+local OBJECTIVE_ICON_SIZE_PADDED = tonumber(hud_source:match("local OBJECTIVE_ICON_SIZE_PADDED = (%d+)"))
 local EXPECTED_ICON_SIZE_BY_KIND = {
-    mission_objective_scanner = 16,
-    mission_objective_hacking = 16,
-    mission_objective_console = 16,
-    mission_objective_servo_skull = 16,
+    mission_objective_scanner = OBJECTIVE_ICON_SIZE,
+    mission_objective_hacking = OBJECTIVE_ICON_SIZE,
+    mission_objective_console = OBJECTIVE_ICON_SIZE,
+    mission_objective_servo_skull = OBJECTIVE_ICON_SIZE,
     -- Its art sits small inside its own box, so it needs a larger nominal size
     -- to carry the same visual weight.
-    mission_objective_other = 28,
+    mission_objective_other = OBJECTIVE_ICON_SIZE_PADDED,
 }
+
+-- Calibrated against the game's own marker, whose icon sits well inside the
+-- diamond rather than filling it. The scale multiplies the frame afterwards, so
+-- this ratio is what holds at every scale.
+check(OBJECTIVE_ICON_SIZE ~= nil and OBJECTIVE_FRAME_SIZE ~= nil
+    and OBJECTIVE_ICON_SIZE / OBJECTIVE_FRAME_SIZE < 0.55,
+    "the objective icon fills too much of its frame to match the game's marker")
 
 check(hud_source:find('local OBJECTIVE_FRAME_ICON = "content/ui/materials/hud/interactions/frames/point_of_interest_top"',
     1, true) ~= nil, "the objective frame material is missing")
@@ -260,8 +269,11 @@ for i = 1, #KINDS do
             kind .. ": does not share the family frame size")
         check(block:find("background_base_size = OBJECTIVE_FRAME_SIZE", 1, true) ~= nil,
             kind .. ": has no frame size to scale its icon against")
-        check(block:find("arrow_base_size = OBJECTIVE_ARROW_BASE_SIZE", 1, true) ~= nil,
-            kind .. ": the vertical arrow is not decoupled from the frame")
+        -- The arrow derives from the final rendered marker size, so it scales
+        -- with the frame and sits against it the way every other marker's does.
+        -- An override would pin it to a fixed size and detach it.
+        check(block:find("arrow_base_size", 1, true) == nil,
+            kind .. ": pins its arrow to a fixed size instead of the rendered frame")
 
         -- The renderer sizes the icon as `size * (overlay_base / background_base)`,
         -- and both bases are the frame size here, so the nominal size is what
@@ -269,12 +281,123 @@ for i = 1, #KINDS do
         -- added, so adding the frame changes nothing but the frame. Retuning the
         -- frame size deliberately does not fail this -- it is the knob for how
         -- much room the diamond leaves.
-        local overlay_base = tonumber(block:match("overlay_base_size = (%d+)"))
+        -- The sizes are named constants now, so the symbol is resolved rather
+        -- than read as a literal.
+        local overlay_symbol = block:match("overlay_base_size = ([%u_]+)")
+        local overlay_base = overlay_symbol == "OBJECTIVE_ICON_SIZE" and OBJECTIVE_ICON_SIZE
+            or overlay_symbol == "OBJECTIVE_ICON_SIZE_PADDED" and OBJECTIVE_ICON_SIZE_PADDED
+            or tonumber(block:match("overlay_base_size = (%d+)"))
 
         check(overlay_base == EXPECTED_ICON_SIZE_BY_KIND[kind],
             kind .. ": icon draws at " .. tostring(overlay_base) .. ", not its established size")
     end
 end
+
+-- The backplate is an opt-in layer drawn before the base icon. Enemy markers
+-- compose their own coloured background into the base layer and must keep doing
+-- so, since the radar background is itself configurable and they need contrast.
+local widgets_source = assert(io.open("Radar/scripts/mods/Radar/ui/Radar_hud_widgets.lua")):read("*a")
+local plate_pass_at = widgets_source:find('value_id = "plate_icon"', 1, true)
+local icon_pass_at = widgets_source:find('value_id = "icon"', 1, true)
+
+check(plate_pass_at ~= nil, "the backplate pass is missing")
+check(plate_pass_at ~= nil and icon_pass_at ~= nil and plate_pass_at < icon_pass_at,
+    "the backplate is not drawn before the base icon")
+-- The gate has to be on the pass itself, not merely defined somewhere: without
+-- it the plate would draw behind every marker in the game.
+-- A window after the pass starts, rather than a non-greedy match: the pass
+-- contains a nested `style = { ... },` that any lazy pattern stops at first.
+local plate_pass_block = plate_pass_at and widgets_source:sub(plate_pass_at, plate_pass_at + 600) or nil
+
+check(plate_pass_block ~= nil
+    and plate_pass_block:find("visibility_function = WidgetVisibility.has_plate_icon", 1, true) ~= nil,
+    "the backplate pass has no visibility gate, so it would draw on every marker")
+check(widgets_source:find("has_plate_icon = function(content)", 1, true) ~= nil,
+    "the backplate visibility function is missing")
+check(widgets_source:find("widget.content.plate_icon = nil", 1, true) ~= nil,
+    "the backplate is not cleared when a pooled widget is reused")
+check(hud_source:find("widget.content.plate_icon = visual and visual.plate_icon or nil", 1, true) ~= nil,
+    "the backplate is not driven by an explicit marker property")
+
+-- Enemy markers must not gain the layer: they never name a plate.
+local enemy_visual_block = hud_source:match("local function _enemy_visual(.-)" .. LF .. "local function ")
+
+check(enemy_visual_block == nil or enemy_visual_block:find("plate_icon", 1, true) == nil,
+    "enemy markers must not use the backplate layer")
+
+for i = 1, #KINDS do
+    local kind = KINDS[i]
+    local block = hud_source:match(LF .. "    " .. kind .. " = {(.-)" .. LF .. "    },")
+
+    check(block ~= nil and block:find("plate_icon = OBJECTIVE_PLATE_ICON", 1, true) ~= nil,
+        kind .. ": does not opt into the backplate")
+end
+
+-- Only the icon changes for a daemonic growth step, and the shared presentation
+-- table means an override has to be reset on every marker or it leaks.
+check(expeditions_source:find("MISSION_OBJECTIVE_GROWTH_NAME_SUFFIXES", 1, true) ~= nil,
+    "the growth objective name list is missing")
+-- Anchored to the end of the name. Objective names are `objective_<mission>_<event>`,
+-- so a suffix covers every mission running the event while matching strictly
+-- less than a loose substring search would.
+check(expeditions_source:find("string_sub(objective_name, -#suffix) == suffix", 1, true) ~= nil,
+    "growth objectives are not matched on the name suffix")
+check(expeditions_source:find('"content/ui/materials/icons/circumstances/havoc/havoc_mutator_parasite"', 1, true) ~= nil,
+    "the growth icon is missing")
+check(hud_source:find("presentation.overlay_icon = (meta and meta.objective_overlay_icon) or default_overlay_icon",
+    1, true) ~= nil,
+    "the icon override does not reset for markers that do not carry one")
+-- The game's icons are not normalised, so a replaced icon carries its own fit.
+-- The frame is never touched: the family keeps one footprint.
+check(hud_source:find("presentation.overlay_base_size = (meta and meta.objective_overlay_size)", 1, true) ~= nil,
+    "a replaced icon cannot carry its own size")
+check(hud_source:find("or DEFAULT_OVERLAY_BASE_SIZE_BY_KIND[target_kind]", 1, true) ~= nil,
+    "the icon size override does not reset for markers that do not carry one")
+check(expeditions_source:find("meta.objective_overlay_size = MISSION_OBJECTIVE_GROWTH_ICON_SIZE", 1, true) ~= nil,
+    "the growth icon carries no size of its own")
+
+-- The plate defaults to the near-black the game uses behind its own objective
+-- markers, and is configurable. One colour for the family, since they share the
+-- frame.
+local background_color = mod:get_configurable_color("mission_objective_background_marker")
+
+check(type(background_color) == "table" and #background_color == 4,
+    "the objective background colour is not configurable")
+
+if type(background_color) == "table" then
+    check(background_color[2] < 60 and background_color[3] < 60 and background_color[4] < 60,
+        "the objective background does not default to near-black")
+end
+
+check(color_settings.anchored_color_settings
+    and color_settings.anchored_color_settings.mission_objective_icon_scale ~= nil,
+    "the objective background colour has no sliders in the mission objective group")
+check(hud_source:find("presentation.plate_color = _configured_objective_background_color", 1, true) ~= nil,
+    "the backplate does not use the configured colour")
+
+-- Keyed on the objective and its stage: a timed objective's progression changes
+-- every tick, and keying on the whole field text let two of them consume the
+-- probe budget before the objective under investigation was reached.
+check(expeditions_source:find('"active_objective:" .. name .. "|" .. tostring(rawget(objective, "_stage"))',
+    1, true) ~= nil,
+    "the active objective probe can be starved by a timed objective")
+
+-- This module body sits near LuaJIT's ceiling of 200 locals in one function, and
+-- the debug scaffolding is what pushed it there. Crossing it is a load-time
+-- error, not a subtle one, but it is worth catching here rather than in game.
+local expeditions_locals = 0
+
+for _ in expeditions_source:gmatch(LF .. "    local [_%a]") do
+    expeditions_locals = expeditions_locals + 1
+end
+
+check(expeditions_locals < 200,
+    "Radar_expeditions.lua declares " .. expeditions_locals .. " top level locals; LuaJIT allows 200")
+
+-- The probe walks the game's markers for units the mod does not track, which is
+-- the only way a unit in no objective system can be found at all.
+check(expeditions_source:find("function _debug_probe_untracked_world_markers", 1, true) ~= nil,
+    "the untracked world marker probe is missing")
 
 -- The frame is the base layer, so the configured colour reaches the icon only if
 -- it is passed on; otherwise the icon stays white while the frame turns red.
@@ -357,6 +480,34 @@ for _, size in ipairs({ 12, 14, 16, 20, 28, 40 }) do
     check(actual_size == legacy_size, "arrow size changed at marker size " .. size)
     check(actual_from_centre == legacy_offset - size * 0.5, "arrow position changed at marker size " .. size)
 end
+
+-- A per-icon nudge for art that is not centred in its own texture, scaled with
+-- the marker so it holds at any icon scale. Only the icon that needs it carries
+-- one; every other marker is centred as before.
+check(hud_source:find("local nudge_base = visual and tonumber(visual.overlay_offset_base_size) or nil",
+    1, true) ~= nil,
+    "there is no per-icon offset for art that is not centred in its texture")
+
+local nudged_kinds = 0
+
+for i = 1, #KINDS do
+    local block = hud_source:match(LF .. "    " .. KINDS[i] .. " = {(.-)" .. LF .. "    },")
+
+    if block and block:find("overlay_offset_x", 1, true) ~= nil then
+        nudged_kinds = nudged_kinds + 1
+
+        check(block:find("overlay_offset_base_size = OBJECTIVE_FRAME_SIZE", 1, true) ~= nil,
+            KINDS[i] .. ": has an offset with no base size, so it would not scale")
+    end
+end
+
+check(nudged_kinds == 1, "expected exactly one icon to need a nudge, found " .. nudged_kinds)
+
+-- One arrow formula for every marker type: the frame is the objective marker's
+-- box, so the standard placement already anchors the arrow to it and scales with
+-- it. A special case here would be a second thing to keep in step.
+check(hud_source:find("local inset = (base_size - arrow_base) * 0.5", 1, true) ~= nil,
+    "the arrow placement has diverged from the shared formula")
 
 -- The oversized objective marker must end up with the same arrow as the others.
 local nominal_size, nominal_from_centre = arrow_geometry(16, nil)

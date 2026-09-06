@@ -71,7 +71,8 @@ local function new_harness()
     -- tracked units or points during these scans.
     local mission_name = "test_mission"
     local gameplay_t = 0
-    local player_unit = {}
+    -- Positioned, so anything that measures distance from the player works.
+    local player_unit = { position = { x = 0, y = 0, z = 0 } }
     local interactee_map = {}
     local extension_systems = {}
     local active_objective_names = nil
@@ -466,6 +467,12 @@ local function new_harness()
     function harness:scan()
         gameplay_t = gameplay_t + 0.25
         scan_interactees()
+    end
+
+    -- Past the window in which a just-started objective's markers may not have
+    -- been assigned yet. A scan alone advances only a quarter second.
+    function harness:wait_for_marker_settle()
+        gameplay_t = gameplay_t + 3
     end
 
     function harness:scan_with_active_objective()
@@ -1553,8 +1560,13 @@ test("an objective the marker list does not cover is not filtered", function()
     harness:set_world_marker_units({ unrelated })
     harness:scan()
 
+    assert_nil(harness:tracked_kind(control), "candidates are held back until the markers settle")
+
+    harness:wait_for_marker_settle()
+    harness:scan()
+
     assert_equal("mission_objective_other", harness:tracked_kind(control),
-        "an uncovered objective must keep its markers")
+        "an uncovered objective must keep its markers once the window has passed")
 end)
 
 test("an unreadable marker list changes nothing", function()
@@ -1749,6 +1761,8 @@ test("the marker probe reports an uncovered objective", function()
     harness:set_active_objective_names({ "extract" })
     harness:set_world_marker_units({})
     harness:scan()
+    harness:wait_for_marker_settle()
+    harness:scan()
 
     local text = harness:log_text()
 
@@ -1789,6 +1803,7 @@ test("an objective never seen in the marker list is still never filtered", funct
     harness:set_active_objective_names({ "uncovered" })
     harness:set_world_marker_units({})
     harness:scan()
+    harness:wait_for_marker_settle()
     harness:scan()
 
     assert_equal("mission_objective_other", harness:tracked_kind(step),
@@ -1919,6 +1934,228 @@ test("the active objective probe reports its own fields", function()
 
     assert_contains(harness:log_text(), "Active objective fields:", "the active objective probe did not run")
     assert_contains(harness:log_text(), "objective=corruptor_event", "the probe did not name the objective")
+end)
+
+-- Objective names are `objective_<mission>_<event>`, so the event suffix covers
+-- every mission that runs it without naming each one.
+test("a growth objective is matched in any mission", function()
+    local harness = new_harness()
+    local silo = { name = "silo_growth", position = { x = 1, y = 0, z = 0 }, health_alive = true }
+    local other_mission = { name = "rise_growth", position = { x = 2, y = 0, z = 0 }, health_alive = true }
+
+    harness:add_to_system("mission_objective_target_system", silo,
+        { _objective_name = "objective_dm_stockpile_corruptor_event" })
+    harness:add_to_system("mission_objective_target_system", other_mission,
+        { _objective_name = "objective_dm_rise_corruptor_event" })
+    harness:set_active_objective_names({
+        "objective_dm_stockpile_corruptor_event",
+        "objective_dm_rise_corruptor_event",
+    })
+    harness:scan()
+
+    local growth_icon = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_parasite"
+    local silo_tracked = harness.mod._tracked_units[silo]
+    local other_tracked = harness.mod._tracked_units[other_mission]
+
+    assert_equal(growth_icon, silo_tracked and silo_tracked.meta and silo_tracked.meta.objective_overlay_icon,
+        "the confirmed mission must match")
+    assert_equal(growth_icon, other_tracked and other_tracked.meta and other_tracked.meta.objective_overlay_icon,
+        "another mission running the same event must match without being listed")
+end)
+
+-- Anchored to the end, so an objective that merely mentions the event elsewhere
+-- in its name is not swept up.
+test("a name that only contains the event is not matched", function()
+    local harness = new_harness()
+    local unrelated = { name = "unrelated", position = { x = 3, y = 0, z = 0 }, health_alive = true }
+
+    harness:add_to_system("mission_objective_target_system", unrelated,
+        { _objective_name = "objective_dm_rise_corruptor_event_cleanup" })
+    harness:set_active_objective_names({ "objective_dm_rise_corruptor_event_cleanup" })
+    harness:scan()
+
+    local tracked = harness.mod._tracked_units[unrelated]
+
+    assert_equal("mission_objective_other", harness:tracked_kind(unrelated), "it is still marked as usual")
+    assert_nil(tracked and tracked.meta and tracked.meta.objective_overlay_icon,
+        "a name that only contains the event must not be matched")
+end)
+
+-- An over-broad suffix must be visible in a debug run, not only in the markers
+-- it silently changed.
+test("matched growth objectives are named in debug mode", function()
+    local harness = new_harness()
+    local growth = { name = "growth", position = { x = 4, y = 0, z = 0 }, health_alive = true }
+
+    harness.settings.debug_mode = true
+    harness:add_to_system("mission_objective_target_system", growth,
+        { _objective_name = "objective_dm_stockpile_corruptor_event" })
+    harness:set_active_objective_names({ "objective_dm_stockpile_corruptor_event" })
+    harness:scan()
+
+    assert_contains(harness:log_text(), "Daemonic growth objective matched:", "the match is not reported")
+    assert_contains(harness:log_text(), "objective=objective_dm_stockpile_corruptor_event",
+        "the report does not name the objective")
+end)
+
+-- Daemonic growth steps are ordinary health-bearing targets, so only the
+-- objective name distinguishes them. Confirmed from Silo Cluster.
+test("a daemonic growth step gets its own icon", function()
+    local harness = new_harness()
+    local growth = { name = "growth", position = { x = 1, y = 0, z = 0 }, health_alive = true }
+
+    harness:add_to_system("mission_objective_target_system", growth,
+        { _objective_name = "objective_dm_stockpile_corruptor_event" })
+    harness:set_active_objective_names({ "objective_dm_stockpile_corruptor_event" })
+    harness:scan()
+
+    local tracked = harness.mod._tracked_units[growth]
+
+    assert_equal("mission_objective_other", harness:tracked_kind(growth), "a growth step is still marked as usual")
+    assert_equal("content/ui/materials/icons/circumstances/havoc/havoc_mutator_parasite",
+        tracked and tracked.meta and tracked.meta.objective_overlay_icon, "the growth icon was not applied")
+    -- The game's icons are not normalised, so a replaced icon brings its own fit.
+    assert_equal("number", type(tracked and tracked.meta and tracked.meta.objective_overlay_size),
+        "the replaced icon carries no size of its own")
+end)
+
+-- Only the icon changes. An entry missing from the name list must cost a
+-- distinct icon and nothing else, so the marker itself is untouched.
+test("an unmatched objective keeps the default icon", function()
+    local harness = new_harness()
+    local step = { name = "step", position = { x = 2, y = 0, z = 0 }, health_alive = true }
+
+    harness:add_to_system("mission_objective_target_system", step, { _objective_name = "objective_dm_rise_demo_floor_one" })
+    harness:set_active_objective_names({ "objective_dm_rise_demo_floor_one" })
+    harness:scan()
+
+    local tracked = harness.mod._tracked_units[step]
+
+    assert_equal("mission_objective_other", harness:tracked_kind(step), "an unmatched step is marked as usual")
+    assert_nil(tracked and tracked.meta and tracked.meta.objective_overlay_icon,
+        "an unmatched objective must carry no icon override")
+end)
+
+-- The growth flag is rebuilt each scan, so a step must lose the icon if its
+-- objective is no longer matched -- and one unit's override must never reach
+-- another unit's marker.
+test("the growth icon does not leak to other markers", function()
+    local harness = new_harness()
+    local growth = { name = "growth", position = { x = 3, y = 0, z = 0 }, health_alive = true }
+    local plain = { name = "plain", position = { x = 4, y = 0, z = 0 }, health_alive = true }
+
+    harness:add_to_system("mission_objective_target_system", growth,
+        { _objective_name = "objective_dm_stockpile_corruptor_event" })
+    harness:add_to_system("mission_objective_target_system", plain,
+        { _objective_name = "objective_dm_stockpile_reach_elevator" })
+    harness:set_active_objective_names({
+        "objective_dm_stockpile_corruptor_event",
+        "objective_dm_stockpile_reach_elevator",
+    })
+    harness:scan()
+
+    local growth_meta = harness.mod._tracked_units[growth]
+    local plain_meta = harness.mod._tracked_units[plain]
+
+    assert_equal("content/ui/materials/icons/circumstances/havoc/havoc_mutator_parasite",
+        growth_meta and growth_meta.meta and growth_meta.meta.objective_overlay_icon,
+        "the growth step lost its icon")
+    assert_nil(plain_meta and plain_meta.meta and plain_meta.meta.objective_overlay_icon,
+        "a neighbouring step must not inherit the growth icon")
+end)
+
+-- A purge event files its dormant growth eyes and the active one under one
+-- objective name, all carrying health, so nothing on the unit tells them apart.
+-- The game marks exactly the one that is live.
+test("only the live target of a health-bearing objective is marked", function()
+    local harness = new_harness()
+    local active_eye = { name = "eye_active", position = { x = 1, y = 0, z = 0 }, health_alive = true }
+    local dormant_a = { name = "eye_dormant_a", position = { x = 2, y = 0, z = 0 }, health_alive = true }
+    local dormant_b = { name = "eye_dormant_b", position = { x = 3, y = 0, z = 0 }, health_alive = true }
+
+    for _, unit in ipairs({ active_eye, dormant_a, dormant_b }) do
+        harness:add_to_system("mission_objective_target_system", unit,
+            { _objective_name = "objective_dm_stockpile_corruptor_event" })
+    end
+
+    harness:set_active_objective_names({ "objective_dm_stockpile_corruptor_event" })
+    harness:set_world_marker_units({ active_eye })
+    harness:scan()
+
+    assert_equal("mission_objective_other", harness:tracked_kind(active_eye), "the live target must be marked")
+    assert_nil(harness:tracked_kind(dormant_a), "a dormant spawn location must not be marked")
+    assert_nil(harness:tracked_kind(dormant_b), "a dormant spawn location must not be marked")
+end)
+
+-- An interactee is deliberately shown before the game marks it -- that is the
+-- point of the feature -- so this filter must never reach one.
+test("an interactable target is still shown before the game marks it", function()
+    local harness = new_harness()
+    local device = harness:add_interactee({ interaction_type = "decoder_device" })
+    local marked = { name = "marked_target", position = { x = 5, y = 0, z = 0 }, health_alive = true }
+
+    harness:add_to_system("mission_objective_target_system", device, { _objective_name = "objective_a" })
+    harness:add_to_system("mission_objective_target_system", marked, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    -- The list covers the objective, but not the device.
+    harness:set_world_marker_units({ marked })
+    harness:scan()
+
+    assert_equal("mission_objective_hacking", harness:tracked_kind(device),
+        "an interactable must not need a world marker")
+end)
+
+-- At the start of an event the game has not assigned its markers yet, so for a
+-- moment no candidate has one -- which looks exactly like an objective the list
+-- never describes. Every candidate flashed up during that window.
+test("candidates do not flash up before the markers are assigned", function()
+    local harness = new_harness()
+    local active_eye = { name = "eye_active", position = { x = 1, y = 0, z = 0 }, health_alive = true }
+    local dormant = { name = "eye_dormant", position = { x = 2, y = 0, z = 0 }, health_alive = true }
+
+    for _, unit in ipairs({ active_eye, dormant }) do
+        harness:add_to_system("mission_objective_target_system", unit, { _objective_name = "corruptor_event" })
+    end
+
+    harness:set_active_objective_names({ "corruptor_event" })
+    -- The event has begun but nothing has been marked yet.
+    harness:set_world_marker_units({})
+    harness:scan()
+
+    assert_nil(harness:tracked_kind(active_eye), "nothing may be shown before the markers settle")
+    assert_nil(harness:tracked_kind(dormant), "nothing may be shown before the markers settle")
+
+    -- The game assigns the marker to the live one.
+    harness:set_world_marker_units({ active_eye })
+    harness:scan()
+
+    assert_equal("mission_objective_other", harness:tracked_kind(active_eye), "the live target must appear")
+    assert_nil(harness:tracked_kind(dormant), "a dormant candidate must stay hidden")
+end)
+
+-- The prerequisite growths are in no objective system and the game holds no
+-- marker for them, so the destructibles themselves are the last place to look.
+-- Debug paths that ship unverified here have shipped broken four times.
+test("the destructible probe reports nearby live breakables", function()
+    local harness = new_harness()
+    local growth = { name = "chaos_growth_small_01", position = { x = 2, y = 0, z = 0 }, health_alive = true }
+    local far_away = { name = "crate_far", position = { x = 500, y = 0, z = 0 }, health_alive = true }
+    local dead = { name = "crate_dead", position = { x = 3, y = 0, z = 0 }, health_alive = false }
+
+    harness.settings.debug_mode = true
+    harness:add_to_system("destructible_system", growth, { _section = "growth" })
+    harness:add_to_system("destructible_system", far_away, { _section = "far" })
+    harness:add_to_system("destructible_system", dead, { _section = "dead" })
+    harness:add_to_system("health_system", growth, { _max_health = 4000 })
+    harness:scan()
+
+    local text = harness:log_text()
+
+    assert_contains(text, "Nearby destructible:", "the destructible probe did not run")
+    assert_contains(text, "_section=growth", "the probe did not report the destructible extension fields")
+    assert_contains(text, "_max_health=4000", "the probe did not report the health extension fields")
+    assert_equal(nil, text:find("_section=far", 1, true), "a distant breakable must not be walked")
+    assert_equal(nil, text:find("_section=dead", 1, true), "a destroyed breakable must not be reported")
 end)
 
 -- Sockets have had their own marker kind since long before this scan, and the

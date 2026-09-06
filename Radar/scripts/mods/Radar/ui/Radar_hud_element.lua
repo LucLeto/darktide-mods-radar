@@ -176,10 +176,20 @@ local VANILLA_OBJECTIVE_WIDGET_COLOR = RadarColorSettings.vanilla_objective_colo
 -- own art inside the diamond. The icon is sized as a ratio of the frame, so the
 -- fit survives the icon-scale slider.
 local OBJECTIVE_FRAME_ICON = "content/ui/materials/hud/interactions/frames/point_of_interest_top"
+-- The plate the game draws behind that frame. Opt-in per marker: naming it is
+-- what turns the extra layer on, so enemy markers, which build their own
+-- coloured background into the base layer, are untouched.
+local OBJECTIVE_PLATE_ICON = "content/ui/materials/hud/interactions/frames/point_of_interest_back"
 local OBJECTIVE_FRAME_SIZE = 26
--- Keeps the vertical arrows the size they were before the frame widened the
--- markers.
-local OBJECTIVE_ARROW_BASE_SIZE = 16
+-- Calibrated against the game's own marker: its icon sits noticeably smaller
+-- inside the diamond than a naive fit suggests. These are nominal sizes at a
+-- 26px frame; the user's icon scale multiplies the frame afterwards and the icon
+-- follows by ratio, so the calibration holds at any scale.
+local OBJECTIVE_ICON_SIZE = 12
+-- For art that sits small inside its own box and needs a larger nominal size to
+-- carry the same visual weight.
+local OBJECTIVE_ICON_SIZE_PADDED = 21
+
 local RADAR_OUTLINE_WIDGET_COLOR = { 255, 213, 226, 206 }
 local RADAR_LEGEND_INDICATOR_WIDGET_COLOR = { 255, 213, 226, 206 }
 local MARKER_VALUE_TEXT_WIDGET_COLOR = { 255, 255, 225, 0 }
@@ -631,50 +641,53 @@ local PRESENTATIONS = {
     },
     mission_objective_scanner = {
         icon = OBJECTIVE_FRAME_ICON,
+        plate_icon = OBJECTIVE_PLATE_ICON,
         overlay_icon = "content/ui/materials/icons/mission_types/mission_type_03",
         color = VANILLA_OBJECTIVE_WIDGET_COLOR,
         size = OBJECTIVE_FRAME_SIZE,
         background_base_size = OBJECTIVE_FRAME_SIZE,
-        overlay_base_size = 16,
-        arrow_base_size = OBJECTIVE_ARROW_BASE_SIZE,
+        overlay_base_size = OBJECTIVE_ICON_SIZE,
     },
     mission_objective_hacking = {
         icon = OBJECTIVE_FRAME_ICON,
+        plate_icon = OBJECTIVE_PLATE_ICON,
         overlay_icon = "content/ui/materials/icons/pocketables/hud/auspex_scanner",
         color = VANILLA_OBJECTIVE_WIDGET_COLOR,
         size = OBJECTIVE_FRAME_SIZE,
         background_base_size = OBJECTIVE_FRAME_SIZE,
-        overlay_base_size = 16,
-        arrow_base_size = OBJECTIVE_ARROW_BASE_SIZE,
+        overlay_base_size = OBJECTIVE_ICON_SIZE,
     },
     mission_objective_console = {
         icon = OBJECTIVE_FRAME_ICON,
+        plate_icon = OBJECTIVE_PLATE_ICON,
         overlay_icon = "content/ui/materials/icons/system/settings/category_video",
         color = VANILLA_OBJECTIVE_WIDGET_COLOR,
         size = OBJECTIVE_FRAME_SIZE,
         background_base_size = OBJECTIVE_FRAME_SIZE,
-        overlay_base_size = 16,
-        arrow_base_size = OBJECTIVE_ARROW_BASE_SIZE,
+        overlay_base_size = OBJECTIVE_ICON_SIZE,
     },
     mission_objective_servo_skull = {
         icon = OBJECTIVE_FRAME_ICON,
+        plate_icon = OBJECTIVE_PLATE_ICON,
         overlay_icon = "content/ui/materials/icons/abilities/default",
         color = VANILLA_OBJECTIVE_WIDGET_COLOR,
         size = OBJECTIVE_FRAME_SIZE,
         background_base_size = OBJECTIVE_FRAME_SIZE,
-        overlay_base_size = 16,
-        arrow_base_size = OBJECTIVE_ARROW_BASE_SIZE,
+        overlay_base_size = OBJECTIVE_ICON_SIZE,
     },
     mission_objective_other = {
         icon = OBJECTIVE_FRAME_ICON,
+        plate_icon = OBJECTIVE_PLATE_ICON,
         overlay_icon = "content/ui/materials/hud/interactions/icons/objective_main",
         color = VANILLA_OBJECTIVE_WIDGET_COLOR,
         size = OBJECTIVE_FRAME_SIZE,
         background_base_size = OBJECTIVE_FRAME_SIZE,
-        -- This art sits small inside its own box, so it is given a larger
-        -- nominal size to end up the same visual weight as the others.
-        overlay_base_size = 28,
-        arrow_base_size = OBJECTIVE_ARROW_BASE_SIZE,
+        overlay_base_size = OBJECTIVE_ICON_SIZE_PADDED,
+        -- `objective_main`'s art sits low and to the right inside its texture.
+        -- Nominal pixels at the frame size, scaled with the marker.
+        overlay_offset_x = -2,
+        overlay_offset_y = -2,
+        overlay_offset_base_size = OBJECTIVE_FRAME_SIZE,
     },
     pickup_tainted_skull = {
         icon = TAINTED_SKULL_LIVE_EVENT_ICON,
@@ -1658,6 +1671,11 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         _style_color_table(overlay_icon_style),
         visual and visual.overlay_color or nil
     ) or nil
+    local plate_icon_style_for_color = widget.style.plate_icon
+    local plate_color = plate_icon_style_for_color and _copy_into_widget_color(
+        _style_color_table(plate_icon_style_for_color),
+        visual and visual.plate_color or nil
+    ) or nil
     local title_color = title_icon_style and _copy_into_widget_color(
         _style_color_table(title_icon_style),
         visual and visual.color or nil
@@ -1703,6 +1721,7 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
     widget.content.radius_icon_size = radius_size
     widget.content.icon = visual and visual.icon or nil
     widget.content.glyph_icon = glyph_icon
+    widget.content.plate_icon = visual and visual.plate_icon or nil
     widget.content.overlay_icon = visual and visual.overlay_icon or nil
     widget.content.title_icon = visual and visual.title_icon or nil
     widget.content.arrow_icon = arrow_icon
@@ -1726,6 +1745,24 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
     icon_size_tbl[1] = size
     icon_size_tbl[2] = size
     icon_style.color = color
+
+    -- An opt-in layer behind the base icon, for markers that want a backplate
+    -- under their art. A marker enables it purely by naming a `plate_icon`; kinds
+    -- that do not name one -- every enemy marker among them, which composes its
+    -- own background into the base layer instead -- are drawn exactly as before.
+    local plate_icon_style = widget.style.plate_icon
+
+    if plate_icon_style then
+        local plate_offset = plate_icon_style.offset
+        local plate_size_tbl = plate_icon_style.size
+
+        plate_offset[1] = icon_offset[1]
+        plate_offset[2] = icon_offset[2]
+        plate_offset[3] = icon_z - 1
+        plate_size_tbl[1] = size
+        plate_size_tbl[2] = size
+        plate_icon_style.color = plate_color or color
+    end
 
     if radius_icon_style and radius_icon and radius_size then
         local radius_offset = radius_icon_style.offset
@@ -1796,8 +1833,23 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
             overlay_offset[2] = icon_offset[2] + size - overlap
             overlay_offset[3] = icon_z + 3
         else
-            overlay_offset[1] = icon_center_x - math_floor(overlay_size * 0.5)
-            overlay_offset[2] = icon_center_y - math_floor(overlay_size * 0.5)
+            -- A per-icon nudge for art that is not centred within its own
+            -- texture. Given in nominal pixels against the marker's base size and
+            -- scaled with it, so the correction holds at any icon scale. Absent
+            -- on every other marker, which are centred as before.
+            local nudge_x = 0
+            local nudge_y = 0
+            local nudge_base = visual and tonumber(visual.overlay_offset_base_size) or nil
+
+            if nudge_base and nudge_base > 0 then
+                local nudge_scale = size / nudge_base
+
+                nudge_x = math_floor((tonumber(visual.overlay_offset_x) or 0) * nudge_scale + 0.5)
+                nudge_y = math_floor((tonumber(visual.overlay_offset_y) or 0) * nudge_scale + 0.5)
+            end
+
+            overlay_offset[1] = icon_center_x - math_floor(overlay_size * 0.5) + nudge_x
+            overlay_offset[2] = icon_center_y - math_floor(overlay_size * 0.5) + nudge_y
             overlay_offset[3] = icon_z + 1
         end
 
@@ -2468,6 +2520,25 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
     return result
 end
 
+-- PRESENTATIONS entries are shared tables, mutated per target as each is drawn.
+-- An icon override therefore has to be reapplied or reset on every marker, or
+-- the first overridden one leaves its icon on every later marker of that kind.
+local DEFAULT_OVERLAY_ICON_BY_KIND = {}
+local DEFAULT_OVERLAY_BASE_SIZE_BY_KIND = {}
+
+for kind, presentation in pairs(PRESENTATIONS) do
+    if presentation.overlay_icon ~= nil then
+        DEFAULT_OVERLAY_ICON_BY_KIND[kind] = presentation.overlay_icon
+        DEFAULT_OVERLAY_BASE_SIZE_BY_KIND[kind] = presentation.overlay_base_size
+    end
+end
+
+local function _configured_objective_background_color(fallback)
+    local get_color = mod.get_mission_objective_background_color
+
+    return get_color and get_color(mod) or fallback
+end
+
 local function _artwork_mode(kind, draw_cache)
     local mode = nil
 
@@ -2862,6 +2933,21 @@ local function _target_visual(target, draw_cache)
             if presentation.overlay_icon ~= nil then
                 presentation.overlay_color = presentation.color
             end
+        end
+
+        local default_overlay_icon = DEFAULT_OVERLAY_ICON_BY_KIND[target_kind]
+
+        if default_overlay_icon ~= nil then
+            -- A replaced icon brings its own fit: the game's icons are not
+            -- normalised, so one size does not suit every texture. The frame is
+            -- untouched either way, so the family keeps one footprint.
+            presentation.overlay_icon = (meta and meta.objective_overlay_icon) or default_overlay_icon
+            presentation.overlay_base_size = (meta and meta.objective_overlay_size)
+                or DEFAULT_OVERLAY_BASE_SIZE_BY_KIND[target_kind]
+        end
+
+        if presentation.plate_icon ~= nil then
+            presentation.plate_color = _configured_objective_background_color(presentation.plate_color)
         end
 
         presentation.accent_color = _configured_marker_background_color(target_kind, presentation.accent_color)
