@@ -61,6 +61,11 @@ return function(env)
         pocketable_void_shield = { 255, 181, 166, 66 },
         pickup_martyr_skull = { 255, 255, 215, 0 },
         martyr_skull_riddle_interactable = { 255, 255, 215, 0 },
+        mission_objective_scanner = RadarColorSettings.vanilla_objective_color,
+        mission_objective_hacking = RadarColorSettings.vanilla_objective_color,
+        mission_objective_console = RadarColorSettings.vanilla_objective_color,
+        mission_objective_servo_skull = RadarColorSettings.vanilla_objective_color,
+        mission_objective_other = RadarColorSettings.vanilla_objective_color,
         luggable_power_cell_orange = { 255, 255, 140, 0 },
         medicae_station = { 255, 38, 205, 26 },
         luggable_socket = { 255, 255, 245, 80 },
@@ -216,11 +221,21 @@ return function(env)
     local ICON_DISTANCE_MARKER_DISPLAY_MODE_KIND_TO_SETTING = {
         hazard_explosive_barrel = "show_explosive_barrels",
         hazard_fire_barrel = "show_fire_barrels",
+        mission_objective_scanner = "show_mission_objective_scanner",
+        mission_objective_hacking = "show_mission_objective_hacking",
+        mission_objective_console = "show_mission_objective_console",
+        mission_objective_servo_skull = "show_mission_objective_servo_skull",
+        mission_objective_other = "show_mission_objective_other",
     }
 
     local ICON_DISTANCE_MARKER_DISPLAY_MODE_DEFAULT_BY_SETTING = {
         show_explosive_barrels = "icon_only",
         show_fire_barrels = "icon_only",
+        show_mission_objective_scanner = "icon_only",
+        show_mission_objective_hacking = "icon_only",
+        show_mission_objective_console = "icon_only",
+        show_mission_objective_servo_skull = "icon_only",
+        show_mission_objective_other = "icon_only",
     }
 
     EXPEDITION_OBJECTIVE_ICON_DEFAULTS = {
@@ -283,6 +298,11 @@ return function(env)
         pickup_coordinates_paper = "primary_objective_group",
         pocketable_grimoire = "secondary_objective_group",
         pocketable_scripture = "secondary_objective_group",
+        mission_objective_scanner = "mission_objective_group",
+        mission_objective_hacking = "mission_objective_group",
+        mission_objective_console = "mission_objective_group",
+        mission_objective_servo_skull = "mission_objective_group",
+        mission_objective_other = "mission_objective_group",
         expedition_loot_converter = "expeditions_location_group",
         expedition_objective_opportunity = "expeditions_location_group",
         expedition_objective_transition = "expeditions_location_group",
@@ -335,6 +355,7 @@ return function(env)
         materials_group = "materials_icon_scale",
         primary_objective_group = "primary_objective_icon_scale",
         secondary_objective_group = "secondary_objective_icon_scale",
+        mission_objective_group = "mission_objective_icon_scale",
         expeditions_location_group = "expeditions_location_icon_scale",
         expeditions_specific_group = "expeditions_specific_icon_scale",
         martyr_s_skull_group = "martyr_s_skull_icon_scale",
@@ -1034,11 +1055,18 @@ return function(env)
     }
 
 
+    -- Kinds the game already marks on screen. A radar marker is still useful,
+    -- but a second highlight bracket around the same object is not.
+    NEARBY_HIGHLIGHT_EXCLUDED_KINDS = {
+        mission_objective_servo_skull = true,
+    }
+
     NEARBY_HIGHLIGHT_SETTING_BY_GROUP = {
         common_pickups_group = "nearby_highlight_common_pickups",
         materials_group = "nearby_highlight_materials",
         primary_objective_group = "nearby_highlight_primary_objective",
         secondary_objective_group = "nearby_highlight_secondary_objective",
+        mission_objective_group = "nearby_highlight_mission_objective",
         expeditions_specific_group = "nearby_highlight_expeditions_specific",
         martyr_s_skull_group = "nearby_highlight_martyr_s_skull",
         environment_group = "nearby_highlight_environment",
@@ -1050,6 +1078,7 @@ return function(env)
         materials_group = "nearby_highlight_distance_text_materials",
         primary_objective_group = "nearby_highlight_distance_text_primary_objective",
         secondary_objective_group = "nearby_highlight_distance_text_secondary_objective",
+        mission_objective_group = "nearby_highlight_distance_text_mission_objective",
         expeditions_specific_group = "nearby_highlight_distance_text_expeditions_specific",
         martyr_s_skull_group = "nearby_highlight_distance_text_martyr_s_skull",
         environment_group = "nearby_highlight_distance_text_environment",

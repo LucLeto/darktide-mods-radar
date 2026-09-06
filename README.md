@@ -23,6 +23,7 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 - Adds optional nearby screen-space highlight brackets for supported non-enemy marker groups, with configurable thickness, per-marker highlight colors, and optional distance labels on the screen highlight, the radar marker, or both.
 - Adds optional remaining-charge annotations for Medicae Stations and deployed Ammo Crates, plus a scaled healing-radius ring for deployed Medical Crates.
 - Adds dedicated **Martyr's Skull riddle interactable** markers for supported mission-specific keys, levers, switches, buttons, and related puzzle controls. Markers clear automatically when individual steps are used or the riddle is completed.
+- Adds **Mission Objective Interactable** markers for the world interactions that drive mission progression, split into **Scanner targets**, **Hacking terminals**, **Consoles**, **Servo skull objectives**, and **Other objective interactions**, each with its own **Icon only**, **Icon + Distance m**, and **Off** display mode and icon. Markers come from the game's own objective systems rather than from what the HUD happens to be drawing, so a step appears as soon as it becomes relevant instead of only once you are close enough for the interaction prompt, and clears again the moment it is completed.
 - Adds dedicated **Expedition POI** support for numbered **Sites of Interest**, **Deadsider Sanctuaries**, **Data Reliquary Harvesters**, **Main Objective**, **Valkyrie Extraction Zone**, and **Valkyrie Arrival Zone**, with per-category **Icon only**, **Icon + Distance m**, and **Off** display modes. Player-marked navigation POIs show an evenly divided ring containing the slot colors of up to four marking players.
 - Supports tech-remnant loot modes for **Default**, **Scale by value**, and **Merge nearby piles**, plus optional cluster value text and radius tuning.
 - Includes optional distance text for bosses, player tags, nearby marker highlights, and expedition POIs, per-enemy-category vertical arrow toggles, **Infinite** boss and teammate range modes, **debug logs**, and an **unknown pickups** toggle for discovery and troubleshooting.
@@ -343,6 +344,7 @@ Each major option group now includes an **Icon size (%)** slider. These sliders 
 | Collectable Materials | Diamantine and Plasteel |
 | Primary Objective Items | Mission luggables and primary objective pickups |
 | Secondary Objective Items | Grimoires and Scriptures |
+| Mission Objective Interactables | Scanner targets, hacking terminals, consoles, servo skull objectives, and other objective interaction points |
 | Expeditions POI | Sites of Interest, sanctuaries, harvesters, main objective, extraction, and arrival markers |
 | Expeditions-Specific Items | Salvage, Tech-Remnants, expedition pocketables, and related expedition pickups |
 | Martyr's Skull Items | Martyr's Skull markers, riddle interactables, and related power cell markers |
@@ -407,6 +409,7 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Collectable Materials | Highlights nearby diamantine and plasteel. |
 | Primary Objective Items | Highlights nearby mission luggables and main objective pickups. |
 | Secondary Objective Items | Highlights nearby grimoires and scriptures. |
+| Mission Objective Interactables | Highlights nearby scanner targets, hacking terminals, consoles, and other active objective interaction points. Servo skull objectives are excluded because the game already draws its own on-screen marker for them. |
 | Expeditions-Specific Items | Highlights nearby salvage, tech-remnants, expedition pocketables, and related expedition pickups. |
 | Martyr's Skull Items | Highlights nearby Martyr's Skull items, riddle interactables, and orange power cell markers. |
 | Environment | Highlights nearby medicae stations, power sockets, heretic idols, and hazard barrels. |
@@ -434,6 +437,72 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Main Objective | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls expedition main objective locations with the dedicated objective icon. |
 | Valkyrie Extraction Zone | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls extraction points with the dedicated extraction icon. |
 | Valkyrie Arrival Zone | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls arrival points with the dedicated arrival icon. |
+
+### Mission Objective Interactable Controls
+
+Radar reads these markers from the game's own objective systems. A step appears as soon as the game
+arms it, rather than only once you are close enough for the interaction prompt to be drawn, which is
+what makes objectives visible from across a room. A marker clears when the step reports itself used or
+inactive, when a scan target is scanned, when a puzzle is solved, when a destructible step is broken,
+or when the objective system drops it.
+
+Missions often place several copies of the same device and arm one at a time, so only the armed copy is
+marked. An unarmed copy appears once the mission arms it.
+
+Missions often file several alternatives under one objective and use only one of them -- nine possible
+cargo containers where one holds the cargo, several possible spawn sites for an event. When an
+objective says which of its units it will mark at the start, the ones it passes over are left off the
+radar; when it says nothing of the sort, every unit is kept.
+
+Objectives that mix real steps with pure position hints show only the steps. A luggable objective holds
+the items and their sockets, which you can act on, alongside spawn points and waypoints, which you
+cannot, so the bare units in it are left off the radar. An objective made of nothing but bare units is
+read the other way round: there the bare units are the step, as with the train controls destroyed to
+stop the train, and all of them are marked. Those steps carry no state of their own at all, so they are
+cleared one at a time by the game's own world marker for each of them going away -- and only for an
+objective the game's marker list has been seen to cover, so a list that says nothing about an objective
+never hides it. Once an objective has appeared in that list it stays trusted for the rest of the
+mission, since otherwise its last remaining step finishing would look the same as an objective the list
+never described. This is decided per objective, since missions run several
+at once. Objective units that already have their own marker kind, such as luggables and their sockets,
+keep it instead of gaining a second one.
+
+Only the currently active objective is shown. A mission holds around a hundred objective-bound units
+across all of its stages, so anything the game does not tie to the live objective stays off the radar.
+This holds however a device is recognised: a mission that places three devices and finishes with one of
+them never used drops that one along with the rest. Devices the mission does not attribute to any
+objective at all are exempt, since that is the only way they stay visible.
+
+Objective devices that carry a puzzle -- Auspex decoding, bomb defusal, and the like -- say in colour
+whether they need somebody, following the device's own hologram:
+
+| Puzzle | Marker |
+| --- | --- |
+| Not started yet | the shared objective tint, like any other objective marker |
+| Running, nobody at it | **red** -- it is asking for a player |
+| A player at the device | **yellow** -- it is being worked on |
+| Solved | the shared objective tint again -- the device stays part of the objective |
+
+A device keeps its marker for as long as its objective runs, whether or not its puzzle is solved, so
+nothing blinks out and returns in red when an objective arms the same device for another round. The
+marker goes when the objective itself ends.
+
+The two live colours have their own sliders under **Hacking terminals**, since that is where every
+puzzle device is configured whichever category it belongs to. The icon, display mode and icon size stay
+those of the device's own category; only the colour follows the puzzle, and the on-screen highlight
+bracket follows it too. Objective devices without a puzzle keep the shared objective tint throughout.
+
+Objective markers are never hidden for being above or below you, whatever **Hide vertical markers
+above/below** is set to: an objective a floor up is exactly what you need to see.
+
+| Option | Modes / default | What it controls |
+| --- | --- | --- |
+| Mission Objective Interactables | Option group | Groups the icon-size, nearby-highlight, distance-text, and per-category display mode controls. |
+| Scanner targets | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls scanning targets tied to the current mission objective. |
+| Hacking terminals | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls hacking terminals and decoding spots tied to the current mission objective. |
+| Consoles | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls consoles and control machines used for mission progression. |
+| Servo skull objectives | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls the mission servo skull while you follow it. Its position updates at the configured **Marker update rate** rather than the slower pickup rate, since it moves. It gets no nearby highlight bracket and needs a larger height difference than other markers before a vertical arrow appears, because it hovers and bobs in flight. |
+| Other objective interactions | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls the remaining objective-bound interaction points, such as switches, buttons, and mission-scripted interactions that do not fall into the categories above. |
 
 ### Martyr's Skull Controls
 
@@ -730,6 +799,27 @@ Player tags intentionally stay flatter and cleaner than supported item markers. 
 | --- | --- | --- |
 | <img src="doc/img/pocketable_grimoire.png"  width="80" alt="Grimoire marker" /> | Grimoire | Secondary objective pocketable. |
 | <img src="doc/img/pocketable_scripture.png"  width="80" alt="Scripture marker" /> | Scripture | Secondary objective pocketable. |
+
+### Mission Objective Interactables
+
+| Marker | Source | Notes |
+| --- | --- | --- |
+| Scanner targets | Scan zone selection | The Auspex targets the active scan zone selected for this run, dropped individually as each one is scanned. |
+| Hacking terminals | Decoder device system | Decoder and hacking terminals used for mission progression. A puzzle device is red while it is running unattended, yellow while a player is at it, and the shared objective tint both before it starts and once it is solved. The marker stays until the objective ends. |
+| Consoles | Objective interaction type | Consoles and control machines used for mission progression. |
+| Servo skull objectives | Servo skull interaction | The mission servo skull while you follow it. |
+| Other objective interactions | Objective target system | The remaining objective-bound interaction points of the active objective, such as switches, buttons, and destructible steps. Destructibles clear one at a time as each is broken, rather than all at once when the objective ends. |
+
+Each category has its own icon, drawn inside the diamond frame the game itself uses around objective
+markers, so the whole family is distinguishable at a glance from enemy markers and from standard points
+of interest. All five share one frame size and the vanilla objective marker tint, so the radar reads as
+the same family as the on-screen HUD marker. Each icon is sized as a proportion of the frame, so it
+keeps its fit at any icon scale. Each has its own icon color sliders.
+
+Scan targets are the one case where the radar has to reconstruct what the game knows. The zone that
+owns them publishes which targets this run selected, and each target carries its own active flag that
+clears when it is scanned. On a client the selection itself is not replicated, so it is recovered from
+those flags instead, and only used when its size agrees with the zone's own outstanding count.
 
 ### Expedition POIs
 

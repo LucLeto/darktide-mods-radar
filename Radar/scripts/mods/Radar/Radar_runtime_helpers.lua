@@ -1215,6 +1215,11 @@ return function(env)
         pocketable_void_shield = 0.08,
         pickup_martyr_skull = 0.1,
         martyr_skull_riddle_interactable = 0.12,
+        mission_objective_scanner = 0.12,
+        mission_objective_hacking = 0.12,
+        mission_objective_console = 0.12,
+        mission_objective_servo_skull = 0.12,
+        mission_objective_other = 0.12,
         luggable_power_cell_orange = 0.18,
         medicae_station = 0.2,
         luggable_socket = 0.18,
@@ -1278,22 +1283,71 @@ return function(env)
         return cache
     end
 
-    function mod:get_interaction_world_markers_by_unit()
-        local cache = _interaction_world_marker_cache()
+    -- Reused instead of a per-call closure; the event manager invokes the
+    -- callback synchronously, so a single slot is enough.
+    local _world_markers_list_result = nil
+
+    local function _world_markers_list_response(response)
+        _world_markers_list_result = response
+    end
+
+    -- Shared by every world-marker consumer so the request is issued the same
+    -- way each time. Returns the live list owned by the HUD element; callers
+    -- must only read it.
+    function _safe_world_markers_list()
         local managers = Managers
         local event_manager = managers and managers.event or nil
         local trigger = event_manager and event_manager.trigger or nil
 
         if not trigger then
-            return cache
+            return nil
         end
 
-        local markers = nil
-        local ok = pcall(trigger, event_manager, "request_world_markers_list", function(response)
-            markers = response
-        end)
+        _world_markers_list_result = nil
+
+        local ok = pcall(trigger, event_manager, "request_world_markers_list", _world_markers_list_response)
+        local markers = _world_markers_list_result
+        _world_markers_list_result = nil
 
         if not ok or type(markers) ~= "table" then
+            return nil
+        end
+
+        return markers
+    end
+
+    -- Every unit the game currently holds a world marker for, whatever the
+    -- marker's type. Presence only, deliberately not `draw` or `widget.visible`:
+    -- a marker the player is too far away to see is still a live objective, and
+    -- filtering on visibility would make markers blink with distance. Returns
+    -- false when the list cannot be read, so callers can fall back rather than
+    -- treat an unavailable list as "nothing exists".
+    function _refresh_world_marker_units(out)
+        table_clear(out)
+
+        local markers = _safe_world_markers_list()
+
+        if not markers then
+            return false
+        end
+
+        for i = 1, #markers do
+            local marker = markers[i]
+            local unit = marker and marker.unit or nil
+
+            if unit ~= nil then
+                out[unit] = true
+            end
+        end
+
+        return true
+    end
+
+    function mod:get_interaction_world_markers_by_unit()
+        local cache = _interaction_world_marker_cache()
+        local markers = _safe_world_markers_list()
+
+        if not markers then
             return cache
         end
 
@@ -1824,6 +1878,9 @@ return function(env)
         local get_marker_scale_group = mod.get_marker_scale_group
         local highlight_setting_by_group = NEARBY_HIGHLIGHT_SETTING_BY_GROUP
         local screen_highlight_color_for_kind = _screen_highlight_color_for_kind
+        local marker_color_kind = mod.get_marker_color_kind or function(_, kind)
+            return kind
+        end
         local get_occluded_highlight_color = mod.get_occluded_highlight_color
         local screen_highlight_anchor_position = _screen_highlight_anchor_position
         local screen_highlight_projection_fallback_position = _screen_highlight_projection_fallback_position
@@ -1853,6 +1910,16 @@ return function(env)
                     local setting_id = group_name and highlight_setting_by_group[group_name] or nil
 
                     enabled = setting_id ~= nil and get_setting(mod, setting_id) == true or false
+
+                    -- The radar-side highlight honours the per-kind exclusion
+                    -- list through `is_nearby_highlight_enabled_for_kind`, but
+                    -- this screen-space bracket is a separate gate and used to
+                    -- ignore it, so an excluded kind still got a bracket drawn
+                    -- around it in the world.
+                    if enabled and NEARBY_HIGHLIGHT_EXCLUDED_KINDS[kind] then
+                        enabled = false
+                    end
+
                     highlight_enabled_by_kind[kind] = enabled
                 end
 
@@ -1865,7 +1932,10 @@ return function(env)
                     end
 
                     if distance_sq ~= nil and distance_sq <= max_distance_sq then
-                        local color = screen_highlight_color_for_kind(kind)
+                        -- Follows the radar marker, so a puzzle's bracket and its
+                        -- dot never disagree about whether it needs a player.
+                        local color = screen_highlight_color_for_kind(
+                            marker_color_kind(mod, kind, target.meta))
                         local world_position = screen_highlight_anchor_position(target, interactee_extension_map)
                         local fallback_world_position = screen_highlight_projection_fallback_position(target)
 

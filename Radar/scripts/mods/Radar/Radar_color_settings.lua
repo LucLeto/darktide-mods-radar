@@ -8,6 +8,23 @@ local function _color(a, r, g, b)
 end
 
 local WHITE = _color(255, 255, 255, 255)
+
+-- Mission objective markers are tinted to match the vanilla objective marker so
+-- they read as the same family as the on-screen HUD marker. Taken from the
+-- game's own HUD tint when it can be resolved, with the shipped value as a
+-- fallback so a moved settings path cannot break marker colors.
+local function _vanilla_objective_color()
+    local ok, hud_settings = pcall(require, "scripts/settings/ui/ui_hud_settings")
+    local tint = ok and type(hud_settings) == "table" and hud_settings.color_tint_main_1 or nil
+
+    if type(tint) == "table" and tonumber(tint[1]) and tonumber(tint[4]) then
+        return _color(tint[1], tint[2], tint[3], tint[4])
+    end
+
+    return _color(255, 223, 229, 219)
+end
+
+local VANILLA_OBJECTIVE = _vanilla_objective_color()
 local RADAR_OUTLINE = _color(255, 213, 226, 206)
 local AUSPEX_GREEN = _color(255, 0, 255, 0)
 
@@ -651,6 +668,58 @@ _add_marker({
 })
 
 _add_marker({
+    kind = "mission_objective_scanner",
+    anchor = "show_mission_objective_scanner",
+    default = VANILLA_OBJECTIVE,
+    supports_highlight = true,
+})
+_add_marker({
+    kind = "mission_objective_hacking",
+    anchor = "show_mission_objective_hacking",
+    default = VANILLA_OBJECTIVE,
+    supports_highlight = true,
+})
+-- Puzzle devices keep the objective icon but say, in colour, whether they still
+-- need somebody. Registered as colour kinds only: nothing ever tracks a marker
+-- under these names, they are just the key `get_marker_color` is looked up by,
+-- so no icon, dropdown or scale group changes with the state. Both sit under the
+-- hacking terminal option because that is where every puzzle device is
+-- configured, whichever objective category it belongs to.
+_add_marker({
+    kind = "mission_objective_minigame_waiting",
+    anchor = "show_mission_objective_hacking",
+    default = _color(255, 235, 70, 70),
+    label_prefix = "mission_objective_minigame_waiting_color_title",
+    label_suffix = "",
+    label_role = "minigame_state",
+})
+_add_marker({
+    kind = "mission_objective_minigame_active",
+    anchor = "show_mission_objective_hacking",
+    default = _color(255, 255, 205, 60),
+    label_prefix = "mission_objective_minigame_active_color_title",
+    label_suffix = "",
+    label_role = "minigame_state",
+})
+_add_marker({
+    kind = "mission_objective_console",
+    anchor = "show_mission_objective_console",
+    default = VANILLA_OBJECTIVE,
+    supports_highlight = true,
+})
+_add_marker({
+    kind = "mission_objective_servo_skull",
+    anchor = "show_mission_objective_servo_skull",
+    default = VANILLA_OBJECTIVE,
+})
+_add_marker({
+    kind = "mission_objective_other",
+    anchor = "show_mission_objective_other",
+    default = VANILLA_OBJECTIVE,
+    supports_highlight = true,
+})
+
+_add_marker({
     kind = "pickup_martyr_skull",
     aliases = { "martyr_skull_riddle_interactable" },
     anchor = "show_martyr_skull",
@@ -834,6 +903,20 @@ function ColorSettings.install_runtime(mod)
         return self:get_configurable_color(prefix, fallback)
     end
 
+    -- Puzzle devices keep their category's icon, dropdown and scale group and
+    -- change only which colour they are looked up under, so the marker says
+    -- whether the puzzle still needs somebody or already has one.
+    local MINIGAME_COLOR_KIND_BY_STATE = {
+        waiting = "mission_objective_minigame_waiting",
+        active = "mission_objective_minigame_active",
+    }
+
+    function mod:get_marker_color_kind(kind, meta)
+        local state = meta and meta.minigame_state or nil
+
+        return (state and MINIGAME_COLOR_KIND_BY_STATE[state]) or kind
+    end
+
     function mod:get_marker_background_color(kind, fallback)
         local prefix = kind and marker_background_prefix_by_kind[kind] or nil
         return self:get_configurable_color(prefix, fallback)
@@ -999,5 +1082,6 @@ ColorSettings.marker_prefix_by_kind = marker_prefix_by_kind
 ColorSettings.marker_background_prefix_by_kind = marker_background_prefix_by_kind
 ColorSettings.marker_highlight_prefix_by_kind = marker_highlight_prefix_by_kind
 ColorSettings.enemy_icon_prefix_by_kind = enemy_icon_prefix_by_kind
+ColorSettings.vanilla_objective_color = VANILLA_OBJECTIVE
 
 return ColorSettings

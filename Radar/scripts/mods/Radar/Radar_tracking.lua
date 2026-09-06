@@ -1194,6 +1194,11 @@ return function(env)
             and _should_scan_hidden_martyr_skull_riddle_interactables()
         table_clear(seen_interactees)
 
+        local scan_hidden_mission_objectives = _refresh_mission_objective_markers()
+        -- Hoisted out of the per-interactee loop: this runs for every interactee
+        -- in the level on every scan.
+        local log_objective_rejections = mod:get("debug_mode") == true
+
         for unit, extension in pairs(interactee_map) do
             if _safe_unit_alive(unit) and extension then
                 seen_interactees[unit] = true
@@ -1248,15 +1253,34 @@ return function(env)
                 local kind = nil
                 local meta = nil
 
+                -- Fed before classification so a step that has just gone
+                -- inactive is already retired by the time it is classified.
+                _update_mission_objective_lifecycle(unit, active_state, used_state)
+
                 if is_active and not is_used then
                     if show_marker then
                         kind, meta = _classify_interactee(extension, unit)
-                    elseif force_hidden_martyr_skull_riddle_interactables then
-                        kind, meta = _classify_interactee(extension, unit, true, true)
+                    else
+                        -- Mission objective interactables have to be visible
+                        -- before the game draws their own prompt, so they are
+                        -- classified while `show_marker` is still false. The
+                        -- pre-check is a table lookup plus at most one extension
+                        -- call, so full classification stays limited to units
+                        -- that are actually objective-bound.
+                        local hidden_objective = scan_hidden_mission_objectives
+                            and _hidden_mission_objective_kind(extension, unit) ~= nil
 
-                        if kind ~= "martyr_skull_riddle_interactable" then
-                            kind = nil
-                            meta = nil
+                        if hidden_objective or force_hidden_martyr_skull_riddle_interactables then
+                            kind, meta = _classify_interactee(extension, unit, true, true)
+
+                            local keep = (hidden_objective and _is_mission_objective_marker_kind(kind))
+                                or (force_hidden_martyr_skull_riddle_interactables
+                                    and kind == "martyr_skull_riddle_interactable")
+
+                            if not keep then
+                                kind = nil
+                                meta = nil
+                            end
                         end
                     end
 
@@ -1267,8 +1291,26 @@ return function(env)
                     else
                         _clear_tracked_unit_from_source(unit, "interactee_system")
                     end
+
+                    if not show_marker then
+                        if log_objective_rejections then
+                            _debug_log_rejected_mission_objective_marker(unit, extension, "show_marker")
+                        end
+                    end
                 else
+                    -- An interactee that reports itself inactive is not part of
+                    -- the current step. Missions place several copies of the same
+                    -- device and arm one at a time, so marking inactive ones puts
+                    -- every copy on the radar at once. `show_marker` is bypassed
+                    -- above so a marker still appears before the prompt does;
+                    -- `active` is not, because it is what distinguishes the live
+                    -- device from its siblings.
                     _clear_tracked_unit_from_source(unit, "interactee_system")
+
+                    if log_objective_rejections then
+                        _debug_log_rejected_mission_objective_marker(unit, extension,
+                            is_used and "used" or "inactive")
+                    end
                 end
 
                 if martyr_skull_riddle_fallback_mission_name then
@@ -1292,6 +1334,10 @@ return function(env)
                 tracked_units[unit] = nil
             end
         end
+
+        -- Runs last: objective zones and targets are often not interactees at
+        -- all, so this is the only path that can reach them.
+        _scan_mission_objective_targets(interactee_map)
     end
 
     local function _scan_chests()
@@ -1659,6 +1705,13 @@ return function(env)
         player_companion = true,
     }
 
+    -- Kinds that move under their own power even though they are tracked from a
+    -- slow scan tier. Their positions refresh at the configurable scan rate, so
+    -- a flying servo skull does not lag a quarter of a second behind.
+    local MOVING_TRACK_KINDS = {
+        mission_objective_servo_skull = true,
+    }
+
     local function _prune_units(refresh_item_positions)
         local now = _safe_gameplay_time() or 0
         local tracked_units = mod._tracked_units
@@ -1671,7 +1724,8 @@ return function(env)
 
                 if last_seen_t and now - last_seen_t > 2.5 then
                     tracked_units[unit] = nil
-                elseif refresh_item_positions or MOVING_TRACK_SOURCES[data.source] then
+                elseif refresh_item_positions or MOVING_TRACK_SOURCES[data.source]
+                    or MOVING_TRACK_KINDS[data.kind] then
                     local meta = data and data.meta
                     local position = meta and _copy_vector3(meta.position) or nil
 
@@ -1703,6 +1757,28 @@ return function(env)
     end
 
     local ITEM_VERTICAL_ARROW_Z_DEADZONE = 2
+
+    -- The flying servo skull hovers well above head height and bobs as it moves,
+    -- so the shared 2 m deadzone reads it as being on another floor. A larger
+    -- deadzone keeps the arrow for genuine floor changes only. This overrides the
+    -- height at which an arrow appears; the player's own "show vertical arrows
+    -- within range" distance setting still applies unchanged.
+    local VERTICAL_ARROW_Z_DEADZONE_BY_KIND = {
+        mission_objective_servo_skull = 6,
+    }
+
+    -- Kinds that must never be hidden for being above or below the player.
+    -- Every mission objective marker qualifies: an objective a floor up is
+    -- exactly what you need to see, and losing the marker is worse than an
+    -- imprecise one. Objective kinds are matched by predicate so a new category
+    -- is covered without a second edit here.
+    local VERTICAL_HIDE_EXEMPT_KINDS = {
+        pickup_heretic_idol = true,
+    }
+
+    local function _is_vertical_hide_exempt(kind)
+        return VERTICAL_HIDE_EXEMPT_KINDS[kind] == true or _is_mission_objective_marker_kind(kind)
+    end
 
     local function _is_player_smart_tag_kind(kind)
         return kind == "location_attention"
@@ -2096,6 +2172,7 @@ return function(env)
                     kind == "player_teammate" or
                     kind == "material_expeditions_loot_player_drop" or
                     kind == "martyr_skull_riddle_interactable" or
+                    _is_mission_objective_marker_kind(kind) or
                     kind == "location_attention" or
                     kind == "location_ping" or
                     kind == "location_threat"
@@ -2206,12 +2283,13 @@ return function(env)
                     local abs_vertical_delta = math_abs(vertical_delta)
 
                     if not infinite_range
-                        and kind ~= "pickup_heretic_idol"
+                        and not _is_vertical_hide_exempt(kind)
                         and abs_vertical_delta >= item_vertical_hide_threshold then
                         return
                     end
 
-                    if abs_vertical_delta >= ITEM_VERTICAL_ARROW_Z_DEADZONE
+                    if abs_vertical_delta >= (VERTICAL_ARROW_Z_DEADZONE_BY_KIND[kind]
+                            or ITEM_VERTICAL_ARROW_Z_DEADZONE)
                         and distance_sq_horizontal <= item_vertical_arrow_threshold_sq then
                         if vertical_delta > 0 then
                             vertical_state = "up"
@@ -2427,6 +2505,7 @@ return function(env)
         mod._idol_destroyed_units = {}
         mod._martyr_skull_riddle_solved_by_mission = {}
         mod._martyr_skull_riddle_fallback_state_by_position = {}
+        _reset_mission_objective_marker_state()
         mod._last_safe_zone_section_index = nil
         mod._last_expedition_in_safe_zone = nil
         mod._player_smart_tag_generation = 0
@@ -3454,6 +3533,10 @@ return function(env)
 
     function mod:is_nearby_highlight_enabled_for_kind(kind)
         if not kind or not _kind_enabled(kind) then
+            return false
+        end
+
+        if NEARBY_HIGHLIGHT_EXCLUDED_KINDS[kind] then
             return false
         end
 

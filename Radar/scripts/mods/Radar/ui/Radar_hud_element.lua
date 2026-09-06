@@ -8,6 +8,7 @@ local RadarHudRenderer = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_hud_re
 local RadarHudWidgets = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_hud_widgets")
 local RadarNavmesh = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_navmesh_renderer")
 local RadarStrikemapGeometry = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_strikemap_geometry")
+local RadarColorSettings = mod:io_dofile("Radar/scripts/mods/Radar/Radar_color_settings")
 
 local Color = Color
 local Vector3 = Vector3
@@ -164,6 +165,21 @@ local function _widget_color(a, r, g, b)
 end
 
 local WHITE_WIDGET_COLOR = { 255, 255, 255, 255 }
+-- Matches the vanilla on-screen objective marker so the radar reads as the same
+-- family. Only a fallback: configured marker colors take precedence.
+local VANILLA_OBJECTIVE_WIDGET_COLOR = RadarColorSettings.vanilla_objective_color
+
+-- The frame the game draws around its own objective markers, read off a live
+-- marker widget rather than guessed: its `content.frame`. Every objective kind
+-- shares it and shares one size, so the whole family has a single footprint and
+-- reads as one group; each kind then sets `overlay_base_size` alone to fit its
+-- own art inside the diamond. The icon is sized as a ratio of the frame, so the
+-- fit survives the icon-scale slider.
+local OBJECTIVE_FRAME_ICON = "content/ui/materials/hud/interactions/frames/point_of_interest_top"
+local OBJECTIVE_FRAME_SIZE = 26
+-- Keeps the vertical arrows the size they were before the frame widened the
+-- markers.
+local OBJECTIVE_ARROW_BASE_SIZE = 16
 local RADAR_OUTLINE_WIDGET_COLOR = { 255, 213, 226, 206 }
 local RADAR_LEGEND_INDICATOR_WIDGET_COLOR = { 255, 213, 226, 206 }
 local MARKER_VALUE_TEXT_WIDGET_COLOR = { 255, 255, 225, 0 }
@@ -206,6 +222,12 @@ local function _configured_marker_color(kind, fallback)
     local get_marker_color = mod.get_marker_color
 
     return get_marker_color and get_marker_color(mod, kind, fallback) or fallback
+end
+
+local function _marker_color_kind(kind, meta)
+    local get_marker_color_kind = mod.get_marker_color_kind
+
+    return get_marker_color_kind and get_marker_color_kind(mod, kind, meta) or kind
 end
 
 local function _configured_marker_background_color(kind, fallback)
@@ -606,6 +628,53 @@ local PRESENTATIONS = {
         icon = "content/ui/materials/hud/interactions/icons/default",
         color = _widget_color(255, 255, 215, 0),
         size = 14,
+    },
+    mission_objective_scanner = {
+        icon = OBJECTIVE_FRAME_ICON,
+        overlay_icon = "content/ui/materials/icons/mission_types/mission_type_03",
+        color = VANILLA_OBJECTIVE_WIDGET_COLOR,
+        size = OBJECTIVE_FRAME_SIZE,
+        background_base_size = OBJECTIVE_FRAME_SIZE,
+        overlay_base_size = 16,
+        arrow_base_size = OBJECTIVE_ARROW_BASE_SIZE,
+    },
+    mission_objective_hacking = {
+        icon = OBJECTIVE_FRAME_ICON,
+        overlay_icon = "content/ui/materials/icons/pocketables/hud/auspex_scanner",
+        color = VANILLA_OBJECTIVE_WIDGET_COLOR,
+        size = OBJECTIVE_FRAME_SIZE,
+        background_base_size = OBJECTIVE_FRAME_SIZE,
+        overlay_base_size = 16,
+        arrow_base_size = OBJECTIVE_ARROW_BASE_SIZE,
+    },
+    mission_objective_console = {
+        icon = OBJECTIVE_FRAME_ICON,
+        overlay_icon = "content/ui/materials/icons/system/settings/category_video",
+        color = VANILLA_OBJECTIVE_WIDGET_COLOR,
+        size = OBJECTIVE_FRAME_SIZE,
+        background_base_size = OBJECTIVE_FRAME_SIZE,
+        overlay_base_size = 16,
+        arrow_base_size = OBJECTIVE_ARROW_BASE_SIZE,
+    },
+    mission_objective_servo_skull = {
+        icon = OBJECTIVE_FRAME_ICON,
+        overlay_icon = "content/ui/materials/icons/abilities/default",
+        color = VANILLA_OBJECTIVE_WIDGET_COLOR,
+        size = OBJECTIVE_FRAME_SIZE,
+        background_base_size = OBJECTIVE_FRAME_SIZE,
+        overlay_base_size = 16,
+        arrow_base_size = OBJECTIVE_ARROW_BASE_SIZE,
+    },
+    mission_objective_other = {
+        icon = OBJECTIVE_FRAME_ICON,
+        overlay_icon = "content/ui/materials/hud/interactions/icons/objective_main",
+        color = VANILLA_OBJECTIVE_WIDGET_COLOR,
+        size = OBJECTIVE_FRAME_SIZE,
+        background_base_size = OBJECTIVE_FRAME_SIZE,
+        -- This art sits small inside its own box, so it is given a larger
+        -- nominal size to end up the same visual weight as the others.
+        overlay_base_size = 28,
+        arrow_base_size = OBJECTIVE_ARROW_BASE_SIZE,
     },
     pickup_tainted_skull = {
         icon = TAINTED_SKULL_LIVE_EVENT_ICON,
@@ -1645,7 +1714,11 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
     local arrow_anchor_x = nil
     local arrow_anchor_y = nil
     local arrow_anchor_size = nil
-    local arrow_size_base = nil
+    -- Some icon art sits small inside its box, so its presentation raises `size`
+    -- to compensate. `arrow_base_size` lets the vertical arrow keep the
+    -- proportions it would have at the nominal size instead of scaling with the
+    -- inflated box. Nil means the arrow tracks the marker exactly as before.
+    local arrow_size_base = visual and tonumber(visual.arrow_base_size) or nil
 
     icon_offset[1] = math_floor((x or 0) + 0.5)
     icon_offset[2] = math_floor((y or 0) + 0.5)
@@ -1695,7 +1768,7 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
             arrow_anchor_size = math_floor(anchor_size + 0.5)
         end
 
-        arrow_size_base = size
+        arrow_size_base = arrow_size_base or size
     end
 
     if overlay_icon_style then
@@ -1758,11 +1831,17 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         local base_x = arrow_anchor_x or icon_offset[1]
         local base_y = arrow_anchor_y or icon_offset[2]
         local base_size = arrow_anchor_size or size
-        local arrow_size = math_max(6, math_floor((arrow_size_base or base_size) * 0.45 + 1))
+        local arrow_base = arrow_size_base or base_size
+        local arrow_size = math_max(6, math_floor(arrow_base * 0.45 + 1))
         local overlap = math_floor(arrow_size * 0.5 + 1) + 2
+        -- The arrow anchor box is centred on the marker, so a smaller arrow base
+        -- keeps the arrow beside the glyph instead of drifting out to the corner
+        -- of an oversized box. With no override this is zero and the placement is
+        -- unchanged.
+        local inset = (base_size - arrow_base) * 0.5
 
-        arrow_offset[1] = base_x + base_size - overlap
-        arrow_offset[2] = base_y + base_size - overlap
+        arrow_offset[1] = math_floor(base_x + inset + arrow_base - overlap + 0.5)
+        arrow_offset[2] = math_floor(base_y + inset + arrow_base - overlap + 0.5)
         arrow_offset[3] = icon_z + 3
         arrow_size_tbl[1] = arrow_size
         arrow_size_tbl[2] = arrow_size
@@ -2775,7 +2854,14 @@ local function _target_visual(target, draw_cache)
         end
 
         if display_mode ~= "artwork" then
-            presentation.color = _configured_marker_color(target_kind, presentation.color)
+            presentation.color = _configured_marker_color(_marker_color_kind(target_kind, meta), presentation.color)
+
+            -- The base layer is the frame on a composed marker, so the icon on
+            -- top needs the same colour or it stays white while the frame turns
+            -- red or yellow.
+            if presentation.overlay_icon ~= nil then
+                presentation.overlay_color = presentation.color
+            end
         end
 
         presentation.accent_color = _configured_marker_background_color(target_kind, presentation.accent_color)
