@@ -431,6 +431,17 @@ end
 check(expeditions_locals < 200,
     "Radar_expeditions.lua declares " .. expeditions_locals .. " top level locals; LuaJIT allows 200")
 
+-- The same ceiling applies to a file's main chunk, and the HUD element declares
+-- its constants there. It has less room left than the line count suggests.
+local hud_locals = 0
+
+for _ in hud_source:gmatch(LF .. "local [_%a]") do
+    hud_locals = hud_locals + 1
+end
+
+check(hud_locals < 200,
+    "Radar_hud_element.lua declares " .. hud_locals .. " file level locals; LuaJIT allows 200")
+
 -- The probe walks the game's markers for units the mod does not track, which is
 -- the only way a unit in no objective system can be found at all.
 check(expeditions_source:find("function _debug_probe_untracked_world_markers", 1, true) ~= nil,
@@ -505,48 +516,105 @@ check(expeditions_source:find("table_clear(_objective_world_marker_seen)", 1, tr
     and select(2, expeditions_source:gsub("table_clear%(_objective_world_marker_seen%)", "")) == 1,
     "the world marker coverage latch must be cleared once per mission, not once per scan")
 
--- The objective_main art sits small inside its box, so that presentation raises
--- `size` and decouples the vertical arrow from it. Mirrors the geometry in
--- _apply_marker_widget.
-check(hud_source:find("arrow_base_size", 1, true) ~= nil, "the arrow size override is missing")
-check(hud_source:find("local arrow_base = arrow_size_base or base_size", 1, true) ~= nil,
-    "the arrow no longer sizes off the override")
-
-local function arrow_geometry(base_size, arrow_base_size)
-    local arrow_base = arrow_base_size or base_size
-    local arrow_size = math.max(6, math.floor(arrow_base * 0.45 + 1))
-    local overlap = math.floor(arrow_size * 0.5 + 1) + 2
-    local inset = (base_size - arrow_base) * 0.5
-    local offset = math.floor(inset + arrow_base - overlap + 0.5)
-
-    return arrow_size, offset - base_size * 0.5
-end
-
--- Without an override the geometry must equal the original formula exactly, so
--- no existing marker moves.
-for _, size in ipairs({ 12, 14, 16, 20, 28, 40 }) do
-    local legacy_size = math.max(6, math.floor(size * 0.45 + 1))
-    local legacy_offset = size - (math.floor(legacy_size * 0.5 + 1) + 2)
-    local actual_size, actual_from_centre = arrow_geometry(size, nil)
-
-    check(actual_size == legacy_size, "arrow size changed at marker size " .. size)
-    check(actual_from_centre == legacy_offset - size * 0.5, "arrow position changed at marker size " .. size)
-end
-
--- No positional offsets. The frame's centre and the icon's half size are floored
--- separately, so an icon at a different size to its frame drifts by a pixel at
--- some scales and not others -- which no fixed offset can correct. An icon that
--- needs to sit flush links itself to the frame size instead, where the two
--- floors cancel exactly.
+-- No positional offsets: an icon that needs to sit flush links itself to the
+-- frame size, and the renderer corrects the parity, so nothing is nudged by
+-- hand.
 check(OBJECTIVE_ICON_SIZE_LINKED ~= nil and OBJECTIVE_FRAME_SIZE ~= nil
     and OBJECTIVE_ICON_SIZE_LINKED % 2 == 0 and OBJECTIVE_FRAME_SIZE % 2 == 0,
-    "an odd icon or frame size puts the icon half a pixel off centre")
+    "an odd nominal icon or frame size needs a parity correction at 100%, where none should be needed")
 check(OBJECTIVE_ICON_SIZE_LINKED ~= nil and OBJECTIVE_FRAME_SIZE ~= nil
     and OBJECTIVE_ICON_SIZE_LINKED < OBJECTIVE_FRAME_SIZE,
     "the linked icon fills the whole frame, which draws it larger than the game's marker")
 check(hud_source:find("overlay_offset_x", 1, true) == nil
     and hud_source:find("overlay_offset_base_size", 1, true) == nil,
     "per-icon positional offsets are back; link the icon to the frame size instead")
+
+-- The vertical arrow. Its size and the amount it overlaps the marker's corner
+-- are proportions of the marker, not pixel sums, so that the arrow keeps the
+-- same relationship to the marker at every icon scale.
+--
+-- The constants are read out of the source rather than repeated here: a mirror
+-- of the formula written from memory compares the spec against itself and
+-- passes whatever the code does.
+local ARROW_SIZE_RATIO = tonumber(hud_source:match("local VERTICAL_ARROW_SIZE_RATIO = ([%d.]+)"))
+local ARROW_OVERLAP_RATIO = tonumber(hud_source:match("local VERTICAL_ARROW_OVERLAP_RATIO = ([%d.]+)"))
+local ARROW_MIN_SIZE = tonumber(hud_source:match("local VERTICAL_ARROW_MIN_SIZE = (%d+)"))
+
+check(ARROW_SIZE_RATIO ~= nil and ARROW_OVERLAP_RATIO ~= nil and ARROW_MIN_SIZE ~= nil,
+    "the arrow proportions are missing")
+
+-- Both halves of the geometry must actually use them, or the constants are
+-- decoration and the formula is still whatever it was.
+check(hud_source:find("math_floor(arrow_base * VERTICAL_ARROW_SIZE_RATIO + 0.5)", 1, true) ~= nil,
+    "the arrow size is not derived from its ratio")
+check(hud_source:find("math_floor(arrow_size * VERTICAL_ARROW_OVERLAP_RATIO + 0.5)", 1, true) ~= nil,
+    "the arrow overlap is not derived from its ratio")
+-- The pixel sums this replaced. They held at the default size and drifted
+-- everywhere else, which is the whole reason for the ratios.
+check(hud_source:find("arrow_base * 0.45 + 1", 1, true) == nil
+    and hud_source:find("math_floor(arrow_size * 0.5 + 1) + 2", 1, true) == nil,
+    "the absolute arrow pixel sums are back")
+
+check(hud_source:find("local arrow_base = arrow_size_base or base_size", 1, true) ~= nil,
+    "the arrow no longer sizes off the override")
+check(hud_source:find("arrow_base_size", 1, true) ~= nil, "the arrow size override is missing")
+
+local function arrow_geometry(base_size, arrow_base_size)
+    local arrow_base = arrow_base_size or base_size
+    local arrow_size = math.max(ARROW_MIN_SIZE, math.floor(arrow_base * ARROW_SIZE_RATIO + 0.5))
+    local overlap = math.floor(arrow_size * ARROW_OVERLAP_RATIO + 0.5)
+    local inset = (base_size - arrow_base) * 0.5
+    local offset = math.floor(inset + arrow_base - overlap + 0.5)
+
+    return arrow_size, offset - base_size * 0.5, offset + arrow_size - base_size
+end
+
+-- What the user sees as the arrow drifting away from the marker is the part of
+-- it hanging past the marker's corner. Under the old pixel sums that ran from
+-- nothing at half scale to a sixth of the marker at double; it has to stay
+-- inside a narrow band instead. Measured over the objective frame and the
+-- luggable marker, across the whole icon scale range.
+for _, base in ipairs({ OBJECTIVE_FRAME_SIZE, 25, 14 }) do
+    local lowest_overhang, highest_overhang = math.huge, -math.huge
+    local lowest_ratio, highest_ratio = math.huge, -math.huge
+
+    for percent = 50, 200 do
+        local size = math.floor(base * percent / 100 + 0.5)
+        local arrow_size, _, overhang = arrow_geometry(size, nil)
+
+        lowest_overhang = math.min(lowest_overhang, overhang / size)
+        highest_overhang = math.max(highest_overhang, overhang / size)
+
+        -- Below the legibility floor the arrow stops being a proportion of
+        -- anything on purpose, so those sizes are not part of the band. The
+        -- floor only ever makes the arrow larger, never smaller, which is what
+        -- keeps a tiny marker's arrow readable.
+        if size * ARROW_SIZE_RATIO >= ARROW_MIN_SIZE then
+            lowest_ratio = math.min(lowest_ratio, arrow_size / size)
+            highest_ratio = math.max(highest_ratio, arrow_size / size)
+        else
+            check(arrow_size == ARROW_MIN_SIZE,
+                "a " .. size .. "px marker's arrow is not held at the legibility floor")
+        end
+    end
+
+    check(highest_overhang - lowest_overhang < 0.08,
+        "the arrow overhang on a " .. base .. "px marker swings from "
+            .. string.format("%.1f%% to %.1f%%", lowest_overhang * 100, highest_overhang * 100)
+            .. " across the scale range, so it detaches as the marker grows")
+    check(highest_ratio - lowest_ratio < 0.1,
+        "the arrow size on a " .. base .. "px marker swings from "
+            .. string.format("%.2f to %.2f", lowest_ratio, highest_ratio)
+            .. " of the marker across the scale range")
+end
+
+-- The default look is the one that was calibrated by eye, so the proportions
+-- have to reproduce it rather than quietly resize every marker.
+local default_arrow_size, _, default_overhang = arrow_geometry(OBJECTIVE_FRAME_SIZE, nil)
+
+check(default_arrow_size == 12 and default_overhang == 3,
+    "the arrow at the default objective frame is " .. default_arrow_size .. "px overhanging "
+        .. default_overhang .. "px, not the 12px/3px it was calibrated at")
 
 -- One arrow formula for every marker type: the frame is the objective marker's
 -- box, so the standard placement already anchors the arrow to it and scales with
@@ -560,6 +628,78 @@ local override_size, override_from_centre = arrow_geometry(28, 16)
 
 check(override_size == nominal_size, "the overridden arrow is not the size of a nominal marker arrow")
 check(override_from_centre == nominal_from_centre, "the overridden arrow does not sit where a nominal one does")
+
+-- Centring. The frame's centre and the icon's half size are floored
+-- independently, so they cancel only when the two sizes share a parity. Both
+-- nominal sizes are even, but the icon scale is applied to each separately and
+-- about half the scale values break the match -- 120% did while 125% did not,
+-- which is why no static offset could ever have fixed it. The renderer moves the
+-- icon to the nearer integer of the frame's parity instead.
+check(hud_source:find("if (overlay_size - size) % 2 ~= 0 then", 1, true) ~= nil,
+    "the overlay parity correction is missing, so the icon sits half a pixel off at some scales")
+check(hud_source:find("local exact_overlay_size = nil", 1, true) ~= nil,
+    "the unrounded overlay size is gone, so the correction cannot pick the nearer candidate")
+-- Which way it corrects matters as much as that it corrects: always shrinking
+-- would centre the icon and quietly bias it a pixel small at every scale that
+-- needs a correction. Checked against the source, because a mirror of the rule
+-- written here would only ever agree with itself.
+check(hud_source:find("if exact_overlay_size > overlay_size or overlay_size <= 4 then", 1, true) ~= nil,
+    "the parity correction no longer picks the nearer of the two candidates")
+
+local function overlay_geometry(size, overlay_base, frame_base)
+    local exact = size * (overlay_base / frame_base)
+    local overlay_size = math.max(4, math.floor(exact + 0.5))
+
+    if (overlay_size - size) % 2 ~= 0 then
+        if exact > overlay_size or overlay_size <= 4 then
+            overlay_size = overlay_size + 1
+        else
+            overlay_size = overlay_size - 1
+        end
+    end
+
+    return overlay_size
+end
+
+-- Exact centring at every size the scale slider can produce, for every objective
+-- icon, and at a size cost of no more than a pixel.
+local grew = 0
+local shrank = 0
+
+for kind, icon_base in pairs(EXPECTED_ICON_SIZE_BY_KIND) do
+    for size = 10, 72 do
+        local overlay_size = overlay_geometry(size, icon_base, OBJECTIVE_FRAME_SIZE)
+        local drawn_left = math.floor(size * 0.5) - math.floor(overlay_size * 0.5)
+        local centred_left = (size - overlay_size) / 2
+        local uncorrected = math.max(4, math.floor(size * (icon_base / OBJECTIVE_FRAME_SIZE) + 0.5))
+
+        check(drawn_left == centred_left,
+            kind .. " sits " .. (drawn_left - centred_left) .. "px off centre in a " .. size .. "px frame")
+        check(math.abs(overlay_size - uncorrected) <= 1,
+            kind .. " changes size by more than a pixel to stay centred in a " .. size .. "px frame")
+
+        if overlay_size > uncorrected then
+            grew = grew + 1
+        elseif overlay_size < uncorrected then
+            shrank = shrank + 1
+        end
+    end
+end
+
+-- Both directions have to occur. A rule that only ever shrinks is centred but
+-- biased, and would leave every corrected icon a pixel smaller than intended.
+check(grew > 0 and shrank > 0,
+    "the parity correction only ever " .. (grew > 0 and "grows" or "shrinks")
+        .. " the icon, so it is biased rather than choosing the nearer size")
+
+-- The corner-anchored overlay is not centred on anything, so it must be left
+-- exactly as it was.
+local bottom_right_block = hud_source:match('if visual and visual%.overlay_anchor == "bottom_right" then(.-)else')
+
+check(bottom_right_block ~= nil and bottom_right_block:find("overlay_size", 1, true) ~= nil
+    and bottom_right_block:find("% 2", 1, true) == nil,
+    "the parity correction has leaked into the corner-anchored overlay")
+
 
 -- Lua locals are invisible above their declaration, so a function written
 -- earlier in the file that touches one silently reads nil and writes a global.
@@ -639,6 +779,31 @@ check(tentacle_call ~= nil and target_pass_call ~= nil and tentacle_call > targe
 -- Quadratic in what the range test lets through, so it needs a ceiling.
 check(expeditions_source:find("candidate_limit", 1, true) ~= nil,
     "the tentacle pairwise pass is unbounded")
+
+-- An objective the game is itself marking is drawn however far away it is. The
+-- signal is the vanilla marker list, which is where the HUD gets its own
+-- markers, so the exemption lasts exactly as long as the marker the player can
+-- see and no approximation of it has to be maintained alongside.
+check(expeditions_source:find("function _objective_has_world_marker(unit)", 1, true) ~= nil,
+    "the world marker exemption has no accessor")
+-- Without the availability guard, a mission where the list cannot be read would
+-- fall back on a stale table from the previous one.
+check(expeditions_source:find(
+    "return _world_marker_units_available and _scratch_world_marker_units[unit] == true", 1, true) ~= nil,
+    "the exemption does not check that the marker list was readable")
+
+local bypass = tracking_source:find("_objective_has_world_marker(unit) then", 1, true)
+local range_test = tracking_source:find("if distance_sq_horizontal > max_range_sq and not ignore_range then", 1, true)
+
+check(bypass ~= nil, "the radar target build never consults the game's own markers")
+check(bypass ~= nil and range_test ~= nil and bypass < range_test,
+    "the exemption is decided after the range test, where it can no longer let anything through")
+
+-- Objectives only. Enemies, pickups and luggables keep their own range rules.
+local bypass_block = tracking_source:match("if not ignore_range" .. LF .. "(.-)ignore_range = true")
+
+check(bypass_block ~= nil and bypass_block:find("_is_mission_objective_marker_kind(kind)", 1, true) ~= nil,
+    "the range exemption is not restricted to mission objective markers")
 
 check_local_use_before_declaration(expeditions_source, "Radar_expeditions.lua")
 check_local_use_before_declaration(tracking_source, "Radar_tracking.lua")

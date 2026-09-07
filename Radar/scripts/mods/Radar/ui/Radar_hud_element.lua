@@ -194,6 +194,18 @@ local RADAR_LEGEND_INDICATOR_WIDGET_COLOR = { 255, 213, 226, 206 }
 local MARKER_VALUE_TEXT_WIDGET_COLOR = { 255, 255, 225, 0 }
 local BOSS_DISTANCE_TEXT_WIDGET_COLOR = MARKER_VALUE_TEXT_WIDGET_COLOR
 local VERTICAL_ARROW_WIDGET_COLOR = { 255, 255, 255, 255 }
+-- The arrow and the amount it overlaps its marker's corner are both fixed
+-- proportions of the marker. They used to be pixel sums -- `size * 0.45 + 1` for
+-- the arrow, and half of that plus three for the overlap -- which held at the
+-- default size and drifted everywhere else: the part of the arrow hanging past
+-- the marker grew from nothing at half scale to a sixth of the marker at double,
+-- so a large marker's arrow looked detached from it while a small one's looked
+-- tucked in. The ratios below reproduce the default size exactly and hold that
+-- proportion at every scale instead.
+local VERTICAL_ARROW_SIZE_RATIO = 0.46
+local VERTICAL_ARROW_OVERLAP_RATIO = 0.75
+-- Below this the arrow stops reading as an arrow at all.
+local VERTICAL_ARROW_MIN_SIZE = 6
 local RADAR_ZOOM_INDICATOR_WIDGET_COLOR = { 210, 0, 255, 0 }
 
 local function _any_to_widget_color(color, fallback)
@@ -1821,17 +1833,19 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
     end
 
     if overlay_icon_style then
-        local overlay_size = nil
         local overlay_base_size = visual and tonumber(visual.overlay_base_size) or nil
         local background_base_size = visual and tonumber(visual.background_base_size or visual.size) or nil
+        -- Kept unrounded: the parity correction below needs to know which way
+        -- the rounding went to pick the nearer of the two candidates.
+        local exact_overlay_size = nil
 
         if overlay_base_size and background_base_size and background_base_size > 0 then
-            overlay_size = math_floor(size * (overlay_base_size / background_base_size) + 0.5)
+            exact_overlay_size = size * (overlay_base_size / background_base_size)
         else
-            overlay_size = math_floor((visual and visual.overlay_size or (size - 2)) + 0.5)
+            exact_overlay_size = visual and visual.overlay_size or (size - 2)
         end
 
-        overlay_size = math_max(4, overlay_size)
+        local overlay_size = math_max(4, math_floor(exact_overlay_size + 0.5))
 
         local overlay_offset = overlay_icon_style.offset
         local overlay_size_tbl = overlay_icon_style.size
@@ -1845,6 +1859,28 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
             overlay_offset[2] = icon_offset[2] + size - overlap
             overlay_offset[3] = icon_z + 3
         else
+            -- The frame's centre and the icon's half size are floored
+            -- independently, so they only cancel when the two sizes share a
+            -- parity: an odd icon inside an even frame -- or the reverse --
+            -- lands half a pixel off centre. Both the nominal sizes are even, but
+            -- the user's scale is applied to each of them separately and about
+            -- half of the scale values break the match. 120% did (frame 31, icon
+            -- 24) while 125% did not (33 and 25), which is what a static offset
+            -- could never have fixed.
+            --
+            -- So the icon is moved to the nearer integer of the frame's own
+            -- parity. That costs at most a pixel of size and buys exact centring
+            -- at every scale.
+            if (overlay_size - size) % 2 ~= 0 then
+                -- Whichever of the two neighbours is nearer the exact size,
+                -- except at the minimum, where there is only one way to go.
+                if exact_overlay_size > overlay_size or overlay_size <= 4 then
+                    overlay_size = overlay_size + 1
+                else
+                    overlay_size = overlay_size - 1
+                end
+            end
+
             overlay_offset[1] = icon_center_x - math_floor(overlay_size * 0.5)
             overlay_offset[2] = icon_center_y - math_floor(overlay_size * 0.5)
             overlay_offset[3] = icon_z + 1
@@ -1881,8 +1917,9 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         local base_y = arrow_anchor_y or icon_offset[2]
         local base_size = arrow_anchor_size or size
         local arrow_base = arrow_size_base or base_size
-        local arrow_size = math_max(6, math_floor(arrow_base * 0.45 + 1))
-        local overlap = math_floor(arrow_size * 0.5 + 1) + 2
+        local arrow_size = math_max(VERTICAL_ARROW_MIN_SIZE,
+            math_floor(arrow_base * VERTICAL_ARROW_SIZE_RATIO + 0.5))
+        local overlap = math_floor(arrow_size * VERTICAL_ARROW_OVERLAP_RATIO + 0.5)
         -- The arrow anchor box is centred on the marker, so a smaller arrow base
         -- keeps the arrow beside the glyph instead of drifting out to the corner
         -- of an oversized box. With no override this is zero and the placement is

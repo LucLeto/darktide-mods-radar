@@ -2247,6 +2247,21 @@ return function(env)
         return _scratch_inactive_objective_units[unit] == true
     end
 
+    -- True while the game itself is drawing a world marker on this unit. Read
+    -- straight off `request_world_markers_list`, the same list the vanilla HUD
+    -- draws from and the same one the objective scan already filters bare steps
+    -- with, so there is no second notion of "the game is showing this" to keep
+    -- in step with the first.
+    --
+    -- The list does not distinguish an objective marker from an interaction
+    -- prompt, and it does not need to: an interaction prompt only appears within
+    -- a few metres, where the radar's range filter was never going to hide
+    -- anything. What reaches out past the configured range is the objective
+    -- marker, and that is what this lets through.
+    function _objective_has_world_marker(unit)
+        return _world_marker_units_available and _scratch_world_marker_units[unit] == true
+    end
+
     -- Actionability is evaluated once per unit here and read back below, so the
     -- health-extension lookup runs once per active objective unit per scan
     -- rather than twice.

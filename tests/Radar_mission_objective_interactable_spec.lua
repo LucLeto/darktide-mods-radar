@@ -2510,6 +2510,84 @@ test("a tentacle is reported once, not once a scan", function()
     assert_equal(first, harness:probe_calls(), "the tentacle report repeats every scan")
 end)
 
+-- An objective the game is itself pointing at is exempt from the radar's scan
+-- range. The exemption is read off the same marker list the vanilla HUD draws
+-- from, so it lasts exactly as long as that marker and there is no second
+-- notion of "the game is showing this" to drift out of step.
+test("an objective the game is marking is exempt from the scan range", function()
+    local harness = new_harness()
+    local step = harness:add_interactee()
+
+    harness:add_to_system("mission_objective_target_system", step, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units({ step })
+    harness:scan()
+
+    assert_equal(true, harness.env._objective_has_world_marker(step),
+        "a marked objective must be exempt from the scan range")
+end)
+
+test("an objective the game is not marking is not exempt", function()
+    local harness = new_harness()
+    local marked = harness:add_interactee()
+    local unmarked = harness:add_interactee()
+
+    harness:add_to_system("mission_objective_target_system", marked, { _objective_name = "objective_a" })
+    harness:add_to_system("mission_objective_target_system", unmarked, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units({ marked })
+    harness:scan()
+
+    assert_equal(false, harness.env._objective_has_world_marker(unmarked),
+        "an unmarked objective must obey the scan range")
+end)
+
+-- The exemption ends with the marker, not with the objective.
+test("the exemption ends when the game drops its marker", function()
+    local harness = new_harness()
+    local step = harness:add_interactee()
+
+    harness:add_to_system("mission_objective_target_system", step, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units({ step })
+    harness:scan()
+    assert_equal(true, harness.env._objective_has_world_marker(step), "the marked step must be exempt")
+
+    harness:set_world_marker_units({})
+    harness:scan()
+
+    assert_equal(false, harness.env._objective_has_world_marker(step),
+        "the exemption must end with the game's own marker")
+end)
+
+-- With no readable marker list there is nothing to base an exemption on, and
+-- range filtering must behave exactly as it did before.
+test("an unreadable marker list exempts nothing", function()
+    local harness = new_harness()
+    local step = harness:add_interactee()
+
+    harness:add_to_system("mission_objective_target_system", step, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units(nil)
+    harness:scan()
+
+    assert_equal(false, harness.env._objective_has_world_marker(step),
+        "an unreadable marker list must not exempt anything")
+end)
+
+-- A unit that was never an objective at all reads false, so nothing outside the
+-- objective family can pick the exemption up by accident.
+test("a unit with no objective at all is not exempt", function()
+    local harness = new_harness()
+    local stranger = { name = "stranger", position = { x = 0, y = 0, z = 0 } }
+
+    harness:set_world_marker_units({})
+    harness:scan()
+
+    assert_equal(false, harness.env._objective_has_world_marker(stranger),
+        "an unknown unit must not be exempt")
+end)
+
 local failures = {}
 
 for i = 1, #tests do

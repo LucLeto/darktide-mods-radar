@@ -2269,6 +2269,19 @@ return function(env)
                 ignore_range = true
             end
 
+            -- An objective the game is itself pointing at stays on the radar
+            -- however far away it is: the radar's range is there to keep the
+            -- display readable, not to hide the step the mission is asking for.
+            -- Tied to the game's own marker, so it lasts exactly as long as that
+            -- marker does and normal range filtering resumes the moment it goes.
+            -- Objectives only; enemies, pickups and luggables are unaffected.
+            if not ignore_range
+                and _is_mission_objective_marker_kind(kind)
+                and _objective_has_world_marker ~= nil
+                and _objective_has_world_marker(unit) then
+                ignore_range = true
+            end
+
             if distance_sq_horizontal > max_range_sq and not ignore_range then
                 return
             end
