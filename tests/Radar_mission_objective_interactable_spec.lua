@@ -7,6 +7,7 @@ local MISSION_OBJECTIVE_SETTING_BY_KIND = {
     mission_objective_console = "show_mission_objective_console",
     mission_objective_servo_skull = "show_mission_objective_servo_skull",
     mission_objective_other = "show_mission_objective_other",
+    mission_objective_growth = "show_mission_objective_growth",
 }
 
 local function assert_nil(value, message)
@@ -66,6 +67,7 @@ local function new_harness()
         show_mission_objective_console = "icon_only",
         show_mission_objective_servo_skull = "icon_only",
         show_mission_objective_other = "icon_only",
+        show_mission_objective_growth = "icon_only",
     }
     -- A mission with no Martyr's Skull riddle data, so nothing else writes
     -- tracked units or points during these scans.
@@ -2195,6 +2197,317 @@ test("luggable sockets are left to their own marker", function()
     harness:scan()
 
     assert_equal("luggable_socket", harness:tracked_kind(socket), "a socket must keep its own kind")
+end)
+
+-- The three eyes of a growth tentacle are one prefab. Measured off eight
+-- tentacles of a single Chasm Logistratum run, their pairwise distances were
+-- 0.328, 0.347 and 0.407 metres every time, to the millimetre. These offsets
+-- reproduce that triangle, so the shape test is exercised against the real one
+-- rather than a convenient one.
+local TENTACLE_EYE_OFFSETS = {
+    { x = 0.000, y = 0.000, z = 0.000 },
+    { x = 0.102, y = 0.083, z = 0.321 },
+    { x = 0.302, y = 0.246, z = 0.118 },
+}
+
+-- Returns the three eyes in prefab order. `centre` is where the tentacle
+-- stands; the corruptor it belongs to is placed by the caller.
+local function add_tentacle(harness, centre, options)
+    options = options or {}
+
+    local eyes = {}
+
+    for i = 1, #TENTACLE_EYE_OFFSETS do
+        local offset = TENTACLE_EYE_OFFSETS[i]
+        local eye = {
+            name = (options.name or "eye") .. "_" .. tostring(i),
+            position = { x = centre.x + offset.x, y = centre.y + offset.y, z = centre.z + offset.z },
+            health_alive = true,
+        }
+
+        harness:add_to_system("destructible_system", eye, { _is_nav_gate = options.nav_gate == true })
+        eyes[i] = eye
+    end
+
+    return eyes
+end
+
+-- The corruptor the event marks, and the objective name that makes it a growth.
+local function add_growth_objective(harness, position)
+    local corruptor = { name = "corruptor", position = position, health_alive = true }
+
+    harness:add_to_system("mission_objective_target_system", corruptor,
+        { _objective_name = "objective_dm_stockpile_corruptor_event" })
+    harness:set_active_objective_names({ "objective_dm_stockpile_corruptor_event" })
+
+    return corruptor
+end
+
+local function marked_eyes(harness, eyes)
+    local marked = {}
+
+    for i = 1, #eyes do
+        if harness:tracked_kind(eyes[i]) ~= nil then
+            marked[#marked + 1] = eyes[i]
+        end
+    end
+
+    return marked
+end
+
+-- The eyes reach the radar through their shape alone: they are in no objective
+-- system, their unit names are hashed, and the game's own marker list never
+-- carries them.
+test("a growth tentacle is marked once, not three times", function()
+    local harness = new_harness()
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:scan()
+
+    local marked = marked_eyes(harness, eyes)
+
+    assert_equal(1, #marked, "a tentacle must put exactly one marker on the radar")
+    assert_equal("mission_objective_growth", harness:tracked_kind(marked[1]),
+        "the tentacle marker must be a growth marker")
+end)
+
+-- The level's own breakables stand alone. In the run data the closest of them
+-- was 9.2 m from the corruptor, nearer than any tentacle, so distance cannot be
+-- the test and the shape has to be.
+test("a lone breakable near a growth event is not a tentacle", function()
+    local harness = new_harness()
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local barrel = { name = "barrel", position = { x = 9, y = 0, z = 0 }, health_alive = true }
+
+    harness:add_to_system("destructible_system", barrel, {})
+    harness:scan()
+
+    assert_nil(harness:tracked_kind(barrel), "a solitary breakable must not be marked")
+end)
+
+-- Two is not the prefab. Without this the pass would fire on any pair of
+-- breakables that happen to sit together.
+test("a pair of breakables is not a tentacle", function()
+    local harness = new_harness()
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:remove_from_system("destructible_system", eyes[3])
+    harness:scan()
+
+    assert_equal(0, #marked_eyes(harness, eyes), "two breakables must not be read as a tentacle")
+end)
+
+-- A destroyed eye stays in the destructible map, so the shape survives and only
+-- the marker moves. Without this the tentacle would leave the radar after the
+-- first eye and abandon two live ones.
+test("the tentacle marker outlives its first destroyed eyes", function()
+    local harness = new_harness()
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:scan()
+
+    local first = marked_eyes(harness, eyes)[1]
+
+    first.health_alive = false
+    harness:scan()
+
+    local marked = marked_eyes(harness, eyes)
+
+    assert_equal(1, #marked, "the tentacle must keep exactly one marker")
+    assert_equal(true, marked[1].health_alive, "the marker must move to a living eye")
+
+    marked[1].health_alive = false
+    harness:scan()
+
+    assert_equal(1, #marked_eyes(harness, eyes), "the last living eye must still be marked")
+end)
+
+test("a cleared tentacle leaves no marker", function()
+    local harness = new_harness()
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:scan()
+
+    for i = 1, #eyes do
+        eyes[i].health_alive = false
+    end
+
+    harness:scan()
+
+    assert_equal(0, #marked_eyes(harness, eyes), "a cleared tentacle must leave the radar")
+end)
+
+-- The shape is only looked for while the event runs, so the level's breakables
+-- are never walked outside one.
+test("breakables are ignored without a live growth objective", function()
+    local harness = new_harness()
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:add_to_system("mission_objective_target_system",
+        { name = "step", position = { x = 0, y = 0, z = 0 } }, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:scan()
+
+    assert_equal(0, #marked_eyes(harness, eyes), "breakables must not be marked outside a growth event")
+end)
+
+-- The event ending empties the anchor set, and the scan's own prune drops what
+-- is left. This is what retires the tentacles when the corruptor dies.
+test("tentacle markers are dropped when the growth event ends", function()
+    local harness = new_harness()
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:scan()
+    assert_equal(1, #marked_eyes(harness, eyes), "the tentacle must be marked while the event runs")
+
+    harness:set_active_objective_names({})
+    harness:scan()
+
+    assert_equal(0, #marked_eyes(harness, eyes), "the tentacle must go when the event ends")
+end)
+
+-- Monster wall volumes come in numbers and sit in the destructible system too.
+test("nav gates are never read as a tentacle", function()
+    local harness = new_harness()
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local gates = add_tentacle(harness, { x = 12, y = 0, z = 0 }, { nav_gate = true, name = "gate" })
+
+    harness:scan()
+
+    assert_equal(0, #marked_eyes(harness, gates), "nav gates must not be marked")
+end)
+
+-- The range test bounds the work rather than identifying anything, but a shape
+-- on the far side of the level is not this event.
+test("a tentacle out of range of the event is not marked", function()
+    local harness = new_harness()
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local eyes = add_tentacle(harness, { x = 200, y = 0, z = 0 })
+
+    harness:scan()
+
+    assert_equal(0, #marked_eyes(harness, eyes), "a distant shape must not be marked")
+end)
+
+-- Each stage puts three tentacles around its corruptor. They must not be
+-- collapsed into a single marker between them.
+test("three tentacles of a stage each get their own marker", function()
+    local harness = new_harness()
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local first = add_tentacle(harness, { x = 12, y = 0, z = 0 }, { name = "first" })
+    local second = add_tentacle(harness, { x = -3, y = 12, z = 1 }, { name = "second" })
+    local third = add_tentacle(harness, { x = 8, y = -9, z = 2 }, { name = "third" })
+
+    harness:scan()
+
+    assert_equal(1, #marked_eyes(harness, first), "the first tentacle must be marked once")
+    assert_equal(1, #marked_eyes(harness, second), "the second tentacle must be marked once")
+    assert_equal(1, #marked_eyes(harness, third), "the third tentacle must be marked once")
+end)
+
+-- Turning the setting off must stop the work, not just the marker. The claim
+-- itself refuses a disabled kind, so nothing observable would change if the
+-- pass ran anyway; what the guard protects is the walk of the whole
+-- destructible map, once a scan, for the length of every growth event.
+test("the destructible map is not walked when growth markers are off", function()
+    local harness = new_harness()
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+    local inner = harness.env._safe_unit_to_extension_map
+    local destructible_lookups = 0
+
+    harness.env._safe_unit_to_extension_map = function(system_name)
+        if system_name == "destructible_system" then
+            destructible_lookups = destructible_lookups + 1
+        end
+
+        return inner(system_name)
+    end
+
+    harness.settings.show_mission_objective_growth = "off"
+    harness:scan()
+
+    assert_equal(0, destructible_lookups, "a disabled kind must not read the destructible system")
+    assert_equal(0, #marked_eyes(harness, eyes), "a disabled kind must not mark anything")
+
+    harness.settings.show_mission_objective_growth = "icon_only"
+    harness:scan()
+
+    assert_equal(1, #marked_eyes(harness, eyes), "turning the setting back on must restore the marker")
+end)
+
+-- A run has to be readable against the destructible probe's own list, so each
+-- tentacle the shape found names itself once.
+test("found tentacles are named in debug mode", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+    add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:scan()
+
+    assert_contains(harness:log_text(), "Growth tentacle found:", "the tentacle is not reported")
+    assert_contains(harness:log_text(), "eyes=3", "the report does not say how many eyes were found")
+end)
+
+-- The report is scaffolding, not part of the marker, so a normal run stays
+-- silent about it.
+test("tentacles are not reported outside debug mode", function()
+    local harness = new_harness()
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:scan()
+
+    assert_equal(1, #marked_eyes(harness, eyes), "the tentacle must still be marked")
+    assert_equal(0, harness:probe_calls(), "a normal run must log nothing")
+end)
+
+test("a tentacle is reported once, not once a scan", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+    add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:scan()
+
+    local first = harness:probe_calls()
+
+    harness:scan()
+    harness:scan()
+
+    assert_equal(first, harness:probe_calls(), "the tentacle report repeats every scan")
 end)
 
 local failures = {}

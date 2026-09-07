@@ -601,6 +601,45 @@ local function check_local_use_before_declaration(source, label)
     end
 end
 
+-- The growth tentacles are the one marker the mod finds by shape rather than by
+-- name, so the numbers that shape is measured against are checked here: they
+-- came off a run and a comfortable guess would quietly widen or narrow them.
+local growth_eye_link = expeditions_source:match("link_squared = ([%d.]+),")
+
+check(growth_eye_link ~= nil, "the tentacle shape has no link distance")
+
+if growth_eye_link ~= nil then
+    local link = tonumber(growth_eye_link)
+
+    -- The prefab's widest pair measured 0.407 m, so the link must clear it.
+    check(link > 0.407 * 0.407,
+        "the tentacle link distance of " .. growth_eye_link .. " m^2 is under the prefab's own 0.407 m pair")
+    -- The level's own breakables near an event stood metres apart. A link this
+    -- wide would start joining them.
+    check(link < 1, "the tentacle link distance of " .. growth_eye_link .. " m^2 is wide enough to join scenery")
+end
+
+check(expeditions_source:find("cluster_size = 3,", 1, true) ~= nil,
+    "a tentacle carries three eyes")
+
+-- Through the shared claim, so the retirement, liveness and health gates that
+-- every other objective marker passes apply to these too.
+check(expeditions_source:find('_claim_mission_objective_unit(units[i], "mission_objective_growth"', 1, true) ~= nil,
+    "tentacle eyes must be claimed through the shared choke point, not tracked directly")
+
+-- Last of the passes: these units are in no objective system, so they must not
+-- take a classification away from one that is.
+local tentacle_call = expeditions_source:find(LF .. "            _track_growth_tentacle_units(", 1, true)
+local target_pass_call = expeditions_source:find("_track_mission_objective_units(MISSION_OBJECTIVE_TARGET_SYSTEM", 1, true)
+
+check(tentacle_call ~= nil, "the objective scan never looks for growth tentacles")
+check(tentacle_call ~= nil and target_pass_call ~= nil and tentacle_call > target_pass_call,
+    "the tentacle pass must run after the objective system's own passes")
+
+-- Quadratic in what the range test lets through, so it needs a ceiling.
+check(expeditions_source:find("candidate_limit", 1, true) ~= nil,
+    "the tentacle pairwise pass is unbounded")
+
 check_local_use_before_declaration(expeditions_source, "Radar_expeditions.lua")
 check_local_use_before_declaration(tracking_source, "Radar_tracking.lua")
 

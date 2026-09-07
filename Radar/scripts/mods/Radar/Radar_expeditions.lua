@@ -2308,6 +2308,188 @@ return function(env)
         end
     end
 
+    -- A growth tentacle carries three small destructible eyes, and they are the
+    -- only part of the event a player can act on: the corruptor the objective
+    -- marks is protected until its tentacles are cleared. Nothing names them.
+    -- They belong to no objective system, their unit names are hashed, and the
+    -- game draws its three yellow markers on them through a HUD element that
+    -- never reaches `request_world_markers_list`, so none of the routes every
+    -- other objective step uses can find them.
+    --
+    -- What they do have is a shape. The three eyes of a tentacle are one prefab:
+    -- across eight tentacles of a single run their pairwise distances measured
+    -- 0.328, 0.347 and 0.407 metres every time, to the millimetre, while the
+    -- level's own breakables around the event each stood alone with no other
+    -- destructible within 20 metres. A destructible with two more inside half a
+    -- metre is a tentacle, and in the data nothing else in the level is.
+    local GROWTH_EYE = {
+        -- Only a bound on the work. The level's own breakables sit well inside
+        -- it -- the nearest was closer than any tentacle -- and are rejected by
+        -- the shape rather than by this.
+        range_squared = 1600,
+        -- Comfortably above the prefab's widest pair at 0.407 m and far below
+        -- the spacing of anything else observed near an event.
+        link_squared = 0.25,
+        cluster_size = 3,
+        -- Bounds the pairwise pass, which is quadratic in what the range test
+        -- lets through. Nine live eyes and a handful of breakables is what a
+        -- tentacle stage actually produces.
+        candidate_limit = 64,
+        anchor_x = {},
+        anchor_y = {},
+        anchor_z = {},
+        units = {},
+        x = {},
+        y = {},
+        z = {},
+        alive = {},
+        -- Keyed by position, so each tentacle reports itself once.
+        logged = {},
+    }
+
+    -- One marker per tentacle rather than three: at radar scale three markers
+    -- 40 cm apart are a single blob. It is carried by the tentacle's
+    -- lowest-sorting living eye, so it survives the first two being destroyed
+    -- and the shared health gate in `_claim_mission_objective_unit` retires it
+    -- when the last one goes. The event ending empties the anchor set, and the
+    -- scan's own prune then drops whatever is left.
+    local function _track_growth_tentacle_units(enabled_by_kind, seen_units)
+        if not enabled_by_kind["mission_objective_growth"] then
+            return
+        end
+
+        local anchor_x = GROWTH_EYE.anchor_x
+        local anchor_y = GROWTH_EYE.anchor_y
+        local anchor_z = GROWTH_EYE.anchor_z
+        local anchor_count = 0
+
+        -- Anchored on the live objective's own targets, which includes the
+        -- event's unused spawn points. Tentacles stood 10 to 17 metres from the
+        -- corruptor they belonged to.
+        for unit in pairs(_scratch_growth_objective_units) do
+            local x, y, z = _vector3_components(_safe_unit_position(unit))
+
+            if x ~= nil then
+                anchor_count = anchor_count + 1
+                anchor_x[anchor_count] = x
+                anchor_y[anchor_count] = y
+                anchor_z[anchor_count] = z
+            end
+        end
+
+        if anchor_count == 0 then
+            return
+        end
+
+        local extension_map = _safe_unit_to_extension_map("destructible_system")
+
+        if type(extension_map) ~= "table" then
+            return
+        end
+
+        local units = GROWTH_EYE.units
+        local xs = GROWTH_EYE.x
+        local ys = GROWTH_EYE.y
+        local zs = GROWTH_EYE.z
+        local alive = GROWTH_EYE.alive
+        local range_squared = GROWTH_EYE.range_squared
+        local limit = GROWTH_EYE.candidate_limit
+        local count = 0
+
+        for unit, extension in pairs(extension_map) do
+            if count >= limit then
+                break
+            end
+
+            -- Nav gates are the level's monster wall volumes: numerous, never a
+            -- target, and cheaper to reject than to measure.
+            if type(extension) == "table" and rawget(extension, "_is_nav_gate") ~= true then
+                local x, y, z = _vector3_components(_safe_unit_position(unit))
+
+                if x ~= nil then
+                    for i = 1, anchor_count do
+                        local dx = anchor_x[i] - x
+                        local dy = anchor_y[i] - y
+                        local dz = anchor_z[i] - z
+
+                        if dx * dx + dy * dy + dz * dz <= range_squared then
+                            count = count + 1
+                            units[count] = unit
+                            xs[count] = x
+                            ys[count] = y
+                            zs[count] = z
+                            -- A destroyed eye stays in the destructible map, so
+                            -- the shape is measured against every eye of the
+                            -- prefab and only the marker moves.
+                            alive[count] = _safe_health_alive(unit) ~= false
+
+                            break
+                        end
+                    end
+                end
+            end
+        end
+
+        local link_squared = GROWTH_EYE.link_squared
+        local neighbours_needed = GROWTH_EYE.cluster_size - 1
+
+        for i = 1, count do
+            if alive[i] then
+                local x = xs[i]
+                local y = ys[i]
+                local z = zs[i]
+                local neighbours = 0
+                local lowest = true
+
+                for j = 1, count do
+                    if j ~= i then
+                        local dx = xs[j] - x
+                        local dy = ys[j] - y
+                        local dz = zs[j] - z
+
+                        if dx * dx + dy * dy + dz * dz <= link_squared then
+                            neighbours = neighbours + 1
+
+                            if alive[j] and (dx < 0 or (dx == 0 and (dy < 0 or (dy == 0 and dz < 0)))) then
+                                lowest = false
+                            end
+                        end
+                    end
+                end
+
+                if lowest and neighbours >= neighbours_needed then
+                    -- Confirmed by the live objective these sit inside, not by
+                    -- the target system, which has never heard of them.
+                    _claim_mission_objective_unit(units[i], "mission_objective_growth", enabled_by_kind,
+                        seen_units, true)
+
+                    -- Names each tentacle the shape found, so a run can be read
+                    -- against the destructible probe's own list rather than
+                    -- against what happened to appear on the radar.
+                    if mod:get("debug_mode") == true then
+                        local position_text = _debug_unit_position_text(units[i])
+                        local key = "growth_tentacle:" .. position_text
+
+                        if not GROWTH_EYE.logged[key] then
+                            GROWTH_EYE.logged[key] = true
+
+                            _log_once(key, string_format(
+                                "Growth tentacle found: mission=%s eyes=%d position=%s",
+                                tostring(_safe_mission_name()),
+                                neighbours + 1,
+                                position_text
+                            ))
+                        end
+                    end
+                end
+            end
+        end
+
+        for i = 1, count do
+            units[i] = nil
+        end
+    end
+
     local function _track_mission_objective_units(system_name, interactee_map, enabled_by_kind, active_names,
                                                   require_active_objective, seen_units, default_kind, skip_units)
         local extension_map = _safe_unit_to_extension_map(system_name)
@@ -2426,6 +2608,10 @@ return function(env)
             -- trigger volumes off the radar.
             _track_mission_objective_units(MISSION_OBJECTIVE_TARGET_SYSTEM, interactee_map, enabled_by_kind,
                 active_names, true, seen_units, nil, zone_units)
+
+            -- Last, because these units are in no objective system at all and
+            -- must not take a classification away from one that is.
+            _track_growth_tentacle_units(enabled_by_kind, seen_units)
         end
 
         for unit, data in pairs(tracked_units) do
@@ -2459,6 +2645,9 @@ return function(env)
         table_clear(_scratch_mission_objective_zone_units)
         table_clear(_scratch_inactive_objective_units)
         table_clear(_scratch_growth_objective_units)
+        -- The only one of the tentacle arrays that holds unit references.
+        table_clear(GROWTH_EYE.units)
+        table_clear(GROWTH_EYE.logged)
         table_clear(_scratch_world_marker_units)
         table_clear(_objective_world_marker_seen)
         table_clear(_objective_first_active_t)
