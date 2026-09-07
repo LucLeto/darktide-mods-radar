@@ -710,6 +710,20 @@ local MISSION_OBJECTIVE_BACKGROUND = _color(235, 16, 18, 20)
 _add_radar_color("mission_objective_icon_scale", "mission_objective_background_marker", MISSION_OBJECTIVE_BACKGROUND,
     "marker_background_color", "marker_background_color_slider_tooltip")
 
+-- The frame itself, separate from the icon inside it. One colour for the whole
+-- family, so the frame stays the family's identity while each icon keeps its own
+-- colour and its own state colours.
+_add_radar_color("mission_objective_icon_scale", "mission_objective_frame_marker", VANILLA_OBJECTIVE,
+    "mission_objective_frame_color", "mission_objective_frame_color_slider_tooltip")
+
+local MISSION_OBJECTIVE_GROWTH = _color(255, 186, 124, 0)
+
+_add_marker({
+    kind = "mission_objective_growth",
+    anchor = "show_mission_objective_growth",
+    default = MISSION_OBJECTIVE_GROWTH,
+    supports_highlight = true,
+})
 _add_marker({
     kind = "mission_objective_console",
     anchor = "show_mission_objective_console",
@@ -926,6 +940,10 @@ function ColorSettings.install_runtime(mod)
         return (state and MINIGAME_COLOR_KIND_BY_STATE[state]) or kind
     end
 
+    function mod:get_mission_objective_frame_color()
+        return self:get_configurable_color("mission_objective_frame_marker")
+    end
+
     function mod:get_mission_objective_background_color()
         return self:get_configurable_color("mission_objective_background_marker")
     end
@@ -1096,5 +1114,6 @@ ColorSettings.marker_background_prefix_by_kind = marker_background_prefix_by_kin
 ColorSettings.marker_highlight_prefix_by_kind = marker_highlight_prefix_by_kind
 ColorSettings.enemy_icon_prefix_by_kind = enemy_icon_prefix_by_kind
 ColorSettings.vanilla_objective_color = VANILLA_OBJECTIVE
+ColorSettings.mission_objective_growth_color = MISSION_OBJECTIVE_GROWTH
 
 return ColorSettings

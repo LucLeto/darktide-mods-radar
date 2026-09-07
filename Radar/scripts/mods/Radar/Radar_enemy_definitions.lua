@@ -66,6 +66,7 @@ return function(env)
         mission_objective_console = RadarColorSettings.vanilla_objective_color,
         mission_objective_servo_skull = RadarColorSettings.vanilla_objective_color,
         mission_objective_other = RadarColorSettings.vanilla_objective_color,
+        mission_objective_growth = RadarColorSettings.mission_objective_growth_color,
         luggable_power_cell_orange = { 255, 255, 140, 0 },
         medicae_station = { 255, 38, 205, 26 },
         luggable_socket = { 255, 255, 245, 80 },
@@ -226,6 +227,7 @@ return function(env)
         mission_objective_console = "show_mission_objective_console",
         mission_objective_servo_skull = "show_mission_objective_servo_skull",
         mission_objective_other = "show_mission_objective_other",
+        mission_objective_growth = "show_mission_objective_growth",
     }
 
     local ICON_DISTANCE_MARKER_DISPLAY_MODE_DEFAULT_BY_SETTING = {
@@ -236,6 +238,7 @@ return function(env)
         show_mission_objective_console = "icon_only",
         show_mission_objective_servo_skull = "icon_only",
         show_mission_objective_other = "icon_only",
+        show_mission_objective_growth = "icon_only",
     }
 
     EXPEDITION_OBJECTIVE_ICON_DEFAULTS = {
@@ -303,6 +306,7 @@ return function(env)
         mission_objective_console = "mission_objective_group",
         mission_objective_servo_skull = "mission_objective_group",
         mission_objective_other = "mission_objective_group",
+        mission_objective_growth = "mission_objective_group",
         expedition_loot_converter = "expeditions_location_group",
         expedition_objective_opportunity = "expeditions_location_group",
         expedition_objective_transition = "expeditions_location_group",

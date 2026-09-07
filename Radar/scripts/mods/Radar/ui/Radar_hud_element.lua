@@ -186,9 +186,8 @@ local OBJECTIVE_FRAME_SIZE = 26
 -- 26px frame; the user's icon scale multiplies the frame afterwards and the icon
 -- follows by ratio, so the calibration holds at any scale.
 local OBJECTIVE_ICON_SIZE = 12
--- For art that sits small inside its own box and needs a larger nominal size to
--- carry the same visual weight.
-local OBJECTIVE_ICON_SIZE_PADDED = 21
+-- For art whose own texture already carries the inset.
+local OBJECTIVE_ICON_SIZE_LINKED = 20
 
 local RADAR_OUTLINE_WIDGET_COLOR = { 255, 213, 226, 206 }
 local RADAR_LEGEND_INDICATOR_WIDGET_COLOR = { 255, 213, 226, 206 }
@@ -675,6 +674,18 @@ local PRESENTATIONS = {
         background_base_size = OBJECTIVE_FRAME_SIZE,
         overlay_base_size = OBJECTIVE_ICON_SIZE,
     },
+    -- Growth steps of a purge event. Its own kind purely so its icon carries its
+    -- own size and position: it shares the generic category's dropdown, colour
+    -- and scale group.
+    mission_objective_growth = {
+        icon = OBJECTIVE_FRAME_ICON,
+        plate_icon = OBJECTIVE_PLATE_ICON,
+        overlay_icon = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_parasite",
+        color = VANILLA_OBJECTIVE_WIDGET_COLOR,
+        size = OBJECTIVE_FRAME_SIZE,
+        background_base_size = OBJECTIVE_FRAME_SIZE,
+        overlay_base_size = 10,
+    },
     mission_objective_other = {
         icon = OBJECTIVE_FRAME_ICON,
         plate_icon = OBJECTIVE_PLATE_ICON,
@@ -682,12 +693,13 @@ local PRESENTATIONS = {
         color = VANILLA_OBJECTIVE_WIDGET_COLOR,
         size = OBJECTIVE_FRAME_SIZE,
         background_base_size = OBJECTIVE_FRAME_SIZE,
-        overlay_base_size = OBJECTIVE_ICON_SIZE_PADDED,
-        -- `objective_main`'s art sits low and to the right inside its texture.
-        -- Nominal pixels at the frame size, scaled with the marker.
-        overlay_offset_x = -2,
-        overlay_offset_y = -2,
-        overlay_offset_base_size = OBJECTIVE_FRAME_SIZE,
+        -- `objective_main` carries its inset inside the texture, so it needs a
+        -- larger share of the frame than the other icons -- but not the whole
+        -- frame, which drew it larger than the game's own marker. Kept even, and
+        -- an even fraction of an even frame: the frame's centre and the icon's
+        -- half size are floored separately, and only matching parity makes the
+        -- two cancel, which is what keeps this centred without an offset.
+        overlay_base_size = OBJECTIVE_ICON_SIZE_LINKED,
     },
     pickup_tainted_skull = {
         icon = TAINTED_SKULL_LIVE_EVENT_ICON,
@@ -1833,23 +1845,8 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
             overlay_offset[2] = icon_offset[2] + size - overlap
             overlay_offset[3] = icon_z + 3
         else
-            -- A per-icon nudge for art that is not centred within its own
-            -- texture. Given in nominal pixels against the marker's base size and
-            -- scaled with it, so the correction holds at any icon scale. Absent
-            -- on every other marker, which are centred as before.
-            local nudge_x = 0
-            local nudge_y = 0
-            local nudge_base = visual and tonumber(visual.overlay_offset_base_size) or nil
-
-            if nudge_base and nudge_base > 0 then
-                local nudge_scale = size / nudge_base
-
-                nudge_x = math_floor((tonumber(visual.overlay_offset_x) or 0) * nudge_scale + 0.5)
-                nudge_y = math_floor((tonumber(visual.overlay_offset_y) or 0) * nudge_scale + 0.5)
-            end
-
-            overlay_offset[1] = icon_center_x - math_floor(overlay_size * 0.5) + nudge_x
-            overlay_offset[2] = icon_center_y - math_floor(overlay_size * 0.5) + nudge_y
+            overlay_offset[1] = icon_center_x - math_floor(overlay_size * 0.5)
+            overlay_offset[2] = icon_center_y - math_floor(overlay_size * 0.5)
             overlay_offset[3] = icon_z + 1
         end
 
@@ -2523,18 +2520,14 @@ end
 -- PRESENTATIONS entries are shared tables, mutated per target as each is drawn.
 -- An icon override therefore has to be reapplied or reset on every marker, or
 -- the first overridden one leaves its icon on every later marker of that kind.
-local DEFAULT_OVERLAY_ICON_BY_KIND = {}
-local DEFAULT_OVERLAY_BASE_SIZE_BY_KIND = {}
-
-for kind, presentation in pairs(PRESENTATIONS) do
-    if presentation.overlay_icon ~= nil then
-        DEFAULT_OVERLAY_ICON_BY_KIND[kind] = presentation.overlay_icon
-        DEFAULT_OVERLAY_BASE_SIZE_BY_KIND[kind] = presentation.overlay_base_size
-    end
-end
-
 local function _configured_objective_background_color(fallback)
     local get_color = mod.get_mission_objective_background_color
+
+    return get_color and get_color(mod) or fallback
+end
+
+local function _configured_objective_frame_color(fallback)
+    local get_color = mod.get_mission_objective_frame_color
 
     return get_color and get_color(mod) or fallback
 end
@@ -2925,29 +2918,18 @@ local function _target_visual(target, draw_cache)
         end
 
         if display_mode ~= "artwork" then
-            presentation.color = _configured_marker_color(_marker_color_kind(target_kind, meta), presentation.color)
+            local marker_color = _configured_marker_color(_marker_color_kind(target_kind, meta), presentation.color)
 
-            -- The base layer is the frame on a composed marker, so the icon on
-            -- top needs the same colour or it stays white while the frame turns
-            -- red or yellow.
-            if presentation.overlay_icon ~= nil then
-                presentation.overlay_color = presentation.color
+            if presentation.plate_icon ~= nil then
+                -- A framed marker's base layer is the frame, which is the family's
+                -- identity and has a colour of its own. The marker colour, and
+                -- any state colour, belongs to the icon on top of it.
+                presentation.color = _configured_objective_frame_color(marker_color)
+                presentation.overlay_color = marker_color
+                presentation.plate_color = _configured_objective_background_color(presentation.plate_color)
+            else
+                presentation.color = marker_color
             end
-        end
-
-        local default_overlay_icon = DEFAULT_OVERLAY_ICON_BY_KIND[target_kind]
-
-        if default_overlay_icon ~= nil then
-            -- A replaced icon brings its own fit: the game's icons are not
-            -- normalised, so one size does not suit every texture. The frame is
-            -- untouched either way, so the family keeps one footprint.
-            presentation.overlay_icon = (meta and meta.objective_overlay_icon) or default_overlay_icon
-            presentation.overlay_base_size = (meta and meta.objective_overlay_size)
-                or DEFAULT_OVERLAY_BASE_SIZE_BY_KIND[target_kind]
-        end
-
-        if presentation.plate_icon ~= nil then
-            presentation.plate_color = _configured_objective_background_color(presentation.plate_color)
         end
 
         presentation.accent_color = _configured_marker_background_color(target_kind, presentation.accent_color)

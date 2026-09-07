@@ -1220,6 +1220,7 @@ return function(env)
         mission_objective_console = 0.12,
         mission_objective_servo_skull = 0.12,
         mission_objective_other = 0.12,
+        mission_objective_growth = 0.12,
         luggable_power_cell_orange = 0.18,
         medicae_station = 0.2,
         luggable_socket = 0.18,

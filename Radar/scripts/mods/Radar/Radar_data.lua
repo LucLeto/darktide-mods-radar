@@ -419,6 +419,10 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
         icon = "content/ui/materials/hud/interactions/icons/objective_main",
         icon_colour = RadarColorSettings.vanilla_objective_color,
     },
+    show_mission_objective_growth = {
+        icon = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_parasite",
+        icon_colour = RadarColorSettings.mission_objective_growth_color,
+    },
     show_martyr_skull = {
         icon = "content/ui/materials/hud/interactions/icons/enemy",
         icon_colour = { 255, 255, 215, 0 },
@@ -1902,6 +1906,7 @@ return {
                         _icon_distance_off_dropdown("show_mission_objective_hacking", "icon_only"),
                         _icon_distance_off_dropdown("show_mission_objective_console", "icon_only"),
                         _icon_distance_off_dropdown("show_mission_objective_servo_skull", "icon_only"),
+                        _icon_distance_off_dropdown("show_mission_objective_growth", "icon_only"),
                         _icon_distance_off_dropdown("show_mission_objective_other", "icon_only"),
                     },
                 },

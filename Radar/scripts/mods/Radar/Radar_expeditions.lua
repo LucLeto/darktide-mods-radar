@@ -1509,6 +1509,7 @@ return function(env)
 
     local MISSION_OBJECTIVE_MARKER_KINDS = {
         mission_objective_scanner = true,
+        mission_objective_growth = true,
         mission_objective_hacking = true,
         mission_objective_console = true,
         mission_objective_servo_skull = true,
@@ -1699,11 +1700,6 @@ return function(env)
     }
 
     local MISSION_OBJECTIVE_GROWTH_NAME_SUFFIX_COUNT = #MISSION_OBJECTIVE_GROWTH_NAME_SUFFIXES
-    local MISSION_OBJECTIVE_GROWTH_ICON = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_parasite"
-    -- Its own fit inside the shared frame. The game's icons are not normalised to
-    -- a common visual size, so a replaced icon carries its own size rather than
-    -- inheriting the one tuned for the icon it replaced. The frame is untouched.
-    local MISSION_OBJECTIVE_GROWTH_ICON_SIZE = 10
     -- Resolved once per objective name rather than per unit per scan.
     local _growth_objective_by_name = {}
 
@@ -1799,24 +1795,9 @@ return function(env)
     -- when it re-arms reads as something having gone wrong.
     function _minigame_marker_meta(unit, meta)
         local state = _minigame_state_by_unit[unit]
-        local growth = _scratch_growth_objective_units[unit] == true
 
         if state == MISSION_OBJECTIVE_MINIGAME_COMPLETE_STATE then
             state = nil
-        end
-
-        if growth then
-            if meta == nil then
-                meta = _minigame_meta_by_unit[unit]
-
-                if meta == nil then
-                    meta = {}
-                    _minigame_meta_by_unit[unit] = meta
-                end
-            end
-
-            meta.objective_overlay_icon = MISSION_OBJECTIVE_GROWTH_ICON
-            meta.objective_overlay_size = MISSION_OBJECTIVE_GROWTH_ICON_SIZE
         end
 
         if state == nil then
@@ -1831,7 +1812,7 @@ return function(env)
                 cached.minigame_state = nil
             end
 
-            return meta or (growth and _minigame_meta_by_unit[unit] or nil)
+            return meta
         end
 
         if meta == nil then
@@ -1952,6 +1933,10 @@ return function(env)
             if MISSION_OBJECTIVE_EXCLUSIVE_INTERACTION_TYPES[interaction_type] then
                 return nil
             end
+        end
+
+        if _scratch_growth_objective_units[unit] == true then
+            return "mission_objective_growth"
         end
 
         return default_kind or "mission_objective_other"
@@ -2750,7 +2735,24 @@ return function(env)
             local marker = markers[i]
             local unit = marker and marker.unit or nil
 
-            if unit ~= nil and tracked_units[unit] == nil then
+            -- Markers with no unit are reported too. The small eyes of a growth
+            -- tentacle carry the game's own yellow indicators, and if those are
+            -- position-anchored rather than unit-anchored, a probe that requires
+            -- a unit would never see them at all.
+            if unit == nil then
+                local key = "untracked_marker:no_unit|" .. tostring(marker and marker.type)
+
+                if not _untracked_marker_probe_seen[key] then
+                    _untracked_marker_probe_seen[key] = true
+                    _untracked_marker_probe_logs_left = _untracked_marker_probe_logs_left - 1
+
+                    _log_once(key, string_format(
+                        "Untracked world marker: mission=%s type=%s owners=<no unit>",
+                        mission_text,
+                        tostring(marker and marker.type)
+                    ))
+                end
+            elseif tracked_units[unit] == nil then
                 local owner_count = 0
 
                 table_clear(owners)
@@ -2765,10 +2767,9 @@ return function(env)
                     end
                 end
 
-                -- Only markers on something with state. A marker on a bare unit
-                -- is a waypoint and says nothing about what to shoot.
-                if owner_count > 0 then
-                    local owner_text = table_concat(owners, ",", 1, owner_count)
+                do
+                    local owner_text = owner_count > 0 and table_concat(owners, ",", 1, owner_count)
+                        or "<none>"
                     local key = "untracked_marker:" .. tostring(marker.type) .. "|" .. owner_text
                         .. "|" .. tostring(_safe_health_alive(unit))
 
@@ -3084,17 +3085,33 @@ return function(env)
         ))
     end
 
-    -- The prerequisite growths of a purge event are in no objective system, the
-    -- game holds no world marker for them, and their unit names are hashed ids.
-    -- What is left is the extensions themselves: a growth and a crate are both
-    -- destructibles, but their health and destructible extensions need not carry
-    -- the same values. Distinct field shapes are reported, not distinct units, so
-    -- thirty identical crates cost one line and anything unusual stands out.
+    -- A growth tentacle's three small eyes are destroyed one at a time, and the
+    -- tentacle's own target is protected until they are gone. `_is_invulnerable`
+    -- on the destructible extension is exactly that concept, so this watches it
+    -- per unit rather than reporting which shapes exist: each nearby breakable
+    -- logs a line whenever its watched state changes, giving a timeline of a
+    -- tentacle being cleared.
     --
-    -- Debug only, behind the shared two second window, and limited to units close
-    -- to the player.
+    -- Nav gates are the level's monster wall volumes, which are numerous and
+    -- never a target, so they are left out. Debug only, behind the shared two
+    -- second window, and limited to units close to the player.
+    -- Within reach of a target of the live growth objective. Anchored there and
+    -- not on the player, because a budget spent walking the level at large was
+    -- exhausted hundreds of metres from the tentacles and never saw one.
+    local function _is_near_growth_target(position)
+        for unit in pairs(_scratch_growth_objective_units) do
+            local target_position = _safe_unit_position(unit)
+
+            if target_position ~= nil and _distance_squared(target_position, position) <= 625 then
+                return true
+            end
+        end
+
+        return false
+    end
+
     function _reset_destructible_probe()
-        PROBE.destructible_left = 30
+        PROBE.destructible_left = 60
         table_clear(PROBE.destructible_seen)
     end
 
@@ -3104,46 +3121,60 @@ return function(env)
         end
 
         local extension_map = _safe_unit_to_extension_map("destructible_system")
-        local player_position = _safe_unit_position(_player_unit())
 
-        if type(extension_map) ~= "table" or player_position == nil then
+        if type(extension_map) ~= "table" then
             return
         end
 
-        local health_map = _safe_unit_to_extension_map("health_system")
         local mission_text = tostring(_safe_mission_name())
-        local fields = _scratch_target_fields
 
         for unit, extension in pairs(extension_map) do
             if PROBE.destructible_left <= 0 then
                 break
             end
 
-            local position = _safe_unit_position(unit)
+            local position = type(extension) == "table" and _safe_unit_position(unit) or nil
 
-            if position ~= nil and _distance_squared(player_position, position) <= 900
-                and _safe_health_alive(unit) == true and type(extension) == "table" then
-                table_clear(fields)
-
-                local count = _debug_collect_scalars(extension, fields, 0)
-                local health_extension = type(health_map) == "table" and health_map[unit] or nil
-
-                if type(health_extension) == "table" then
-                    count = _debug_collect_scalars(health_extension, fields, count)
-                end
-
-                local field_text = table_concat(fields, " ", 1, count)
-                local key = "destructible:" .. field_text
+            if position ~= nil and _is_near_growth_target(position)
+                and rawget(extension, "_is_nav_gate") ~= true then
+                local invulnerable = rawget(extension, "_is_invulnerable")
+                local health = rawget(extension, "_health")
+                local damage = rawget(extension, "_damage")
+                local dead = rawget(extension, "_is_dead")
+                local position_text = _debug_unit_position_text(unit)
+                -- Keyed per unit and per watched state, so a unit logs again
+                -- every time one of them changes and nothing else adds noise.
+                local key = "destructible:" .. position_text
+                    .. "|" .. tostring(invulnerable)
+                    .. "|" .. tostring(health)
+                    .. "|" .. tostring(dead)
 
                 if not PROBE.destructible_seen[key] then
                     PROBE.destructible_seen[key] = true
                     PROBE.destructible_left = PROBE.destructible_left - 1
 
+                    local fields = ""
+
+                    if invulnerable == nil and health == nil then
+                        local scratch = _scratch_target_fields
+
+                        table_clear(scratch)
+
+                        local count = _debug_collect_scalars(extension, scratch, 0)
+
+                        fields = " fields:" .. table_concat(scratch, " ", 1, count)
+                    end
+
                     _log_once(key, string_format(
-                        "Nearby destructible: mission=%s position=%s %s",
+                        "Destructible state: mission=%s invulnerable=%s health=%s damage=%s dead=%s alive=%s position=%s%s",
                         mission_text,
-                        _debug_unit_position_text(unit),
-                        field_text
+                        tostring(invulnerable),
+                        tostring(health),
+                        tostring(damage),
+                        tostring(dead),
+                        tostring(_safe_health_alive(unit)),
+                        position_text,
+                        fields
                     ))
                 end
             end

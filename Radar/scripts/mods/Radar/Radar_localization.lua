@@ -326,6 +326,20 @@ local _color_channel_names = {
 }
 
 local _color_label_texts = {
+    mission_objective_frame = {
+        en = "Objective frame color",
+        fr = "Couleur du cadre d'objectif",
+        de = "Ziel-Rahmenfarbe",
+        it = "Colore cornice obiettivo",
+        es = "Color del marco de objetivo",
+        pl = "Kolor ramki celu",
+        ["pt-br"] = "Cor da moldura de objetivo",
+        ru = "Цвет рамки задачи",
+        ja = "目標フレームの色",
+        ko = "목표 프레임 색상",
+        ["zh-cn"] = "目标边框颜色",
+        ["zh-tw"] = "目標邊框顏色",
+    },
     marker = {
         en = "Marker color",
         fr = "Couleur du marqueur",
@@ -777,6 +791,20 @@ local _color_label_texts = {
 }
 
 local _color_tooltip_texts = {
+    mission_objective_frame = {
+        en = "Sets the color of the frame drawn around mission objective markers.",
+        fr = "Définit la couleur du cadre dessiné autour des marqueurs d'objectif.",
+        de = "Legt die Farbe des Rahmens um Missionsziel-Marker fest.",
+        it = "Imposta il colore della cornice attorno ai marcatori degli obiettivi.",
+        es = "Define el color del marco dibujado alrededor de los marcadores de objetivo.",
+        pl = "Ustawia kolor ramki rysowanej wokół znaczników celów misji.",
+        ["pt-br"] = "Define a cor da moldura desenhada ao redor dos marcadores de objetivo.",
+        ru = "Задаёт цвет рамки вокруг маркеров задач миссии.",
+        ja = "ミッション目標マーカーの周囲に描かれるフレームの色を設定します。",
+        ko = "임무 목표 마커 주위에 그려지는 프레임 색상을 설정합니다.",
+        ["zh-cn"] = "设置任务目标标记周围边框的颜色。",
+        ["zh-tw"] = "設定任務目標標記周圍邊框的顏色。",
+    },
     marker = {
         en = "Adjust the configured ARGB marker color. Opacity is the alpha channel.",
         fr = "Ajuste la couleur ARGB configuree du marqueur. L'opacite est le canal alpha.",
@@ -954,6 +982,11 @@ return {
     highlight_color_red = _color_channel_text("highlight", "red"),
     highlight_color_green = _color_channel_text("highlight", "green"),
     highlight_color_blue = _color_channel_text("highlight", "blue"),
+    mission_objective_frame_color = _color_label_text("mission_objective_frame"),
+    mission_objective_frame_color_opacity = _color_channel_text("mission_objective_frame", "opacity"),
+    mission_objective_frame_color_red = _color_channel_text("mission_objective_frame", "red"),
+    mission_objective_frame_color_green = _color_channel_text("mission_objective_frame", "green"),
+    mission_objective_frame_color_blue = _color_channel_text("mission_objective_frame", "blue"),
     marker_background_color = _color_label_text("marker_background"),
     marker_background_color_opacity = _color_channel_text("marker_background", "opacity"),
     marker_background_color_red = _color_channel_text("marker_background", "red"),
@@ -1144,6 +1177,7 @@ return {
     marker_color_slider_tooltip = _color_tooltip_text("marker"),
     highlight_color_slider_tooltip = _color_tooltip_text("highlight"),
     icon_marker_color_slider_tooltip = _color_tooltip_text("icon_marker"),
+    mission_objective_frame_color_slider_tooltip = _color_tooltip_text("mission_objective_frame"),
     marker_background_color_slider_tooltip = _color_tooltip_text("marker_background"),
     enemy_marker_color_slider_tooltip = _color_tooltip_text("enemy_marker"),
     enemy_background_color_slider_tooltip = _color_tooltip_text("enemy_background"),
@@ -3501,6 +3535,20 @@ return {
         ["zh-cn"] = "机仆头骨目标",
         ["zh-tw"] = "機僕頭骨目標",
     },
+    show_mission_objective_growth = {
+        en = "Daemonic growth",
+        fr = "Excroissance démoniaque",
+        de = "Dämonischer Auswuchs",
+        it = "Escrescenza demoniaca",
+        es = "Excrecencia demoníaca",
+        pl = "Demoniczna narośl",
+        ["pt-br"] = "Excrescência demoníaca",
+        ru = "Демоническая поросль",
+        ja = "魔の増殖体",
+        ko = "악마 증식체",
+        ["zh-cn"] = "邪魔增生体",
+        ["zh-tw"] = "邪魔增生體",
+    },
     show_mission_objective_other = {
         en = "Other objective interactions",
         fr = "Autres interactions d'objectif",
@@ -5737,6 +5785,20 @@ return {
         ko = "서보 해골 목표의 활성화 장치와 스캔 지점을 레이더에 표시합니다.",
         ["zh-cn"] = "在雷达上显示机仆头骨目标的启动装置及其扫描点。",
         ["zh-tw"] = "在雷達上顯示機僕頭骨目標的啟動裝置與其掃描點。",
+    },
+    show_mission_objective_growth_tooltip = {
+        en = "Shows the daemonic growth targets of a purge event.",
+        fr = "Affiche les cibles d'excroissance démoniaque d'un événement de purge.",
+        de = "Zeigt die dämonischen Auswuchs-Ziele eines Läuterungs-Events.",
+        it = "Mostra i bersagli di escrescenza demoniaca di un evento di purga.",
+        es = "Muestra los objetivos de excrecencia demoníaca de un evento de purga.",
+        pl = "Pokazuje cele demonicznej narośli podczas wydarzenia oczyszczania.",
+        ["pt-br"] = "Mostra os alvos de excrescência demoníaca de um evento de purga.",
+        ru = "Показывает цели демонической поросли во время события очищения.",
+        ja = "パージイベントの魔の増殖体ターゲットを表示します。",
+        ko = "정화 이벤트의 악마 증식체 대상을 표시합니다.",
+        ["zh-cn"] = "显示净化事件中的邪魔增生体目标。",
+        ["zh-tw"] = "顯示淨化事件中的邪魔增生體目標。",
     },
     show_mission_objective_other_tooltip = {
         en = "Show the remaining active objective interactions, such as switches, buttons, and other mission-bound interaction points, on the radar.",

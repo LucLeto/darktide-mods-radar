@@ -2,6 +2,7 @@
 -- is registered everywhere a marker kind has to be registered, and that the
 -- shared presentation rules hold.
 local KINDS = {
+    "mission_objective_growth",
     "mission_objective_scanner",
     "mission_objective_hacking",
     "mission_objective_console",
@@ -10,6 +11,7 @@ local KINDS = {
 }
 
 local SETTING_BY_KIND = {
+    mission_objective_growth = "show_mission_objective_growth",
     mission_objective_scanner = "show_mission_objective_scanner",
     mission_objective_hacking = "show_mission_objective_hacking",
     mission_objective_console = "show_mission_objective_console",
@@ -18,6 +20,7 @@ local SETTING_BY_KIND = {
 }
 
 local settings_store = {
+    show_mission_objective_growth = "icon_only",
     show_mission_objective_scanner = "icon_only",
     show_mission_objective_hacking = "icon_distance",
     show_mission_objective_console = "off",
@@ -123,12 +126,15 @@ for i = 1, #KINDS do
 
     check(mod:is_event_marker_kind(kind) ~= true, kind .. ": must not be treated as an event marker")
 
-    -- All five share the vanilla objective tint so the radar reads as the same
-    -- family as the on-screen HUD marker.
-    local expected = color_settings.vanilla_objective_color
+    -- The family shares the vanilla objective tint so the radar reads as the same
+    -- family as the on-screen HUD marker. Daemonic growth is the exception: it is
+    -- its own configurable category with a colour of its own.
+    local expected = kind == "mission_objective_growth"
+        and color_settings.mission_objective_growth_color
+        or color_settings.vanilla_objective_color
     local outline = env.NEARBY_OUTLINE_COLOR_BY_KIND[kind]
 
-    check(type(expected) == "table", "vanilla objective color is not exported")
+    check(type(expected) == "table", kind .. ": expected color is not exported")
 
     if type(expected) == "table" and type(outline) == "table" then
         for channel = 1, 4 do
@@ -142,6 +148,19 @@ for i = 1, #KINDS do
         end
     end
 end
+
+-- Its own configurable category: dropdown, colour and defaults of its own,
+-- rather than borrowing the generic objective category's.
+local growth_default = color_settings.mission_objective_growth_color
+
+check(type(growth_default) == "table"
+    and growth_default[2] == 186 and growth_default[3] == 124 and growth_default[4] == 0,
+    "the daemonic growth default colour is not the requested one")
+check(data_source:find('_icon_distance_off_dropdown("show_mission_objective_growth"', 1, true) ~= nil,
+    "daemonic growth has no display mode dropdown")
+check(color_settings.anchored_color_settings
+    and color_settings.anchored_color_settings.show_mission_objective_growth ~= nil,
+    "daemonic growth has no colour sliders of its own")
 
 -- Puzzle devices change only which colour they are looked up under. These two
 -- are colour kinds and nothing else: no presentation, no dropdown, no scale
@@ -232,15 +251,17 @@ check(runtime_source:find("marker_color_kind(mod, kind, target.meta)", 1, true) 
 local LF = string.char(10)
 local OBJECTIVE_FRAME_SIZE = tonumber(hud_source:match("local OBJECTIVE_FRAME_SIZE = (%d+)"))
 local OBJECTIVE_ICON_SIZE = tonumber(hud_source:match("local OBJECTIVE_ICON_SIZE = (%d+)"))
-local OBJECTIVE_ICON_SIZE_PADDED = tonumber(hud_source:match("local OBJECTIVE_ICON_SIZE_PADDED = (%d+)"))
+local OBJECTIVE_ICON_SIZE_LINKED = tonumber(hud_source:match("local OBJECTIVE_ICON_SIZE_LINKED = (%d+)"))
 local EXPECTED_ICON_SIZE_BY_KIND = {
+    -- The parasite art needs its own fit; the game's icons are not normalised.
+    mission_objective_growth = 10,
     mission_objective_scanner = OBJECTIVE_ICON_SIZE,
     mission_objective_hacking = OBJECTIVE_ICON_SIZE,
     mission_objective_console = OBJECTIVE_ICON_SIZE,
     mission_objective_servo_skull = OBJECTIVE_ICON_SIZE,
-    -- Its art sits small inside its own box, so it needs a larger nominal size
-    -- to carry the same visual weight.
-    mission_objective_other = OBJECTIVE_ICON_SIZE_PADDED,
+    -- Its texture carries its own inset, so it takes a larger share of the
+    -- frame than the others.
+    mission_objective_other = OBJECTIVE_ICON_SIZE_LINKED,
 }
 
 -- Calibrated against the game's own marker, whose icon sits well inside the
@@ -285,7 +306,8 @@ for i = 1, #KINDS do
         -- than read as a literal.
         local overlay_symbol = block:match("overlay_base_size = ([%u_]+)")
         local overlay_base = overlay_symbol == "OBJECTIVE_ICON_SIZE" and OBJECTIVE_ICON_SIZE
-            or overlay_symbol == "OBJECTIVE_ICON_SIZE_PADDED" and OBJECTIVE_ICON_SIZE_PADDED
+            or overlay_symbol == "OBJECTIVE_ICON_SIZE_LINKED" and OBJECTIVE_ICON_SIZE_LINKED
+            or overlay_symbol == "OBJECTIVE_FRAME_SIZE" and OBJECTIVE_FRAME_SIZE
             or tonumber(block:match("overlay_base_size = (%d+)"))
 
         check(overlay_base == EXPECTED_ICON_SIZE_BY_KIND[kind],
@@ -342,19 +364,34 @@ check(expeditions_source:find("MISSION_OBJECTIVE_GROWTH_NAME_SUFFIXES", 1, true)
 -- less than a loose substring search would.
 check(expeditions_source:find("string_sub(objective_name, -#suffix) == suffix", 1, true) ~= nil,
     "growth objectives are not matched on the name suffix")
-check(expeditions_source:find('"content/ui/materials/icons/circumstances/havoc/havoc_mutator_parasite"', 1, true) ~= nil,
-    "the growth icon is missing")
-check(hud_source:find("presentation.overlay_icon = (meta and meta.objective_overlay_icon) or default_overlay_icon",
+-- Growth is a marker kind of its own, so its icon, size and position live in its
+-- own presentation. Carried as an override on another kind's presentation, any
+-- per-icon property set for that kind reached the growth marker too.
+check(hud_source:find('overlay_icon = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_parasite"',
     1, true) ~= nil,
-    "the icon override does not reset for markers that do not carry one")
--- The game's icons are not normalised, so a replaced icon carries its own fit.
--- The frame is never touched: the family keeps one footprint.
-check(hud_source:find("presentation.overlay_base_size = (meta and meta.objective_overlay_size)", 1, true) ~= nil,
-    "a replaced icon cannot carry its own size")
-check(hud_source:find("or DEFAULT_OVERLAY_BASE_SIZE_BY_KIND[target_kind]", 1, true) ~= nil,
-    "the icon size override does not reset for markers that do not carry one")
-check(expeditions_source:find("meta.objective_overlay_size = MISSION_OBJECTIVE_GROWTH_ICON_SIZE", 1, true) ~= nil,
-    "the growth icon carries no size of its own")
+    "the growth icon is missing from its own presentation")
+check(expeditions_source:find('return "mission_objective_growth"', 1, true) ~= nil,
+    "growth units are not classified as their own kind")
+check(hud_source:find("objective_overlay_icon", 1, true) == nil
+    and expeditions_source:find("objective_overlay_icon", 1, true) == nil,
+    "the icon override machinery is still present alongside the growth kind")
+
+-- Its own kind purely for its visuals: it shares the generic category's
+-- dropdown, colour and scale group, so it needs no settings of its own.
+check(mod:get_marker_scale_group("mission_objective_growth") == "mission_objective_group",
+    "the growth kind is not in the mission objective scale group")
+check(mod:get_icon_distance_marker_display_mode("mission_objective_growth")
+    == settings_store.show_mission_objective_other,
+    "the growth kind does not follow the generic objective dropdown")
+
+local growth_color = mod:get_marker_color("mission_objective_growth")
+
+check(type(growth_color) == "table" and #growth_color == 4,
+    "the growth kind has no resolvable colour")
+check(env.NEARBY_OUTLINE_COLOR_BY_KIND.mission_objective_growth ~= nil,
+    "the growth kind has no outline colour")
+check(env.SCREEN_HIGHLIGHT_Z_OFFSET_BY_KIND.mission_objective_growth ~= nil,
+    "the growth kind has no screen highlight offset")
 
 -- The plate defaults to the near-black the game uses behind its own objective
 -- markers, and is configurable. One colour for the family, since they share the
@@ -399,10 +436,25 @@ check(expeditions_locals < 200,
 check(expeditions_source:find("function _debug_probe_untracked_world_markers", 1, true) ~= nil,
     "the untracked world marker probe is missing")
 
--- The frame is the base layer, so the configured colour reaches the icon only if
--- it is passed on; otherwise the icon stays white while the frame turns red.
-check(hud_source:find("presentation.overlay_color = presentation.color", 1, true) ~= nil,
+-- The frame is the base layer and carries the family's identity, so it has a
+-- colour of its own; the marker colour, and any puzzle state colour, belongs to
+-- the icon drawn on top of it.
+check(hud_source:find("presentation.overlay_color = marker_color", 1, true) ~= nil,
     "the icon does not follow the marker colour")
+check(hud_source:find("presentation.color = _configured_objective_frame_color(marker_color)", 1, true) ~= nil,
+    "the frame does not take its own colour")
+
+local frame_color = mod:get_configurable_color("mission_objective_frame_marker")
+local vanilla = color_settings.vanilla_objective_color
+
+check(type(frame_color) == "table" and #frame_color == 4, "the frame colour is not configurable")
+
+if type(frame_color) == "table" and type(vanilla) == "table" then
+    for channel = 1, 4 do
+        check(frame_color[channel] == vanilla[channel],
+            "the frame colour does not default to the vanilla objective tint")
+    end
+end
 
 -- The servo skull already carries a vanilla on-screen objective marker, so a
 -- second screen-space highlight bracket around the same object is redundant.
@@ -481,27 +533,20 @@ for _, size in ipairs({ 12, 14, 16, 20, 28, 40 }) do
     check(actual_from_centre == legacy_offset - size * 0.5, "arrow position changed at marker size " .. size)
 end
 
--- A per-icon nudge for art that is not centred in its own texture, scaled with
--- the marker so it holds at any icon scale. Only the icon that needs it carries
--- one; every other marker is centred as before.
-check(hud_source:find("local nudge_base = visual and tonumber(visual.overlay_offset_base_size) or nil",
-    1, true) ~= nil,
-    "there is no per-icon offset for art that is not centred in its texture")
-
-local nudged_kinds = 0
-
-for i = 1, #KINDS do
-    local block = hud_source:match(LF .. "    " .. KINDS[i] .. " = {(.-)" .. LF .. "    },")
-
-    if block and block:find("overlay_offset_x", 1, true) ~= nil then
-        nudged_kinds = nudged_kinds + 1
-
-        check(block:find("overlay_offset_base_size = OBJECTIVE_FRAME_SIZE", 1, true) ~= nil,
-            KINDS[i] .. ": has an offset with no base size, so it would not scale")
-    end
-end
-
-check(nudged_kinds == 1, "expected exactly one icon to need a nudge, found " .. nudged_kinds)
+-- No positional offsets. The frame's centre and the icon's half size are floored
+-- separately, so an icon at a different size to its frame drifts by a pixel at
+-- some scales and not others -- which no fixed offset can correct. An icon that
+-- needs to sit flush links itself to the frame size instead, where the two
+-- floors cancel exactly.
+check(OBJECTIVE_ICON_SIZE_LINKED ~= nil and OBJECTIVE_FRAME_SIZE ~= nil
+    and OBJECTIVE_ICON_SIZE_LINKED % 2 == 0 and OBJECTIVE_FRAME_SIZE % 2 == 0,
+    "an odd icon or frame size puts the icon half a pixel off centre")
+check(OBJECTIVE_ICON_SIZE_LINKED ~= nil and OBJECTIVE_FRAME_SIZE ~= nil
+    and OBJECTIVE_ICON_SIZE_LINKED < OBJECTIVE_FRAME_SIZE,
+    "the linked icon fills the whole frame, which draws it larger than the game's marker")
+check(hud_source:find("overlay_offset_x", 1, true) == nil
+    and hud_source:find("overlay_offset_base_size", 1, true) == nil,
+    "per-icon positional offsets are back; link the icon to the frame size instead")
 
 -- One arrow formula for every marker type: the frame is the objective marker's
 -- box, so the standard placement already anchors the arrow to it and scales with

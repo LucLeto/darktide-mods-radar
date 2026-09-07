@@ -507,6 +507,7 @@ above/below** is set to: an objective a floor up is exactly what you need to see
 | Hacking terminals | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls hacking terminals and decoding spots tied to the current mission objective. |
 | Consoles | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls consoles and control machines used for mission progression. |
 | Servo skull objectives | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls the mission servo skull while you follow it. Its position updates at the configured **Marker update rate** rather than the slower pickup rate, since it moves. It gets no nearby highlight bracket and needs a larger height difference than other markers before a vertical arrow appears, because it hovers and bobs in flight. |
+| Daemonic growth | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls the daemonic growth targets of a purge event. Has its own icon and color rather than the shared objective tint. |
 | Other objective interactions | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls the remaining objective-bound interaction points, such as switches, buttons, and mission-scripted interactions that do not fall into the categories above. |
 
 ### Martyr's Skull Controls
@@ -813,16 +814,18 @@ Player tags intentionally stay flatter and cleaner than supported item markers. 
 | Hacking terminals | Decoder device system | Decoder and hacking terminals used for mission progression. A puzzle device is red while it is running unattended, yellow while a player is at it, and the shared objective tint both before it starts and once it is solved. The marker stays until the objective ends. |
 | Consoles | Objective interaction type | Consoles and control machines used for mission progression. |
 | Servo skull objectives | Servo skull interaction | The mission servo skull while you follow it. |
-| Daemonic growth | Objective target system | Growth steps of a purge event, matched on the objective name suffix so every mission running the event is covered, with their own icon. Marked, coloured and cleared exactly as any other objective step. |
+| Daemonic growth | Objective target system | Growth steps of a purge event, matched on the objective name suffix so every mission running the event is covered. Its own category with its own display mode, color and icon. |
 | Other objective interactions | Objective target system | The remaining objective-bound interaction points of the active objective, such as switches, buttons, and destructible steps. Destructibles clear one at a time as each is broken, rather than all at once when the objective ends. |
 
 Each category has its own icon, drawn inside the diamond frame and backplate the game itself uses around
 objective markers, so the whole family is distinguishable at a glance from enemy markers and from standard points
 of interest. All five share one frame size and the vanilla objective marker tint, so the radar reads as
 the same family as the on-screen HUD marker. Each icon is sized as a proportion of the frame, so it
-keeps its fit at any icon scale, and an icon that replaces another carries its own size, since the
-game's icons are not drawn to a common visual size. Each has its own icon color sliders, and the frame
-backplate has one shared color, defaulting to the near-black the game uses behind its own objective
+keeps its fit at any icon scale, and each carries its own size, since the game's icons are not drawn to
+a common visual size. An icon whose own texture already carries the inset is linked to the frame size
+instead, exactly as the game links them, which also keeps it perfectly centered at every scale. Each has its own icon color sliders. The frame and its backplate have one shared color each, so the
+frame stays the family's identity while each icon keeps its own color and its own state colors; they
+default to the vanilla objective tint and to the near-black the game uses behind its own objective
 markers.
 
 Scan targets are the one case where the radar has to reconstruct what the game knows. The zone that
