@@ -3173,6 +3173,123 @@ test("an untracked marker outside the objective system reports no gates", functi
     end
 end)
 
+-- Power Matrix files the elevator's call point and the platform it takes you to
+-- under one objective. Only the call point claims
+-- `_add_marker_on_objective_start`, so the platform was dropped as an
+-- alternative the mission had not chosen -- while the game was drawing an
+-- objective marker on it and sending the player there.
+test("a marked unit survives a sibling claiming the start marker", function()
+    local harness = new_harness()
+    local call_point = harness:add_interactee()
+    local platform = harness:add_interactee()
+
+    harness:add_to_system("mission_objective_target_system", call_point,
+        { _objective_name = "objective_a", _add_marker_on_objective_start = true })
+    harness:add_to_system("mission_objective_target_system", platform, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units({ platform })
+    harness:scan()
+
+    assert_equal("mission_objective_other", harness:tracked_kind(platform),
+        "a unit the game is marking must not be dropped as an unused alternative")
+    assert_equal("mission_objective_other", harness:tracked_kind(call_point),
+        "the unit claiming the start marker must still be shown")
+end)
+
+-- The filter still does its job on everything the game is not marking. Chasm
+-- Logistratum files nine possible cargo containers and one real one under a
+-- single objective, and only the real one claims the flag.
+test("unmarked alternatives are still dropped", function()
+    local harness = new_harness()
+    local chosen = harness:add_interactee()
+    local spare_one = harness:add_interactee()
+    local spare_two = harness:add_interactee()
+
+    harness:add_to_system("mission_objective_target_system", chosen,
+        { _objective_name = "objective_a", _add_marker_on_objective_start = true })
+    harness:add_to_system("mission_objective_target_system", spare_one, { _objective_name = "objective_a" })
+    harness:add_to_system("mission_objective_target_system", spare_two, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units({})
+    harness:scan()
+
+    assert_equal("mission_objective_other", harness:tracked_kind(chosen), "the chosen container must be shown")
+    assert_nil(harness:tracked_kind(spare_one), "an unmarked alternative must stay hidden")
+    assert_nil(harness:tracked_kind(spare_two), "an unmarked alternative must stay hidden")
+end)
+
+-- The same override on the other guess: a target with nothing to act on is
+-- normally a position hint, but not while the game is pointing at it.
+test("a marked unit survives the actionable filter", function()
+    local harness = new_harness()
+    local device = harness:add_interactee()
+    local hint = { name = "hint", position = { x = 40, y = 0, z = 0 } }
+
+    harness:add_to_system("mission_objective_target_system", device, { _objective_name = "objective_a" })
+    harness:add_to_system("mission_objective_target_system", hint, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units({ hint })
+    harness:scan()
+
+    assert_equal("mission_objective_other", harness:tracked_kind(hint),
+        "a unit the game is marking must not be dropped as a position hint")
+end)
+
+test("unmarked position hints are still dropped", function()
+    local harness = new_harness()
+    local device = harness:add_interactee()
+    local hint = { name = "hint", position = { x = 40, y = 0, z = 0 } }
+
+    harness:add_to_system("mission_objective_target_system", device, { _objective_name = "objective_a" })
+    harness:add_to_system("mission_objective_target_system", hint, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units({})
+    harness:wait_for_marker_settle()
+    harness:scan()
+
+    assert_equal("mission_objective_other", harness:tracked_kind(device), "the real step must be shown")
+    assert_nil(harness:tracked_kind(hint), "an unmarked position hint must stay hidden")
+end)
+
+-- The override reads the game's list, so with no readable list it cannot fire
+-- and the filters behave exactly as they did before.
+test("an unreadable marker list overrides nothing", function()
+    local harness = new_harness()
+    local chosen = harness:add_interactee()
+    local spare = harness:add_interactee()
+
+    harness:add_to_system("mission_objective_target_system", chosen,
+        { _objective_name = "objective_a", _add_marker_on_objective_start = true })
+    harness:add_to_system("mission_objective_target_system", spare, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units(nil)
+    harness:scan()
+
+    assert_equal("mission_objective_other", harness:tracked_kind(chosen), "the chosen unit must be shown")
+    assert_nil(harness:tracked_kind(spare), "without a list the alternative filter must still apply")
+end)
+
+-- And it ends with the marker: the platform goes when the game stops pointing
+-- at it, rather than being latched on by having once been marked.
+test("the override ends when the game drops its marker", function()
+    local harness = new_harness()
+    local call_point = harness:add_interactee()
+    local platform = harness:add_interactee()
+
+    harness:add_to_system("mission_objective_target_system", call_point,
+        { _objective_name = "objective_a", _add_marker_on_objective_start = true })
+    harness:add_to_system("mission_objective_target_system", platform, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units({ platform })
+    harness:scan()
+    assert_equal("mission_objective_other", harness:tracked_kind(platform), "the marked platform must be shown")
+
+    harness:set_world_marker_units({})
+    harness:scan()
+
+    assert_nil(harness:tracked_kind(platform), "the platform must go when the game stops marking it")
+end)
+
 local failures = {}
 
 for i = 1, #tests do

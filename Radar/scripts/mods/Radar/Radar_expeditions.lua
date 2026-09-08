@@ -2708,7 +2708,23 @@ return function(env)
 
                 keep = objective_name ~= nil and active_names ~= nil and active_names[objective_name] == true
 
-                if keep and _scratch_objective_has_start_marker[objective_name] == true
+                -- Both filters below are guesses about which of an objective's
+                -- units is the live one, and the game's own marker is not a
+                -- guess. A unit it is currently pointing at is the live one
+                -- whatever the flags say, so the marker overrides them.
+                --
+                -- Power Matrix files the elevator's call point and the platform
+                -- it takes you to under one objective. Only the call point
+                -- claims `_add_marker_on_objective_start`, so the platform was
+                -- dropped as an alternative the mission had not chosen -- while
+                -- the game was drawing an objective marker on it and the player
+                -- was being sent there. This only ever adds a marker the game is
+                -- already showing; nothing it used to draw stops being drawn.
+                local game_marks_unit = _world_marker_units_available
+                    and _scratch_world_marker_units[unit] ~= nil
+
+                if keep and not game_marks_unit
+                    and _scratch_objective_has_start_marker[objective_name] == true
                     and _scratch_start_marker_by_unit[unit] ~= true then
                     -- An alternative the mission chose not to use.
                     keep = false
@@ -2718,7 +2734,8 @@ return function(env)
                     end
                 end
 
-                if keep and has_actionable[objective_name] == true
+                if keep and not game_marks_unit
+                    and has_actionable[objective_name] == true
                     and actionable_by_unit[unit] ~= true then
                     keep = false
 
@@ -2742,7 +2759,7 @@ return function(env)
                 if keep and interactee_map ~= nil and interactee_map[unit] == nil
                     and _world_marker_units_available then
                     if _objective_world_marker_seen[objective_name] == true then
-                        keep = _scratch_world_marker_units[unit] == true
+                        keep = game_marks_unit
                     else
                         -- No unit of this objective has been marked yet. That is
                         -- either an objective the list does not describe, or one

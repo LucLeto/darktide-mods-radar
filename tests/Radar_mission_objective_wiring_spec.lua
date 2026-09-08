@@ -946,6 +946,32 @@ if registry ~= nil then
         "the detection module registers " .. registered .. " marker kinds but this spec sweeps " .. #KINDS)
 end
 
+-- The standing rule for this whole family: an objective the game is currently
+-- pointing at is represented on the radar. Two of the objective filters are
+-- guesses about which of an objective's units is the live one, and the game's
+-- marker is not a guess, so it overrides both. Power Matrix filed an elevator's
+-- call point and the platform it takes you to under one objective, and only the
+-- call point claimed the start-marker flag, so the platform was dropped as an
+-- unused alternative while the game was drawing an objective marker on it.
+local start_marker_filter = expeditions_source:find(
+    "if keep and not game_marks_unit" .. LF
+        .. "                    and _scratch_objective_has_start_marker", 1, true)
+local actionable_filter = expeditions_source:find(
+    "if keep and not game_marks_unit" .. LF
+        .. "                    and has_actionable", 1, true)
+
+check(start_marker_filter ~= nil,
+    "the unused-alternative filter can drop a unit the game is pointing at")
+check(actionable_filter ~= nil,
+    "the position-hint filter can drop a unit the game is pointing at")
+
+-- Read per scan from the game's own list, so the override lasts exactly as long
+-- as the marker does. A latch here would keep a unit on the radar for the rest
+-- of the mission after one frame of being marked.
+check(expeditions_source:find("local game_marks_unit = _world_marker_units_available" .. LF
+    .. "                    and _scratch_world_marker_units[unit] ~= nil", 1, true) ~= nil,
+    "the marker override is not read per unit per scan from the game's own list")
+
 check_local_use_before_declaration(expeditions_source, "Radar_expeditions.lua")
 check_local_use_before_declaration(tracking_source, "Radar_tracking.lua")
 
