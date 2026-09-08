@@ -194,16 +194,23 @@ local RADAR_LEGEND_INDICATOR_WIDGET_COLOR = { 255, 213, 226, 206 }
 local MARKER_VALUE_TEXT_WIDGET_COLOR = { 255, 255, 225, 0 }
 local BOSS_DISTANCE_TEXT_WIDGET_COLOR = MARKER_VALUE_TEXT_WIDGET_COLOR
 local VERTICAL_ARROW_WIDGET_COLOR = { 255, 255, 255, 255 }
--- The arrow and the amount it overlaps its marker's corner are both fixed
--- proportions of the marker. They used to be pixel sums -- `size * 0.45 + 1` for
--- the arrow, and half of that plus three for the overlap -- which held at the
--- default size and drifted everywhere else: the part of the arrow hanging past
--- the marker grew from nothing at half scale to a sixth of the marker at double,
--- so a large marker's arrow looked detached from it while a small one's looked
--- tucked in. The ratios below reproduce the default size exactly and hold that
--- proportion at every scale instead.
-local VERTICAL_ARROW_SIZE_RATIO = 0.46
-local VERTICAL_ARROW_OVERLAP_RATIO = 0.75
+-- Where the arrow sits and how big it is are two separate proportions of the
+-- marker, so one can be tuned without moving the other. They used to be pixel
+-- sums -- `size * 0.45 + 1` for the arrow, and half of that plus three for the
+-- corner overlap -- which held at the default size and drifted everywhere else:
+-- the part of the arrow hanging past the marker grew from nothing at half scale
+-- to a sixth of the marker at double, so a large marker's arrow looked detached
+-- while a small one's looked tucked in.
+--
+-- The arrow's centre, as a fraction of the marker from its top left corner. This
+-- is the placement, and it is what the pixel sums worked out to at the default
+-- size, so it is unchanged from the geometry that was calibrated by eye.
+local VERTICAL_ARROW_CENTRE_RATIO = 0.885
+-- The arrow reads as a secondary indicator, not a second marker: at the 26px
+-- objective frame this is a 9px arrow against a 12px icon inside a 26px
+-- diamond. Sizing it off the centre ratio's own arithmetic, as an overlap did,
+-- meant shrinking the arrow also walked it outwards.
+local VERTICAL_ARROW_SIZE_RATIO = 0.34
 -- Below this the arrow stops reading as an arrow at all.
 local VERTICAL_ARROW_MIN_SIZE = 6
 local RADAR_ZOOM_INDICATOR_WIDGET_COLOR = { 210, 0, 255, 0 }
@@ -1919,15 +1926,15 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         local arrow_base = arrow_size_base or base_size
         local arrow_size = math_max(VERTICAL_ARROW_MIN_SIZE,
             math_floor(arrow_base * VERTICAL_ARROW_SIZE_RATIO + 0.5))
-        local overlap = math_floor(arrow_size * VERTICAL_ARROW_OVERLAP_RATIO + 0.5)
+        local arrow_centre = arrow_base * VERTICAL_ARROW_CENTRE_RATIO
         -- The arrow anchor box is centred on the marker, so a smaller arrow base
         -- keeps the arrow beside the glyph instead of drifting out to the corner
         -- of an oversized box. With no override this is zero and the placement is
         -- unchanged.
         local inset = (base_size - arrow_base) * 0.5
 
-        arrow_offset[1] = math_floor(base_x + inset + arrow_base - overlap + 0.5)
-        arrow_offset[2] = math_floor(base_y + inset + arrow_base - overlap + 0.5)
+        arrow_offset[1] = math_floor(base_x + inset + arrow_centre - arrow_size * 0.5 + 0.5)
+        arrow_offset[2] = math_floor(base_y + inset + arrow_centre - arrow_size * 0.5 + 0.5)
         arrow_offset[3] = icon_z + 3
         arrow_size_tbl[1] = arrow_size
         arrow_size_tbl[2] = arrow_size

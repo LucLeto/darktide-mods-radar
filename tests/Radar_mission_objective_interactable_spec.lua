@@ -2588,6 +2588,110 @@ test("a unit with no objective at all is not exempt", function()
         "an unknown unit must not be exempt")
 end)
 
+-- A tentacle has no world marker of its own: the game draws its three yellow
+-- pips with something that never reaches the marker list. It inherits the
+-- exemption from the corruptor it belongs to, which does carry one.
+test("a tentacle inherits the exemption from the growth it belongs to", function()
+    local harness = new_harness()
+    local corruptor = add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:set_world_marker_units({ corruptor })
+    harness:scan()
+
+    local marked = marked_eyes(harness, eyes)
+
+    assert_equal(1, #marked, "the tentacle must be marked")
+    assert_equal(true, harness.env._objective_has_world_marker(marked[1]),
+        "the tentacle must be exempt while the game marks its growth")
+
+    -- Exactly the eye carrying the marker, not every destructible of the
+    -- prefab: the other two are not drawn, so exempting them would be a set
+    -- that says more than it means.
+    for i = 1, #eyes do
+        if eyes[i] ~= marked[1] then
+            assert_equal(false, harness.env._objective_has_world_marker(eyes[i]),
+                "only the eye carrying the marker is exempt")
+        end
+    end
+end)
+
+-- The exemption is the game's marker, not the event. A growth the HUD is not
+-- pointing at leaves its tentacles under the normal scan range.
+test("a tentacle of an unmarked growth obeys the scan range", function()
+    local harness = new_harness()
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:set_world_marker_units({})
+    harness:scan()
+
+    local marked = marked_eyes(harness, eyes)
+
+    assert_equal(1, #marked, "the tentacle must still be marked")
+    assert_equal(false, harness.env._objective_has_world_marker(marked[1]),
+        "an unmarked growth must not exempt its tentacles")
+end)
+
+-- Only the tentacles. A breakable that failed the shape test is not part of the
+-- event and keeps the normal range rules.
+test("a breakable that is not a tentacle is never exempt", function()
+    local harness = new_harness()
+    local corruptor = add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+    local barrel = { name = "barrel", position = { x = 9, y = 0, z = 0 }, health_alive = true }
+
+    harness:add_to_system("destructible_system", barrel, {})
+    harness:set_world_marker_units({ corruptor })
+    harness:scan()
+
+    assert_nil(harness:tracked_kind(barrel), "a solitary breakable must not be marked")
+    assert_equal(false, harness.env._objective_has_world_marker(barrel),
+        "a breakable outside the event must not be exempt")
+end)
+
+-- The exemption ends with the event, not one scan later.
+test("the tentacle exemption ends with the growth event", function()
+    local harness = new_harness()
+    local corruptor = add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:set_world_marker_units({ corruptor })
+    harness:scan()
+
+    local exempt = marked_eyes(harness, eyes)[1]
+
+    assert_equal(true, harness.env._objective_has_world_marker(exempt), "the tentacle must be exempt")
+
+    harness:set_active_objective_names({})
+    harness:scan()
+
+    assert_equal(false, harness.env._objective_has_world_marker(exempt),
+        "the exemption must end with the event")
+end)
+
+-- Turning growth markers off must not leave a stale exemption behind, since the
+-- pass returns before it reaches any tentacle.
+test("disabling growth markers clears the tentacle exemption", function()
+    local harness = new_harness()
+    local corruptor = add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:set_world_marker_units({ corruptor })
+    harness:scan()
+
+    local exempt = marked_eyes(harness, eyes)[1]
+
+    assert_equal(true, harness.env._objective_has_world_marker(exempt), "the tentacle must be exempt")
+
+    harness.settings.show_mission_objective_growth = "off"
+    harness:scan()
+
+    assert_equal(false, harness.env._objective_has_world_marker(exempt),
+        "a disabled kind must not leave an exemption behind")
+end)
+
 local failures = {}
 
 for i = 1, #tests do

@@ -529,61 +529,89 @@ check(hud_source:find("overlay_offset_x", 1, true) == nil
     and hud_source:find("overlay_offset_base_size", 1, true) == nil,
     "per-icon positional offsets are back; link the icon to the frame size instead")
 
--- The vertical arrow. Its size and the amount it overlaps the marker's corner
--- are proportions of the marker, not pixel sums, so that the arrow keeps the
--- same relationship to the marker at every icon scale.
+-- The vertical arrow. Where it sits and how big it is are two separate
+-- proportions of the marker, so that its size can be tuned without walking it
+-- across the marker -- which is what an overlap-based placement did, because
+-- shrinking the arrow shrank the overlap and pushed the arrow outwards.
 --
 -- The constants are read out of the source rather than repeated here: a mirror
 -- of the formula written from memory compares the spec against itself and
 -- passes whatever the code does.
+local ARROW_CENTRE_RATIO = tonumber(hud_source:match("local VERTICAL_ARROW_CENTRE_RATIO = ([%d.]+)"))
 local ARROW_SIZE_RATIO = tonumber(hud_source:match("local VERTICAL_ARROW_SIZE_RATIO = ([%d.]+)"))
-local ARROW_OVERLAP_RATIO = tonumber(hud_source:match("local VERTICAL_ARROW_OVERLAP_RATIO = ([%d.]+)"))
 local ARROW_MIN_SIZE = tonumber(hud_source:match("local VERTICAL_ARROW_MIN_SIZE = (%d+)"))
 
-check(ARROW_SIZE_RATIO ~= nil and ARROW_OVERLAP_RATIO ~= nil and ARROW_MIN_SIZE ~= nil,
+check(ARROW_CENTRE_RATIO ~= nil and ARROW_SIZE_RATIO ~= nil and ARROW_MIN_SIZE ~= nil,
     "the arrow proportions are missing")
 
 -- Both halves of the geometry must actually use them, or the constants are
 -- decoration and the formula is still whatever it was.
 check(hud_source:find("math_floor(arrow_base * VERTICAL_ARROW_SIZE_RATIO + 0.5)", 1, true) ~= nil,
     "the arrow size is not derived from its ratio")
-check(hud_source:find("math_floor(arrow_size * VERTICAL_ARROW_OVERLAP_RATIO + 0.5)", 1, true) ~= nil,
-    "the arrow overlap is not derived from its ratio")
--- The pixel sums this replaced. They held at the default size and drifted
--- everywhere else, which is the whole reason for the ratios.
+check(hud_source:find("local arrow_centre = arrow_base * VERTICAL_ARROW_CENTRE_RATIO", 1, true) ~= nil,
+    "the arrow placement is not derived from its centre ratio")
+check(hud_source:find("arrow_centre - arrow_size * 0.5", 1, true) ~= nil,
+    "the arrow is not centred on its anchor")
+-- What this replaced, in both of its forms. The pixel sums held only at the
+-- default size; the overlap tied placement to size.
 check(hud_source:find("arrow_base * 0.45 + 1", 1, true) == nil
-    and hud_source:find("math_floor(arrow_size * 0.5 + 1) + 2", 1, true) == nil,
-    "the absolute arrow pixel sums are back")
+    and hud_source:find("math_floor(arrow_size * 0.5 + 1) + 2", 1, true) == nil
+    and hud_source:find("VERTICAL_ARROW_OVERLAP_RATIO", 1, true) == nil,
+    "the arrow placement is tied to its size again")
 
 check(hud_source:find("local arrow_base = arrow_size_base or base_size", 1, true) ~= nil,
     "the arrow no longer sizes off the override")
 check(hud_source:find("arrow_base_size", 1, true) ~= nil, "the arrow size override is missing")
 
-local function arrow_geometry(base_size, arrow_base_size)
+local function arrow_geometry(base_size, arrow_base_size, size_ratio)
     local arrow_base = arrow_base_size or base_size
-    local arrow_size = math.max(ARROW_MIN_SIZE, math.floor(arrow_base * ARROW_SIZE_RATIO + 0.5))
-    local overlap = math.floor(arrow_size * ARROW_OVERLAP_RATIO + 0.5)
+    local arrow_size = math.max(ARROW_MIN_SIZE,
+        math.floor(arrow_base * (size_ratio or ARROW_SIZE_RATIO) + 0.5))
     local inset = (base_size - arrow_base) * 0.5
-    local offset = math.floor(inset + arrow_base - overlap + 0.5)
+    local offset = math.floor(inset + arrow_base * ARROW_CENTRE_RATIO - arrow_size * 0.5 + 0.5)
 
-    return arrow_size, offset - base_size * 0.5, offset + arrow_size - base_size
+    return arrow_size, offset - base_size * 0.5, offset + arrow_size - base_size, offset + arrow_size * 0.5
 end
 
--- What the user sees as the arrow drifting away from the marker is the part of
--- it hanging past the marker's corner. Under the old pixel sums that ran from
--- nothing at half scale to a sixth of the marker at double; it has to stay
--- inside a narrow band instead. Measured over the objective frame and the
--- luggable marker, across the whole icon scale range.
+-- The point of splitting the two proportions: resizing the arrow must leave it
+-- where it was. Under the old overlap this was false by construction -- a
+-- quarter of the size change moved the arrow every time.
 for _, base in ipairs({ OBJECTIVE_FRAME_SIZE, 25, 14 }) do
-    local lowest_overhang, highest_overhang = math.huge, -math.huge
+    for percent = 50, 200, 10 do
+        local size = math.floor(base * percent / 100 + 0.5)
+        local _, _, _, small_centre = arrow_geometry(size, nil, ARROW_SIZE_RATIO * 0.6)
+        local _, _, _, large_centre = arrow_geometry(size, nil, ARROW_SIZE_RATIO * 1.4)
+
+        check(math.abs(small_centre - large_centre) <= 1,
+            "resizing the arrow moves it by " .. (large_centre - small_centre)
+                .. "px on a " .. size .. "px marker, so size and placement are still coupled")
+    end
+end
+
+-- The arrow is a secondary indicator. It reading as a second marker beside the
+-- first is the thing being guarded against here.
+-- What the user sees as the arrow drifting away is the part of it hanging past
+-- the marker's corner. Under the old pixel sums that ran from nothing at half
+-- scale to a sixth of the marker at double; it has to stay inside a narrow band.
+for _, base in ipairs({ OBJECTIVE_FRAME_SIZE, 25, 14 }) do
     local lowest_ratio, highest_ratio = math.huge, -math.huge
 
     for percent = 50, 200 do
         local size = math.floor(base * percent / 100 + 0.5)
-        local arrow_size, _, overhang = arrow_geometry(size, nil)
+        local arrow_size, _, overhang, centre = arrow_geometry(size, nil)
 
-        lowest_overhang = math.min(lowest_overhang, overhang / size)
-        highest_overhang = math.max(highest_overhang, overhang / size)
+        -- The placement guarantee, stated exactly: the arrow's centre never
+        -- lands more than a pixel from its nominal anchor, at any scale. This is
+        -- what the old pixel sums broke -- they put the centre at a fraction of
+        -- the marker that moved with the marker's size.
+        check(math.abs(centre - size * ARROW_CENTRE_RATIO) <= 1,
+            "the arrow centre on a " .. size .. "px marker sits "
+                .. string.format("%.1f", centre - size * ARROW_CENTRE_RATIO)
+                .. "px from its anchor")
+        -- And it stays attached: at least half of it overlaps the marker.
+        check(overhang <= arrow_size * 0.5,
+            "the arrow hangs " .. overhang .. "px past a " .. size
+                .. "px marker, which is more than half of its own " .. arrow_size .. "px")
 
         -- Below the legibility floor the arrow stops being a proportion of
         -- anything on purpose, so those sizes are not part of the band. The
@@ -598,23 +626,26 @@ for _, base in ipairs({ OBJECTIVE_FRAME_SIZE, 25, 14 }) do
         end
     end
 
-    check(highest_overhang - lowest_overhang < 0.08,
-        "the arrow overhang on a " .. base .. "px marker swings from "
-            .. string.format("%.1f%% to %.1f%%", lowest_overhang * 100, highest_overhang * 100)
-            .. " across the scale range, so it detaches as the marker grows")
     check(highest_ratio - lowest_ratio < 0.1,
         "the arrow size on a " .. base .. "px marker swings from "
             .. string.format("%.2f to %.2f", lowest_ratio, highest_ratio)
             .. " of the marker across the scale range")
+    check(highest_ratio <= 0.4,
+        "the arrow reaches " .. string.format("%.2f", highest_ratio) .. " of a " .. base
+            .. "px marker, which reads as a second marker rather than an elevation hint")
 end
 
--- The default look is the one that was calibrated by eye, so the proportions
--- have to reproduce it rather than quietly resize every marker.
-local default_arrow_size, _, default_overhang = arrow_geometry(OBJECTIVE_FRAME_SIZE, nil)
+-- The placement was calibrated by eye and is being kept; only the size changed.
+-- The frame is 26px with a 12px icon inside it, so an arrow larger than the icon
+-- is the complaint this is guarding against.
+local default_arrow_size, _, _, default_centre = arrow_geometry(OBJECTIVE_FRAME_SIZE, nil)
 
-check(default_arrow_size == 12 and default_overhang == 3,
-    "the arrow at the default objective frame is " .. default_arrow_size .. "px overhanging "
-        .. default_overhang .. "px, not the 12px/3px it was calibrated at")
+check(default_arrow_size < OBJECTIVE_ICON_SIZE,
+    "the arrow is " .. default_arrow_size .. "px against a " .. OBJECTIVE_ICON_SIZE
+        .. "px objective icon, so it competes with the marker it annotates")
+check(math.abs(default_centre - 23.5) <= 1,
+    "the arrow centre on the default objective frame moved to " .. default_centre
+        .. "px; the calibrated placement is 23px from the marker's corner")
 
 -- One arrow formula for every marker type: the frame is the objective marker's
 -- box, so the standard placement already anchors the arrow to it and scales with
@@ -789,8 +820,20 @@ check(expeditions_source:find("function _objective_has_world_marker(unit)", 1, t
 -- Without the availability guard, a mission where the list cannot be read would
 -- fall back on a stale table from the previous one.
 check(expeditions_source:find(
-    "return _world_marker_units_available and _scratch_world_marker_units[unit] == true", 1, true) ~= nil,
+    "if _world_marker_units_available and _scratch_world_marker_units[unit] == true then", 1, true) ~= nil,
     "the exemption does not check that the marker list was readable")
+-- A tentacle has no marker of its own and inherits its growth's, so the second
+-- source has to exist and has to be the tentacle set rather than a wider one.
+check(expeditions_source:find("return GROWTH_EYE.range_exempt[unit] == true", 1, true) ~= nil,
+    "growth tentacles cannot inherit their corruptor's exemption")
+check(expeditions_source:find("if growth_marked then", 1, true) ~= nil
+    and expeditions_source:find("GROWTH_EYE.range_exempt[units[i]] = true", 1, true) ~= nil,
+    "tentacles are exempted without checking that the game is marking their growth")
+-- Cleared before the pass can return early, so a finished growth cannot leave
+-- its tentacles exempt.
+check(expeditions_source:find("table_clear(GROWTH_EYE.range_exempt)" .. LF .. LF
+    .. '        if not enabled_by_kind["mission_objective_growth"] then', 1, true) ~= nil,
+    "the tentacle exemption is not cleared ahead of the pass's early returns")
 
 local bypass = tracking_source:find("_objective_has_world_marker(unit) then", 1, true)
 local range_test = tracking_source:find("if distance_sq_horizontal > max_range_sq and not ignore_range then", 1, true)

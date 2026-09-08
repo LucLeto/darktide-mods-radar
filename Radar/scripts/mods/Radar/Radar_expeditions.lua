@@ -2247,21 +2247,6 @@ return function(env)
         return _scratch_inactive_objective_units[unit] == true
     end
 
-    -- True while the game itself is drawing a world marker on this unit. Read
-    -- straight off `request_world_markers_list`, the same list the vanilla HUD
-    -- draws from and the same one the objective scan already filters bare steps
-    -- with, so there is no second notion of "the game is showing this" to keep
-    -- in step with the first.
-    --
-    -- The list does not distinguish an objective marker from an interaction
-    -- prompt, and it does not need to: an interaction prompt only appears within
-    -- a few metres, where the radar's range filter was never going to hide
-    -- anything. What reaches out past the configured range is the objective
-    -- marker, and that is what this lets through.
-    function _objective_has_world_marker(unit)
-        return _world_marker_units_available and _scratch_world_marker_units[unit] == true
-    end
-
     -- Actionability is evaluated once per unit here and read back below, so the
     -- health-extension lookup runs once per active objective unit per scan
     -- rather than twice.
@@ -2360,6 +2345,8 @@ return function(env)
         alive = {},
         -- Keyed by position, so each tentacle reports itself once.
         logged = {},
+        -- The tentacles of a growth the game is currently pointing at.
+        range_exempt = {},
     }
 
     -- One marker per tentacle rather than three: at radar scale three markers
@@ -2369,6 +2356,10 @@ return function(env)
     -- when the last one goes. The event ending empties the anchor set, and the
     -- scan's own prune then drops whatever is left.
     local function _track_growth_tentacle_units(enabled_by_kind, seen_units)
+        -- Before any early return: a growth that has ended must not leave its
+        -- tentacles exempt from the radar's range.
+        table_clear(GROWTH_EYE.range_exempt)
+
         if not enabled_by_kind["mission_objective_growth"] then
             return
         end
@@ -2377,6 +2368,11 @@ return function(env)
         local anchor_y = GROWTH_EYE.anchor_y
         local anchor_z = GROWTH_EYE.anchor_z
         local anchor_count = 0
+        -- The tentacles carry no marker of their own: the game draws its three
+        -- yellow pips on them with something that never reaches the marker list.
+        -- What it does mark is the corruptor they belong to, so the event's own
+        -- marker is what says the HUD is pointing at this fight.
+        local growth_marked = false
 
         -- Anchored on the live objective's own targets, which includes the
         -- event's unused spawn points. Tentacles stood 10 to 17 metres from the
@@ -2389,6 +2385,10 @@ return function(env)
                 anchor_x[anchor_count] = x
                 anchor_y[anchor_count] = y
                 anchor_z[anchor_count] = z
+            end
+
+            if _world_marker_units_available and _scratch_world_marker_units[unit] == true then
+                growth_marked = true
             end
         end
 
@@ -2478,6 +2478,13 @@ return function(env)
                     _claim_mission_objective_unit(units[i], "mission_objective_growth", enabled_by_kind,
                         seen_units, true)
 
+                    -- Only while the game is marking the growth, and only for
+                    -- the tentacles of that growth. A breakable the event is not
+                    -- running on is never in this set.
+                    if growth_marked then
+                        GROWTH_EYE.range_exempt[units[i]] = true
+                    end
+
                     -- Names each tentacle the shape found, so a run can be read
                     -- against the destructible probe's own list rather than
                     -- against what happened to appear on the radar.
@@ -2503,6 +2510,30 @@ return function(env)
         for i = 1, count do
             units[i] = nil
         end
+    end
+
+    -- True while the game itself is pointing at this unit, which is what lets a
+    -- mission objective past the radar's configured scan range.
+    --
+    -- Two sources, because the game marks objectives in two different ways.
+    -- Ordinary steps carry their own entry in `request_world_markers_list`, the
+    -- same list the vanilla HUD draws from, so there is no second notion of "the
+    -- game is showing this" to keep in step with the first. That list does not
+    -- separate an objective marker from an interaction prompt and does not need
+    -- to: a prompt only appears within a few metres, where the range filter was
+    -- never going to hide anything.
+    --
+    -- A growth tentacle has no entry of its own -- the three yellow pips the game
+    -- draws on it come from something that never reaches the list -- so it
+    -- inherits the exemption from the corruptor it belongs to, which does carry
+    -- one. That is decided per scan in the tentacle pass and lasts exactly as
+    -- long as the marker the player can see.
+    function _objective_has_world_marker(unit)
+        if _world_marker_units_available and _scratch_world_marker_units[unit] == true then
+            return true
+        end
+
+        return GROWTH_EYE.range_exempt[unit] == true
     end
 
     local function _track_mission_objective_units(system_name, interactee_map, enabled_by_kind, active_names,
@@ -2663,6 +2694,7 @@ return function(env)
         -- The only one of the tentacle arrays that holds unit references.
         table_clear(GROWTH_EYE.units)
         table_clear(GROWTH_EYE.logged)
+        table_clear(GROWTH_EYE.range_exempt)
         table_clear(_scratch_world_marker_units)
         table_clear(_objective_world_marker_seen)
         table_clear(_objective_first_active_t)
