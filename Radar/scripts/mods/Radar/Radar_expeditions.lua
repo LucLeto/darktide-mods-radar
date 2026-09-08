@@ -1754,6 +1754,14 @@ return function(env)
     -- is invisible before its declaration.
     local _scratch_growth_objective_units = {}
 
+    -- Units the game is currently pointing at through something other than its
+    -- own world marker list. Every objective system answers "is the HUD showing
+    -- this right now" in its own way -- a scan zone by its selection, a growth by
+    -- its corruptor's marker -- so each pass writes what it knows here and the
+    -- range decision reads one set. Declared early: the passes that fill it run
+    -- well before the accessor that reads it.
+    local _scratch_objective_range_exempt = {}
+
     -- Walks the whole minigame map rather than looking units up one at a time:
     -- a mission carries a handful of these (2 in Core Research, 5 on the train),
     -- so one pass per scan is cheaper than a lookup per objective unit.
@@ -2088,6 +2096,8 @@ return function(env)
                 if type(extension) == "table" and rawget(extension, "_is_active") == true then
                     _claim_mission_objective_unit(unit, "mission_objective_scanner", enabled_by_kind,
                         seen_units, true)
+
+                    _scratch_objective_range_exempt[unit] = true
                 end
             end
         end
@@ -2155,6 +2165,12 @@ return function(env)
 
                                 _claim_mission_objective_unit(unit, "mission_objective_scanner", enabled_by_kind,
                                     seen_units, true)
+
+                                -- Selected by a live zone and still outstanding
+                                -- is the same state the vanilla HUD draws its
+                                -- own marker from, so it is what exempts the
+                                -- target from the radar's range.
+                                _scratch_objective_range_exempt[unit] = true
                             end
                         end
 
@@ -2357,8 +2373,6 @@ return function(env)
         group_carrier = {},
         -- Keyed by position, so each tentacle reports itself once.
         logged = {},
-        -- The tentacles of a growth the game is currently pointing at.
-        range_exempt = {},
     }
 
     -- One marker per tentacle rather than three: at radar scale three markers
@@ -2368,10 +2382,6 @@ return function(env)
     -- when the last one goes. The event ending empties the anchor set, and the
     -- scan's own prune then drops whatever is left.
     local function _track_growth_tentacle_units(enabled_by_kind, seen_units)
-        -- Before any early return: a growth that has ended must not leave its
-        -- tentacles exempt from the radar's range.
-        table_clear(GROWTH_EYE.range_exempt)
-
         if not enabled_by_kind["mission_objective_growth"] then
             return
         end
@@ -2551,7 +2561,7 @@ return function(env)
             -- tentacles of that growth. A breakable the event is not running on
             -- is never in this set.
             if growth_marked then
-                GROWTH_EYE.range_exempt[member] = true
+                _scratch_objective_range_exempt[member] = true
             end
 
             -- Reported per tentacle and per remaining eye count, so a run shows
@@ -2578,28 +2588,29 @@ return function(env)
         end
     end
 
-    -- True while the game itself is pointing at this unit, which is what lets a
-    -- mission objective past the radar's configured scan range.
+    -- Whether the game is currently pointing the player at this unit, which is
+    -- what lets a mission objective past the radar's configured scan range. One
+    -- decision; the systems that answer it differently feed it from two places.
     --
-    -- Two sources, because the game marks objectives in two different ways.
-    -- Ordinary steps carry their own entry in `request_world_markers_list`, the
-    -- same list the vanilla HUD draws from, so there is no second notion of "the
-    -- game is showing this" to keep in step with the first. That list does not
-    -- separate an objective marker from an interaction prompt and does not need
-    -- to: a prompt only appears within a few metres, where the range filter was
-    -- never going to hide anything.
+    -- Most objectives carry their own entry in `request_world_markers_list`, the
+    -- list the vanilla HUD draws from, so they are answered by a direct lookup
+    -- and nothing has to be maintained for them. That list does not separate an
+    -- objective marker from an interaction prompt and does not need to: a prompt
+    -- only appears within a few metres, where the range filter was never going
+    -- to hide anything.
     --
-    -- A growth tentacle has no entry of its own -- the three yellow pips the game
-    -- draws on it come from something that never reaches the list -- so it
-    -- inherits the exemption from the corruptor it belongs to, which does carry
-    -- one. That is decided per scan in the tentacle pass and lasts exactly as
-    -- long as the marker the player can see.
-    function _objective_has_world_marker(unit)
+    -- The rest never reach that list at all, and each objective system exposes
+    -- the same fact its own way: a scan zone by which of its targets it has
+    -- selected and not yet had scanned, a growth tentacle by the marker on the
+    -- corruptor it belongs to. Those passes write what they know into one set as
+    -- they run, and it is rebuilt from scratch every scan, so an exemption lasts
+    -- exactly as long as the state behind it.
+    function _objective_ignores_radar_range(unit)
         if _world_marker_units_available and _scratch_world_marker_units[unit] == true then
             return true
         end
 
-        return GROWTH_EYE.range_exempt[unit] == true
+        return _scratch_objective_range_exempt[unit] == true
     end
 
     local function _track_mission_objective_units(system_name, interactee_map, enabled_by_kind, active_names,
@@ -2699,6 +2710,9 @@ return function(env)
         table_clear(seen_units)
         table_clear(zone_units)
         table_clear(_scratch_inactive_objective_units)
+        -- Ahead of every pass, so an objective that has ended cannot leave an
+        -- exemption behind and nothing survives a scan that does not re-earn it.
+        table_clear(_scratch_objective_range_exempt)
 
         if _any_mission_objective_kind_enabled() then
             local enabled_by_kind = _scratch_mission_objective_kind_enabled
@@ -2760,7 +2774,6 @@ return function(env)
         -- The only one of the tentacle arrays that holds unit references.
         table_clear(GROWTH_EYE.units)
         table_clear(GROWTH_EYE.logged)
-        table_clear(GROWTH_EYE.range_exempt)
         table_clear(GROWTH_EYE.group_of)
         table_clear(GROWTH_EYE.member_units)
         table_clear(GROWTH_EYE.member_group)

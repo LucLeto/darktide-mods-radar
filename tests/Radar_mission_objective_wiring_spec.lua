@@ -838,27 +838,38 @@ check(expeditions_source:find("candidate_limit", 1, true) ~= nil,
 -- signal is the vanilla marker list, which is where the HUD gets its own
 -- markers, so the exemption lasts exactly as long as the marker the player can
 -- see and no approximation of it has to be maintained alongside.
-check(expeditions_source:find("function _objective_has_world_marker(unit)", 1, true) ~= nil,
-    "the world marker exemption has no accessor")
+check(expeditions_source:find("function _objective_ignores_radar_range(unit)", 1, true) ~= nil,
+    "the range exemption has no accessor")
+-- One decision. Each objective system answers "is the HUD showing this" its own
+-- way and writes what it knows into one set, so a new objective type adds an
+-- answer rather than another branch here.
+check(select(2, expeditions_source:gsub("function _objective_ignores_radar_range", "")) == 1,
+    "the range exemption is decided in more than one place")
 -- Without the availability guard, a mission where the list cannot be read would
 -- fall back on a stale table from the previous one.
 check(expeditions_source:find(
     "if _world_marker_units_available and _scratch_world_marker_units[unit] == true then", 1, true) ~= nil,
     "the exemption does not check that the marker list was readable")
--- A tentacle has no marker of its own and inherits its growth's, so the second
--- source has to exist and has to be the tentacle set rather than a wider one.
-check(expeditions_source:find("return GROWTH_EYE.range_exempt[unit] == true", 1, true) ~= nil,
-    "growth tentacles cannot inherit their corruptor's exemption")
+-- Neither a tentacle nor a scan target reaches the game's marker list, so both
+-- need their own system to answer for them, into the shared set.
+check(expeditions_source:find("return _scratch_objective_range_exempt[unit] == true", 1, true) ~= nil,
+    "the systems that never reach the marker list have no way to exempt anything")
 check(expeditions_source:find("if growth_marked then", 1, true) ~= nil
-    and expeditions_source:find("GROWTH_EYE.range_exempt[member] = true", 1, true) ~= nil,
+    and expeditions_source:find("_scratch_objective_range_exempt[member] = true", 1, true) ~= nil,
     "tentacles are exempted without checking that the game is marking their growth")
--- Cleared before the pass can return early, so a finished growth cannot leave
--- its tentacles exempt.
-check(expeditions_source:find("table_clear(GROWTH_EYE.range_exempt)" .. LF .. LF
-    .. '        if not enabled_by_kind["mission_objective_growth"] then', 1, true) ~= nil,
-    "the tentacle exemption is not cleared ahead of the pass's early returns")
+-- A scan target the zone has selected and not yet had scanned is what the
+-- vanilla HUD draws its own marker from. Both claim paths, since the fallback
+-- one runs whenever the selection cannot be read.
+check(select(2, expeditions_source:gsub("_scratch_objective_range_exempt%[unit%] = true", "")) == 2,
+    "only one of the two scan target paths exempts what it claims")
+-- Rebuilt from nothing every scan and before any pass can write to it, so an
+-- exemption cannot outlive the state that earned it.
+check(expeditions_source:find("table_clear(_scratch_inactive_objective_units)", 1, true) ~= nil
+    and expeditions_source:find("table_clear(_scratch_objective_range_exempt)", 1, true)
+        < expeditions_source:find(LF .. "            _track_mission_objective_scan_zones(", 1, true),
+    "the range exemption set is not cleared ahead of the passes that fill it")
 
-local bypass = tracking_source:find("_objective_has_world_marker(unit) then", 1, true)
+local bypass = tracking_source:find("_objective_ignores_radar_range(unit) then", 1, true)
 local range_test = tracking_source:find("if distance_sq_horizontal > max_range_sq and not ignore_range then", 1, true)
 
 check(bypass ~= nil, "the radar target build never consults the game's own markers")

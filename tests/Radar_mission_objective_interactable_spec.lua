@@ -2523,7 +2523,7 @@ test("an objective the game is marking is exempt from the scan range", function(
     harness:set_world_marker_units({ step })
     harness:scan()
 
-    assert_equal(true, harness.env._objective_has_world_marker(step),
+    assert_equal(true, harness.env._objective_ignores_radar_range(step),
         "a marked objective must be exempt from the scan range")
 end)
 
@@ -2538,7 +2538,7 @@ test("an objective the game is not marking is not exempt", function()
     harness:set_world_marker_units({ marked })
     harness:scan()
 
-    assert_equal(false, harness.env._objective_has_world_marker(unmarked),
+    assert_equal(false, harness.env._objective_ignores_radar_range(unmarked),
         "an unmarked objective must obey the scan range")
 end)
 
@@ -2551,12 +2551,12 @@ test("the exemption ends when the game drops its marker", function()
     harness:set_active_objective_names({ "objective_a" })
     harness:set_world_marker_units({ step })
     harness:scan()
-    assert_equal(true, harness.env._objective_has_world_marker(step), "the marked step must be exempt")
+    assert_equal(true, harness.env._objective_ignores_radar_range(step), "the marked step must be exempt")
 
     harness:set_world_marker_units({})
     harness:scan()
 
-    assert_equal(false, harness.env._objective_has_world_marker(step),
+    assert_equal(false, harness.env._objective_ignores_radar_range(step),
         "the exemption must end with the game's own marker")
 end)
 
@@ -2571,7 +2571,7 @@ test("an unreadable marker list exempts nothing", function()
     harness:set_world_marker_units(nil)
     harness:scan()
 
-    assert_equal(false, harness.env._objective_has_world_marker(step),
+    assert_equal(false, harness.env._objective_ignores_radar_range(step),
         "an unreadable marker list must not exempt anything")
 end)
 
@@ -2584,7 +2584,7 @@ test("a unit with no objective at all is not exempt", function()
     harness:set_world_marker_units({})
     harness:scan()
 
-    assert_equal(false, harness.env._objective_has_world_marker(stranger),
+    assert_equal(false, harness.env._objective_ignores_radar_range(stranger),
         "an unknown unit must not be exempt")
 end)
 
@@ -2602,7 +2602,7 @@ test("a tentacle inherits the exemption from the growth it belongs to", function
     local marked = marked_eyes(harness, eyes)
 
     assert_equal(1, #marked, "the tentacle must be marked")
-    assert_equal(true, harness.env._objective_has_world_marker(marked[1]),
+    assert_equal(true, harness.env._objective_ignores_radar_range(marked[1]),
         "the tentacle must be exempt while the game marks its growth")
 
     -- Exactly the eye carrying the marker, not every destructible of the
@@ -2610,7 +2610,7 @@ test("a tentacle inherits the exemption from the growth it belongs to", function
     -- that says more than it means.
     for i = 1, #eyes do
         if eyes[i] ~= marked[1] then
-            assert_equal(false, harness.env._objective_has_world_marker(eyes[i]),
+            assert_equal(false, harness.env._objective_ignores_radar_range(eyes[i]),
                 "only the eye carrying the marker is exempt")
         end
     end
@@ -2631,7 +2631,7 @@ test("a tentacle of an unmarked growth obeys the scan range", function()
     local marked = marked_eyes(harness, eyes)
 
     assert_equal(1, #marked, "the tentacle must still be marked")
-    assert_equal(false, harness.env._objective_has_world_marker(marked[1]),
+    assert_equal(false, harness.env._objective_ignores_radar_range(marked[1]),
         "an unmarked growth must not exempt its tentacles")
 end)
 
@@ -2647,7 +2647,7 @@ test("a breakable that is not a tentacle is never exempt", function()
     harness:scan()
 
     assert_nil(harness:tracked_kind(barrel), "a solitary breakable must not be marked")
-    assert_equal(false, harness.env._objective_has_world_marker(barrel),
+    assert_equal(false, harness.env._objective_ignores_radar_range(barrel),
         "a breakable outside the event must not be exempt")
 end)
 
@@ -2662,12 +2662,12 @@ test("the tentacle exemption ends with the growth event", function()
 
     local exempt = marked_eyes(harness, eyes)[1]
 
-    assert_equal(true, harness.env._objective_has_world_marker(exempt), "the tentacle must be exempt")
+    assert_equal(true, harness.env._objective_ignores_radar_range(exempt), "the tentacle must be exempt")
 
     harness:set_active_objective_names({})
     harness:scan()
 
-    assert_equal(false, harness.env._objective_has_world_marker(exempt),
+    assert_equal(false, harness.env._objective_ignores_radar_range(exempt),
         "the exemption must end with the event")
 end)
 
@@ -2683,12 +2683,12 @@ test("disabling growth markers clears the tentacle exemption", function()
 
     local exempt = marked_eyes(harness, eyes)[1]
 
-    assert_equal(true, harness.env._objective_has_world_marker(exempt), "the tentacle must be exempt")
+    assert_equal(true, harness.env._objective_ignores_radar_range(exempt), "the tentacle must be exempt")
 
     harness.settings.show_mission_objective_growth = "off"
     harness:scan()
 
-    assert_equal(false, harness.env._objective_has_world_marker(exempt),
+    assert_equal(false, harness.env._objective_ignores_radar_range(exempt),
         "a disabled kind must not leave an exemption behind")
 end)
 
@@ -2839,6 +2839,87 @@ test("a reference is rendered, not only typed", function()
 
     assert_contains(harness:log_text(), rendered,
         "the probe does not render a reference, so two eyes cannot be told to share one")
+end)
+
+-- Scan targets never appear in the game's world marker list -- confirmed from a
+-- run where all three read world_marker=false while the objective was live and
+-- the list was readable -- so the direct lookup can never answer for them. The
+-- zone's own selection is what the vanilla HUD draws from, and it is what
+-- exempts them here.
+test("a selected scan target ignores the scan range", function()
+    local harness = new_harness()
+    local first = harness:add_interactee()
+    local second = harness:add_interactee()
+
+    harness:add_scan_zone({ objective_name = "objective_a", scannables = { first, second }, total = 2 })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units({})
+    harness:scan()
+
+    assert_equal("mission_objective_scanner", harness:tracked_kind(first), "the scan target must be marked")
+    assert_equal(true, harness.env._objective_ignores_radar_range(first),
+        "a selected scan target must ignore the scan range")
+    assert_equal(true, harness.env._objective_ignores_radar_range(second),
+        "every outstanding target of the zone must ignore the scan range")
+end)
+
+-- The exemption follows the zone, so a target that has been scanned goes back
+-- under the normal range rules along with its marker.
+test("a scanned target stops ignoring the scan range", function()
+    local harness = new_harness()
+    local first = harness:add_interactee()
+    local second = harness:add_interactee()
+
+    harness:add_scan_zone({
+        objective_name = "objective_a",
+        scannables = { [first] = true, [second] = false },
+        total = 2,
+        progression = 1,
+    })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units({})
+    harness:scan()
+
+    assert_equal(false, harness.env._objective_ignores_radar_range(first),
+        "a scanned target must obey the scan range again")
+    assert_equal(true, harness.env._objective_ignores_radar_range(second),
+        "the outstanding target must still ignore the scan range")
+end)
+
+-- And with the objective, not one scan later.
+test("scan targets stop ignoring the range when the objective ends", function()
+    local harness = new_harness()
+    local target = harness:add_interactee()
+
+    harness:add_scan_zone({ objective_name = "objective_a", scannables = { target }, total = 1 })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units({})
+    harness:scan()
+
+    assert_equal(true, harness.env._objective_ignores_radar_range(target), "the target must be exempt")
+
+    harness:set_active_objective_names({})
+    harness:scan()
+
+    assert_equal(false, harness.env._objective_ignores_radar_range(target),
+        "the exemption must end with the objective")
+end)
+
+-- A scannable the zone did not select is not part of this run and keeps the
+-- normal range rules, the same way it keeps no marker.
+test("an unselected scannable does not ignore the scan range", function()
+    local harness = new_harness()
+    local selected = harness:add_interactee()
+    local spare = harness:add_interactee()
+
+    harness:add_scan_zone({ objective_name = "objective_a", scannables = { selected }, total = 1 })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units({})
+    harness:scan()
+
+    assert_nil(harness:tracked_kind(spare), "an unselected scannable must not be marked")
+    assert_equal(false, harness.env._objective_ignores_radar_range(spare),
+        "an unselected scannable must obey the scan range")
 end)
 
 local failures = {}
