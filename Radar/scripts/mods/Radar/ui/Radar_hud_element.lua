@@ -181,13 +181,26 @@ local OBJECTIVE_FRAME_ICON = "content/ui/materials/hud/interactions/frames/point
 -- coloured background into the base layer, are untouched.
 local OBJECTIVE_PLATE_ICON = "content/ui/materials/hud/interactions/frames/point_of_interest_back"
 local OBJECTIVE_FRAME_SIZE = 26
--- Calibrated against the game's own marker: its icon sits noticeably smaller
--- inside the diamond than a naive fit suggests. These are nominal sizes at a
--- 26px frame; the user's icon scale multiplies the frame afterwards and the icon
--- follows by ratio, so the calibration holds at any scale.
-local OBJECTIVE_ICON_SIZE = 12
--- For art whose own texture already carries the inset.
-local OBJECTIVE_ICON_SIZE_LINKED = 20
+-- The frame is shared by the whole family; the icon inside it is not. The
+-- game's icons are not normalised -- each was drawn to sit differently inside
+-- its own box -- so one number cannot fit them all, and a category has to be
+-- able to be tuned without moving its neighbours.
+--
+-- Nominal sizes against the 26px frame. The user's icon scale multiplies the
+-- frame afterwards and the icon follows by ratio, so a fit calibrated here holds
+-- at every scale. Keep them even: that is what centres the icon exactly at the
+-- nominal size, and the renderer corrects the parity at the scales where the two
+-- floors would otherwise disagree.
+local OBJECTIVE_ICON_SIZE_BY_KIND = {
+    mission_objective_scanner = 8,
+    mission_objective_hacking = 10,
+    mission_objective_servo_skull = 9,
+    -- The parasite art fills its own box more than the others do.
+    mission_objective_growth = 8,
+    -- Its texture already carries the inset, so it takes a much larger share of
+    -- the frame than the rest and still matches the game's own marker.
+    mission_objective_other = 20,
+}
 
 local RADAR_OUTLINE_WIDGET_COLOR = { 255, 213, 226, 206 }
 local RADAR_LEGEND_INDICATOR_WIDGET_COLOR = { 255, 213, 226, 206 }
@@ -664,7 +677,7 @@ local PRESENTATIONS = {
         color = VANILLA_OBJECTIVE_WIDGET_COLOR,
         size = OBJECTIVE_FRAME_SIZE,
         background_base_size = OBJECTIVE_FRAME_SIZE,
-        overlay_base_size = OBJECTIVE_ICON_SIZE,
+        overlay_base_size = OBJECTIVE_ICON_SIZE_BY_KIND.mission_objective_scanner,
     },
     mission_objective_hacking = {
         icon = OBJECTIVE_FRAME_ICON,
@@ -673,16 +686,7 @@ local PRESENTATIONS = {
         color = VANILLA_OBJECTIVE_WIDGET_COLOR,
         size = OBJECTIVE_FRAME_SIZE,
         background_base_size = OBJECTIVE_FRAME_SIZE,
-        overlay_base_size = OBJECTIVE_ICON_SIZE,
-    },
-    mission_objective_console = {
-        icon = OBJECTIVE_FRAME_ICON,
-        plate_icon = OBJECTIVE_PLATE_ICON,
-        overlay_icon = "content/ui/materials/icons/system/settings/category_video",
-        color = VANILLA_OBJECTIVE_WIDGET_COLOR,
-        size = OBJECTIVE_FRAME_SIZE,
-        background_base_size = OBJECTIVE_FRAME_SIZE,
-        overlay_base_size = OBJECTIVE_ICON_SIZE,
+        overlay_base_size = OBJECTIVE_ICON_SIZE_BY_KIND.mission_objective_hacking,
     },
     mission_objective_servo_skull = {
         icon = OBJECTIVE_FRAME_ICON,
@@ -691,7 +695,7 @@ local PRESENTATIONS = {
         color = VANILLA_OBJECTIVE_WIDGET_COLOR,
         size = OBJECTIVE_FRAME_SIZE,
         background_base_size = OBJECTIVE_FRAME_SIZE,
-        overlay_base_size = OBJECTIVE_ICON_SIZE,
+        overlay_base_size = OBJECTIVE_ICON_SIZE_BY_KIND.mission_objective_servo_skull,
     },
     -- Growth steps of a purge event. Its own kind purely so its icon carries its
     -- own size and position: it shares the generic category's dropdown, colour
@@ -703,7 +707,7 @@ local PRESENTATIONS = {
         color = VANILLA_OBJECTIVE_WIDGET_COLOR,
         size = OBJECTIVE_FRAME_SIZE,
         background_base_size = OBJECTIVE_FRAME_SIZE,
-        overlay_base_size = 10,
+        overlay_base_size = OBJECTIVE_ICON_SIZE_BY_KIND.mission_objective_growth,
     },
     mission_objective_other = {
         icon = OBJECTIVE_FRAME_ICON,
@@ -718,7 +722,7 @@ local PRESENTATIONS = {
         -- an even fraction of an even frame: the frame's centre and the icon's
         -- half size are floored separately, and only matching parity makes the
         -- two cancel, which is what keeps this centred without an offset.
-        overlay_base_size = OBJECTIVE_ICON_SIZE_LINKED,
+        overlay_base_size = OBJECTIVE_ICON_SIZE_BY_KIND.mission_objective_other,
     },
     pickup_tainted_skull = {
         icon = TAINTED_SKULL_LIVE_EVENT_ICON,

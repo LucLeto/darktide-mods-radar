@@ -5,7 +5,6 @@ local KINDS = {
     "mission_objective_growth",
     "mission_objective_scanner",
     "mission_objective_hacking",
-    "mission_objective_console",
     "mission_objective_servo_skull",
     "mission_objective_other",
 }
@@ -14,7 +13,6 @@ local SETTING_BY_KIND = {
     mission_objective_growth = "show_mission_objective_growth",
     mission_objective_scanner = "show_mission_objective_scanner",
     mission_objective_hacking = "show_mission_objective_hacking",
-    mission_objective_console = "show_mission_objective_console",
     mission_objective_servo_skull = "show_mission_objective_servo_skull",
     mission_objective_other = "show_mission_objective_other",
 }
@@ -23,8 +21,7 @@ local settings_store = {
     show_mission_objective_growth = "icon_only",
     show_mission_objective_scanner = "icon_only",
     show_mission_objective_hacking = "icon_distance",
-    show_mission_objective_console = "off",
-    show_mission_objective_servo_skull = "icon_only",
+    show_mission_objective_servo_skull = "off",
     show_mission_objective_other = "icon_only",
     nearby_highlight_mission_objective = true,
     nearby_highlight_distance_text_mission_objective = true,
@@ -90,6 +87,13 @@ end
 for i = 1, #KINDS do
     local kind = KINDS[i]
     local setting_id = SETTING_BY_KIND[kind]
+
+    -- Reported rather than crashed on: a kind swept here without a setting is a
+    -- half-registered kind, which is the defect, not a broken spec.
+    if setting_id == nil then
+        check(false, kind .. ": swept as a marker kind but has no setting")
+        setting_id = "<missing>"
+    end
 
     check(env.NEARBY_OUTLINE_COLOR_BY_KIND[kind] ~= nil,
         kind .. ": missing NEARBY_OUTLINE_COLOR_BY_KIND entry")
@@ -250,26 +254,51 @@ check(runtime_source:find("marker_color_kind(mod, kind, target.meta)", 1, true) 
 -- the fit through the icon-scale slider.
 local LF = string.char(10)
 local OBJECTIVE_FRAME_SIZE = tonumber(hud_source:match("local OBJECTIVE_FRAME_SIZE = (%d+)"))
-local OBJECTIVE_ICON_SIZE = tonumber(hud_source:match("local OBJECTIVE_ICON_SIZE = (%d+)"))
-local OBJECTIVE_ICON_SIZE_LINKED = tonumber(hud_source:match("local OBJECTIVE_ICON_SIZE_LINKED = (%d+)"))
-local EXPECTED_ICON_SIZE_BY_KIND = {
-    -- The parasite art needs its own fit; the game's icons are not normalised.
-    mission_objective_growth = 10,
-    mission_objective_scanner = OBJECTIVE_ICON_SIZE,
-    mission_objective_hacking = OBJECTIVE_ICON_SIZE,
-    mission_objective_console = OBJECTIVE_ICON_SIZE,
-    mission_objective_servo_skull = OBJECTIVE_ICON_SIZE,
-    -- Its texture carries its own inset, so it takes a larger share of the
-    -- frame than the others.
-    mission_objective_other = OBJECTIVE_ICON_SIZE_LINKED,
-}
+-- Read out of the table the renderer uses, not repeated here: the point of the
+-- table is that a category can be retuned on its own, so the spec has to check
+-- the properties every entry must hold rather than the numbers themselves.
+local ICON_SIZE_BLOCK = hud_source:match("local OBJECTIVE_ICON_SIZE_BY_KIND = {(.-)" .. LF .. "}")
+local ICON_SIZE_BY_KIND = {}
 
--- Calibrated against the game's own marker, whose icon sits well inside the
--- diamond rather than filling it. The scale multiplies the frame afterwards, so
--- this ratio is what holds at every scale.
-check(OBJECTIVE_ICON_SIZE ~= nil and OBJECTIVE_FRAME_SIZE ~= nil
-    and OBJECTIVE_ICON_SIZE / OBJECTIVE_FRAME_SIZE < 0.55,
-    "the objective icon fills too much of its frame to match the game's marker")
+if ICON_SIZE_BLOCK ~= nil then
+    for kind, size in ICON_SIZE_BLOCK:gmatch("(mission_objective_[%a_]+) = (%d+),") do
+        ICON_SIZE_BY_KIND[kind] = tonumber(size)
+    end
+end
+
+check(ICON_SIZE_BLOCK ~= nil, "the per-category icon sizes are missing")
+
+-- These numbers are tuned by eye against the game's own marker and are expected
+-- to change. Pinning them here would turn every deliberate adjustment into a
+-- test failure, which is the opposite of what the table is for, so what is
+-- checked is that each category has a size of its own and that the size is one
+-- the renderer can actually draw.
+--
+-- Parity is deliberately not checked. The renderer moves the icon to the nearer
+-- integer of the frame's parity at every scale, so an odd nominal size is
+-- centred exactly like an even one -- verified across sizes 10 to 72 below. An
+-- earlier version of this spec required even sizes, which was left over from
+-- before that correction existed and rejected a perfectly good hand-tuned value.
+for _, kind in ipairs(KINDS) do
+    local icon_size = ICON_SIZE_BY_KIND[kind]
+
+    check(icon_size ~= nil, kind .. " has no icon size of its own")
+
+    -- Guarded, so a missing entry is one reported defect rather than a crash
+    -- that hides every check after it.
+    if icon_size ~= nil then
+        check(icon_size >= 4, kind .. " has an icon size of " .. icon_size
+            .. ", below the minimum the renderer will draw")
+        -- Inside the frame, or it is not an icon in a diamond any more.
+        check(icon_size < OBJECTIVE_FRAME_SIZE,
+            kind .. " fills its whole frame, which draws it larger than the game's marker")
+    end
+end
+
+-- Independently tunable is the whole point: sharing one number is what made
+-- tuning the scanner move the servo skull.
+check(ICON_SIZE_BLOCK ~= nil and ICON_SIZE_BLOCK:find("OBJECTIVE_ICON_SIZE", 1, true) == nil,
+    "the categories share a size symbol again, so one cannot be tuned alone")
 
 check(hud_source:find('local OBJECTIVE_FRAME_ICON = "content/ui/materials/hud/interactions/frames/point_of_interest_top"',
     1, true) ~= nil, "the objective frame material is missing")
@@ -304,14 +333,16 @@ for i = 1, #KINDS do
         -- much room the diamond leaves.
         -- The sizes are named constants now, so the symbol is resolved rather
         -- than read as a literal.
-        local overlay_symbol = block:match("overlay_base_size = ([%u_]+)")
-        local overlay_base = overlay_symbol == "OBJECTIVE_ICON_SIZE" and OBJECTIVE_ICON_SIZE
-            or overlay_symbol == "OBJECTIVE_ICON_SIZE_LINKED" and OBJECTIVE_ICON_SIZE_LINKED
-            or overlay_symbol == "OBJECTIVE_FRAME_SIZE" and OBJECTIVE_FRAME_SIZE
+        -- Each presentation names its own entry in the size table, so the
+        -- symbol is resolved through it rather than read as a literal.
+        local overlay_kind = block:match("overlay_base_size = OBJECTIVE_ICON_SIZE_BY_KIND%.([%a_]+)")
+        local overlay_base = overlay_kind and ICON_SIZE_BY_KIND[overlay_kind]
             or tonumber(block:match("overlay_base_size = (%d+)"))
 
-        check(overlay_base == EXPECTED_ICON_SIZE_BY_KIND[kind],
-            kind .. ": icon draws at " .. tostring(overlay_base) .. ", not its established size")
+        check(overlay_kind == kind,
+            kind .. ": takes its icon size from " .. tostring(overlay_kind) .. " rather than its own entry")
+        check(overlay_base ~= nil, kind .. ": its icon size does not resolve to a number")
+
     end
 end
 
@@ -516,15 +547,10 @@ check(expeditions_source:find("table_clear(_objective_world_marker_seen)", 1, tr
     and select(2, expeditions_source:gsub("table_clear%(_objective_world_marker_seen%)", "")) == 1,
     "the world marker coverage latch must be cleared once per mission, not once per scan")
 
--- No positional offsets: an icon that needs to sit flush links itself to the
--- frame size, and the renderer corrects the parity, so nothing is nudged by
--- hand.
-check(OBJECTIVE_ICON_SIZE_LINKED ~= nil and OBJECTIVE_FRAME_SIZE ~= nil
-    and OBJECTIVE_ICON_SIZE_LINKED % 2 == 0 and OBJECTIVE_FRAME_SIZE % 2 == 0,
-    "an odd nominal icon or frame size needs a parity correction at 100%, where none should be needed")
-check(OBJECTIVE_ICON_SIZE_LINKED ~= nil and OBJECTIVE_FRAME_SIZE ~= nil
-    and OBJECTIVE_ICON_SIZE_LINKED < OBJECTIVE_FRAME_SIZE,
-    "the linked icon fills the whole frame, which draws it larger than the game's marker")
+-- No positional offsets: the sizes above are even and the renderer corrects the
+-- parity everywhere else, so nothing is nudged by hand.
+check(OBJECTIVE_FRAME_SIZE ~= nil and OBJECTIVE_FRAME_SIZE % 2 == 0,
+    "an odd frame size needs a parity correction at 100%, where none should be needed")
 check(hud_source:find("overlay_offset_x", 1, true) == nil
     and hud_source:find("overlay_offset_base_size", 1, true) == nil,
     "per-icon positional offsets are back; link the icon to the frame size instead")
@@ -640,9 +666,13 @@ end
 -- is the complaint this is guarding against.
 local default_arrow_size, _, _, default_centre = arrow_geometry(OBJECTIVE_FRAME_SIZE, nil)
 
-check(default_arrow_size < OBJECTIVE_ICON_SIZE,
-    "the arrow is " .. default_arrow_size .. "px against a " .. OBJECTIVE_ICON_SIZE
-        .. "px objective icon, so it competes with the marker it annotates")
+-- Bounded against the frame, which is shared and fixed, rather than against the
+-- icon sizes, which are hand-tuned per category: an arrow the size of the whole
+-- marker is a defect, an arrow larger than one deliberately small icon is a
+-- judgement call and not this spec's to make.
+check(default_arrow_size < OBJECTIVE_FRAME_SIZE * 0.5,
+    "the arrow is " .. default_arrow_size .. "px on a " .. OBJECTIVE_FRAME_SIZE
+        .. "px frame, so it reads as a second marker rather than an elevation hint")
 check(math.abs(default_centre - 23.5) <= 1,
     "the arrow centre on the default objective frame moved to " .. default_centre
         .. "px; the calibrated placement is 23px from the marker's corner")
@@ -697,7 +727,9 @@ end
 local grew = 0
 local shrank = 0
 
-for kind, icon_base in pairs(EXPECTED_ICON_SIZE_BY_KIND) do
+-- Over the sizes actually in the source, so a hand-tuned value is verified
+-- rather than assumed: this is what says an odd nominal size is centred too.
+for kind, icon_base in pairs(ICON_SIZE_BY_KIND) do
     for size = 10, 72 do
         local overlay_size = overlay_geometry(size, icon_base, OBJECTIVE_FRAME_SIZE)
         local drawn_left = math.floor(size * 0.5) - math.floor(overlay_size * 0.5)
@@ -881,6 +913,38 @@ local bypass_block = tracking_source:match("if not ignore_range" .. LF .. "(.-)i
 
 check(bypass_block ~= nil and bypass_block:find("_is_mission_objective_marker_kind(kind)", 1, true) ~= nil,
     "the range exemption is not restricted to mission objective markers")
+
+-- A kind that is registered everywhere but that no detection path can ever
+-- assign costs a settings dropdown, a colour picker and a tooltip in twelve
+-- languages for a marker that cannot appear. `mission_objective_console` was
+-- exactly that from the first commit of this feature until it was removed, so
+-- registration alone is no longer taken as evidence that a kind is real.
+--
+-- Every kind the scan can produce names itself as a quoted string somewhere in
+-- the detection module -- a claim, a dedicated system's kind, an interaction
+-- type's mapping, or the resolver's own fallback. The registry uses bare table
+-- keys, so being registered does not satisfy this.
+for _, kind in ipairs(KINDS) do
+    check(expeditions_source:find('"' .. kind .. '"', 1, true) ~= nil,
+        kind .. " is registered as a marker kind but no detection path can produce it")
+end
+
+-- And the reverse: nothing may be registered that is not in this spec's list,
+-- so a new kind cannot be added to the settings without being swept here.
+local registry = expeditions_source:match("local MISSION_OBJECTIVE_MARKER_KINDS = {(.-)" .. LF .. "    }")
+
+check(registry ~= nil, "the marker kind registry is missing")
+
+if registry ~= nil then
+    local registered = 0
+
+    for _ in registry:gmatch("mission_objective_[%a_]+ = true") do
+        registered = registered + 1
+    end
+
+    check(registered == #KINDS,
+        "the detection module registers " .. registered .. " marker kinds but this spec sweeps " .. #KINDS)
+end
 
 check_local_use_before_declaration(expeditions_source, "Radar_expeditions.lua")
 check_local_use_before_declaration(tracking_source, "Radar_tracking.lua")

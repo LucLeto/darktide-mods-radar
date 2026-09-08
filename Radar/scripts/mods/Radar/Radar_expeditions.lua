@@ -1511,7 +1511,6 @@ return function(env)
         mission_objective_scanner = true,
         mission_objective_growth = true,
         mission_objective_hacking = true,
-        mission_objective_console = true,
         mission_objective_servo_skull = true,
         mission_objective_other = true,
     }
@@ -1754,6 +1753,19 @@ return function(env)
     -- is invisible before its declaration.
     local _scratch_growth_objective_units = {}
 
+    -- Bare objective steps -- the train controls destroyed to stop the train --
+    -- carry no completion state anywhere: not an interactee, no health, in no
+    -- system at all, and their own target extension never changes a field. The
+    -- game's own world marker is the only thing that goes away when one is
+    -- finished, so it stands in for the signal the unit does not have.
+    --
+    -- Declared here with the rest of the per-scan marker state rather than
+    -- beside the pass that fills it: the puzzle state below is read from it and
+    -- runs earlier in the frame, and a local is invisible before its
+    -- declaration.
+    local _scratch_world_marker_units = {}
+    local _world_marker_units_available = false
+
     -- Units the game is currently pointing at through something other than its
     -- own world marker list. Every objective system answers "is the HUD showing
     -- this right now" in its own way -- a scan zone by its selection, a growth by
@@ -1782,13 +1794,29 @@ return function(env)
                 if state == MISSION_OBJECTIVE_MINIGAME_COMPLETE_STATE then
                     _minigame_state_by_unit[unit] = MISSION_OBJECTIVE_MINIGAME_COMPLETE_STATE
                 elseif state == MISSION_OBJECTIVE_MINIGAME_GAMEPLAY_STATE then
-                    -- Only a running puzzle has a colour of its own: `_active`
-                    -- is the one field that says a player is at the device right
-                    -- now, so a running puzzle without one is asking for
-                    -- somebody rather than being worked on.
+                    -- `_active` is the one field that says a player is at this
+                    -- device right now, and it is per device, so it stands on
+                    -- its own.
                     if rawget(extension, "_active") == true then
                         _minigame_state_by_unit[unit] = MISSION_OBJECTIVE_MINIGAME_ACTIVE
-                    else
+                    elseif _scratch_world_marker_units[unit] ~= nil then
+                        -- Red means "this device is asking for a player", and
+                        -- the puzzle state alone cannot say that: a solved one
+                        -- does not report itself solved. It goes back to
+                        -- `gameplay` with nobody attached, which is the same
+                        -- reading as a fresh breakdown. On Power Matrix a
+                        -- repaired interrogator sat in that state for the rest
+                        -- of the event and turned red again the moment the next
+                        -- one broke.
+                        --
+                        -- The game's own marker is what separates them: it marks
+                        -- the device it is currently asking for and nothing
+                        -- else. Both real breakdowns in that run carried one,
+                        -- and the repaired device carried none even with the
+                        -- player stood at it. It is also what exempts the device
+                        -- from the radar's range, so the red one and the one
+                        -- drawn past the range are the same device by
+                        -- construction rather than by two rules agreeing.
                         _minigame_state_by_unit[unit] = MISSION_OBJECTIVE_MINIGAME_WAITING
                     end
                 end
@@ -1843,6 +1871,19 @@ return function(env)
         local enabled = _any_mission_objective_kind_enabled()
 
         if enabled then
+            table_clear(_scratch_world_marker_units)
+
+            -- Read here, at the head of the frame, rather than in the objective
+            -- pass that used to own it: the puzzle state below is derived from
+            -- it and runs first, and reading last frame's answer would colour a
+            -- device a scan behind the game.
+            --
+            -- Guarded rather than called outright: a scan must not fail because
+            -- one helper is missing, and without the list the filters that use
+            -- it simply do not run.
+            _world_marker_units_available = _refresh_world_marker_units ~= nil
+                and _refresh_world_marker_units(_scratch_world_marker_units) == true
+
             _refresh_minigame_states()
         end
 
@@ -2236,12 +2277,6 @@ return function(env)
     -- left an unused hacking device drawn for the rest of the mission once its
     -- event had finished.
     local _scratch_inactive_objective_units = {}
-    -- Bare objective steps -- the train controls destroyed to stop the train --
-    -- carry no completion state anywhere: not an interactee, no health, in no
-    -- system at all, and their own target extension never changes a field. The
-    -- game's own world marker is the only thing that goes away when one is
-    -- finished, so it stands in for the signal the unit does not have.
-    local _scratch_world_marker_units = {}
     -- Latched for the mission rather than rebuilt each scan. "No unit of this
     -- objective has a marker" is ambiguous: it means either that the list does
     -- not describe this objective, or that every one of its units is finished.
@@ -2257,7 +2292,6 @@ return function(env)
     -- showing the steps of an objective the list genuinely says nothing about.
     local _objective_first_active_t = {}
     local OBJECTIVE_MARKER_SETTLE_SECONDS = 2
-    local _world_marker_units_available = false
 
     function _is_unit_of_inactive_objective(unit)
         return _scratch_inactive_objective_units[unit] == true
@@ -2275,14 +2309,6 @@ return function(env)
         table_clear(_scratch_objective_has_start_marker)
         table_clear(_scratch_start_marker_by_unit)
         table_clear(_scratch_growth_objective_units)
-
-        table_clear(_scratch_world_marker_units)
-
-        -- Guarded rather than called outright: a scan must not fail outright
-        -- because one helper is missing, and without the list the filter simply
-        -- does not run.
-        _world_marker_units_available = _refresh_world_marker_units ~= nil
-            and _refresh_world_marker_units(_scratch_world_marker_units) == true
 
         if type(extension_map) ~= "table" then
             return
@@ -2431,10 +2457,20 @@ return function(env)
         local range_squared = GROWTH_EYE.range_squared
         local limit = GROWTH_EYE.candidate_limit
         local count = 0
+        -- Counted whether or not anything matches. Silence is ambiguous between
+        -- "no tentacles standing here" and "this machine cannot see the
+        -- destructible system at all", and only the second is a defect.
+        local seen_destructibles = 0
+        local is_server = nil
 
         for unit, extension in pairs(extension_map) do
-            if count >= limit then
-                break
+
+            if type(extension) == "table" then
+                seen_destructibles = seen_destructibles + 1
+
+                if is_server == nil then
+                    is_server = rawget(extension, "_is_server")
+                end
             end
 
             -- Nav gates are the level's monster wall volumes: numerous, never a
@@ -2448,7 +2484,7 @@ return function(env)
                         local dy = anchor_y[i] - y
                         local dz = anchor_z[i] - z
 
-                        if dx * dx + dy * dy + dz * dz <= range_squared then
+                        if dx * dx + dy * dy + dz * dz <= range_squared and count < limit then
                             count = count + 1
                             units[count] = unit
                             xs[count] = x
@@ -2580,6 +2616,38 @@ return function(env)
                         _debug_unit_position_text(member)
                     ))
                 end
+            end
+        end
+
+        -- One line that says what this machine can see, logged whether or not a
+        -- tentacle was found. Everything the host/client question needs is here:
+        -- `server` says which side this is, `destructibles` whether the system
+        -- is populated at all, `near` whether the eyes reach this machine,
+        -- `registered` whether the shape can be matched here, and `standing`
+        -- follows a tentacle being worn down. Keyed on the whole tuple, so it
+        -- reports each distinct state once rather than every scan.
+        if mod:get("debug_mode") == true then
+            local standing_groups = 0
+
+            for _ in pairs(carrier) do
+                standing_groups = standing_groups + 1
+            end
+
+            local key = string_format("growth_scan:%s|%d|%d|%d|%d", tostring(is_server),
+                seen_destructibles, count, GROWTH_EYE.group_next, standing_groups)
+
+            if not GROWTH_EYE.logged[key] then
+                GROWTH_EYE.logged[key] = true
+
+                _log_once(key, string_format(
+                    "Growth tentacle scan: mission=%s server=%s destructibles=%d near=%d registered=%d standing=%d",
+                    tostring(_safe_mission_name()),
+                    tostring(is_server),
+                    seen_destructibles,
+                    count,
+                    GROWTH_EYE.group_next,
+                    standing_groups
+                ))
             end
         end
 
@@ -3091,20 +3159,74 @@ return function(env)
                 do
                     local owner_text = owner_count > 0 and table_concat(owners, ",", 1, owner_count)
                         or "<none>"
+                    -- Why it is not tracked, for a unit the objective scan could
+                    -- have claimed. Knowing that the game marks something the
+                    -- radar does not is only half an answer; the gate that
+                    -- dropped it is the other half, and reading it off a run
+                    -- beats guessing at one of six.
+                    local gates = ""
+                    local target_map = _safe_unit_to_extension_map(MISSION_OBJECTIVE_TARGET_SYSTEM)
+                    local target_extension = type(target_map) == "table" and target_map[unit] or nil
+
+                    if target_extension ~= nil then
+                        local objective_name = _safe_objective_target_name(target_extension)
+                        local interactee_map = _safe_unit_to_extension_map("interactee_system")
+                        local interactee = type(interactee_map) == "table" and interactee_map[unit] or nil
+                        local interactee_active, interactee_used = nil, nil
+
+                        -- The same two getters the classifier itself calls, and
+                        -- through pcall for the same reason.
+                        if type(interactee) == "table" then
+                            -- Assigned in a branch rather than with `and`/`or`:
+                            -- `false` is the answer being looked for here, and
+                            -- `ok and value or nil` turns it into nil.
+                            if type(interactee.active) == "function" then
+                                local ok, value = pcall(interactee.active, interactee)
+
+                                if ok then
+                                    interactee_active = value
+                                end
+                            end
+
+                            if type(interactee.used) == "function" then
+                                local ok, value = pcall(interactee.used, interactee)
+
+                                if ok then
+                                    interactee_used = value
+                                end
+                            end
+                        end
+
+                        gates = string_format(
+                            " objective=%s objective_active=%s retired=%s inactive_set=%s actionable=%s"
+                                .. " start_marker=%s interactee_active=%s interactee_used=%s",
+                            tostring(objective_name),
+                            tostring(objective_name ~= nil
+                                and _scratch_active_objective_names[objective_name] == true),
+                            tostring(_is_mission_objective_unit_retired(unit)),
+                            tostring(_scratch_inactive_objective_units[unit] == true),
+                            tostring(_scratch_objective_actionable_by_unit[unit]),
+                            tostring(_scratch_start_marker_by_unit[unit] == true),
+                            tostring(interactee_active),
+                            tostring(interactee_used)
+                        )
+                    end
+
                     local key = "untracked_marker:" .. tostring(marker.type) .. "|" .. owner_text
-                        .. "|" .. tostring(_safe_health_alive(unit))
+                        .. "|" .. tostring(_safe_health_alive(unit)) .. "|" .. gates
 
                     if not _untracked_marker_probe_seen[key] then
                         _untracked_marker_probe_seen[key] = true
                         _untracked_marker_probe_logs_left = _untracked_marker_probe_logs_left - 1
 
                         _log_once(key, string_format(
-                            "Untracked world marker: mission=%s type=%s owners=%s health_alive=%s position=%s",
+                            "Untracked world marker: mission=%s type=%s owners=%s health_alive=%s position=%s%s",
                             mission_text,
                             tostring(marker.type),
                             owner_text,
                             tostring(_safe_health_alive(unit)),
-                            _debug_unit_position_text(unit)
+                            _debug_unit_position_text(unit),
+                            gates
                         ))
                     end
                 end

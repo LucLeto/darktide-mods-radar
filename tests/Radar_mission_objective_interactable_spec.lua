@@ -4,7 +4,6 @@ local TRACKING_PATH = "Radar/scripts/mods/Radar/Radar_tracking.lua"
 local MISSION_OBJECTIVE_SETTING_BY_KIND = {
     mission_objective_scanner = "show_mission_objective_scanner",
     mission_objective_hacking = "show_mission_objective_hacking",
-    mission_objective_console = "show_mission_objective_console",
     mission_objective_servo_skull = "show_mission_objective_servo_skull",
     mission_objective_other = "show_mission_objective_other",
     mission_objective_growth = "show_mission_objective_growth",
@@ -64,7 +63,6 @@ local function new_harness()
         enable_radar = true,
         show_mission_objective_scanner = "icon_only",
         show_mission_objective_hacking = "icon_only",
-        show_mission_objective_console = "icon_only",
         show_mission_objective_servo_skull = "icon_only",
         show_mission_objective_other = "icon_only",
         show_mission_objective_growth = "icon_only",
@@ -1195,16 +1193,20 @@ test("a solved device keeps its marker in the shared tint", function()
     harness:add_to_system("mission_objective_target_system", unit, { _objective_name = "repeat_objective" })
     harness:add_to_system("minigame_system", unit, minigame)
     harness:set_active_objective_names({ "repeat_objective" })
+    -- Red is the game asking for a player, so the game has to be asking.
+    harness:set_world_marker_units({ unit })
     harness:scan()
     assert_equal("waiting", harness:tracked_minigame_state(unit), "a running puzzle must ask for a player")
 
     minigame._minigame._current_state = "complete"
+    harness:set_world_marker_units({})
     harness:scan()
     assert_equal("mission_objective_hacking", harness:tracked_kind(unit), "a solved device must stay marked")
     assert_nil(harness:tracked_minigame_state(unit), "a solved device must fall back to the shared tint")
 
     -- The objective arms the same device for its second round.
     minigame._minigame._current_state = "gameplay"
+    harness:set_world_marker_units({ unit })
     harness:scan()
     assert_equal("waiting", harness:tracked_minigame_state(unit), "an armed device must ask for a player again")
 
@@ -1271,6 +1273,8 @@ test("a running puzzle reports whether it needs a player", function()
         _active = true,
         _minigame = { _current_state = "gameplay" },
     })
+    -- The game is asking for the unattended one; the other already has somebody.
+    harness:set_world_marker_units({ unattended })
     harness:scan()
 
     assert_equal("mission_objective_hacking", harness:tracked_kind(unattended), "the kind must not change with state")
@@ -1306,6 +1310,7 @@ test("a puzzle state follows the device through its whole life", function()
     assert_nil(harness:tracked_minigame_state(unit), "an unstarted puzzle must carry no state colour")
 
     minigame._minigame._current_state = "gameplay"
+    harness:set_world_marker_units({ unit })
     harness:scan()
     assert_equal("waiting", harness:tracked_minigame_state(unit), "a started puzzle must ask for a player")
 
@@ -1319,6 +1324,7 @@ test("a puzzle state follows the device through its whole life", function()
     assert_equal("waiting", harness:tracked_minigame_state(unit), "it must ask again when abandoned part-way")
 
     minigame._minigame._current_state = "complete"
+    harness:set_world_marker_units({})
     harness:scan()
     assert_equal("mission_objective_hacking", harness:tracked_kind(unit), "a solved puzzle keeps its marker")
     assert_nil(harness:tracked_minigame_state(unit), "and falls back to the shared tint")
@@ -2920,6 +2926,251 @@ test("an unselected scannable does not ignore the scan range", function()
     assert_nil(harness:tracked_kind(spare), "an unselected scannable must not be marked")
     assert_equal(false, harness.env._objective_ignores_radar_range(spare),
         "an unselected scannable must obey the scan range")
+end)
+
+-- Silence would otherwise be ambiguous between "no tentacles here" and "this
+-- machine cannot see the destructible system at all". Only the second is a
+-- defect, and it is the one a non-host client run has to rule out.
+test("a growth event reports what this machine can see, tentacles or not", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local barrel = { name = "barrel", position = { x = 9, y = 0, z = 0 }, health_alive = true }
+
+    harness:add_to_system("destructible_system", barrel, { _is_server = false })
+    harness:scan()
+
+    assert_contains(harness:log_text(), "Growth tentacle scan:", "the scan reports nothing at all")
+    assert_contains(harness:log_text(), "server=false destructibles=1",
+        "the report does not say which side this is, or does not count what it can see")
+    assert_contains(harness:log_text(), "registered=0", "the report claims a tentacle that was never matched")
+end)
+
+test("the report follows a tentacle from registration to its last eye", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:scan()
+    assert_contains(harness:log_text(), "registered=1 standing=1", "a matched tentacle is not reported")
+
+    for i = 1, #eyes do
+        harness:remove_from_system("destructible_system", eyes[i])
+    end
+
+    harness:scan()
+
+    assert_contains(harness:log_text(), "registered=1 standing=0",
+        "a cleared tentacle is not distinguishable from one that was never there")
+end)
+
+-- The candidate cap bounds the pairwise match, not the count of what is
+-- visible: a machine seeing nothing must be distinguishable from one seeing a
+-- great deal, however many it can match.
+test("the report counts every destructible, not just the ones it matched", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    for i = 1, 80 do
+        harness:add_to_system("destructible_system",
+            { name = "far_" .. i, position = { x = 400 + i, y = 0, z = 0 }, health_alive = true },
+            { _is_server = true })
+    end
+
+    harness:scan()
+
+    assert_contains(harness:log_text(), "destructibles=80", "the report undercounts what this machine can see")
+    assert_contains(harness:log_text(), "near=0", "distant breakables were counted as near the event")
+end)
+
+-- Power Matrix, three Data Interrogators on one objective. A repaired one does
+-- not report itself repaired: its puzzle goes back to `gameplay` with nobody
+-- attached, which by state alone reads exactly like a fresh breakdown. Confirmed
+-- from a run where the first interrogator sat in that state for the rest of the
+-- event and turned red again the moment the second one broke.
+local function add_interrogator(harness, objective_name)
+    local unit = harness:add_interactee({ interaction_type = "decoder_device" })
+    local minigame = { _active = false, _minigame = { _current_state = "none" } }
+
+    harness:add_to_system("decoder_device_system", unit)
+    harness:add_to_system("mission_objective_target_system", unit, { _objective_name = objective_name })
+    harness:add_to_system("minigame_system", unit, minigame)
+
+    return unit, minigame
+end
+
+test("a repaired interrogator does not turn red when the next one breaks", function()
+    local harness = new_harness()
+    local first, first_game = add_interrogator(harness, "decrypt")
+    local second, second_game = add_interrogator(harness, "decrypt")
+
+    harness:set_active_objective_names({ "decrypt" })
+    harness:scan()
+
+    assert_nil(harness:tracked_minigame_state(first), "a healthy interrogator carries no state colour")
+    assert_nil(harness:tracked_minigame_state(second), "a healthy interrogator carries no state colour")
+
+    -- The first breaks down: the game starts asking for a player.
+    first_game._minigame._current_state = "gameplay"
+    harness:set_world_marker_units({ first })
+    harness:scan()
+
+    assert_equal("waiting", harness:tracked_minigame_state(first), "a broken interrogator must ask for a player")
+    assert_nil(harness:tracked_minigame_state(second), "the other interrogator must be untouched")
+
+    -- A player repairs it. Its puzzle stays in `gameplay` afterwards, which is
+    -- the whole trap; what changes is that the game stops asking.
+    first_game._active = true
+    harness:scan()
+    assert_equal("active", harness:tracked_minigame_state(first), "a puzzle being solved must report active")
+
+    first_game._active = false
+    harness:set_world_marker_units({})
+    harness:scan()
+    assert_nil(harness:tracked_minigame_state(first),
+        "a repaired interrogator must fall back to the shared tint")
+
+    -- The second breaks down later. The first must not follow it into red.
+    second_game._minigame._current_state = "gameplay"
+    harness:set_world_marker_units({ second })
+    harness:scan()
+
+    assert_equal("waiting", harness:tracked_minigame_state(second), "the newly broken one must ask for a player")
+    assert_nil(harness:tracked_minigame_state(first),
+        "a repaired interrogator must not inherit the next one's red state")
+end)
+
+-- The red one and the one drawn past the radar's range are the same device by
+-- construction: both are "the game is asking for this one".
+test("only the interrogator the game is asking for ignores the scan range", function()
+    local harness = new_harness()
+    local broken, broken_game = add_interrogator(harness, "decrypt")
+    local repaired, repaired_game = add_interrogator(harness, "decrypt")
+
+    -- Repaired: still in `gameplay`, nobody attached, and unmarked.
+    repaired_game._minigame._current_state = "gameplay"
+    broken_game._minigame._current_state = "gameplay"
+
+    harness:set_active_objective_names({ "decrypt" })
+    harness:set_world_marker_units({ broken })
+    harness:scan()
+
+    assert_equal("waiting", harness:tracked_minigame_state(broken), "the broken one must be red")
+    assert_nil(harness:tracked_minigame_state(repaired), "the repaired one must not be red")
+    assert_equal(true, harness.env._objective_ignores_radar_range(broken),
+        "the interrogator the game is asking for must ignore the scan range")
+    assert_equal(false, harness.env._objective_ignores_radar_range(repaired),
+        "a repaired interrogator must obey the scan range")
+end)
+
+-- Yellow is per device and does not need the game's marker: a player being at
+-- the device is a fact about that device alone, and the game drops its marker
+-- while somebody is interacting.
+test("a puzzle being solved stays yellow without the game's marker", function()
+    local harness = new_harness()
+    local unit, minigame = add_interrogator(harness, "decrypt")
+
+    minigame._minigame._current_state = "gameplay"
+    minigame._active = true
+
+    harness:set_active_objective_names({ "decrypt" })
+    harness:set_world_marker_units({})
+    harness:scan()
+
+    assert_equal("active", harness:tracked_minigame_state(unit),
+        "a puzzle with a player at it must stay yellow while the marker is away")
+end)
+
+-- The colour is read at the head of the frame, so it must not be a scan behind
+-- the game's own marker.
+test("a breakdown is coloured on the same scan the game marks it", function()
+    local harness = new_harness()
+    local unit, minigame = add_interrogator(harness, "decrypt")
+
+    harness:set_active_objective_names({ "decrypt" })
+    harness:scan()
+
+    minigame._minigame._current_state = "gameplay"
+    harness:set_world_marker_units({ unit })
+    harness:scan()
+
+    assert_equal("waiting", harness:tracked_minigame_state(unit),
+        "the red state lags the game's marker by a scan")
+end)
+
+-- With no readable marker list there is nothing to base red on, and a device
+-- must not be coloured on a guess.
+test("an unreadable marker list leaves a puzzle in the shared tint", function()
+    local harness = new_harness()
+    local unit, minigame = add_interrogator(harness, "decrypt")
+
+    minigame._minigame._current_state = "gameplay"
+
+    harness:set_active_objective_names({ "decrypt" })
+    harness:set_world_marker_units(nil)
+    harness:scan()
+
+    assert_equal("mission_objective_hacking", harness:tracked_kind(unit), "the device must still be marked")
+    assert_nil(harness:tracked_minigame_state(unit), "an unreadable list must not colour a device red")
+end)
+
+-- Knowing the game marks something the radar does not is only half an answer.
+-- Power Matrix had an objective-marked elevator target that Radar dropped, and
+-- the probe could say it was dropped but not which of six gates did it.
+test("an untracked objective marker reports the gate that dropped it", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    local unit = harness:add_interactee({ active = false })
+
+    harness:add_to_system("mission_objective_target_system", unit, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_list({ { unit = unit, type = "objective" } })
+    harness:set_world_marker_units({ unit })
+    harness:wait_for_marker_settle()
+    harness:scan()
+
+    local log = harness:log_text()
+
+    assert_contains(log, "Untracked world marker:", "the untracked marker is not reported")
+    assert_contains(log, "objective=objective_a", "the report does not name the objective")
+    assert_contains(log, "objective_active=true", "the report does not say whether the objective is live")
+    assert_contains(log, "interactee_active=false",
+        "the report does not name the interactee gate that dropped it")
+end)
+
+-- A marker on a unit that is in no objective system at all has no gates to
+-- report, and the probe must not invent any.
+test("an untracked marker outside the objective system reports no gates", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    local stranger = { name = "stranger", position = { x = 5, y = 0, z = 0 } }
+
+    harness:set_world_marker_list({ { unit = stranger, type = "interaction" } })
+    harness:set_world_marker_units({})
+    harness:wait_for_marker_settle()
+    harness:scan()
+
+    local log = harness:log_text()
+
+    assert_contains(log, "Untracked world marker:", "the untracked marker is not reported")
+
+    if string.find(log, "objective_active=", 1, true) then
+        error("the probe reported objective gates for a unit in no objective system")
+    end
 end)
 
 local failures = {}

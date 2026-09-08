@@ -407,10 +407,6 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
         icon = "content/ui/materials/icons/pocketables/hud/auspex_scanner",
         icon_colour = RadarColorSettings.vanilla_objective_color,
     },
-    show_mission_objective_console = {
-        icon = "content/ui/materials/icons/system/settings/category_video",
-        icon_colour = RadarColorSettings.vanilla_objective_color,
-    },
     show_mission_objective_servo_skull = {
         icon = "content/ui/materials/icons/abilities/default",
         icon_colour = RadarColorSettings.vanilla_objective_color,
@@ -1904,7 +1900,6 @@ return {
                             "nearby_highlight_distance_text_mission_objective"),
                         _icon_distance_off_dropdown("show_mission_objective_scanner", "icon_only"),
                         _icon_distance_off_dropdown("show_mission_objective_hacking", "icon_only"),
-                        _icon_distance_off_dropdown("show_mission_objective_console", "icon_only"),
                         _icon_distance_off_dropdown("show_mission_objective_servo_skull", "icon_only"),
                         _icon_distance_off_dropdown("show_mission_objective_growth", "icon_only"),
                         _icon_distance_off_dropdown("show_mission_objective_other", "icon_only"),

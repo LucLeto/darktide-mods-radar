@@ -1217,7 +1217,6 @@ return function(env)
         martyr_skull_riddle_interactable = 0.12,
         mission_objective_scanner = 0.12,
         mission_objective_hacking = 0.12,
-        mission_objective_console = 0.12,
         mission_objective_servo_skull = 0.12,
         mission_objective_other = 0.12,
         mission_objective_growth = 0.12,

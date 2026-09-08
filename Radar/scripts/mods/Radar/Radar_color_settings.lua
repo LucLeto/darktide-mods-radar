@@ -725,12 +725,6 @@ _add_marker({
     supports_highlight = true,
 })
 _add_marker({
-    kind = "mission_objective_console",
-    anchor = "show_mission_objective_console",
-    default = VANILLA_OBJECTIVE,
-    supports_highlight = true,
-})
-_add_marker({
     kind = "mission_objective_servo_skull",
     anchor = "show_mission_objective_servo_skull",
     default = VANILLA_OBJECTIVE,

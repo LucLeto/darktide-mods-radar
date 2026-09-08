@@ -23,7 +23,7 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 - Adds optional nearby screen-space highlight brackets for supported non-enemy marker groups, with configurable thickness, per-marker highlight colors, and optional distance labels on the screen highlight, the radar marker, or both.
 - Adds optional remaining-charge annotations for Medicae Stations and deployed Ammo Crates, plus a scaled healing-radius ring for deployed Medical Crates.
 - Adds dedicated **Martyr's Skull riddle interactable** markers for supported mission-specific keys, levers, switches, buttons, and related puzzle controls. Markers clear automatically when individual steps are used or the riddle is completed.
-- Adds **Mission Objective Interactable** markers for the world interactions that drive mission progression, split into **Scanner targets**, **Hacking terminals**, **Consoles**, **Servo skull objectives**, and **Other objective interactions**, each with its own **Icon only**, **Icon + Distance m**, and **Off** display mode and icon. Markers come from the game's own objective systems rather than from what the HUD happens to be drawing, so a step appears as soon as it becomes relevant instead of only once you are close enough for the interaction prompt, and clears again the moment it is completed.
+- Adds **Mission Objective Interactable** markers for the world interactions that drive mission progression, split into **Scanner targets**, **Hacking terminals**, **Servo skull objectives**, **Daemonic growth**, and **Other objective interactions**, each with its own **Icon only**, **Icon + Distance m**, and **Off** display mode and icon. Markers come from the game's own objective systems rather than from what the HUD happens to be drawing, so a step appears as soon as it becomes relevant instead of only once you are close enough for the interaction prompt, and clears again the moment it is completed.
 - Adds dedicated **Expedition POI** support for numbered **Sites of Interest**, **Deadsider Sanctuaries**, **Data Reliquary Harvesters**, **Main Objective**, **Valkyrie Extraction Zone**, and **Valkyrie Arrival Zone**, with per-category **Icon only**, **Icon + Distance m**, and **Off** display modes. Player-marked navigation POIs show an evenly divided ring containing the slot colors of up to four marking players.
 - Supports tech-remnant loot modes for **Default**, **Scale by value**, and **Merge nearby piles**, plus optional cluster value text and radius tuning.
 - Includes optional distance text for bosses, player tags, nearby marker highlights, and expedition POIs, per-enemy-category vertical arrow toggles, **Infinite** boss and teammate range modes, **debug logs**, and an **unknown pickups** toggle for discovery and troubleshooting.
@@ -344,7 +344,7 @@ Each major option group now includes an **Icon size (%)** slider. These sliders 
 | Collectable Materials | Diamantine and Plasteel |
 | Primary Objective Items | Mission luggables and primary objective pickups |
 | Secondary Objective Items | Grimoires and Scriptures |
-| Mission Objective Interactables | Scanner targets, hacking terminals, consoles, servo skull objectives, and other objective interaction points |
+| Mission Objective Interactables | Scanner targets, hacking terminals, servo skull objectives, daemonic growth, and other objective interaction points |
 | Expeditions POI | Sites of Interest, sanctuaries, harvesters, main objective, extraction, and arrival markers |
 | Expeditions-Specific Items | Salvage, Tech-Remnants, expedition pocketables, and related expedition pickups |
 | Martyr's Skull Items | Martyr's Skull markers, riddle interactables, and related power cell markers |
@@ -409,7 +409,7 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Collectable Materials | Highlights nearby diamantine and plasteel. |
 | Primary Objective Items | Highlights nearby mission luggables and main objective pickups. |
 | Secondary Objective Items | Highlights nearby grimoires and scriptures. |
-| Mission Objective Interactables | Highlights nearby scanner targets, hacking terminals, consoles, and other active objective interaction points. Servo skull objectives are excluded because the game already draws its own on-screen marker for them. |
+| Mission Objective Interactables | Highlights nearby scanner targets, hacking terminals, and other active objective interaction points. Servo skull objectives are excluded because the game already draws its own on-screen marker for them. |
 | Expeditions-Specific Items | Highlights nearby salvage, tech-remnants, expedition pocketables, and related expedition pickups. |
 | Martyr's Skull Items | Highlights nearby Martyr's Skull items, riddle interactables, and orange power cell markers. |
 | Environment | Highlights nearby medicae stations, power sockets, heretic idols, and hazard barrels. |
@@ -505,7 +505,6 @@ above/below** is set to: an objective a floor up is exactly what you need to see
 | Mission Objective Interactables | Option group | Groups the icon-size, nearby-highlight, distance-text, and per-category display mode controls. |
 | Scanner targets | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls scanning targets tied to the current mission objective. |
 | Hacking terminals | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls hacking terminals and decoding spots tied to the current mission objective. |
-| Consoles | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls consoles and control machines used for mission progression. |
 | Servo skull objectives | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls the mission servo skull while you follow it. Its position updates at the configured **Marker update rate** rather than the slower pickup rate, since it moves. It gets no nearby highlight bracket and needs a larger height difference than other markers before a vertical arrow appears, because it hovers and bobs in flight. |
 | Daemonic growth | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls the daemonic growth targets of a purge event. Has its own icon and color rather than the shared objective tint. |
 | Other objective interactions | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls the remaining objective-bound interaction points, such as switches, buttons, and mission-scripted interactions that do not fall into the categories above. |
@@ -812,7 +811,6 @@ Player tags intentionally stay flatter and cleaner than supported item markers. 
 | --- | --- | --- |
 | Scanner targets | Scan zone selection | The Auspex targets the active scan zone selected for this run, dropped individually as each one is scanned. |
 | Hacking terminals | Decoder device system | Decoder and hacking terminals used for mission progression. A puzzle device is red while it is running unattended, yellow while a player is at it, and the shared objective tint both before it starts and once it is solved. The marker stays until the objective ends. |
-| Consoles | Objective interaction type | Consoles and control machines used for mission progression. |
 | Servo skull objectives | Servo skull interaction | The mission servo skull while you follow it. |
 | Daemonic growth | Objective target system | Growth steps of a purge event, matched on the objective name suffix so every mission running the event is covered. Its own category with its own display mode, color and icon. |
 | Other objective interactions | Objective target system | The remaining objective-bound interaction points of the active objective, such as switches, buttons, and destructible steps. Destructibles clear one at a time as each is broken, rather than all at once when the objective ends. |
