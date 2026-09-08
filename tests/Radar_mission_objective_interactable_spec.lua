@@ -2305,9 +2305,9 @@ test("a pair of breakables is not a tentacle", function()
     assert_equal(0, #marked_eyes(harness, eyes), "two breakables must not be read as a tentacle")
 end)
 
--- A destroyed eye stays in the destructible map, so the shape survives and only
--- the marker moves. Without this the tentacle would leave the radar after the
--- first eye and abandon two live ones.
+-- The tentacle is what the marker belongs to, not the eye carrying it. This
+-- covers an eye retired by health alone; the case that actually happens in game,
+-- where the eye leaves the destructible system, is below.
 test("the tentacle marker outlives its first destroyed eyes", function()
     local harness = new_harness()
 
@@ -2473,8 +2473,8 @@ test("found tentacles are named in debug mode", function()
 
     harness:scan()
 
-    assert_contains(harness:log_text(), "Growth tentacle found:", "the tentacle is not reported")
-    assert_contains(harness:log_text(), "eyes=3", "the report does not say how many eyes were found")
+    assert_contains(harness:log_text(), "Growth tentacle standing:", "the tentacle is not reported")
+    assert_contains(harness:log_text(), "eyes=3", "the report does not say how many eyes are standing")
 end)
 
 -- The report is scaffolding, not part of the marker, so a normal run stays
@@ -2690,6 +2690,155 @@ test("disabling growth markers clears the tentacle exemption", function()
 
     assert_equal(false, harness.env._objective_has_world_marker(exempt),
         "a disabled kind must not leave an exemption behind")
+end)
+
+-- The way the game actually retires an eye: it leaves the destructible system.
+-- That is what used to end the tentacle at the first kill, because the shape
+-- test then had only two units left to match and gave up on all of them.
+test("a tentacle survives its eyes leaving the destructible system", function()
+    local harness = new_harness()
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:scan()
+    assert_equal(1, #marked_eyes(harness, eyes), "three standing eyes must show one marker")
+
+    harness:remove_from_system("destructible_system", marked_eyes(harness, eyes)[1])
+    harness:scan()
+    assert_equal(1, #marked_eyes(harness, eyes), "two standing eyes must still show the marker")
+
+    harness:remove_from_system("destructible_system", marked_eyes(harness, eyes)[1])
+    harness:scan()
+    assert_equal(1, #marked_eyes(harness, eyes), "the last standing eye must still show the marker")
+
+    harness:remove_from_system("destructible_system", marked_eyes(harness, eyes)[1])
+    harness:scan()
+    assert_equal(0, #marked_eyes(harness, eyes), "the tentacle must leave the radar with its last eye")
+end)
+
+-- Destroying an eye that is not the one carrying the marker must change nothing
+-- at all.
+test("destroying a tentacle's other eyes does not move its marker", function()
+    local harness = new_harness()
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:scan()
+
+    local carrier = marked_eyes(harness, eyes)[1]
+
+    -- One at a time, so that a rule picking the last standing eye rather than
+    -- the first is visible: with two eyes left, those are different units.
+    for i = 1, #eyes do
+        if eyes[i] ~= carrier then
+            harness:remove_from_system("destructible_system", eyes[i])
+            harness:scan()
+
+            local marked = marked_eyes(harness, eyes)
+
+            assert_equal(1, #marked, "the tentacle must keep exactly one marker")
+            assert_equal(carrier, marked[1], "the marker must stay on the eye already carrying it")
+        end
+    end
+end)
+
+-- A worn-down tentacle can no longer be matched by shape, so a fresh one at the
+-- same spawn point must not be able to adopt what is left of it.
+test("a new tentacle does not adopt a cleared one's last eye", function()
+    local harness = new_harness()
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local old_eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 }, { name = "old" })
+
+    harness:scan()
+
+    -- Two of the three gone: the survivor is still standing but its tentacle can
+    -- never be re-matched.
+    local survivor = marked_eyes(harness, old_eyes)[1]
+
+    for i = 1, #old_eyes do
+        if old_eyes[i] ~= survivor then
+            harness:remove_from_system("destructible_system", old_eyes[i])
+        end
+    end
+
+    -- A replacement lands close enough that a shape match could reach across.
+    local new_eyes = add_tentacle(harness, { x = 12.2, y = 0, z = 0 }, { name = "new" })
+
+    harness:scan()
+
+    assert_equal(1, #marked_eyes(harness, old_eyes), "the survivor must keep its own marker")
+    assert_equal(1, #marked_eyes(harness, new_eyes), "the new tentacle must get its own marker")
+end)
+
+-- The remaining eye count is what a run needs in order to show the tentacle
+-- being worn down rather than only that it was found.
+test("a tentacle reports its remaining eyes as they are destroyed", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:scan()
+    harness:remove_from_system("destructible_system", marked_eyes(harness, eyes)[1])
+    harness:scan()
+
+    assert_contains(harness:log_text(), "eyes=3", "the full tentacle was not reported")
+    assert_contains(harness:log_text(), "eyes=2", "the worn tentacle was not reported")
+end)
+
+-- The scalar dump is blind to a reference, so it reported an extension that
+-- carries nothing but numbers. Whether the eyes name a shared parent is exactly
+-- the question the grouping would rather be answered by, so the probe has to be
+-- able to see one.
+test("the destructible probe reports references, not only numbers", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    local corruptor = add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+    local parent = { name = "tentacle_parent" }
+    local eye = { name = "eye", position = { x = 12, y = 0, z = 0 }, health_alive = true }
+
+    harness:add_to_system("destructible_system", eye, { _broadphase_id = 7, _parent_unit = parent })
+    harness:wait_for_marker_settle()
+    harness:scan()
+
+    assert_contains(harness:log_text(), "Destructible state:", "the probe did not run")
+    assert_contains(harness:log_text(), "links:", "the probe reports no references at all")
+    assert_contains(harness:log_text(), "_parent_unit=table", "a reference field was not named")
+end)
+
+-- Named and rendered, so the same parent seen from two eyes can be recognised
+-- as the same parent rather than merely as two fields of the same name.
+test("a reference is rendered, not only typed", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local shared = {}
+    local first = { name = "first", position = { x = 12, y = 0, z = 0 }, health_alive = true }
+    local second = { name = "second", position = { x = 12.1, y = 0, z = 0 }, health_alive = true }
+
+    harness:add_to_system("destructible_system", first, { _parent_unit = shared })
+    harness:add_to_system("destructible_system", second, { _parent_unit = shared })
+    harness:wait_for_marker_settle()
+    harness:scan()
+
+    local rendered = tostring(shared)
+
+    assert_contains(harness:log_text(), rendered,
+        "the probe does not render a reference, so two eyes cannot be told to share one")
 end)
 
 local failures = {}

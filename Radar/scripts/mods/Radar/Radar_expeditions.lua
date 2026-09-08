@@ -2342,7 +2342,19 @@ return function(env)
         x = {},
         y = {},
         z = {},
-        alive = {},
+        -- Indices of a candidate cluster while it is being matched.
+        found = {},
+        -- A tentacle survives its own eyes leaving the destructible system, so
+        -- which units made it up is remembered rather than re-derived. All of
+        -- this lives for the mission and is bounded by the event's spawn points:
+        -- nine tentacles across a run, three units each.
+        group_of = {},
+        member_units = {},
+        member_group = {},
+        member_count = 0,
+        group_next = 0,
+        group_standing = {},
+        group_carrier = {},
         -- Keyed by position, so each tentacle reports itself once.
         logged = {},
         -- The tentacles of a growth the game is currently pointing at.
@@ -2406,7 +2418,6 @@ return function(env)
         local xs = GROWTH_EYE.x
         local ys = GROWTH_EYE.y
         local zs = GROWTH_EYE.z
-        local alive = GROWTH_EYE.alive
         local range_squared = GROWTH_EYE.range_squared
         local limit = GROWTH_EYE.candidate_limit
         local count = 0
@@ -2433,10 +2444,6 @@ return function(env)
                             xs[count] = x
                             ys[count] = y
                             zs[count] = z
-                            -- A destroyed eye stays in the destructible map, so
-                            -- the shape is measured against every eye of the
-                            -- prefab and only the marker moves.
-                            alive[count] = _safe_health_alive(unit) ~= false
 
                             break
                         end
@@ -2446,63 +2453,122 @@ return function(env)
         end
 
         local link_squared = GROWTH_EYE.link_squared
-        local neighbours_needed = GROWTH_EYE.cluster_size - 1
+        local members_needed = GROWTH_EYE.cluster_size
+        local group_of = GROWTH_EYE.group_of
+        local member_units = GROWTH_EYE.member_units
+        local member_group = GROWTH_EYE.member_group
+        local found = GROWTH_EYE.found
 
+        -- Register a tentacle the first time its whole prefab is standing here.
+        -- A destroyed eye leaves the destructible system, so the shape can only
+        -- be recognised while all three are present; from then on the tentacle
+        -- is remembered by the units it was made of rather than re-derived from
+        -- what is left, which is what used to drop the marker at the first kill.
+        --
+        -- Eyes already belonging to a tentacle are excluded from both ends of
+        -- the match, so a new tentacle at a spawn point one has just been
+        -- cleared from cannot absorb the remains of its predecessor.
         for i = 1, count do
-            if alive[i] then
+            if group_of[units[i]] == nil then
                 local x = xs[i]
                 local y = ys[i]
                 local z = zs[i]
-                local neighbours = 0
-                local lowest = true
+                local found_count = 1
+
+                found[1] = i
 
                 for j = 1, count do
-                    if j ~= i then
+                    if j ~= i and group_of[units[j]] == nil then
                         local dx = xs[j] - x
                         local dy = ys[j] - y
                         local dz = zs[j] - z
 
                         if dx * dx + dy * dy + dz * dz <= link_squared then
-                            neighbours = neighbours + 1
-
-                            if alive[j] and (dx < 0 or (dx == 0 and (dy < 0 or (dy == 0 and dz < 0)))) then
-                                lowest = false
-                            end
+                            found_count = found_count + 1
+                            found[found_count] = j
                         end
                     end
                 end
 
-                if lowest and neighbours >= neighbours_needed then
-                    -- Confirmed by the live objective these sit inside, not by
-                    -- the target system, which has never heard of them.
-                    _claim_mission_objective_unit(units[i], "mission_objective_growth", enabled_by_kind,
-                        seen_units, true)
+                if found_count >= members_needed then
+                    local group = GROWTH_EYE.group_next + 1
+                    local member_count = GROWTH_EYE.member_count
 
-                    -- Only while the game is marking the growth, and only for
-                    -- the tentacles of that growth. A breakable the event is not
-                    -- running on is never in this set.
-                    if growth_marked then
-                        GROWTH_EYE.range_exempt[units[i]] = true
+                    GROWTH_EYE.group_next = group
+
+                    for k = 1, found_count do
+                        local member = units[found[k]]
+
+                        member_count = member_count + 1
+                        member_units[member_count] = member
+                        member_group[member_count] = group
+                        group_of[member] = group
                     end
 
-                    -- Names each tentacle the shape found, so a run can be read
-                    -- against the destructible probe's own list rather than
-                    -- against what happened to appear on the radar.
-                    if mod:get("debug_mode") == true then
-                        local position_text = _debug_unit_position_text(units[i])
-                        local key = "growth_tentacle:" .. position_text
+                    GROWTH_EYE.member_count = member_count
+                end
+            end
+        end
 
-                        if not GROWTH_EYE.logged[key] then
-                            GROWTH_EYE.logged[key] = true
+        local standing = GROWTH_EYE.group_standing
+        local carrier = GROWTH_EYE.group_carrier
 
-                            _log_once(key, string_format(
-                                "Growth tentacle found: mission=%s eyes=%d position=%s",
-                                tostring(_safe_mission_name()),
-                                neighbours + 1,
-                                position_text
-                            ))
-                        end
-                    end
+        table_clear(standing)
+        table_clear(carrier)
+
+        -- An eye's own entry in the destructible system is what says it is still
+        -- there: a destroyed one is gone from the map. The unit and health
+        -- checks cover a game that retires one without removing it.
+        for k = 1, GROWTH_EYE.member_count do
+            local member = member_units[k]
+
+            if extension_map[member] ~= nil
+                and _safe_unit_alive(member)
+                and _safe_health_alive(member) ~= false then
+                local group = member_group[k]
+
+                standing[group] = (standing[group] or 0) + 1
+
+                if carrier[group] == nil then
+                    carrier[group] = k
+                end
+            end
+        end
+
+        -- One marker per tentacle, carried by the first of its eyes still
+        -- standing. Registration order is fixed for the life of the tentacle, so
+        -- the marker moves only when the eye carrying it is destroyed, and the
+        -- tentacle leaves the radar only when its last eye does.
+        for group, k in pairs(carrier) do
+            local member = member_units[k]
+
+            -- Confirmed by the live objective these sit inside, not by the
+            -- target system, which has never heard of them.
+            _claim_mission_objective_unit(member, "mission_objective_growth", enabled_by_kind,
+                seen_units, true)
+
+            -- Only while the game is marking the growth, and only for the
+            -- tentacles of that growth. A breakable the event is not running on
+            -- is never in this set.
+            if growth_marked then
+                GROWTH_EYE.range_exempt[member] = true
+            end
+
+            -- Reported per tentacle and per remaining eye count, so a run shows
+            -- each one being worn down rather than only that it was found.
+            if mod:get("debug_mode") == true then
+                local key = "growth_tentacle:" .. group .. "|" .. standing[group]
+
+                if not GROWTH_EYE.logged[key] then
+                    GROWTH_EYE.logged[key] = true
+
+                    _log_once(key, string_format(
+                        "Growth tentacle standing: mission=%s tentacle=%d eyes=%d position=%s",
+                        tostring(_safe_mission_name()),
+                        group,
+                        standing[group],
+                        _debug_unit_position_text(member)
+                    ))
                 end
             end
         end
@@ -2695,6 +2761,11 @@ return function(env)
         table_clear(GROWTH_EYE.units)
         table_clear(GROWTH_EYE.logged)
         table_clear(GROWTH_EYE.range_exempt)
+        table_clear(GROWTH_EYE.group_of)
+        table_clear(GROWTH_EYE.member_units)
+        table_clear(GROWTH_EYE.member_group)
+        GROWTH_EYE.member_count = 0
+        GROWTH_EYE.group_next = 0
         table_clear(_scratch_world_marker_units)
         table_clear(_objective_world_marker_seen)
         table_clear(_objective_first_active_t)
@@ -2766,6 +2837,7 @@ return function(env)
         target_field_limit = 20,
         target_budget = 40,
         destructible_left = 30,
+        destructible_link_limit = 10,
         destructible_seen = {},
     }
 
@@ -3399,6 +3471,41 @@ return function(env)
                         local count = _debug_collect_scalars(extension, scratch, 0)
 
                         fields = " fields:" .. table_concat(scratch, " ", 1, count)
+
+                        -- Everything the scalar dump skips. A parent unit, if
+                        -- one exists, is a userdata reference and would never
+                        -- have appeared above, which is why the first pass at
+                        -- this looked like the extension carried nothing but
+                        -- numbers. Rendered as well as named, so three eyes of
+                        -- one tentacle pointing at the same parent can be seen
+                        -- to be pointing at the same parent.
+                        table_clear(scratch)
+
+                        local link_count = 0
+
+                        for field, value in pairs(extension) do
+                            if link_count >= PROBE.destructible_link_limit then
+                                break
+                            end
+
+                            local value_type = type(value)
+
+                            if value_type ~= "number" and value_type ~= "string"
+                                and value_type ~= "boolean" and value_type ~= "function" then
+                                -- Through pcall: this walks fields the mod knows
+                                -- nothing about, and a __tostring of the game's
+                                -- own that raised would take the scan with it.
+                                local ok, rendered = pcall(tostring, value)
+
+                                link_count = link_count + 1
+                                scratch[link_count] = tostring(field) .. "=" .. value_type
+                                    .. "(" .. (ok and tostring(rendered) or "?") .. ")"
+                            end
+                        end
+
+                        if link_count > 0 then
+                            fields = fields .. " links:" .. table_concat(scratch, " ", 1, link_count)
+                        end
                     end
 
                     _log_once(key, string_format(

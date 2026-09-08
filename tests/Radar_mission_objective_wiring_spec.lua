@@ -793,9 +793,32 @@ end
 check(expeditions_source:find("cluster_size = 3,", 1, true) ~= nil,
     "a tentacle carries three eyes")
 
+-- A tentacle outlives its own eyes. The shape can only be matched while all
+-- three are standing, because a destroyed one leaves the destructible system
+-- entirely, so the tentacle has to be remembered by the units it was made of
+-- instead of re-derived every scan from whatever is left.
+check(expeditions_source:find("group_of[units[i]] == nil", 1, true) ~= nil
+    and expeditions_source:find("group_of[member] = group", 1, true) ~= nil,
+    "tentacle eyes are not registered to a tentacle, so the marker dies with the first eye")
+-- Both ends of the match, or a new tentacle at a cleared spawn point could
+-- absorb the remains of its predecessor.
+check(expeditions_source:find("if j ~= i and group_of[units[j]] == nil then", 1, true) ~= nil,
+    "an eye already belonging to a tentacle can be matched into another one")
+-- Presence in the destructible system is the liveness signal, since that is how
+-- the game retires an eye.
+check(expeditions_source:find("if extension_map[member] ~= nil", 1, true) ~= nil,
+    "a tentacle's eyes are not checked against the destructible system itself")
+-- The marker rides the first eye still standing in registration order, so it
+-- moves only when the eye carrying it is destroyed. Checked against the source:
+-- registration order is hash order, so a rule taking the last standing eye
+-- instead agrees with this one whenever the carrier happens to be last, and a
+-- behavioural test cannot be relied on to tell them apart.
+check(expeditions_source:find("if carrier[group] == nil then", 1, true) ~= nil,
+    "the tentacle marker hops to another eye whenever any of them is destroyed")
+
 -- Through the shared claim, so the retirement, liveness and health gates that
 -- every other objective marker passes apply to these too.
-check(expeditions_source:find('_claim_mission_objective_unit(units[i], "mission_objective_growth"', 1, true) ~= nil,
+check(expeditions_source:find('_claim_mission_objective_unit(member, "mission_objective_growth"', 1, true) ~= nil,
     "tentacle eyes must be claimed through the shared choke point, not tracked directly")
 
 -- Last of the passes: these units are in no objective system, so they must not
@@ -827,7 +850,7 @@ check(expeditions_source:find(
 check(expeditions_source:find("return GROWTH_EYE.range_exempt[unit] == true", 1, true) ~= nil,
     "growth tentacles cannot inherit their corruptor's exemption")
 check(expeditions_source:find("if growth_marked then", 1, true) ~= nil
-    and expeditions_source:find("GROWTH_EYE.range_exempt[units[i]] = true", 1, true) ~= nil,
+    and expeditions_source:find("GROWTH_EYE.range_exempt[member] = true", 1, true) ~= nil,
     "tentacles are exempted without checking that the game is marking their growth")
 -- Cleared before the pass can return early, so a finished growth cannot leave
 -- its tentacles exempt.
