@@ -250,6 +250,13 @@ local function new_harness()
     env._reset_dark_rites_marker_scan_cache = function()
     end
 
+    -- Lives in the runtime helpers, which this harness does not install. Stubbed
+    -- rather than guarded at the call site: a guard would also swallow the name
+    -- being wrong, and then the probe's budget would never refill between
+    -- missions with nothing to show for it.
+    env._reset_screen_highlight_anchor_probe = function()
+    end
+
     install(EXPEDITIONS_PATH, env)
     install(TRACKING_PATH, env)
 

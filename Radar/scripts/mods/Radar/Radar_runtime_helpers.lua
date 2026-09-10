@@ -14,6 +14,7 @@ return function(env)
     local math_floor = math.floor
     local math_huge = math.huge
     local math_max = math.max
+    local math_min = math.min
     local math_rad = math.rad
     local math_sqrt = math.sqrt
     local math_tan = math.tan
@@ -1760,14 +1761,211 @@ return function(env)
         return near_size + (far_size - near_size) * t
     end
 
+    -- Where the bracket takes its anchor from, and how far that is from the unit
+    -- itself. There are three sources, best first: the game's own interaction
+    -- marker for this unit, the unit's `ui_interaction_marker` node, and failing
+    -- both, the unit's origin -- which on a large prop is its pivot, usually on
+    -- the floor rather than on the panel a player has to aim at.
+    --
+    -- Scan targets cannot reach the first: a run of Archivum Sycorax produced no
+    -- interaction marker for any of them, and six of its fifteen scannables carry
+    -- no interactee extension at all, which is where a `ui_interaction_marker`
+    -- node would come from. So which of the other two they land on decides
+    -- whether the bracket is usable, and nothing recorded it.
+    --
+    -- Reported once per unit per outcome: what is being looked for is a target
+    -- whose bracket sits away from the thing being aimed at, which is a property
+    -- of the unit rather than of the moment.
+    -- Budgeted per kind, not just in total. A flat budget of 60 was spent in the
+    -- first ninety seconds of a run by ammo, crates and barrels -- the kinds that
+    -- are everywhere and were never the question -- and the scan targets that
+    -- were the question appeared ninety seconds after it ran out. A per kind
+    -- share means a kind that turns up late still gets reported.
+    local SCREEN_HIGHLIGHT_ANCHOR_PROBE = {
+        budget = 150,
+        per_kind = 6,
+        left = 150,
+        used_by_kind = {},
+        seen = {},
+    }
+
+    function _reset_screen_highlight_anchor_probe()
+        SCREEN_HIGHLIGHT_ANCHOR_PROBE.left = SCREEN_HIGHLIGHT_ANCHOR_PROBE.budget
+        table_clear(SCREEN_HIGHLIGHT_ANCHOR_PROBE.used_by_kind)
+        table_clear(SCREEN_HIGHLIGHT_ANCHOR_PROBE.seen)
+    end
+
+    -- Formatted here rather than borrowed from the objective module: this file
+    -- is installed before that one, and a probe should not be the thing that
+    -- couples them.
+    local function _anchor_position_text(vec)
+        local x, y, z = _vector3_components(vec)
+
+        if x == nil then
+            return "nil"
+        end
+
+        return string.format("%.3f,%.3f,%.3f", x, y, z)
+    end
+
+    function _debug_probe_screen_highlight_anchor(unit, kind, node_position, z_offset)
+        if SCREEN_HIGHLIGHT_ANCHOR_PROBE.left <= 0 or unit == nil
+            or mod:get("debug_mode") ~= true then
+            return
+        end
+
+        -- Only fetched here, so the draw path keeps the single lookup it had:
+        -- without the node it already reads the origin, and with one it never
+        -- needs to.
+        local origin_position = _safe_unit_position(unit)
+
+        if origin_position == nil then
+            return
+        end
+
+        -- Whether the best source was available at all. It needs an interaction
+        -- marker the game is currently drawing, which is what scan targets lack.
+        local markers_by_unit = mod.get_interaction_world_markers_by_unit
+            and mod:get_interaction_world_markers_by_unit() or nil
+        local vanilla_marker = type(markers_by_unit) == "table" and markers_by_unit[unit] ~= nil
+        local kind_text = tostring(kind)
+        -- What actually places the bracket, which is not the anchor: the game's
+        -- own marker when it is drawing one, and otherwise the fallback -- the
+        -- box centre for an objective, the origin for everything else. The
+        -- first version of this probe reported only the anchor, and so said
+        -- `node` for props whose bracket was in fact on their origin.
+        local box_center = nil
+
+        if kind_text:sub(1, 18) == "mission_objective_" then
+            box_center = _safe_unit_box_center(unit)
+        end
+
+        local placed_by = vanilla_marker and "vanilla" or (box_center ~= nil and "box" or "origin")
+        local source = node_position ~= nil and "node" or "origin"
+        local gap = nil
+
+        if node_position ~= nil then
+            gap = math_sqrt(math_max(_distance_squared(node_position, origin_position), 0))
+        end
+
+        local key = "highlight_anchor:" .. kind_text .. "|" .. placed_by .. "|" .. source
+            .. "|" .. tostring(vanilla_marker) .. "|" .. _anchor_position_text(origin_position)
+
+        if SCREEN_HIGHLIGHT_ANCHOR_PROBE.seen[key] then
+            return
+        end
+
+        -- Checked after the seen-set, so a repeat costs a kind nothing.
+        local used_by_kind = SCREEN_HIGHLIGHT_ANCHOR_PROBE.used_by_kind
+        local used = used_by_kind[kind_text] or 0
+
+        if used >= SCREEN_HIGHLIGHT_ANCHOR_PROBE.per_kind then
+            return
+        end
+
+        SCREEN_HIGHLIGHT_ANCHOR_PROBE.seen[key] = true
+        used_by_kind[kind_text] = used + 1
+        SCREEN_HIGHLIGHT_ANCHOR_PROBE.left = SCREEN_HIGHLIGHT_ANCHOR_PROBE.left - 1
+
+        _log_once(key, string.format(
+            "Highlight anchor: mission=%s kind=%s placed_by=%s vanilla_marker=%s box=%s anchor=%s gap=%s"
+                .. " z_offset=%s origin=%s node=%s",
+            tostring(_safe_mission_name()),
+            kind_text,
+            placed_by,
+            tostring(vanilla_marker),
+            _anchor_position_text(box_center),
+            source,
+            gap ~= nil and string.format("%.2f", gap) or "nil",
+            string.format("%.2f", z_offset or 0),
+            _anchor_position_text(origin_position),
+            _anchor_position_text(node_position)
+        ))
+
+        -- Only an objective the box could not place is still an open question.
+        _debug_report_anchor_candidates(unit, kind_text, placed_by, origin_position)
+    end
+
+    -- What else this unit could be anchored on. Only for an objective that fell
+    -- back to its origin, which is the case with no answer yet: a scan target
+    -- carries neither the game's own marker nor a `ui_interaction_marker` node,
+    -- so the bracket lands on the prefab root, and on a wall-mounted terminal
+    -- that is not where the mesh is.
+    --
+    -- Everything here is guarded by its own existence check and wrapped in
+    -- pcall. This walks engine functions the mod has never called, and a probe
+    -- must not be the thing that takes a mission down.
+    function _debug_report_anchor_candidates(unit, kind_text, source, origin_position)
+        if source ~= "origin" or kind_text:sub(1, 18) ~= "mission_objective_" then
+            return
+        end
+
+        local unit_api = Unit
+
+        if unit_api == nil then
+            return
+        end
+
+        local parts = {}
+        local count = 0
+
+        -- Whether the engine will give bounds at all, and what shape the answer
+        -- has. A bracket wants the middle of what it is framing, and bounds are
+        -- the only thing that knows where that is.
+        for _, name in ipairs({ "box", "local_box", "bounding_volume", "num_nodes", "node_name" }) do
+            count = count + 1
+            parts[count] = name .. "=" .. (unit_api[name] ~= nil and "yes" or "no")
+        end
+
+        local num_nodes = nil
+
+        if unit_api.num_nodes ~= nil then
+            local ok, value = pcall(unit_api.num_nodes, unit)
+
+            if ok and type(value) == "number" then
+                num_nodes = value
+                count = count + 1
+                parts[count] = "nodes=" .. tostring(value)
+            end
+        end
+
+        -- Each node as an offset from the origin, so a node sitting on the part
+        -- a player has to aim at is visible as a number rather than guessed at
+        -- by name.
+        if num_nodes ~= nil and unit_api.world_position ~= nil then
+            local ox, oy, oz = _vector3_components(origin_position)
+
+            for index = 0, math_max(math_min(num_nodes - 1, 11), 0) do
+                local ok, node_world = pcall(unit_api.world_position, unit, index)
+                local nx, ny, nz = _vector3_components(ok and node_world or nil)
+
+                if nx ~= nil and ox ~= nil then
+                    count = count + 1
+                    parts[count] = string.format("n%d=%+.2f,%+.2f,%+.2f", index, nx - ox, ny - oy, nz - oz)
+                end
+            end
+        end
+
+        _log_once("anchor_candidates:" .. kind_text .. "|" .. _anchor_position_text(origin_position),
+            string.format(
+                "Highlight anchor candidates: mission=%s kind=%s origin=%s %s",
+                tostring(_safe_mission_name()),
+                kind_text,
+                _anchor_position_text(origin_position),
+                table.concat(parts, " ", 1, count)
+            ))
+    end
+
     function _screen_highlight_anchor_position(target, interactee_extension_map)
         local unit = target and target.unit or nil
         local position = target and target.position
 
         local anchor_position = nil
+        local node_position = nil
 
         if unit then
-            anchor_position = _safe_unit_node_position(unit, "ui_interaction_marker") or _safe_unit_position(unit)
+            node_position = _safe_unit_node_position(unit, "ui_interaction_marker")
+            anchor_position = node_position or _safe_unit_position(unit)
         end
 
         if not anchor_position and not position then
@@ -1787,6 +1985,8 @@ return function(env)
             z_offset = z_offset + 0.8
         end
 
+        _debug_probe_screen_highlight_anchor(unit, target.kind, node_position, z_offset)
+
         return {
             x = anchor_position.x,
             y = anchor_position.y,
@@ -1794,12 +1994,70 @@ return function(env)
         }
     end
 
+    -- The centre of the unit's oriented bounding box. A prefab's root is wherever
+    -- its author put the pivot, which on a wall-mounted terminal is the mounting
+    -- point rather than the panel, and a highlight bracket wants the middle of
+    -- what it frames. `Unit.box` returns the box's pose and half extents and the
+    -- pose's translation is its centre -- the same call, and the same reason,
+    -- the Strikemap mod uses to centre its door bars on the leaf instead of the
+    -- hinge.
+    --
+    -- Engine functions the mod has not relied on before, so each is checked for
+    -- existence and called through pcall, and any failure is simply "no box":
+    -- the caller keeps the origin it would have used anyway.
+    function _safe_unit_box_center(unit)
+        if not _safe_unit_alive(unit) then
+            return nil
+        end
+
+        local unit_api = Unit
+        local box = unit_api and unit_api.box
+        local matrix_api = Matrix4x4
+        local translation = matrix_api and matrix_api.translation
+
+        if not box or not translation then
+            return nil
+        end
+
+        local ok_box, pose = pcall(box, unit)
+
+        if not ok_box or pose == nil then
+            return nil
+        end
+
+        local ok_center, center = pcall(translation, pose)
+
+        if not ok_center or center == nil then
+            return nil
+        end
+
+        return _copy_vector3(center)
+    end
+
+    -- Where the bracket is actually placed whenever the game is not drawing its
+    -- own interaction marker for the unit -- which for a scan target is always.
+    -- The anchor above only feeds the occlusion test on the path where that
+    -- marker exists; it never positions the bracket.
     function _screen_highlight_projection_fallback_position(target)
         local unit = target and target.unit or nil
+        local kind = target and target.kind or nil
         local position = nil
 
         if unit then
-            position = _safe_unit_position(unit)
+            -- Objectives are framed on the middle of the prop. Pickups keep their
+            -- origin on purpose (#103): their `ui_interaction_marker` floats above
+            -- the item where the prompt goes, and with no prompt showing a
+            -- bracket up there looks detached, so the lower anchor is right for
+            -- them. A scan target is the opposite case -- a wall terminal whose
+            -- root is its mounting point -- and the bracket sat above and beside
+            -- the panel the auspex had to be pointed at. All six scan targets of
+            -- an Archivum Sycorax run had neither the game's marker nor a node,
+            -- so this is the only thing that can place them.
+            if type(kind) == "string" and kind:sub(1, 18) == "mission_objective_" then
+                position = _safe_unit_box_center(unit)
+            end
+
+            position = position or _safe_unit_position(unit)
         end
 
         position = position or (target and target.position) or nil

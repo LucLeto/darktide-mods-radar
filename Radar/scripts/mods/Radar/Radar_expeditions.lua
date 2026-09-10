@@ -1448,12 +1448,15 @@ return function(env)
                 local nearest_label, nearest_distance_sq =
                     _nearest_martyr_skull_riddle_door_debug_point(mission_name, position)
                 local nearest_distance = nearest_distance_sq and math_sqrt(nearest_distance_sq) or nil
-                local key = string_format("martyr_skull_door_debug:%s|%s|%s|%s|%s",
+                -- Keyed on the door and the state it is in, not on when it
+                -- last changed: the timestamp made every transition a new key,
+                -- and one repeatedly cycling door produced 609 of a run's 1629
+                -- door lines. The timestamp stays in the message.
+                local key = string_format("martyr_skull_door_debug:%s|%s|%s|%s",
                     tostring(mission_name),
                     tostring(unit_name),
                     position_text,
-                    tostring(current_state),
-                    _debug_number_text(last_state_change)
+                    tostring(current_state)
                 )
 
                 _log_once(key, string_format(
@@ -2846,6 +2849,7 @@ return function(env)
         _reset_target_field_probe()
         _reset_untracked_marker_probe()
         _reset_destructible_probe()
+        _reset_rejection_probe()
         _reset_active_objective_probe()
         _reset_mission_objective_lifecycle()
         table_clear(_minigame_state_by_unit)
@@ -2937,7 +2941,38 @@ return function(env)
         destructible_left = 30,
         destructible_link_limit = 10,
         destructible_seen = {},
+        rejection_budget = 40,
+        rejection_left = 40,
+        rejection_seen = {},
+        -- Probe keys identify a unit by a number handed out here rather than by
+        -- its position. A servo skull flies, so a position in the key made it a
+        -- new unit on every scan: one of them took 59 of the marker probe's 80
+        -- line budget in a single mission and the probe then went silent for the
+        -- rest of it, two minutes before the next objective started.
+        unit_ids = {},
+        unit_id_next = 0,
     }
+
+    -- Declared beside PROBE rather than with the other resets: those sit above
+    -- it in the file, and a local is invisible there.
+    function _reset_rejection_probe()
+        PROBE.rejection_left = PROBE.rejection_budget
+        table_clear(PROBE.rejection_seen)
+        table_clear(PROBE.unit_ids)
+        PROBE.unit_id_next = 0
+    end
+
+    function _debug_unit_id(unit)
+        local id = PROBE.unit_ids[unit]
+
+        if id == nil then
+            id = PROBE.unit_id_next + 1
+            PROBE.unit_id_next = id
+            PROBE.unit_ids[unit] = id
+        end
+
+        return id
+    end
 
     local _marker_probe_logs_left = PROBE.marker_budget
     local _scratch_marker_probe_owners = {}
@@ -3281,7 +3316,9 @@ return function(env)
 
                 local count = _debug_collect_scalars(extension, fields, 0)
                 local position_text = _debug_unit_position_text(unit)
-                local key = "objective_target_fields:" .. position_text
+                -- Keyed on the unit, not on where it is standing: a moving one
+                -- reports its fields once rather than once per step.
+                local key = "objective_target_fields:" .. _debug_unit_id(unit)
 
                 if not _target_field_probe_seen[key] then
                     _target_field_probe_seen[key] = true
@@ -3435,7 +3472,7 @@ return function(env)
                 local objective_covered = objective_name ~= nil
                     and _objective_world_marker_seen[objective_name] == true
                 local position_text = _debug_unit_position_text(unit)
-                local key = "objective_marker:" .. position_text
+                local key = "objective_marker:" .. _debug_unit_id(unit)
                     .. "|" .. tostring(kind)
                     .. "|" .. tostring(objective_name)
                     .. "|" .. tostring(objective_active)
@@ -3694,20 +3731,42 @@ return function(env)
     -- from the interactee itself rather than read from a map that is empty at
     -- this point. Callers gate on debug mode, so the lookup only runs then.
     function _debug_log_rejected_mission_objective_marker(unit, extension, reason)
+        if PROBE.rejection_left <= 0 then
+            return
+        end
+
         local kind = _hidden_mission_objective_kind(extension, unit)
 
         if not kind then
             return
         end
 
-        local position_text = _debug_unit_position_text(unit)
+        -- `show_marker` is deliberately bypassed for objective kinds: the point
+        -- of the feature is to draw a step before its interaction prompt exists.
+        -- So that reason is a note about the game, not a drop, and the line used
+        -- to claim the opposite -- 425 times in one run, all of them the one
+        -- servo skull, for a marker that was on the radar the whole time.
+        local dropped = reason ~= "show_marker"
+        -- Keyed on the unit rather than where it is standing, so a moving one
+        -- reports each state once instead of once per step.
+        local key = "mission_objective_marker_rejected:" .. _debug_unit_id(unit)
+            .. "|" .. kind .. "|" .. reason
 
-        _log_once("mission_objective_marker_rejected:" .. kind .. "|" .. reason .. "|" .. position_text, string_format(
-            "Mission objective marker not shown: mission=%s kind=%s reason=%s position=%s unit_name=%s",
+        if PROBE.rejection_seen[key] then
+            return
+        end
+
+        PROBE.rejection_seen[key] = true
+        PROBE.rejection_left = PROBE.rejection_left - 1
+
+        _log_once(key, string_format(
+            "%s: mission=%s kind=%s reason=%s position=%s unit_name=%s",
+            dropped and "Mission objective marker dropped"
+                or "Mission objective marked before its prompt",
             tostring(_safe_mission_name()),
             kind,
             reason,
-            position_text,
+            _debug_unit_position_text(unit),
             tostring(_safe_unit_name(unit))
         ))
     end

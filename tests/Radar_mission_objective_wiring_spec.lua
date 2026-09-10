@@ -793,7 +793,12 @@ local function check_local_use_before_declaration(source, label)
 
         -- Only underscore-prefixed file locals; those are the ones this codebase
         -- uses for module state.
-        for name in line:gmatch("([_][_%w]*)") do
+        -- Underscore-prefixed names, and ALL-CAPS ones. The lint used to check
+        -- only the first, so a reset that touched the upper-case `PROBE` table
+        -- from above its declaration wrote a global and read nil at runtime --
+        -- caught by a spec, but only after it shipped into a build. Table fields
+        -- are rarely upper-case, so this widening costs no false positives here.
+        for name in line:gmatch("([_%u][_%w]*)") do
             local declared = declared_at[name]
 
             if declared and declared > line_number and not line:match("^%s*%-%-") then
@@ -971,6 +976,133 @@ check(actionable_filter ~= nil,
 check(expeditions_source:find("local game_marks_unit = _world_marker_units_available" .. LF
     .. "                    and _scratch_world_marker_units[unit] ~= nil", 1, true) ~= nil,
     "the marker override is not read per unit per scan from the game's own list")
+
+-- Probe keys must identify a thing, not a moment. Anything in a key that
+-- changes on its own -- a position for a unit that moves, a timestamp for a
+-- door that cycles -- mints a new key forever, which either floods the log or
+-- eats a budget and leaves the probe silent. A havoc run lost the marker probe
+-- two minutes before an objective started because one flying servo skull had
+-- taken 59 of its 80 lines, and one door wrote 609 of that run's 1629 door
+-- lines. Checked at the source: a spec cannot easily reach the door probe, and
+-- the starvation is invisible until the budget runs out.
+check(expeditions_source:find('local key = "objective_marker:" .. _debug_unit_id(unit)', 1, true) ~= nil,
+    "the marker probe keys on where a unit is standing, so a moving one starves it")
+check(expeditions_source:find('local key = "objective_target_fields:" .. _debug_unit_id(unit)', 1, true) ~= nil,
+    "the target field probe keys on where a unit is standing, so a moving one starves it")
+check(expeditions_source:find([==[rejected:" .. _debug_unit_id(unit)]==], 1, true) ~= nil,
+    "the rejection probe keys on where a unit is standing, so a moving one floods it")
+
+local door_key = expeditions_source:match(
+    'local key = string_format%("martyr_skull_door_debug:(.-)' .. LF .. "                %)")
+
+check(door_key ~= nil, "the door probe key is missing")
+check(door_key ~= nil and door_key:find("last_state_change", 1, true) == nil,
+    "the door probe keys on when the door last changed, so every cycle writes another line")
+
+-- Every budgeted probe needs its own seen-set, or the budget counts calls rather
+-- than distinct reports and empties on the first busy scan.
+-- The write, not just the read: without it the guard never trips, every scan
+-- spends budget on the same line, and the probe empties on the first busy one.
+check(expeditions_source:find("PROBE.rejection_seen[key] = true", 1, true) ~= nil
+    and expeditions_source:find("if PROBE.rejection_seen[key] then", 1, true) ~= nil
+    and expeditions_source:find("PROBE.rejection_left = PROBE.rejection_left - 1", 1, true) ~= nil,
+    "the rejection probe is budgeted without a record of what it has already said")
+
+-- The screen highlight bracket takes its anchor from one of three places, best
+-- first: the game's own interaction marker for the unit, the unit's
+-- `ui_interaction_marker` node, and failing both the unit's origin -- which on a
+-- large prop is its pivot, usually on the floor rather than on the part being
+-- aimed at. Scan targets cannot reach the first, so which of the other two they
+-- land on decides whether the bracket is usable, and nothing recorded it.
+local helpers_source = assert(io.open("Radar/scripts/mods/Radar/Radar_runtime_helpers.lua")):read("*a")
+
+check(helpers_source:find("function _debug_probe_screen_highlight_anchor", 1, true) ~= nil,
+    "the highlight anchor probe is missing")
+-- The node result has to be carried to the probe, or it can only guess which
+-- source won by repeating the lookup.
+check(helpers_source:find("node_position = _safe_unit_node_position(unit, \"ui_interaction_marker\")", 1, true) ~= nil
+    and helpers_source:find("anchor_position = node_position or _safe_unit_position(unit)", 1, true) ~= nil,
+    "the anchor no longer tells the probe which source it used")
+check(helpers_source:find("_debug_probe_screen_highlight_anchor(unit, target.kind, node_position, z_offset)",
+    1, true) ~= nil, "the highlight anchor probe is never called")
+-- Debug only and budgeted, with its own seen-set: this runs per highlighted
+-- target per frame, which is the most expensive place in the mod to be wrong.
+check(helpers_source:find("if SCREEN_HIGHLIGHT_ANCHOR_PROBE.left <= 0 or unit == nil" .. LF
+    .. '            or mod:get("debug_mode") ~= true then', 1, true) ~= nil,
+    "the highlight anchor probe is not gated on debug mode")
+-- Per kind, not just in total: a flat budget was spent by ammo and crates in the
+-- first ninety seconds of a run, and the scan targets it was added to observe
+-- turned up ninety seconds after it ran out.
+check(helpers_source:find("if used >= SCREEN_HIGHLIGHT_ANCHOR_PROBE.per_kind then", 1, true) ~= nil
+    and helpers_source:find("used_by_kind[kind_text] = used + 1", 1, true) ~= nil
+    and helpers_source:find("table_clear(SCREEN_HIGHLIGHT_ANCHOR_PROBE.used_by_kind)", 1, true) ~= nil,
+    "the highlight anchor probe has no per kind share, so a common kind starves a rare one")
+check(helpers_source:find("SCREEN_HIGHLIGHT_ANCHOR_PROBE.seen[key] = true", 1, true) ~= nil
+    and helpers_source:find("SCREEN_HIGHLIGHT_ANCHOR_PROBE.left = SCREEN_HIGHLIGHT_ANCHOR_PROBE.left - 1",
+        1, true) ~= nil,
+    "the highlight anchor probe is unbudgeted, so a highlighted target floods the log")
+-- The scan targets came back with no vanilla marker and no node, so the bracket
+-- sits on the prefab root. What else the unit offers is the open question, and
+-- this walks engine functions the mod has never called: every one is checked for
+-- existence and called through pcall, because a probe must not be the thing that
+-- takes a mission down.
+check(helpers_source:find("function _debug_report_anchor_candidates", 1, true) ~= nil,
+    "the anchor candidate probe is missing")
+check(helpers_source:find('if source ~= "origin" or kind_text:sub(1, 18) ~= "mission_objective_" then', 1, true) ~= nil,
+    "the anchor candidate probe is not restricted to objectives that fell back to their origin")
+check(helpers_source:find("pcall(unit_api.num_nodes, unit)", 1, true) ~= nil
+    and helpers_source:find("pcall(unit_api.world_position, unit, index)", 1, true) ~= nil,
+    "the anchor candidate probe calls engine functions without pcall")
+-- Refilled per mission, or a long session reports nothing after the first.
+check(tracking_source:find("_reset_screen_highlight_anchor_probe()", 1, true) ~= nil,
+    "the highlight anchor probe budget is never refilled")
+
+-- Every `math_`/`table_`/`string_` alias a file uses must also be declared in
+-- that file. An undeclared one is a nil call at runtime, and only on the path
+-- that uses it -- a probe added `math_min` to a module that had never aliased
+-- it, which no test would have reached until it ran in a mission.
+--
+-- The frontier pattern keeps `_table_size(` from reading as `table_size(`.
+local function check_declared_aliases(source, label)
+    local declared = {}
+
+    for name in source:gmatch("local ([a-z]+_[a-z]+) = [a-z]+%.[a-z]+") do
+        declared[name] = true
+    end
+
+    local reported = {}
+
+    for name in source:gmatch("%f[%w_]([a-z]+_[a-z]+)%(") do
+        local prefix = name:match("^([a-z]+)_")
+
+        if (prefix == "math" or prefix == "table" or prefix == "string")
+            and not declared[name] and not reported[name] then
+            reported[name] = true
+            check(false, label .. ": uses `" .. name .. "` without declaring it, which is a nil call at runtime")
+        end
+    end
+end
+
+check_declared_aliases(helpers_source, "Radar_runtime_helpers.lua")
+check_declared_aliases(expeditions_source, "Radar_expeditions.lua")
+check_declared_aliases(tracking_source, "Radar_tracking.lua")
+
+-- With no interaction marker from the game -- always the case for a scan target
+-- -- the bracket is placed on the fallback position, not the anchor. Objectives
+-- are framed on the centre of their box; everything else keeps the origin that
+-- #103 chose for pickups, whose node floats above them where the prompt goes.
+check(helpers_source:find("function _safe_unit_box_center(unit)", 1, true) ~= nil,
+    "the box centre helper is missing")
+check(helpers_source:find("local ok_box, pose = pcall(box, unit)", 1, true) ~= nil
+    and helpers_source:find("local ok_center, center = pcall(translation, pose)", 1, true) ~= nil,
+    "the box centre calls engine functions without pcall")
+check(helpers_source:find('if type(kind) == "string" and kind:sub(1, 18) == "mission_objective_" then' .. LF
+    .. "                position = _safe_unit_box_center(unit)", 1, true) ~= nil,
+    "the box centre is not restricted to objectives, so pickups lose the placement #103 gave them")
+check(helpers_source:find("            position = position or _safe_unit_position(unit)", 1, true) ~= nil,
+    "an objective with no usable box no longer falls back to its origin")
+
+check_local_use_before_declaration(helpers_source, "Radar_runtime_helpers.lua")
 
 check_local_use_before_declaration(expeditions_source, "Radar_expeditions.lua")
 check_local_use_before_declaration(tracking_source, "Radar_tracking.lua")

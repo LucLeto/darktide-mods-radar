@@ -1140,7 +1140,9 @@ test("the rejection log stays quiet unless debug mode is on", function()
 
     harness.settings.debug_mode = true
     harness:scan()
-    assert_contains(harness:log_text(), "Mission objective marker not shown", "the rejection log did not run")
+    -- A used device really is dropped, so it gets the drop wording.
+    assert_contains(harness:log_text(), "Mission objective marker dropped", "the rejection log did not run")
+    assert_contains(harness:log_text(), "reason=used", "the reason is not reported")
 end)
 
 -- A finished puzzle reports `complete` and then stops changing, while its
@@ -3288,6 +3290,136 @@ test("the override ends when the game drops its marker", function()
     harness:scan()
 
     assert_nil(harness:tracked_kind(platform), "the platform must go when the game stops marking it")
+end)
+
+-- A servo skull flies, and a probe key holding its position made it a new unit
+-- on every scan. One of them took 59 of the marker probe's 80 line budget in a
+-- single havoc mission; the probe then went silent two minutes before the next
+-- objective began, so nothing about that objective was recorded at all.
+test("a moving marker reports each state once, not each step", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    local unit = harness:add_interactee({ interaction_type = "servo_skull" })
+
+    harness:add_to_system("mission_objective_target_system", unit, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:wait_for_marker_settle()
+    harness:scan()
+
+    local after_first = harness:probe_calls()
+
+    for step = 1, 20 do
+        unit.position = { x = step, y = step, z = 0 }
+        harness:wait_for_marker_settle()
+        harness:scan()
+    end
+
+    assert_equal(after_first, harness:probe_calls(),
+        "a marker that only moved was logged again, which is what starved the probe")
+end)
+
+-- The state still has to be reported when it actually changes, or keying on the
+-- unit would have traded a spam problem for a blind one.
+test("a moving marker still reports a change of state", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    local unit = harness:add_interactee({ interaction_type = "decoder_device" })
+    local minigame = { _active = false, _minigame = { _current_state = "none" } }
+
+    harness:add_to_system("decoder_device_system", unit)
+    harness:add_to_system("mission_objective_target_system", unit, { _objective_name = "objective_a" })
+    harness:add_to_system("minigame_system", unit, minigame)
+    harness:set_active_objective_names({ "objective_a" })
+    harness:wait_for_marker_settle()
+    harness:scan()
+
+    local before = harness:probe_calls()
+
+    minigame._minigame._current_state = "gameplay"
+    harness:set_world_marker_units({ unit })
+    harness:wait_for_marker_settle()
+    harness:scan()
+
+    assert_equal(true, harness:probe_calls() > before, "a state change went unreported")
+end)
+
+-- Two units in the same state must not collapse into one line now that position
+-- is out of the key.
+test("two markers in the same state are reported separately", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    local first = harness:add_interactee()
+    local second = harness:add_interactee()
+
+    harness:add_to_system("mission_objective_target_system", first, { _objective_name = "objective_a" })
+    harness:add_to_system("mission_objective_target_system", second, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:wait_for_marker_settle()
+    harness:scan()
+
+    local log = harness:log_text()
+    local reported = 0
+
+    for _ in string.gmatch(log, "Objective marker state:") do
+        reported = reported + 1
+    end
+
+    assert_equal(2, reported, "two markers in the same state were collapsed into one report")
+end)
+
+-- `show_marker` is deliberately bypassed for objective kinds, so that reason is
+-- a note about the game rather than a drop. The line used to say the opposite,
+-- 425 times in one run, for a marker that was on the radar throughout.
+test("a bypassed prompt is not reported as a dropped marker", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    local unit = harness:add_interactee({ interaction_type = "decoder_device", show_marker = false })
+
+    harness:add_to_system("decoder_device_system", unit)
+    harness:scan()
+
+    local log = harness:log_text()
+
+    assert_contains(log, "Mission objective marked before its prompt",
+        "a bypassed prompt is not reported")
+    assert_equal("mission_objective_hacking", harness:tracked_kind(unit),
+        "and the marker is still drawn, which is what the wording has to say")
+
+    if string.find(log, "Mission objective marker dropped", 1, true) then
+        error("a bypassed prompt was reported as a dropped marker")
+    end
+end)
+
+-- Unbudgeted, this probe wrote 425 lines in one run.
+test("the rejection log is bounded", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    for i = 1, 60 do
+        local unit = harness:add_interactee({ interaction_type = "decoder_device", show_marker = false })
+
+        harness:add_to_system("decoder_device_system", unit)
+    end
+
+    harness:scan()
+
+    local reported = 0
+
+    for _ in string.gmatch(harness:log_text(), "Mission objective marked before its prompt") do
+        reported = reported + 1
+    end
+
+    assert_equal(true, reported > 0, "the rejection log reported nothing at all")
+    assert_equal(true, reported <= 40, "the rejection log is unbounded, it wrote " .. reported .. " lines")
 end)
 
 local failures = {}

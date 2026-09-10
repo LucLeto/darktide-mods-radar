@@ -2520,6 +2520,7 @@ return function(env)
         mod._martyr_skull_riddle_solved_by_mission = {}
         mod._martyr_skull_riddle_fallback_state_by_position = {}
         _reset_mission_objective_marker_state()
+        _reset_screen_highlight_anchor_probe()
         mod._last_safe_zone_section_index = nil
         mod._last_expedition_in_safe_zone = nil
         mod._player_smart_tag_generation = 0
