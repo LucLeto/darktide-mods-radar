@@ -812,7 +812,7 @@ Player tags intentionally stay flatter and cleaner than supported item markers. 
 | Scanner targets | Scan zone selection | The Auspex targets the active scan zone selected for this run, dropped individually as each one is scanned. |
 | Hacking terminals | Decoder device system | Decoder and hacking terminals used for mission progression. A puzzle device is red while it is running unattended, yellow while a player is at it, and the shared objective tint both before it starts and once it is solved. The marker stays until the objective ends. |
 | Servo skull objectives | Servo skull interaction | The mission servo skull while you follow it. |
-| Daemonic growth | Objective target system | Growth steps of a purge event, matched on the objective name suffix so every mission running the event is covered. Its own category with its own display mode, color and icon. |
+| Daemonic growth | Objective target system | Growth steps of a purge event, recognised by the three demolition targets the game files around the growth's centre eye rather than by the objective's name, so every mission running the event is covered. The tentacles, each three destructible eyes of one prefab, get one marker each; the demolition targets themselves are not drawn, as they stand under a metre from the centre eye. Its own category with its own display mode, color and icon. |
 | Other objective interactions | Objective target system | The remaining objective-bound interaction points of the active objective, such as switches, buttons, and destructible steps. Destructibles clear one at a time as each is broken, rather than all at once when the objective ends. |
 
 Each category has its own icon, drawn inside the diamond frame and backplate the game itself uses around

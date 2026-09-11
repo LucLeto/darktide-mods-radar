@@ -386,15 +386,31 @@ for i = 1, #KINDS do
         kind .. ": does not opt into the backplate")
 end
 
+-- A daemonic growth is recognised by the demolition targets it files around its
+-- centre eye. The objective name differs on every mission running the event,
+-- so a name list only ever covered the missions written into it.
+local growth_note = expeditions_source:match(
+    "function _note_growth_objective_target%(.-%)(.-)" .. LF .. "    end" .. LF)
+
+check(growth_note ~= nil
+    and growth_note:find('_safe_objective_target_field(extension, "_ui_target_type") ~= "demolition"', 1, true)
+        ~= nil,
+    "growth objectives are not recognised by their demolition targets")
+check(expeditions_source:find('_corruptor_event"', 1, true) == nil
+    and expeditions_source:find("string_sub(objective_name, -#suffix)", 1, true) == nil,
+    "growth objectives are matched on their name again")
+-- Remembered per objective name, which the next mission may reuse.
+check(expeditions_source:find("        table_clear(_growth_objective_by_name)", 1, true) ~= nil,
+    "a growth recognised in one mission carries into the next")
+-- The game marks a growth's demolition targets only to hang its pointers off
+-- them, under a metre from the centre eye. Its marker must not override the
+-- start-marker filter for them, or four markers stack on one spot.
+check(expeditions_source:find("                    and (not game_marks_unit" .. LF
+    .. '                        or _safe_objective_target_field(extension, "_ui_target_type") == "demolition") then',
+    1, true) ~= nil,
+    "the game's marker on a growth's demolition targets overrides the start-marker filter")
 -- Only the icon changes for a daemonic growth step, and the shared presentation
 -- table means an override has to be reset on every marker or it leaks.
-check(expeditions_source:find("MISSION_OBJECTIVE_GROWTH_NAME_SUFFIXES", 1, true) ~= nil,
-    "the growth objective name list is missing")
--- Anchored to the end of the name. Objective names are `objective_<mission>_<event>`,
--- so a suffix covers every mission running the event while matching strictly
--- less than a loose substring search would.
-check(expeditions_source:find("string_sub(objective_name, -#suffix) == suffix", 1, true) ~= nil,
-    "growth objectives are not matched on the name suffix")
 -- Growth is a marker kind of its own, so its icon, size and position live in its
 -- own presentation. Carried as an override on another kind's presentation, any
 -- per-icon property set for that kind reached the growth marker too.
@@ -958,9 +974,13 @@ end
 -- call point and the platform it takes you to under one objective, and only the
 -- call point claimed the start-marker flag, so the platform was dropped as an
 -- unused alternative while the game was drawing an objective marker on it.
+-- The one exception, a growth's demolition targets, is pinned where the stacking
+-- it prevents is described; the override itself must stay for everything else.
 local start_marker_filter = expeditions_source:find(
-    "if keep and not game_marks_unit" .. LF
-        .. "                    and _scratch_objective_has_start_marker", 1, true)
+    "if keep" .. LF
+        .. "                    and _scratch_objective_has_start_marker[objective_name] == true" .. LF
+        .. "                    and _scratch_start_marker_by_unit[unit] ~= true" .. LF
+        .. "                    and (not game_marks_unit" .. LF, 1, true)
 local actionable_filter = expeditions_source:find(
     "if keep and not game_marks_unit" .. LF
         .. "                    and has_actionable", 1, true)
@@ -1103,6 +1123,73 @@ check(helpers_source:find("            position = position or _safe_unit_positio
     "an objective with no usable box no longer falls back to its origin")
 
 check_local_use_before_declaration(helpers_source, "Radar_runtime_helpers.lua")
+
+-- The demolition probe is anchored on the objective's shape -- targets whose
+-- `_ui_target_type` is `demolition` -- rather than on the objective name, which
+-- differs on every mission running daemonic growth. It must not fall back on
+-- the name matcher, or it can only ever see the mission the matcher knows.
+local demolition_probe = expeditions_source:match(
+    "function _debug_probe_demolition_destructibles%(%)(.-)" .. LF .. "    end" .. LF)
+local demolition_report = expeditions_source:match(
+    "function _debug_report_demolition_destructible%(.-%)(.-)" .. LF .. "    end" .. LF)
+
+check(demolition_probe ~= nil, "the demolition probe is missing")
+check(demolition_report ~= nil, "the per-destructible demolition report is missing")
+
+if demolition_probe ~= nil then
+    check(demolition_probe:find('_safe_objective_target_field(extension, "_ui_target_type") == "demolition"',
+        1, true) ~= nil, "the demolition probe is not anchored on the demolition target type")
+    check(demolition_probe:find("_is_growth_objective_name", 1, true) == nil
+        and demolition_probe:find("_scratch_growth_objective_units", 1, true) == nil,
+        "the demolition probe depends on the growth name matcher, so it only sees Stockpile")
+    -- The host flag comes off an objective target, which a client carries, so an
+    -- empty destructible system on a client is still reported as a client.
+    check(demolition_probe:find('target_is_server = _safe_objective_target_field(extension, "_is_server")',
+        1, true) ~= nil, "the demolition probe cannot say it ran on a client when no destructible is visible")
+    -- `false` is the answer being looked for, and `a ~= nil and a or b` loses it.
+    check(demolition_probe:find("local server_flag = target_is_server" .. LF .. LF
+        .. "        if server_flag == nil then", 1, true) ~= nil,
+        "the host flag is chosen with an and/or expression, which turns a client's false into nil")
+    -- The summary has its own budget, so individual destructibles cannot spend it.
+    check(demolition_probe:find("PROBE.demolition_summary_seen[key] = true", 1, true) ~= nil
+        and demolition_probe:find("PROBE.demolition_summary_left = PROBE.demolition_summary_left - 1",
+            1, true) ~= nil,
+        "the demolition summary shares its budget, so a busy level can silence it")
+end
+
+if demolition_report ~= nil then
+    check(demolition_report:find("PROBE.demolition_seen[key] = true", 1, true) ~= nil
+        and demolition_report:find("PROBE.demolition_left = PROBE.demolition_left - 1", 1, true) ~= nil,
+        "the per-destructible demolition report is unbudgeted")
+    check(demolition_report:find("pcall(tostring, value)", 1, true) ~= nil,
+        "a nested reference is rendered without pcall")
+end
+
+check(expeditions_source:find("        _debug_probe_demolition_destructibles()", 1, true) ~= nil,
+    "the demolition probe is never called")
+check(expeditions_source:find("        _reset_demolition_probe()", 1, true) ~= nil,
+    "the demolition probe budget is never refilled between missions")
+
+-- A tentacle is three destructibles of one prefab. The level's own breakables
+-- near a growth can stand as close together as the eyes do, but not as three of
+-- one kind.
+check(expeditions_source:find("if _growth_eye_prefab(units[found[k]]) == prefab then", 1, true) ~= nil,
+    "a tentacle can be made of different prefabs, so decoration near a growth is drawn as one")
+check(expeditions_source:find("        table_clear(GROWTH_EYE.prefab_of)", 1, true) ~= nil,
+    "the prefab cache keeps unit references into the next mission")
+-- Compared for equality, so a per-unit stand-in would make every unit its own
+-- prefab and no tentacle could ever be found.
+check(helpers_source:find("function _safe_unit_prefab_name(unit)", 1, true) ~= nil
+    and (helpers_source:match("function _safe_unit_prefab_name%(unit%)(.-)" .. LF .. "    end" .. LF) or "")
+        :find("tostring(unit)", 1, true) == nil,
+    "the prefab read falls back to a per-unit stand-in")
+
+-- The marker type probe, which tells a vanilla objective marker from the prompt
+-- a player gets standing next to something.
+check(expeditions_source:find("        _debug_probe_objective_marker_types()", 1, true) ~= nil,
+    "the marker type probe is never called")
+check(expeditions_source:find("        _reset_marker_types_probe()", 1, true) ~= nil,
+    "the marker type probe budget is never refilled between missions")
 
 check_local_use_before_declaration(expeditions_source, "Radar_expeditions.lua")
 check_local_use_before_declaration(tracking_source, "Radar_tracking.lua")

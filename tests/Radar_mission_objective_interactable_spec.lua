@@ -219,6 +219,10 @@ local function new_harness()
         return unit and unit.name or nil
     end
 
+    env._safe_unit_prefab_name = function(unit)
+        return unit and unit.prefab or nil
+    end
+
     env._safe_unit_pickup_name = function(unit)
         return unit and unit.pickup_name or nil
     end
@@ -1946,76 +1950,200 @@ test("the active objective probe reports its own fields", function()
     assert_contains(harness:log_text(), "objective=corruptor_event", "the probe did not name the objective")
 end)
 
--- Objective names are `objective_<mission>_<event>`, so the event suffix covers
--- every mission that runs it without naming each one.
-test("a growth objective is matched in any mission", function()
-    local harness = new_harness()
-    local silo = { name = "silo_growth", position = { x = 1, y = 0, z = 0 }, health_alive = true }
-    local other_mission = { name = "rise_growth", position = { x = 2, y = 0, z = 0 }, health_alive = true }
+-- Three targets a fraction of a metre around a growth's centre eye, filed with
+-- `_ui_target_type` set to `demolition`. Every growth on Silo Cluster, Rise and
+-- Propaganda files them, and no other objective in 21 logs does.
+local function add_demolition_targets(harness, objective_name, position)
+    local targets = {}
 
-    harness:add_to_system("mission_objective_target_system", silo,
-        { _objective_name = "objective_dm_stockpile_corruptor_event" })
-    harness:add_to_system("mission_objective_target_system", other_mission,
-        { _objective_name = "objective_dm_rise_corruptor_event" })
-    harness:set_active_objective_names({
-        "objective_dm_stockpile_corruptor_event",
-        "objective_dm_rise_corruptor_event",
+    for i = 1, 3 do
+        local target = {
+            name = "growth_demolition_" .. tostring(i),
+            position = { x = position.x + 0.3 * i - 0.6, y = position.y + 0.2, z = position.z + 0.1 },
+        }
+
+        harness:add_to_system("mission_objective_target_system", target, {
+            _objective_name = objective_name,
+            _ui_target_type = "demolition",
+            _add_marker_on_objective_start = false,
+        })
+        targets[i] = target
+    end
+
+    return targets
+end
+
+-- A growth as every mission files it: the centre eye, which carries health and
+-- claims the start marker, and its demolition targets. `centre_type` covers
+-- Propaganda's first growth, whose centre eye is itself filed as a demolition
+-- target. Returns the centre, then the demolition targets.
+local function add_growth_site(harness, objective_name, position, centre_type)
+    local centre = { name = "growth_centre", position = position, health_alive = true }
+
+    harness:add_to_system("mission_objective_target_system", centre, {
+        _objective_name = objective_name,
+        _ui_target_type = centre_type or "default",
+        _add_marker_on_objective_start = true,
     })
-    harness:scan()
 
-    assert_equal("mission_objective_growth", harness:tracked_kind(silo), "the confirmed mission must match")
-    assert_equal("mission_objective_growth", harness:tracked_kind(other_mission),
-        "another mission running the same event must match without being listed")
+    return centre, add_demolition_targets(harness, objective_name, position)
+end
+
+-- The objective name differs on every mission running the event. Only the
+-- first of these was ever in the name list the icon used to depend on.
+test("a growth is recognised by its demolition targets on every mission", function()
+    for _, objective_name in ipairs({
+        "objective_dm_stockpile_corruptor_event",
+        "objective_dm_rise_demo_floor_one",
+        "objective_dm_propaganda_demolition_a",
+    }) do
+        local harness = new_harness()
+        local centre = add_growth_site(harness, objective_name, { x = 1, y = 0, z = 0 })
+
+        harness:set_active_objective_names({ objective_name })
+        harness:scan()
+
+        assert_equal("mission_objective_growth", harness:tracked_kind(centre),
+            objective_name .. ": the growth centre was not recognised")
+    end
 end)
 
--- Anchored to the end, so an objective that merely mentions the event elsewhere
--- in its name is not swept up.
-test("a name that only contains the event is not matched", function()
+-- Name-independent the other way too: Silo Cluster's objective name without the
+-- demolition targets is just an objective.
+test("an objective without demolition targets is not a growth, whatever it is called", function()
     local harness = new_harness()
-    local unrelated = { name = "unrelated", position = { x = 3, y = 0, z = 0 }, health_alive = true }
+    local step = { name = "step", position = { x = 3, y = 0, z = 0 }, health_alive = true }
 
-    harness:add_to_system("mission_objective_target_system", unrelated,
-        { _objective_name = "objective_dm_rise_corruptor_event_cleanup" })
-    harness:set_active_objective_names({ "objective_dm_rise_corruptor_event_cleanup" })
-    harness:scan()
-
-    assert_equal("mission_objective_other", harness:tracked_kind(unrelated),
-        "a name that only contains the event must not be matched")
-end)
-
--- An over-broad suffix must be visible in a debug run, not only in the markers
--- it silently changed.
-test("matched growth objectives are named in debug mode", function()
-    local harness = new_harness()
-    local growth = { name = "growth", position = { x = 4, y = 0, z = 0 }, health_alive = true }
-
-    harness.settings.debug_mode = true
-    harness:add_to_system("mission_objective_target_system", growth,
+    harness:add_to_system("mission_objective_target_system", step,
         { _objective_name = "objective_dm_stockpile_corruptor_event" })
     harness:set_active_objective_names({ "objective_dm_stockpile_corruptor_event" })
+    harness:scan()
+
+    assert_equal("mission_objective_other", harness:tracked_kind(step),
+        "an objective was recognised as a growth by its name")
+end)
+
+-- Which objectives were recognised must be visible in a debug run, not only in
+-- the icons it silently changed.
+test("recognised growth objectives are named in debug mode", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+    add_growth_site(harness, "objective_dm_rise_demo_floor_one", { x = 4, y = 0, z = 0 })
+    harness:set_active_objective_names({ "objective_dm_rise_demo_floor_one" })
     harness:scan()
 
     assert_contains(harness:log_text(), "Daemonic growth objective matched:", "the match is not reported")
-    assert_contains(harness:log_text(), "objective=objective_dm_stockpile_corruptor_event",
+    assert_contains(harness:log_text(), "objective=objective_dm_rise_demo_floor_one",
         "the report does not name the objective")
 end)
 
--- Daemonic growth steps are ordinary health-bearing targets, so only the
--- objective name distinguishes them. Confirmed from Silo Cluster.
-test("a daemonic growth step gets its own icon", function()
-    local harness = new_harness()
-    local growth = { name = "growth", position = { x = 1, y = 0, z = 0 }, health_alive = true }
+-- The pass that recognises a growth is the same one collecting its targets, and
+-- it meets them in the table's order. A centre met before any demolition
+-- target must still be a growth on that same scan. Repeated, so both orders
+-- are met.
+test("a growth is recognised on its first scan whichever target comes first", function()
+    for attempt = 1, 40 do
+        local harness = new_harness()
+        local centre = add_growth_site(harness, "objective_dm_rise_demo_floor_one", { x = 1, y = 0, z = 0 })
 
-    harness:add_to_system("mission_objective_target_system", growth,
-        { _objective_name = "objective_dm_stockpile_corruptor_event" })
+        harness:set_active_objective_names({ "objective_dm_rise_demo_floor_one" })
+        harness:scan()
+
+        assert_equal("mission_objective_growth", harness:tracked_kind(centre),
+            "attempt " .. attempt .. ": the centre was a generic objective on the scan its growth was recognised")
+    end
+end)
+
+-- The game may retire the demolition targets before the centre eye they stand
+-- around, and the centre must not lose its icon when they go.
+test("a growth keeps its icon once its demolition targets are gone", function()
+    local harness = new_harness()
+    local centre, demolition = add_growth_site(harness, "objective_dm_stockpile_corruptor_event",
+        { x = 1, y = 0, z = 0 })
+
     harness:set_active_objective_names({ "objective_dm_stockpile_corruptor_event" })
     harness:scan()
 
-    assert_equal("mission_objective_growth", harness:tracked_kind(growth), "the growth kind was not applied")
+    assert_equal("mission_objective_growth", harness:tracked_kind(centre), "the growth was not recognised")
+
+    for i = 1, #demolition do
+        harness:remove_from_system("mission_objective_target_system", demolition[i])
+    end
+
+    harness:scan()
+
+    assert_equal("mission_objective_growth", harness:tracked_kind(centre),
+        "the centre lost its icon with its demolition targets")
 end)
 
--- Only the icon changes. An entry missing from the name list must cost a
--- distinct icon and nothing else, so the marker itself is untouched.
+-- Remembered by objective name, which the next mission may reuse for an
+-- objective that is not a growth.
+test("a recognised growth is forgotten when the mission ends", function()
+    local harness = new_harness()
+    local centre, demolition = add_growth_site(harness, "objective_dm_stockpile_corruptor_event",
+        { x = 1, y = 0, z = 0 })
+
+    harness:set_active_objective_names({ "objective_dm_stockpile_corruptor_event" })
+    harness:scan()
+
+    assert_equal("mission_objective_growth", harness:tracked_kind(centre), "the growth was not recognised")
+
+    harness.env._reset_mission_objective_marker_state()
+
+    for i = 1, #demolition do
+        harness:remove_from_system("mission_objective_target_system", demolition[i])
+    end
+
+    harness:scan()
+
+    assert_equal("mission_objective_other", harness:tracked_kind(centre),
+        "a growth recognised in one mission carried into the next")
+end)
+
+-- Silo Cluster, from a client log: the game marks the centre eye, and from the
+-- moment the tentacles spawn each of the three demolition targets as well, to
+-- hang its pointers at the tentacles off them. They stand under a metre from
+-- the centre, so drawing them stacked four markers on one spot of the radar.
+test("a growth's demolition targets do not stack markers on its centre", function()
+    local harness = new_harness()
+    local centre, demolition = add_growth_site(harness, "objective_dm_stockpile_corruptor_event",
+        { x = 1, y = 0, z = 0 })
+
+    harness:set_active_objective_names({ "objective_dm_stockpile_corruptor_event" })
+    harness:set_world_marker_units({ centre, demolition[1], demolition[2], demolition[3] })
+    harness:scan()
+
+    assert_equal("mission_objective_growth", harness:tracked_kind(centre), "the centre eye must be shown")
+
+    for i = 1, #demolition do
+        assert_nil(harness:tracked_kind(demolition[i]),
+            "demolition target " .. i .. " was drawn on top of the centre eye")
+    end
+end)
+
+-- Propaganda's first growth files its centre eye as a demolition target too.
+-- It claims the start marker, so it is kept on that, and the rule that drops
+-- the others must not catch it.
+test("a growth centre filed as a demolition target is still shown", function()
+    local harness = new_harness()
+    local centre, demolition = add_growth_site(harness, "objective_dm_propaganda_demolition_first",
+        { x = 1, y = 0, z = 0 }, "demolition")
+
+    harness:set_active_objective_names({ "objective_dm_propaganda_demolition_first" })
+    harness:set_world_marker_units({ centre, demolition[1], demolition[2], demolition[3] })
+    harness:scan()
+
+    assert_equal("mission_objective_growth", harness:tracked_kind(centre), "the centre eye was dropped")
+
+    for i = 1, #demolition do
+        assert_nil(harness:tracked_kind(demolition[i]),
+            "demolition target " .. i .. " was drawn on top of the centre eye")
+    end
+end)
+
+-- Only the icon changes. An objective that is not recognised costs a distinct
+-- icon and nothing else, so the marker itself is untouched.
 test("an unmatched objective keeps the default icon", function()
     local harness = new_harness()
     local step = { name = "step", position = { x = 2, y = 0, z = 0 }, health_alive = true }
@@ -2033,11 +2161,9 @@ end)
 -- another unit's marker.
 test("the growth icon does not leak to other markers", function()
     local harness = new_harness()
-    local growth = { name = "growth", position = { x = 3, y = 0, z = 0 }, health_alive = true }
+    local growth = add_growth_site(harness, "objective_dm_stockpile_corruptor_event", { x = 3, y = 0, z = 0 })
     local plain = { name = "plain", position = { x = 4, y = 0, z = 0 }, health_alive = true }
 
-    harness:add_to_system("mission_objective_target_system", growth,
-        { _objective_name = "objective_dm_stockpile_corruptor_event" })
     harness:add_to_system("mission_objective_target_system", plain,
         { _objective_name = "objective_dm_stockpile_reach_elevator" })
     harness:set_active_objective_names({
@@ -2064,6 +2190,8 @@ test("only the live target of a health-bearing objective is marked", function()
         harness:add_to_system("mission_objective_target_system", unit,
             { _objective_name = "objective_dm_stockpile_corruptor_event" })
     end
+
+    add_demolition_targets(harness, "objective_dm_stockpile_corruptor_event", active_eye.position)
 
     harness:set_active_objective_names({ "objective_dm_stockpile_corruptor_event" })
     harness:set_world_marker_units({ active_eye })
@@ -2105,6 +2233,8 @@ test("candidates do not flash up before the markers are assigned", function()
             { _objective_name = "objective_dm_stockpile_corruptor_event" })
     end
 
+    add_demolition_targets(harness, "objective_dm_stockpile_corruptor_event", active_eye.position)
+
     harness:set_active_objective_names({ "objective_dm_stockpile_corruptor_event" })
     -- The event has begun but nothing has been marked yet.
     harness:set_world_marker_units({})
@@ -2136,6 +2266,7 @@ test("the destructible probe follows one unit through its states", function()
     harness.settings.debug_mode = true
     harness:add_to_system("mission_objective_target_system", growth_target,
         { _objective_name = "objective_dm_stockpile_corruptor_event" })
+    add_demolition_targets(harness, "objective_dm_stockpile_corruptor_event", growth_target.position)
     harness:set_active_objective_names({ "objective_dm_stockpile_corruptor_event" })
     harness:add_to_system("destructible_system", eye, { _is_invulnerable = true, _health = 70, _is_dead = false })
     harness:add_to_system("destructible_system", far_away, { _is_invulnerable = false, _health = 5 })
@@ -2183,6 +2314,7 @@ test("the destructible probe ignores scenery and distant units", function()
     harness.settings.debug_mode = true
     harness:add_to_system("mission_objective_target_system", growth_target,
         { _objective_name = "objective_dm_stockpile_corruptor_event" })
+    add_demolition_targets(harness, "objective_dm_stockpile_corruptor_event", growth_target.position)
     harness:set_active_objective_names({ "objective_dm_stockpile_corruptor_event" })
     harness:add_to_system("destructible_system", far_away, { _is_invulnerable = false, _health = 5 })
     harness:add_to_system("destructible_system", wall, { _is_nav_gate = true, _health = 7 })
@@ -2224,11 +2356,19 @@ local function add_tentacle(harness, centre, options)
     options = options or {}
 
     local eyes = {}
+    -- Every eye of every tentacle is this one prefab.
+    local prefab = "#ID[ab4fec216e4f3c1c]"
+
+    -- An engine that cannot name prefabs.
+    if options.no_prefab then
+        prefab = nil
+    end
 
     for i = 1, #TENTACLE_EYE_OFFSETS do
         local offset = TENTACLE_EYE_OFFSETS[i]
         local eye = {
             name = (options.name or "eye") .. "_" .. tostring(i),
+            prefab = prefab,
             position = { x = centre.x + offset.x, y = centre.y + offset.y, z = centre.z + offset.z },
             health_alive = true,
         }
@@ -2240,12 +2380,11 @@ local function add_tentacle(harness, centre, options)
     return eyes
 end
 
--- The corruptor the event marks, and the objective name that makes it a growth.
+-- The corruptor the event marks, with the demolition targets that make its
+-- objective a growth.
 local function add_growth_objective(harness, position)
-    local corruptor = { name = "corruptor", position = position, health_alive = true }
+    local corruptor = add_growth_site(harness, "objective_dm_stockpile_corruptor_event", position)
 
-    harness:add_to_system("mission_objective_target_system", corruptor,
-        { _objective_name = "objective_dm_stockpile_corruptor_event" })
     harness:set_active_objective_names({ "objective_dm_stockpile_corruptor_event" })
 
     return corruptor
@@ -2262,6 +2401,232 @@ local function marked_eyes(harness, eyes)
 
     return marked
 end
+
+-- The tentacle search is anchored on the growth's own targets, so it reaches
+-- every mission the growth is recognised on. Rise and Propaganda never had a
+-- tentacle marked while that depended on the objective name.
+test("tentacles are marked around a growth on any mission", function()
+    local harness = new_harness()
+
+    add_growth_site(harness, "objective_dm_rise_demo_floor_one", { x = 0, y = 0, z = 0 })
+    harness:set_active_objective_names({ "objective_dm_rise_demo_floor_one" })
+
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:scan()
+
+    assert_equal(1, #marked_eyes(harness, eyes), "the tentacle of a growth on Rise was not marked")
+end)
+
+-- Rise runs one growth after another under two objectives. When the second is
+-- recognised, the targets of the first -- ended, but still remembered as a
+-- growth -- must not anchor the tentacle search again.
+test("an ended growth does not anchor the search when the next is recognised", function()
+    local harness = new_harness()
+
+    add_growth_site(harness, "objective_dm_rise_demo_floor_one", { x = 0, y = 0, z = 0 })
+    harness:set_active_objective_names({ "objective_dm_rise_demo_floor_one" })
+    harness:scan()
+
+    add_growth_site(harness, "objective_dm_rise_demo_floor_two", { x = 300, y = 0, z = 0 })
+    harness:set_active_objective_names({ "objective_dm_rise_demo_floor_two" })
+
+    local stale = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:scan()
+
+    assert_equal(0, #marked_eyes(harness, stale), "the ended growth's site was searched for tentacles")
+end)
+
+-- hm_strain: a row of decorative breakables beside a growth, three different
+-- prefabs within half a metre of each other, was drawn as a tentacle. They
+-- stand here in the eyes' own triangle, so only the prefab can tell them apart.
+test("three different prefabs are not a tentacle, even in the eyes' triangle", function()
+    local harness = new_harness()
+    local decoration = {}
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    for i = 1, #TENTACLE_EYE_OFFSETS do
+        local offset = TENTACLE_EYE_OFFSETS[i]
+
+        decoration[i] = harness:add_to_system("destructible_system", {
+            name = "decoration_" .. tostring(i),
+            prefab = "#ID[decoration_" .. tostring(i) .. "]",
+            position = { x = 12 + offset.x, y = offset.y, z = offset.z },
+            health_alive = true,
+        }, {})
+    end
+
+    harness:scan()
+
+    assert_equal(0, #marked_eyes(harness, decoration), "decoration of three prefabs was drawn as a tentacle")
+end)
+
+-- A tentacle can spawn with the level's own breakables inside half a metre of
+-- it. It must be made of its three eyes, and the breakable must neither join it
+-- nor carry its marker, whichever of them the pass happens to meet first.
+test("a tentacle beside decoration is made of its own eyes only", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+    local pustule = harness:add_to_system("destructible_system", {
+        name = "pustule",
+        prefab = "#ID[pustule]",
+        position = { x = 12.1, y = 0.1, z = 0 },
+        health_alive = true,
+    }, {})
+
+    harness:scan()
+
+    assert_equal(1, #marked_eyes(harness, eyes), "the tentacle was not marked")
+    assert_nil(harness:tracked_kind(pustule), "the decoration carries the tentacle's marker")
+    assert_contains(harness:log_text(), "eyes=3", "the tentacle was not registered with its three eyes")
+
+    if string.find(harness:log_text(), "eyes=4", 1, true) then
+        error("the decoration was counted as one of the tentacle's eyes")
+    end
+end)
+
+-- An engine that cannot name prefabs must keep the tentacles it had, rather
+-- than lose every one of them to a comparison it cannot make.
+test("a tentacle is still found when prefabs cannot be read", function()
+    local harness = new_harness()
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 }, { no_prefab = true })
+
+    harness:scan()
+
+    assert_equal(1, #marked_eyes(harness, eyes), "without prefab names the tentacle was lost")
+end)
+
+-- The eyes move with the tentacle. One on hm_strain measured 0.328, 0.422 and
+-- 0.548 metres between its eyes a second after it spawned, against 0.328, 0.347
+-- and 0.407 at rest, which is why the prefab and not the triangle identifies
+-- one. These are its eyes' measured positions, relative to the middle one.
+test("a tentacle is found in any pose", function()
+    local harness = new_harness()
+    local pose = {
+        { x = 0, y = 0, z = 0 },
+        { x = 0.264, y = -0.299, z = 0.137 },
+        { x = -0.254, y = -0.122, z = 0.168 },
+    }
+    local eyes = {}
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    for i = 1, #pose do
+        eyes[i] = harness:add_to_system("destructible_system", {
+            name = "moving_eye_" .. tostring(i),
+            prefab = "#ID[ab4fec216e4f3c1c]",
+            position = { x = 12 + pose[i].x, y = pose[i].y, z = pose[i].z },
+            health_alive = true,
+        }, {})
+    end
+
+    harness:scan()
+
+    assert_equal(1, #marked_eyes(harness, eyes), "a tentacle out of its resting pose was not recognised")
+end)
+
+-- The world-marker set counts a prompt the same as an objective marker, and a
+-- player standing next to anything gets a prompt. This probe tells them apart
+-- for every objective marker on the radar.
+test("the marker type probe reports what the game marks an objective with", function()
+    local harness = new_harness()
+    local step = harness:add_interactee({ position = { x = 30, y = 40, z = 0 } })
+
+    harness.settings.debug_mode = true
+    harness:add_to_system("mission_objective_target_system", step, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_list({ { unit = step, type = "interaction" }, { unit = step, type = "objective" } })
+    harness:scan()
+
+    local log = harness:log_text()
+
+    assert_contains(log, "Objective marker types:", "the marker type probe did not run")
+    assert_contains(log, "objective=objective_a", "the objective is not named")
+    assert_contains(log, "interactee=true", "whether it is an interactable is not reported")
+    -- In a fixed order, whatever order the game lists them in.
+    assert_contains(log, "types=objective+interaction", "the types are not reported in a fixed order")
+    assert_contains(log, "distance=50.0", "the player's distance is not reported")
+end)
+
+-- Once per unit and set of types: the moment the game starts marking a step is
+-- the line that matters, and it must not be buried under one line a scan.
+test("the marker type probe reports each change once, not each scan", function()
+    local harness = new_harness()
+    local step = harness:add_interactee({})
+
+    harness.settings.debug_mode = true
+    harness:add_to_system("mission_objective_target_system", step, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_list({})
+    harness:scan()
+
+    assert_contains(harness:log_text(), "types=none", "an unmarked objective marker is not reported")
+
+    harness:set_world_marker_list({ { unit = step, type = "objective" } })
+
+    for _ = 1, 3 do
+        harness:wait_for_marker_settle()
+        harness:scan()
+    end
+
+    local lines = 0
+
+    for _ in string.gmatch(harness:log_text(), "Objective marker types:") do
+        lines = lines + 1
+    end
+
+    assert_contains(harness:log_text(), "types=objective", "the game's marker arriving is not reported")
+    assert_equal(2, lines, "the marker type probe repeats itself")
+end)
+
+test("the marker type probe is silent outside debug mode", function()
+    local harness = new_harness()
+    local step = harness:add_interactee({})
+
+    harness:add_to_system("mission_objective_target_system", step, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_list({ { unit = step, type = "objective" } })
+    harness:scan()
+
+    if string.find(harness:log_text(), "Objective marker types:", 1, true) then
+        error("the marker type probe logged with debug mode off")
+    end
+end)
+
+-- Scavenge alone put sixty-one lockers on the radar at once.
+test("the marker type probe is bounded", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    for _ = 1, 250 do
+        local locker = harness:add_interactee({})
+
+        harness:add_to_system("mission_objective_target_system", locker, { _objective_name = "objective_a" })
+    end
+
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_list({})
+    harness:scan()
+
+    local lines = 0
+
+    for _ in string.gmatch(harness:log_text(), "Objective marker types:") do
+        lines = lines + 1
+    end
+
+    assert_equal(true, lines > 0, "nothing was reported")
+    assert_equal(true, lines <= 200, "the marker type probe is unbounded: " .. lines .. " lines")
+end)
 
 -- The eyes reach the radar through their shape alone: they are in no objective
 -- system, their unit names are hashed, and the game's own marker list never
@@ -2508,14 +2873,25 @@ test("a tentacle is reported once, not once a scan", function()
     add_growth_objective(harness, { x = 0, y = 0, z = 0 })
     add_tentacle(harness, { x = 12, y = 0, z = 0 })
 
+    -- Counted by its own lines rather than by calls: the harness counts every
+    -- `_log_once` call, and the filtered-hint line for the growth's demolition
+    -- targets is one the real `_log_once` prints once per objective.
+    local function tentacle_lines()
+        local _, count = string.gsub(harness:log_text(), "Growth tentacle", "")
+
+        return count
+    end
+
     harness:scan()
 
-    local first = harness:probe_calls()
+    local first = tentacle_lines()
+
+    assert_equal(true, first > 0, "the tentacle was not reported at all")
 
     harness:scan()
     harness:scan()
 
-    assert_equal(first, harness:probe_calls(), "the tentacle report repeats every scan")
+    assert_equal(first, tentacle_lines(), "the tentacle report repeats every scan")
 end)
 
 -- An objective the game is itself pointing at is exempt from the radar's scan
@@ -3420,6 +3796,235 @@ test("the rejection log is bounded", function()
 
     assert_equal(true, reported > 0, "the rejection log reported nothing at all")
     assert_equal(true, reported <= 40, "the rejection log is unbounded, it wrote " .. reported .. " lines")
+end)
+
+-- Daemonic growth runs under a different objective name on every mission, so
+-- anything anchored on the name only ever saw Stockpile. What the missions
+-- share is the objective's shape: a protected centre eye with three targets
+-- whose `_ui_target_type` is `demolition` around it. The probe is anchored on
+-- that, and only reports; it must not classify anything.
+local EYE_PREFAB = "#ID[ab4fec216e4f3c1c]"
+
+local function add_demolition_objective(harness, objective_name, options)
+    options = options or {}
+
+    local centre = { name = "centre_eye", position = { x = 0, y = 0, z = 0 }, health_alive = true }
+
+    harness:add_to_system("mission_objective_target_system", centre, {
+        _objective_name = objective_name,
+        _ui_target_type = "default",
+        _add_marker_on_objective_start = true,
+        _is_server = options.is_server,
+    })
+
+    for i = 1, 3 do
+        harness:add_to_system("mission_objective_target_system",
+            { name = "demolition_" .. i, position = { x = 0.8 * i - 1.6, y = 0.6, z = 0.2 } }, {
+                _objective_name = objective_name,
+                _ui_target_type = "demolition",
+                _add_marker_on_objective_start = false,
+                _is_server = options.is_server,
+            })
+    end
+
+    harness:set_active_objective_names({ objective_name })
+
+    return centre
+end
+
+local function add_eye_triple(harness, centre, name)
+    local eyes = {}
+
+    for i = 1, #TENTACLE_EYE_OFFSETS do
+        local offset = TENTACLE_EYE_OFFSETS[i]
+        local eye = {
+            name = name or EYE_PREFAB,
+            position = { x = centre.x + offset.x, y = centre.y + offset.y, z = centre.z + offset.z },
+            health_alive = true,
+        }
+
+        harness:add_to_system("destructible_system", eye, { _is_server = false })
+        eyes[i] = eye
+    end
+
+    return eyes
+end
+
+-- Rise: `objective_dm_rise_demo_floor_one`, which the growth name matcher does
+-- not recognise. The probe has to report it anyway.
+test("the demolition probe reports an objective of any name", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    add_demolition_objective(harness, "objective_dm_rise_demo_floor_one")
+    add_eye_triple(harness, { x = 12, y = 0, z = 0 })
+    harness:scan()
+
+    local log = harness:log_text()
+
+    assert_contains(log, "Demolition probe:", "an objective with demolition targets is not reported")
+    assert_contains(log, "objectives=objective_dm_rise_demo_floor_one:", "the objective is not named")
+    assert_contains(log, "near=3", "the eyes near the objective are not counted")
+    assert_contains(log, "ids=" .. EYE_PREFAB .. "x3", "the eyes' prefab is not reported")
+    assert_contains(log, "Demolition destructible:", "the eyes are not reported individually")
+end)
+
+test("the demolition probe is silent without a demolition target", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    harness:add_to_system("mission_objective_target_system",
+        { name = "step", position = { x = 0, y = 0, z = 0 } },
+        { _objective_name = "objective_a", _ui_target_type = "default" })
+    harness:set_active_objective_names({ "objective_a" })
+    add_eye_triple(harness, { x = 12, y = 0, z = 0 })
+    harness:scan()
+
+    if string.find(harness:log_text(), "Demolition probe:", 1, true) then
+        error("the demolition probe reported an objective without demolition targets")
+    end
+end)
+
+test("the demolition probe is silent outside debug mode", function()
+    local harness = new_harness()
+
+    add_demolition_objective(harness, "objective_dm_rise_demo_floor_one")
+    add_eye_triple(harness, { x = 12, y = 0, z = 0 })
+    harness:scan()
+
+    if string.find(harness:log_text(), "Demolition", 1, true) then
+        error("the demolition probe logged with debug mode off")
+    end
+end)
+
+-- The client question. If a non-host's destructible system is empty, the line
+-- has to say so and still say it came from a client; the flag is read off the
+-- objective target, which a client carries, not off a destructible it may lack.
+test("the demolition probe reports a client with no destructibles as such", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    add_demolition_objective(harness, "objective_dm_rise_demo_floor_one", { is_server = false })
+    harness:scan()
+
+    assert_contains(harness:log_text(), "server=false objectives=",
+        "the host flag is not taken from the objective target")
+    assert_contains(harness:log_text(), "destructibles=0 near=0 ids=none",
+        "an empty destructible system is not distinguishable from a quiet one")
+end)
+
+-- Scenery near the event must be counted under its own id, so the eyes' prefab
+-- can be told apart from it by id alone.
+test("the demolition probe counts each prefab separately", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    add_demolition_objective(harness, "objective_dm_propaganda_demolition_first")
+    add_eye_triple(harness, { x = 12, y = 0, z = 0 })
+    harness:add_to_system("destructible_system",
+        { name = "#ID[cab8409c3a8cf5a5]", position = { x = 9, y = 0, z = 0 }, health_alive = true }, {})
+    harness:scan()
+
+    local log = harness:log_text()
+
+    assert_contains(log, "ids=#ID[ab4fec216e4f3c1c]x3,#ID[cab8409c3a8cf5a5]x1",
+        "the eyes and the scenery are not counted under their own prefab ids")
+end)
+
+-- The extension's top-level references are all level-wide systems, so a parent,
+-- if the game keeps one, would be a level down.
+test("the demolition probe reports references a level down", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    add_demolition_objective(harness, "objective_dm_rise_demo_floor_one")
+
+    local parent = {}
+    local eye = { name = EYE_PREFAB, position = { x = 12, y = 0, z = 0 }, health_alive = true }
+
+    harness:add_to_system("destructible_system", eye,
+        { _parameters = { owner_unit = parent, stages = 3 }, _destruction_info = { stage = 1 } })
+    harness:scan()
+
+    local log = harness:log_text()
+
+    assert_contains(log, "_parameters.owner_unit=table(" .. tostring(parent) .. ")",
+        "a nested reference is not reported, or not rendered")
+    assert_contains(log, "_destruction_info.stage=1", "a nested scalar is not reported")
+end)
+
+test("the demolition probe ignores nav gates and distant destructibles", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    add_demolition_objective(harness, "objective_dm_rise_demo_floor_one")
+    harness:add_to_system("destructible_system",
+        { name = "gate", position = { x = 5, y = 0, z = 0 } }, { _is_nav_gate = true })
+    harness:add_to_system("destructible_system",
+        { name = "far", position = { x = 500, y = 0, z = 0 } }, {})
+    harness:scan()
+
+    assert_contains(harness:log_text(), "destructibles=2 near=0 ids=none",
+        "a nav gate or a distant destructible was counted as near the event")
+end)
+
+-- Stockpile put 18 destructibles inside forty metres at once; a level with many
+-- more must not be able to flood the log.
+test("the demolition probe is bounded", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    add_demolition_objective(harness, "objective_dm_rise_demo_floor_one")
+
+    for i = 1, 150 do
+        harness:add_to_system("destructible_system",
+            { name = "#ID[crate]", position = { x = (i % 20) - 10, y = math.floor(i / 20), z = 0 } }, {})
+    end
+
+    harness:scan()
+
+    local reported = 0
+
+    for _ in string.gmatch(harness:log_text(), "Demolition destructible:") do
+        reported = reported + 1
+    end
+
+    assert_equal(true, reported > 0, "nothing was reported")
+    assert_equal(true, reported <= 100, "the demolition probe is unbounded: " .. reported .. " lines")
+    -- The summary is the line that answers the question, so running out of
+    -- budget on individual destructibles must not silence it.
+    assert_contains(harness:log_text(), "Demolition probe:",
+        "the individual destructibles spent the summary's budget")
+end)
+
+-- Once per unit, not once per scan.
+test("the demolition probe reports a destructible once", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+
+    add_demolition_objective(harness, "objective_dm_rise_demo_floor_one")
+    add_eye_triple(harness, { x = 12, y = 0, z = 0 })
+
+    for _ = 1, 4 do
+        harness:wait_for_marker_settle()
+        harness:scan()
+    end
+
+    local reported = 0
+
+    for _ in string.gmatch(harness:log_text(), "Demolition destructible:") do
+        reported = reported + 1
+    end
+
+    assert_equal(3, reported, "a destructible was reported more than once")
 end)
 
 local failures = {}

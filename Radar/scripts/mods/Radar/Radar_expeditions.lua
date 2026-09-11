@@ -1685,56 +1685,40 @@ return function(env)
     -- `_active` is not that signal: it only means a player currently has the
     -- puzzle open, so hiding on it made markers disappear while idle and appear
     -- while somebody was already solving them.
-    -- Objectives whose steps are daemonic growth, matched on the objective name
-    -- because nothing else on the unit distinguishes them: they are ordinary
-    -- health-bearing targets with `_ui_target_type=default`. Objective names are
-    -- `objective_<mission>_<event>`, so matching the event suffix covers every
-    -- mission that runs the event without naming each one, and matches strictly
-    -- less than a loose substring would -- an objective merely mentioning the
-    -- event elsewhere in its name is not caught.
+    -- Objectives whose steps are daemonic growth. The objective name differs on
+    -- every mission that runs the event -- `..._corruptor_event` on Silo
+    -- Cluster, `..._demolition_first/a/b/final` on Propaganda,
+    -- `..._demo_floor_one/two` on Rise -- so a name list only ever covered the
+    -- missions written into it. What every growth does share is its shape: it
+    -- files three targets whose `_ui_target_type` is `demolition` a fraction of
+    -- a metre around its centre eye, which is what the game draws its three
+    -- pointers at the tentacles from. Across 21 logs no other objective uses
+    -- that value, and a client's copy of the target carries it too.
     --
-    -- Only the icon changes: the marker is claimed, coloured and retired exactly
-    -- as any other objective step, so a suffix missing from this list costs a
-    -- distinct icon and nothing else. Confirmed from Silo Cluster
-    -- (`objective_dm_stockpile_corruptor_event`).
-    local MISSION_OBJECTIVE_GROWTH_NAME_SUFFIXES = {
-        "_corruptor_event",
-    }
-
-    local MISSION_OBJECTIVE_GROWTH_NAME_SUFFIX_COUNT = #MISSION_OBJECTIVE_GROWTH_NAME_SUFFIXES
-    -- Resolved once per objective name rather than per unit per scan.
+    -- Remembered per objective for the rest of the mission once seen, so the
+    -- centre eye cannot lose its icon if the game retires those targets before
+    -- it. Only the icon and the tentacle search depend on this: the marker is
+    -- claimed, coloured and retired exactly as any other objective step.
     local _growth_objective_by_name = {}
 
     function _is_growth_objective_name(objective_name)
-        if type(objective_name) ~= "string" then
+        return objective_name ~= nil and _growth_objective_by_name[objective_name] == true
+    end
+
+    -- True only the scan an objective is first recognised, so the caller knows
+    -- to go back over the targets it has already passed.
+    function _note_growth_objective_target(objective_name, extension)
+        if _growth_objective_by_name[objective_name] == true
+            or _safe_objective_target_field(extension, "_ui_target_type") ~= "demolition" then
             return false
         end
 
-        local known = _growth_objective_by_name[objective_name]
+        _growth_objective_by_name[objective_name] = true
+        -- Reported once per objective, so a run shows exactly which objectives
+        -- were recognised rather than leaving it to be inferred from the icons.
+        _debug_log_growth_objective(objective_name)
 
-        if known == nil then
-            known = false
-
-            for i = 1, MISSION_OBJECTIVE_GROWTH_NAME_SUFFIX_COUNT do
-                local suffix = MISSION_OBJECTIVE_GROWTH_NAME_SUFFIXES[i]
-
-                if #objective_name >= #suffix and string_sub(objective_name, -#suffix) == suffix then
-                    known = true
-                    break
-                end
-            end
-
-            _growth_objective_by_name[objective_name] = known
-
-            -- Reported once per objective, so a run shows exactly which
-            -- objectives a suffix caught rather than leaving the breadth of the
-            -- match to be inferred from the markers.
-            if known then
-                _debug_log_growth_objective(objective_name)
-            end
-        end
-
-        return known
+        return true
     end
 
     local MISSION_OBJECTIVE_MINIGAME_SYSTEM = "minigame_system"
@@ -2317,6 +2301,8 @@ return function(env)
             return
         end
 
+        local recognised_growth = false
+
         for unit, extension in pairs(extension_map) do
             local objective_name = _safe_objective_target_name(extension)
 
@@ -2338,6 +2324,10 @@ return function(env)
                         _objective_world_marker_seen[objective_name] = true
                     end
 
+                    if _note_growth_objective_target(objective_name, extension) then
+                        recognised_growth = true
+                    end
+
                     if _is_growth_objective_name(objective_name) then
                         _scratch_growth_objective_units[unit] = true
                     end
@@ -2348,6 +2338,21 @@ return function(env)
                     end
                 else
                     _scratch_inactive_objective_units[unit] = true
+                end
+            end
+        end
+
+        -- A growth recognised part-way through the pass above has targets the
+        -- pass had already gone by, the centre eye among them if it came first.
+        -- They are collected here rather than a scan later, so the centre never
+        -- shows as a generic objective for a moment. Once per growth per mission.
+        if recognised_growth then
+            for unit, extension in pairs(extension_map) do
+                local objective_name = _safe_objective_target_name(extension)
+
+                if objective_name ~= nil and active_names[objective_name] == true
+                    and _is_growth_objective_name(objective_name) then
+                    _scratch_growth_objective_units[unit] = true
                 end
             end
         end
@@ -2402,7 +2407,26 @@ return function(env)
         group_carrier = {},
         -- Keyed by position, so each tentacle reports itself once.
         logged = {},
+        -- Each candidate's prefab. `false` records that the engine could not
+        -- say, so it is not asked again.
+        prefab_of = {},
     }
+
+    -- The prefab a tentacle candidate was spawned from, read once per unit: a
+    -- unit never changes what it was spawned from, and decoration near a growth
+    -- is re-tested every scan. nil when the engine cannot say -- then for every
+    -- candidate alike, which leaves the shape to decide on its own as it did
+    -- before prefabs were read.
+    function _growth_eye_prefab(unit)
+        local known = GROWTH_EYE.prefab_of[unit]
+
+        if known == nil then
+            known = _safe_unit_prefab_name ~= nil and _safe_unit_prefab_name(unit) or false
+            GROWTH_EYE.prefab_of[unit] = known
+        end
+
+        return known or nil
+    end
 
     -- One marker per tentacle rather than three: at radar scale three markers
     -- 40 cm apart are a single blob. It is carried by the tentacle's
@@ -2537,6 +2561,28 @@ return function(env)
                             found[found_count] = j
                         end
                     end
+                end
+
+                -- The three eyes of a tentacle are one prefab; the level's own
+                -- breakables are not. Beside a growth on hm_strain a row of
+                -- decoration three prefabs wide stood within half a metre of
+                -- itself and was drawn as a tentacle. The eyes are compared with
+                -- each other rather than with a known id, so nothing is
+                -- hard-coded, and not by the triangle they form: one tentacle on
+                -- the same mission measured 0.328, 0.422 and 0.548 metres a
+                -- second after it spawned, against 0.328, 0.347 and 0.407 at rest.
+                if found_count >= members_needed then
+                    local prefab = _growth_eye_prefab(units[i])
+                    local kept = 1
+
+                    for k = 2, found_count do
+                        if _growth_eye_prefab(units[found[k]]) == prefab then
+                            kept = kept + 1
+                            found[kept] = found[k]
+                        end
+                    end
+
+                    found_count = kept
                 end
 
                 if found_count >= members_needed then
@@ -2726,9 +2772,19 @@ return function(env)
                 local game_marks_unit = _world_marker_units_available
                     and _scratch_world_marker_units[unit] ~= nil
 
-                if keep and not game_marks_unit
+                -- Except over a growth's demolition targets. The game marks each
+                -- of them only to hang its three pointers at the tentacles off
+                -- it, and they stand a fraction of a metre from the centre eye
+                -- that claims the start marker, so on the radar the override
+                -- stacked four markers on one spot. The tentacles carry markers
+                -- of their own, so for these the start marker decides, as it did
+                -- before the override. A centre eye that is itself a demolition
+                -- target claims the start marker and is kept by it.
+                if keep
                     and _scratch_objective_has_start_marker[objective_name] == true
-                    and _scratch_start_marker_by_unit[unit] ~= true then
+                    and _scratch_start_marker_by_unit[unit] ~= true
+                    and (not game_marks_unit
+                        or _safe_objective_target_field(extension, "_ui_target_type") == "demolition") then
                     -- An alternative the mission chose not to use.
                     keep = false
 
@@ -2839,6 +2895,8 @@ return function(env)
         _debug_probe_objective_target_fields()
         _debug_probe_untracked_world_markers()
         _debug_probe_nearby_destructibles()
+        _debug_probe_demolition_destructibles()
+        _debug_probe_objective_marker_types()
     end
 
     -- Dropping the unit map keeps stale unit references out of the next mission.
@@ -2850,6 +2908,8 @@ return function(env)
         _reset_untracked_marker_probe()
         _reset_destructible_probe()
         _reset_rejection_probe()
+        _reset_demolition_probe()
+        _reset_marker_types_probe()
         _reset_active_objective_probe()
         _reset_mission_objective_lifecycle()
         table_clear(_minigame_state_by_unit)
@@ -2860,12 +2920,16 @@ return function(env)
         table_clear(_scratch_mission_objective_zone_units)
         table_clear(_scratch_inactive_objective_units)
         table_clear(_scratch_growth_objective_units)
+        -- Keyed by objective name, which the next mission may reuse for an
+        -- objective that is not a growth.
+        table_clear(_growth_objective_by_name)
         -- The only one of the tentacle arrays that holds unit references.
         table_clear(GROWTH_EYE.units)
         table_clear(GROWTH_EYE.logged)
         table_clear(GROWTH_EYE.group_of)
         table_clear(GROWTH_EYE.member_units)
         table_clear(GROWTH_EYE.member_group)
+        table_clear(GROWTH_EYE.prefab_of)
         GROWTH_EYE.member_count = 0
         GROWTH_EYE.group_next = 0
         table_clear(_scratch_world_marker_units)
@@ -2951,6 +3015,34 @@ return function(env)
         -- rest of it, two minutes before the next objective started.
         unit_ids = {},
         unit_id_next = 0,
+        -- The demolition probe. See _debug_probe_demolition_destructibles.
+        -- Two budgets, so a busy level cannot spend the summary's share on
+        -- individual destructibles: the summary is the line that answers the
+        -- question, and it would otherwise be the one that never appears.
+        demolition_budget = 100,
+        demolition_left = 100,
+        demolition_summary_budget = 40,
+        demolition_summary_left = 40,
+        demolition_seen = {},
+        demolition_summary_seen = {},
+        demolition_range_squared = 1600,
+        demolition_ref_limit = 24,
+        demolition_nested_fields = { "_parameters", "_destruction_info", "_visibility_info" },
+        demolition_objectives = {},
+        demolition_anchor_x = {},
+        demolition_anchor_y = {},
+        demolition_anchor_z = {},
+        demolition_id_counts = {},
+        demolition_id_list = {},
+        demolition_objective_list = {},
+        demolition_parts = {},
+        -- The marker type probe. See _debug_probe_objective_marker_types.
+        marker_types_budget = 200,
+        marker_types_left = 200,
+        marker_types_seen = {},
+        marker_types_objective = {},
+        marker_types_interaction = {},
+        marker_types_other = {},
     }
 
     -- Declared beside PROBE rather than with the other resets: those sit above
@@ -2960,6 +3052,21 @@ return function(env)
         table_clear(PROBE.rejection_seen)
         table_clear(PROBE.unit_ids)
         PROBE.unit_id_next = 0
+    end
+
+    function _reset_marker_types_probe()
+        PROBE.marker_types_left = PROBE.marker_types_budget
+        table_clear(PROBE.marker_types_seen)
+        table_clear(PROBE.marker_types_objective)
+        table_clear(PROBE.marker_types_interaction)
+        table_clear(PROBE.marker_types_other)
+    end
+
+    function _reset_demolition_probe()
+        PROBE.demolition_left = PROBE.demolition_budget
+        PROBE.demolition_summary_left = PROBE.demolition_summary_budget
+        table_clear(PROBE.demolition_seen)
+        table_clear(PROBE.demolition_summary_seen)
     end
 
     function _debug_unit_id(unit)
@@ -3605,6 +3712,382 @@ return function(env)
         end
 
         return false
+    end
+
+    -- Daemonic growth runs under a different objective name on every mission --
+    -- `..._corruptor_event` on Stockpile, `..._demolition_first/a/b/final` on
+    -- Propaganda, `..._demo_floor_one/two` on Rise. This probe is anchored on
+    -- what the missions share instead: every one of them files three targets
+    -- with `_ui_target_type` set to `demolition` around its centre eye. It
+    -- reads the target type itself rather than the growth classification, so
+    -- it stays a check on that classification rather than a copy of it.
+    --
+    -- What it answered, on Stockpile, Rise and Propaganda: the tentacle eyes
+    -- are one prefab (`debug_name` hash `#ID[ab4fec216e4f3c1c]`, on no
+    -- scenery) with the same triangle to the millimetre everywhere, a non-host
+    -- client sees them in the destructible system, and the extension keeps no
+    -- parent -- one level down there is only destruction data.
+    function _debug_probe_demolition_destructibles()
+        if PROBE.demolition_summary_left <= 0 or not _objective_state_probe_due() then
+            return
+        end
+
+        local target_map = _safe_unit_to_extension_map(MISSION_OBJECTIVE_TARGET_SYSTEM)
+
+        if type(target_map) ~= "table" then
+            return
+        end
+
+        local active_names = _scratch_active_objective_names
+        local objectives = PROBE.demolition_objectives
+        local objective_count = 0
+        -- Read off an objective target, which a client carries too, so the
+        -- report says which side it came from even when the destructible
+        -- system turns out to hold nothing -- the one case where that matters.
+        local target_is_server = nil
+
+        table_clear(objectives)
+
+        for _, extension in pairs(target_map) do
+            local name = _safe_objective_target_name(extension)
+
+            if name ~= nil and active_names[name] == true
+                and _safe_objective_target_field(extension, "_ui_target_type") == "demolition" then
+                if objectives[name] == nil then
+                    objectives[name] = "?"
+                    objective_count = objective_count + 1
+                end
+
+                if target_is_server == nil then
+                    target_is_server = _safe_objective_target_field(extension, "_is_server")
+                end
+            end
+        end
+
+        if objective_count == 0 then
+            return
+        end
+
+        -- The objective's own type, read here because the active-objective
+        -- probe stops at forty fields and cut it off on all three missions.
+        local objective_system = _safe_extension_system(MISSION_OBJECTIVE_SOURCE)
+        local active_objectives = type(objective_system) == "table"
+            and rawget(objective_system, "_active_objectives") or nil
+
+        if type(active_objectives) == "table" then
+            for key, value in pairs(active_objectives) do
+                local objective = type(key) == "table" and key or (type(value) == "table" and value or nil)
+                local name = objective and rawget(objective, "_name") or nil
+
+                if name ~= nil and objectives[name] ~= nil then
+                    objectives[name] = tostring(rawget(objective, "_objective_type"))
+                end
+            end
+        end
+
+        -- Every target of those objectives, the centre eye included: the
+        -- tentacles stood ten to seventeen metres from it on Stockpile.
+        local anchor_x = PROBE.demolition_anchor_x
+        local anchor_y = PROBE.demolition_anchor_y
+        local anchor_z = PROBE.demolition_anchor_z
+        local anchor_count = 0
+
+        for unit, extension in pairs(target_map) do
+            local name = _safe_objective_target_name(extension)
+
+            if name ~= nil and objectives[name] ~= nil then
+                local x, y, z = _vector3_components(_safe_unit_position(unit))
+
+                if x ~= nil then
+                    anchor_count = anchor_count + 1
+                    anchor_x[anchor_count] = x
+                    anchor_y[anchor_count] = y
+                    anchor_z[anchor_count] = z
+                end
+            end
+        end
+
+        if anchor_count == 0 then
+            return
+        end
+
+        local destructible_map = _safe_unit_to_extension_map("destructible_system")
+        local mission_text = tostring(_safe_mission_name())
+        local id_counts = PROBE.demolition_id_counts
+        local range_squared = PROBE.demolition_range_squared
+        local total = 0
+        local near = 0
+        local destructible_is_server = nil
+
+        table_clear(id_counts)
+
+        if type(destructible_map) == "table" then
+            for unit, extension in pairs(destructible_map) do
+                if type(extension) == "table" then
+                    total = total + 1
+
+                    if destructible_is_server == nil then
+                        destructible_is_server = rawget(extension, "_is_server")
+                    end
+
+                    if rawget(extension, "_is_nav_gate") ~= true then
+                        local x, y, z = _vector3_components(_safe_unit_position(unit))
+                        local nearest = nil
+
+                        if x ~= nil then
+                            for i = 1, anchor_count do
+                                local dx = anchor_x[i] - x
+                                local dy = anchor_y[i] - y
+                                local dz = anchor_z[i] - z
+                                local distance_squared = dx * dx + dy * dy + dz * dz
+
+                                if nearest == nil or distance_squared < nearest then
+                                    nearest = distance_squared
+                                end
+                            end
+                        end
+
+                        if nearest ~= nil and nearest <= range_squared then
+                            local id = tostring(_safe_unit_name(unit))
+
+                            near = near + 1
+                            id_counts[id] = (id_counts[id] or 0) + 1
+
+                            _debug_report_demolition_destructible(unit, extension, id, mission_text,
+                                target_is_server, math_sqrt(nearest))
+                        end
+                    end
+                end
+            end
+        end
+
+        local id_list = PROBE.demolition_id_list
+        local id_total = 0
+
+        table_clear(id_list)
+
+        for id, count in pairs(id_counts) do
+            id_total = id_total + 1
+            id_list[id_total] = id .. "x" .. count
+        end
+
+        table_sort(id_list)
+
+        local objective_list = PROBE.demolition_objective_list
+        local listed = 0
+
+        table_clear(objective_list)
+
+        for name, objective_type in pairs(objectives) do
+            listed = listed + 1
+            objective_list[listed] = name .. ":" .. objective_type
+        end
+
+        table_sort(objective_list)
+
+        -- In a branch, not `a ~= nil and a or b`: `false` is exactly the answer
+        -- being looked for here -- a client -- and that expression turns it into
+        -- whatever the destructible system says, which on an empty one is nil.
+        local server_flag = target_is_server
+
+        if server_flag == nil then
+            server_flag = destructible_is_server
+        end
+
+        local server_text = tostring(server_flag)
+        local id_text = id_total > 0 and table_concat(id_list, ",", 1, id_total) or "none"
+        -- Keyed on what is visible rather than on time, so each change of
+        -- composition -- a tentacle spawning, its last eye going -- reports once.
+        local key = "demolition_summary:" .. mission_text .. "|" .. server_text .. "|" .. total
+            .. "|" .. near .. "|" .. id_text
+
+        if not PROBE.demolition_summary_seen[key] then
+            PROBE.demolition_summary_seen[key] = true
+            PROBE.demolition_summary_left = PROBE.demolition_summary_left - 1
+
+            _log_once(key, string_format(
+                "Demolition probe: mission=%s server=%s objectives=%s destructibles=%d near=%d ids=%s",
+                mission_text,
+                server_text,
+                table_concat(objective_list, ",", 1, listed),
+                total,
+                near,
+                id_text
+            ))
+        end
+    end
+
+    -- One line per destructible near a demolition objective, once per unit:
+    -- its prefab id and position, which is enough to rebuild the three-eye
+    -- shape offline and compare its dimensions across missions, and one level
+    -- into the tables the extension keeps per unit, where a parent would be.
+    function _debug_report_demolition_destructible(unit, extension, id, mission_text, is_server, distance)
+        if PROBE.demolition_left <= 0 then
+            return
+        end
+
+        local key = "demolition_destructible:" .. _debug_unit_id(unit)
+
+        if PROBE.demolition_seen[key] then
+            return
+        end
+
+        PROBE.demolition_seen[key] = true
+        PROBE.demolition_left = PROBE.demolition_left - 1
+
+        local parts = PROBE.demolition_parts
+        local nested_fields = PROBE.demolition_nested_fields
+        local limit = PROBE.demolition_ref_limit
+        local count = 0
+
+        table_clear(parts)
+
+        for i = 1, #nested_fields do
+            local field = nested_fields[i]
+            local nested = rawget(extension, field)
+
+            if type(nested) == "table" then
+                for nested_key, value in pairs(nested) do
+                    if count >= limit then
+                        break
+                    end
+
+                    local value_type = type(value)
+
+                    if value_type == "userdata" or value_type == "table" then
+                        -- pcall: a __tostring of the game's own that raised
+                        -- would otherwise take the scan down with it.
+                        local ok_render, rendered = pcall(tostring, value)
+
+                        count = count + 1
+                        parts[count] = field .. "." .. tostring(nested_key) .. "=" .. value_type
+                            .. "(" .. (ok_render and tostring(rendered) or "?") .. ")"
+                    elseif value_type == "string" or value_type == "number" or value_type == "boolean" then
+                        count = count + 1
+                        parts[count] = field .. "." .. tostring(nested_key) .. "=" .. tostring(value)
+                    end
+                end
+            end
+        end
+
+        _log_once(key, string_format(
+            "Demolition destructible: mission=%s server=%s id=%s alive=%s distance=%.1f position=%s %s",
+            mission_text,
+            tostring(is_server),
+            id,
+            tostring(_safe_health_alive(unit)),
+            distance or -1,
+            _debug_unit_position_text(unit),
+            table_concat(parts, " ", 1, count)
+        ))
+    end
+
+    -- Which of the game's own markers each objective marker on the radar has, by
+    -- type, and how far away the player is. The world-marker set the scan reads
+    -- counts every type alike, and an `interaction` marker is only the prompt a
+    -- player gets standing next to something: Scavenge's end event files
+    -- sixty-one lockers under its objective, and the few the player walked past
+    -- read as marked. This says whether an `objective` marker is what separates
+    -- a real step from a unit merely filed under one. Debug only; nothing is
+    -- decided from it.
+    function _debug_probe_objective_marker_types()
+        if PROBE.marker_types_left <= 0 or not _objective_state_probe_due() then
+            return
+        end
+
+        local world_markers_list = _safe_world_markers_list
+        local markers = world_markers_list ~= nil and world_markers_list() or nil
+
+        if type(markers) ~= "table" then
+            return
+        end
+
+        local has_objective = PROBE.marker_types_objective
+        local has_interaction = PROBE.marker_types_interaction
+        local other_type = PROBE.marker_types_other
+
+        table_clear(has_objective)
+        table_clear(has_interaction)
+        table_clear(other_type)
+
+        for i = 1, #markers do
+            local marker = markers[i]
+            local unit = type(marker) == "table" and marker.unit or nil
+
+            if unit ~= nil then
+                local marker_type = marker.type
+
+                if marker_type == "objective" then
+                    has_objective[unit] = true
+                elseif marker_type == "interaction" then
+                    has_interaction[unit] = true
+                elseif other_type[unit] == nil then
+                    other_type[unit] = tostring(marker_type)
+                end
+            end
+        end
+
+        local target_map = _safe_unit_to_extension_map(MISSION_OBJECTIVE_TARGET_SYSTEM)
+        local interactee_map = _safe_unit_to_extension_map("interactee_system")
+        local player_position = _safe_unit_position(_player_unit())
+        local mission_text = tostring(_safe_mission_name())
+
+        for unit, data in pairs(mod._tracked_units) do
+            if PROBE.marker_types_left <= 0 then
+                break
+            end
+
+            local kind = data and data.kind or nil
+
+            if kind ~= nil and _is_mission_objective_marker_kind(kind) then
+                -- In a fixed order, so one set reads the same whatever order the
+                -- game lists its markers in.
+                local types = nil
+
+                if has_objective[unit] then
+                    types = "objective"
+                end
+
+                if has_interaction[unit] then
+                    types = types and (types .. "+interaction") or "interaction"
+                end
+
+                if other_type[unit] ~= nil then
+                    types = types and (types .. "+" .. other_type[unit]) or other_type[unit]
+                end
+
+                types = types or "none"
+
+                -- Once per unit and set of types, so a run shows each marker
+                -- gaining and losing the game's markers rather than every scan.
+                local key = "objective_marker_types:" .. _debug_unit_id(unit) .. "|" .. types
+
+                if not PROBE.marker_types_seen[key] then
+                    PROBE.marker_types_seen[key] = true
+                    PROBE.marker_types_left = PROBE.marker_types_left - 1
+
+                    local target_extension = type(target_map) == "table" and target_map[unit] or nil
+                    local objective_name = target_extension and _safe_objective_target_name(target_extension) or nil
+                    local unit_position = _safe_unit_position(unit)
+                    local distance = -1
+
+                    if player_position ~= nil and unit_position ~= nil then
+                        distance = math_sqrt(_distance_squared(player_position, unit_position))
+                    end
+
+                    _log_once(key, string_format(
+                        "Objective marker types: mission=%s kind=%s objective=%s interactee=%s types=%s distance=%.1f position=%s",
+                        mission_text,
+                        kind,
+                        tostring(objective_name),
+                        tostring(type(interactee_map) == "table" and interactee_map[unit] ~= nil),
+                        types,
+                        distance,
+                        _debug_unit_position_text(unit)
+                    ))
+                end
+            end
+        end
     end
 
     function _reset_destructible_probe()

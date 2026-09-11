@@ -96,6 +96,28 @@ return function(env)
         return tostring(unit)
     end
 
+    -- The resource a unit was spawned from, the same for every unit of one
+    -- prefab: hashed in a shipping build (`#ID[ab4fec216e4f3c1c]`) but still
+    -- comparable. nil when the engine cannot say, never a stand-in like the one
+    -- `_safe_unit_name` returns -- callers compare these, and a per-unit
+    -- stand-in would make every unit its own prefab.
+    function _safe_unit_prefab_name(unit)
+        local unit_api = Unit
+        local debug_name = unit_api and unit_api.debug_name
+
+        if not debug_name then
+            return nil
+        end
+
+        local ok, result = pcall(debug_name, unit, false)
+
+        if ok and type(result) == "string" and result ~= "" then
+            return result
+        end
+
+        return nil
+    end
+
     function _is_finite_number(v)
         return type(v) == "number" and v == v and v ~= math_huge and v ~= -math_huge
     end
