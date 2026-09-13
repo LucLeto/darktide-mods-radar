@@ -724,6 +724,14 @@ _add_marker({
     default = MISSION_OBJECTIVE_GROWTH,
     supports_highlight = true,
 })
+-- Targets to destroy: the generic objective tint by default, like the category
+-- they were split from, but a colour of their own.
+_add_marker({
+    kind = "mission_objective_destroy",
+    anchor = "show_mission_objective_destroy",
+    default = VANILLA_OBJECTIVE,
+    supports_highlight = true,
+})
 _add_marker({
     kind = "mission_objective_servo_skull",
     anchor = "show_mission_objective_servo_skull",

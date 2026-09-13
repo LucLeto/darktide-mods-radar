@@ -4,6 +4,12 @@
 -- a copy of its arithmetic.
 local HELPERS_PATH = "Radar/scripts/mods/Radar/Radar_runtime_helpers.lua"
 
+table.clear = table.clear or function(t)
+    for key in pairs(t) do
+        t[key] = nil
+    end
+end
+
 local function assert_equal(expected, actual, message)
     if expected ~= actual then
         error((message or "values differ") .. ": expected " .. tostring(expected) .. ", got " .. tostring(actual), 2)
@@ -112,6 +118,7 @@ test("every objective category is framed on its box", function()
         "mission_objective_hacking",
         "mission_objective_servo_skull",
         "mission_objective_growth",
+        "mission_objective_destroy",
         "mission_objective_other",
     }) do
         local harness = new_harness()
@@ -218,6 +225,26 @@ test("a target with no unit still uses its recorded position", function()
     local placed = harness.place({ kind = "mission_objective_scanner", position = { x = 5, y = 6, z = 7 } })
 
     assert_near(5, placed.x, "a unitless target lost its position")
+end)
+
+-- The marker list says "the game shows something here" for every marker type.
+-- Only an `objective` marker is the game pointing at a step; the prompt a player
+-- gets standing next to something is not.
+test("only an objective marker counts as the game marking an objective", function()
+    local harness = new_harness()
+    local step = {}
+    local locker = {}
+
+    harness.env._safe_world_markers_list = function()
+        return { { unit = step, type = "objective" }, { unit = locker, type = "interaction" } }
+    end
+
+    local out = {}
+
+    assert_equal(true, harness.env._refresh_world_marker_units(out), "the marker list was not read")
+    assert_equal(true, out[step] == true and out[locker] == true, "a marked unit is missing from the set")
+    assert_equal(true, harness.env._game_marks_as_objective(step), "an objective marker is not counted")
+    assert_equal(false, harness.env._game_marks_as_objective(locker), "a prompt was counted as an objective marker")
 end)
 
 local failures = {}

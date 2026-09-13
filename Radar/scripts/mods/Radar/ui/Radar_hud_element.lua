@@ -197,6 +197,8 @@ local OBJECTIVE_ICON_SIZE_BY_KIND = {
     mission_objective_servo_skull = 9,
     -- The parasite art fills its own box more than the others do.
     mission_objective_growth = 8,
+    -- The same mission-type art as the scanner's, so the same share of the frame.
+    mission_objective_destroy = 8,
     -- Its texture already carries the inset, so it takes a much larger share of
     -- the frame than the rest and still matches the game's own marker.
     mission_objective_other = 20,
@@ -708,6 +710,18 @@ local PRESENTATIONS = {
         size = OBJECTIVE_FRAME_SIZE,
         background_base_size = OBJECTIVE_FRAME_SIZE,
         overlay_base_size = OBJECTIVE_ICON_SIZE_BY_KIND.mission_objective_growth,
+    },
+    -- Targets any other objective marks for destruction: ice on machinery,
+    -- tanks, cogitators. The game gives them no finer type, so one icon; the
+    -- generic category's colour.
+    mission_objective_destroy = {
+        icon = OBJECTIVE_FRAME_ICON,
+        plate_icon = OBJECTIVE_PLATE_ICON,
+        overlay_icon = "content/ui/materials/icons/mission_types/mission_type_01",
+        color = VANILLA_OBJECTIVE_WIDGET_COLOR,
+        size = OBJECTIVE_FRAME_SIZE,
+        background_base_size = OBJECTIVE_FRAME_SIZE,
+        overlay_base_size = OBJECTIVE_ICON_SIZE_BY_KIND.mission_objective_destroy,
     },
     mission_objective_other = {
         icon = OBJECTIVE_FRAME_ICON,

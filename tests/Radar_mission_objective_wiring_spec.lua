@@ -3,6 +3,7 @@
 -- shared presentation rules hold.
 local KINDS = {
     "mission_objective_growth",
+    "mission_objective_destroy",
     "mission_objective_scanner",
     "mission_objective_hacking",
     "mission_objective_servo_skull",
@@ -11,6 +12,7 @@ local KINDS = {
 
 local SETTING_BY_KIND = {
     mission_objective_growth = "show_mission_objective_growth",
+    mission_objective_destroy = "show_mission_objective_destroy",
     mission_objective_scanner = "show_mission_objective_scanner",
     mission_objective_hacking = "show_mission_objective_hacking",
     mission_objective_servo_skull = "show_mission_objective_servo_skull",
@@ -19,6 +21,7 @@ local SETTING_BY_KIND = {
 
 local settings_store = {
     show_mission_objective_growth = "icon_only",
+    show_mission_objective_destroy = "icon_only",
     show_mission_objective_scanner = "icon_only",
     show_mission_objective_hacking = "icon_distance",
     show_mission_objective_servo_skull = "off",
@@ -73,6 +76,7 @@ assert(loadfile("Radar/scripts/mods/Radar/Radar_runtime_helpers.lua"))()(env)
 local color_settings = assert(loadfile("Radar/scripts/mods/Radar/Radar_color_settings.lua"))()
 local hud_source = assert(io.open("Radar/scripts/mods/Radar/ui/Radar_hud_element.lua")):read("*a")
 local data_source = assert(io.open("Radar/scripts/mods/Radar/Radar_data.lua")):read("*a")
+local localization_source = assert(io.open("Radar/scripts/mods/Radar/Radar_localization.lua")):read("*a")
 local tracking_source = assert(io.open("Radar/scripts/mods/Radar/Radar_tracking.lua")):read("*a")
 local expeditions_source = assert(io.open("Radar/scripts/mods/Radar/Radar_expeditions.lua")):read("*a")
 
@@ -107,6 +111,27 @@ for i = 1, #KINDS do
     check(mod:get_icon_distance_marker_display_mode(kind) == settings_store[setting_id],
         kind .. ": display mode does not follow its dropdown setting")
 
+    -- Against its own dropdown alone. The store above gives several dropdowns
+    -- the same value, so a kind mapped to the wrong one of those still passed:
+    -- with every dropdown on one value and its own on another, it cannot.
+    do
+        local saved = {}
+
+        for _, other_setting in pairs(SETTING_BY_KIND) do
+            saved[other_setting] = settings_store[other_setting]
+            settings_store[other_setting] = "icon_only"
+        end
+
+        settings_store[setting_id] = "off"
+
+        check(mod:get_icon_distance_marker_display_mode(kind) == "off",
+            kind .. ": display mode follows another category's dropdown")
+
+        for other_setting, value in pairs(saved) do
+            settings_store[other_setting] = value
+        end
+    end
+
     check(env.NEARBY_HIGHLIGHT_SETTING_BY_GROUP[group] == "nearby_highlight_mission_objective",
         kind .. ": nearby highlight setting not mapped")
 
@@ -127,6 +152,11 @@ for i = 1, #KINDS do
 
     check(data_source:find('_icon_distance_off_dropdown("' .. setting_id .. '"', 1, true) ~= nil,
         kind .. ": missing settings dropdown widget")
+
+    -- A dropdown without text shows its raw setting id in the menu.
+    check(localization_source:find("    " .. setting_id .. " = {", 1, true) ~= nil
+        and localization_source:find("    " .. setting_id .. "_tooltip = {", 1, true) ~= nil,
+        kind .. ": its dropdown has no label or tooltip text")
 
     check(mod:is_event_marker_kind(kind) ~= true, kind .. ": must not be treated as an event marker")
 
@@ -165,6 +195,13 @@ check(data_source:find('_icon_distance_off_dropdown("show_mission_objective_grow
 check(color_settings.anchored_color_settings
     and color_settings.anchored_color_settings.show_mission_objective_growth ~= nil,
     "daemonic growth has no colour sliders of its own")
+-- Targets to destroy likewise: a dropdown and icon and highlight colours of
+-- their own, defaulting to the objective tint of the category they came from.
+check(data_source:find('_icon_distance_off_dropdown("show_mission_objective_destroy"', 1, true) ~= nil,
+    "targets to destroy have no display mode dropdown")
+check(color_settings.anchored_color_settings
+    and color_settings.anchored_color_settings.show_mission_objective_destroy ~= nil,
+    "targets to destroy have no colour sliders of their own")
 
 -- Puzzle devices change only which colour they are looked up under. These two
 -- are colour kinds and nothing else: no presentation, no dropdown, no scale
@@ -386,16 +423,18 @@ for i = 1, #KINDS do
         kind .. ": does not opt into the backplate")
 end
 
--- A daemonic growth is recognised by the demolition targets it files around its
--- centre eye. The objective name differs on every mission running the event,
--- so a name list only ever covered the missions written into it.
-local growth_note = expeditions_source:match(
-    "function _note_growth_objective_target%(.-%)(.-)" .. LF .. "    end" .. LF)
-
-check(growth_note ~= nil
-    and growth_note:find('_safe_objective_target_field(extension, "_ui_target_type") ~= "demolition"', 1, true)
-        ~= nil,
-    "growth objectives are not recognised by their demolition targets")
+-- A daemonic growth is recognised by its objective's own type, `demolition`.
+-- The objective name differs on every mission running the event, so a name list
+-- only ever covered the missions written into it; and the targets'
+-- `_ui_target_type=demolition` is only the game's marker style for "destroy
+-- this", which ice, tanks and cogitators carry under other objectives.
+check(expeditions_source:find('or rawget(objective, "_objective_type") ~= "demolition" then', 1, true) ~= nil
+    and expeditions_source:find("                _note_growth_objective(name, objective)", 1, true) ~= nil,
+    "growth objectives are not recognised by their objective's own type")
+check(expeditions_source:find("_note_growth_objective_target", 1, true) == nil,
+    "growth objectives are recognised by their targets' marker style again")
+check(expeditions_source:find('return "mission_objective_destroy"', 1, true) ~= nil,
+    "targets to destroy are not classified as their own kind")
 check(expeditions_source:find('_corruptor_event"', 1, true) == nil
     and expeditions_source:find("string_sub(objective_name, -#suffix)", 1, true) == nil,
     "growth objectives are matched on their name again")
@@ -405,10 +444,13 @@ check(expeditions_source:find("        table_clear(_growth_objective_by_name)", 
 -- The game marks a growth's demolition targets only to hang its pointers off
 -- them, under a metre from the centre eye. Its marker must not override the
 -- start-marker filter for them, or four markers stack on one spot.
+-- And a growth's alone: under any other objective those targets are the things
+-- to destroy, and the override stands for them.
 check(expeditions_source:find("                    and (not game_marks_unit" .. LF
-    .. '                        or _safe_objective_target_field(extension, "_ui_target_type") == "demolition") then',
+    .. "                        or (_is_growth_objective_name(objective_name)" .. LF
+    .. '                            and _safe_objective_target_field(extension, "_ui_target_type") == "demolition")) then',
     1, true) ~= nil,
-    "the game's marker on a growth's demolition targets overrides the start-marker filter")
+    "the growth exception to the game's marker is missing, or reaches other objectives")
 -- Only the icon changes for a daemonic growth step, and the shared presentation
 -- table means an override has to be reset on every marker or it leaks.
 -- Growth is a marker kind of its own, so its icon, size and position live in its
@@ -1190,6 +1232,59 @@ check(expeditions_source:find("        _debug_probe_objective_marker_types()", 1
     "the marker type probe is never called")
 check(expeditions_source:find("        _reset_marker_types_probe()", 1, true) ~= nil,
     "the marker type probe budget is never refilled between missions")
+
+-- Of a bank of identical containers under a luggable objective only those
+-- holding a luggable are drawn, and only containers of a prefab found holding
+-- one are ever dropped, so the objective's other steps are untouched.
+check(expeditions_source:find('if rawget(objective, "_objective_type") == "luggable" then', 1, true) ~= nil,
+    "luggable objectives are not recognised by their own type")
+check(expeditions_source:find("if prefab ~= nil and containers ~= nil and containers[prefab] == true then", 1, true)
+    ~= nil,
+    "containers are dropped without a prefab found holding a luggable")
+check(expeditions_source:find('and kind ~= "luggable_socket"', 1, true) ~= nil,
+    "a socket is taken for a luggable")
+check(expeditions_source:find("        table_clear(LUGGABLE_HOLDER.prefab_of)", 1, true) ~= nil,
+    "the container state keeps unit references into the next mission")
+
+-- Decided where every radar target is built, so the screen highlight follows:
+-- a luggable shut in a container the radar is drawing is hidden under it, and
+-- while the player carries a luggable the sockets ignore the radar's range and
+-- floor, as an objective the game points at does.
+check(tracking_source:find("and _luggable_hidden_in_container(unit) then", 1, true) ~= nil,
+    "a luggable shut in a drawn container is still drawn under it")
+check(tracking_source:find(
+    "carrying_luggable = _unit_carries_luggable(player_unit, script_unit and script_unit.has_extension)", 1, true) ~= nil
+    and tracking_source:find("if socket_while_carrying then", 1, true) ~= nil,
+    "the sockets do not ignore the radar's range while a luggable is carried")
+check(tracking_source:find("and not socket_while_carrying", 1, true) ~= nil,
+    "the sockets are hidden on another floor while a luggable is carried")
+-- A luggable is inside a container only while it is still where it was first
+-- seen: a carried one made a valve a container on lm_rails.
+check(expeditions_source:find("if x ~= nil and _luggable_unmoved(unit, x, y, z) then", 1, true) ~= nil,
+    "a carried or dropped luggable makes whatever it is next to a container")
+check(expeditions_source:find("        table_clear(LUGGABLE_HOLDER.origin)", 1, true) ~= nil,
+    "where the luggables were first seen is kept into the next mission")
+-- A generic interactable the game has marked as an objective follows that
+-- marker, and only an objective marker counts, never the prompt.
+check(expeditions_source:find(
+    'if kind == "mission_objective_other" and interactee_map ~= nil and interactee_map[unit] ~= nil', 1, true) ~= nil,
+    "the game's objective marker is followed beyond generic interactables")
+check(helpers_source:find('if marker.type == "objective" then', 1, true) ~= nil,
+    "the prompt a player gets next to something counts as the game marking an objective")
+-- One reading of "carrying a luggable", for the teammates' state and the player.
+check(tracking_source:find("if _unit_carries_luggable(unit, has_extension) then", 1, true) ~= nil,
+    "the teammates' luggable state reads the wielded slot its own way")
+-- A socket is drawn as what goes into it, decided before its setting is read,
+-- and is still a socket to the range rule while a luggable is carried.
+local socket_kind_at = tracking_source:find("kind = _luggable_socket_display_kind(unit)", 1, true)
+local kind_enabled_at = tracking_source:find("(not _cached_kind_enabled(kind) and not ability_marked_enemy)", 1, true)
+
+check(socket_kind_at ~= nil and kind_enabled_at ~= nil and socket_kind_at < kind_enabled_at,
+    "a socket's setting is read before it is drawn as what goes into it")
+check(tracking_source:find("if is_socket then", 1, true) ~= nil,
+    "a socket drawn as an objective step lost the range rule while a luggable is carried")
+check(expeditions_source:find("        table_clear(LUGGABLE_HOLDER.socket_objective)", 1, true) ~= nil,
+    "the sockets' objectives keep unit references into the next mission")
 
 check_local_use_before_declaration(expeditions_source, "Radar_expeditions.lua")
 check_local_use_before_declaration(tracking_source, "Radar_tracking.lua")

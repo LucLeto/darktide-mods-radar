@@ -945,6 +945,28 @@ return function(env)
         return ok and component or nil
     end
 
+    -- Whether a player is carrying a luggable: wielding the luggable slot with
+    -- something equipped in it.
+    function _unit_carries_luggable(unit, has_extension)
+        local unit_data_extension = has_extension and has_extension(unit, "unit_data_system") or nil
+        local inventory_component = _safe_player_component(unit_data_extension, "inventory")
+
+        if not inventory_component or inventory_component.wielded_slot ~= SLOT_LUGGABLE then
+            return false
+        end
+
+        local visual_loadout_extension = has_extension(unit, "visual_loadout_system")
+        local slot_equipped = PlayerUnitVisualLoadout and PlayerUnitVisualLoadout.slot_equipped
+
+        if not visual_loadout_extension or not slot_equipped then
+            return false
+        end
+
+        local ok, equipped = pcall(slot_equipped, inventory_component, visual_loadout_extension, SLOT_LUGGABLE)
+
+        return ok and equipped and true or false
+    end
+
     local function _player_radar_state(unit, has_extension)
         local unit_data_extension = has_extension and has_extension(unit, "unit_data_system") or nil
         local character_state_component = _safe_player_component(unit_data_extension, "character_state")
@@ -971,19 +993,8 @@ return function(env)
             return "captured"
         end
 
-        local inventory_component = _safe_player_component(unit_data_extension, "inventory")
-
-        if inventory_component and inventory_component.wielded_slot == SLOT_LUGGABLE then
-            local visual_loadout_extension = has_extension and has_extension(unit, "visual_loadout_system") or nil
-            local slot_equipped = PlayerUnitVisualLoadout and PlayerUnitVisualLoadout.slot_equipped
-
-            if visual_loadout_extension and slot_equipped then
-                local ok, equipped = pcall(slot_equipped, inventory_component, visual_loadout_extension, SLOT_LUGGABLE)
-
-                if ok and equipped then
-                    return "luggable"
-                end
-            end
+        if _unit_carries_luggable(unit, has_extension) then
+            return "luggable"
         end
 
         return nil
@@ -2104,6 +2115,9 @@ return function(env)
         local targets = _reuse_or_new_table(mod._radar_targets)
         local target_pool = _warm_radar_target_pool(max_markers)
         local target_count = 0
+        -- Whether the player is carrying a luggable: read once per pass, and only
+        -- once a socket asks.
+        local carrying_luggable = nil
 
         _clear_scratch_radar_caches()
 
@@ -2225,6 +2239,15 @@ return function(env)
                 or companion_action == "inject_ally"
                 or companion_action == "flamethrower"
                 or companion_overlapping_target
+            -- A socket is drawn as what goes into it: one fed mission cargo
+            -- rather than a power cell is an objective step, shown, coloured and
+            -- switched with the other steps. It is still a socket to the range
+            -- rule below.
+            local is_socket = kind == "luggable_socket"
+
+            if is_socket and _luggable_socket_display_kind ~= nil then
+                kind = _luggable_socket_display_kind(unit)
+            end
 
             if not position or not kind or (not _cached_kind_enabled(kind) and not ability_marked_enemy) then
                 return
@@ -2244,6 +2267,16 @@ return function(env)
             end
 
             if not _passes_tag_visibility_filter(kind, source, meta, only_tagged_enemies, only_tagged_items) then
+                return
+            end
+
+            -- A luggable still shut in a container the radar is drawing sits
+            -- under that container's marker; it comes back when the container
+            -- is opened. One a player has tagged is always shown.
+            if source == "interactee_system"
+                and not explicitly_tagged_target
+                and _luggable_hidden_in_container ~= nil
+                and _luggable_hidden_in_container(unit) then
                 return
             end
 
@@ -2283,6 +2316,25 @@ return function(env)
                 ignore_range = true
             end
 
+            -- Carrying a luggable, the sockets are where the mission is sending
+            -- the player: like an objective the game points at, they stay on the
+            -- radar however far away, and on whatever floor.
+            local socket_while_carrying = false
+
+            if is_socket then
+                if carrying_luggable == nil then
+                    local script_unit = ScriptUnit
+
+                    carrying_luggable = _unit_carries_luggable(player_unit, script_unit and script_unit.has_extension)
+                end
+
+                socket_while_carrying = carrying_luggable
+
+                if socket_while_carrying then
+                    ignore_range = true
+                end
+            end
+
             if distance_sq_horizontal > max_range_sq and not ignore_range then
                 return
             end
@@ -2298,6 +2350,7 @@ return function(env)
 
                     if not infinite_range
                         and not _is_vertical_hide_exempt(kind)
+                        and not socket_while_carrying
                         and abs_vertical_delta >= item_vertical_hide_threshold then
                         return
                     end

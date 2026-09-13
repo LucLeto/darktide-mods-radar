@@ -1513,6 +1513,7 @@ return function(env)
     local MISSION_OBJECTIVE_MARKER_KINDS = {
         mission_objective_scanner = true,
         mission_objective_growth = true,
+        mission_objective_destroy = true,
         mission_objective_hacking = true,
         mission_objective_servo_skull = true,
         mission_objective_other = true,
@@ -1532,6 +1533,252 @@ return function(env)
     local _mission_objective_kind_by_unit = {}
     local _scratch_mission_objective_kind_enabled = {}
     local _scratch_active_objective_names = {}
+
+    -- Containers hiding a luggable objective's items. lm_rails' cargo and
+    -- lm_scavenge's samples are filed under their objective together with a
+    -- whole bank of identical lockers -- sixty-one on lm_scavenge -- and nothing
+    -- on a locker says which of them hold anything: one prefab, the same
+    -- fields, and the game marks none of them. The luggable says so itself. It
+    -- exists inside its closed locker from the moment the objective starts,
+    -- tracked like any other, 0.43 m to the side of the locker's origin and
+    -- 1.3 m above it, while the nearest other locker stands 2 m or more away.
+    --
+    -- Only containers of a prefab found holding a luggable are ever dropped, so
+    -- the objective's other steps -- lm_rails files two valves under the same
+    -- objective -- and every objective where nothing turns up inside anything
+    -- are left exactly as they were.
+    local LUGGABLE_HOLDER = {
+        -- Sideways, squared: a metre, halfway to the nearest other locker.
+        reach_squared = 1,
+        -- Up or down: the luggable rests above the locker's origin.
+        height = 3,
+        active = false,
+        objectives = {},
+        count = 0,
+        units = {},
+        x = {},
+        y = {},
+        z = {},
+        -- What holds a luggable, refilled every scan.
+        holds = {},
+        -- Each luggable still shut inside one, and the container it is in.
+        inside = {},
+        -- Per objective, the prefabs found holding one of its luggables. Kept for
+        -- the mission rather than refilled: once the last luggable is out of its
+        -- container nothing holds anything, and the empty ones must stay empty.
+        container_prefabs = {},
+        -- Per unit, read once; `false` when the engine cannot say.
+        prefab_of = {},
+        -- Per kind, whether it is a luggable rather than a socket.
+        luggable_kind = {},
+        -- Where each luggable was first seen, and how far from there it may be
+        -- and still count as never moved: 0.3 m, squared.
+        origin = {},
+        still_squared = 0.09,
+        -- Per objective, the kind of luggable it is about, and per socket, its
+        -- objective. Kept for the mission: the last luggable put in a socket
+        -- leaves nothing to read, and the sockets must not change category then.
+        cargo = {},
+        socket_objective = {},
+        -- The mission cargo that goes into the mission's own machinery rather
+        -- than a power socket. Its sockets are drawn as the objective step they
+        -- are. Power cells are not in it, and keep the power socket.
+        objective_cargo = {
+            luggable_vacuum_capsule = true,
+            luggable_special_issue_ammo = true,
+            luggable_cryonic_rod = true,
+            luggable_moebian_pox_zetaphyte_13_sample = true,
+            luggable_prismata_crystal_repository = true,
+        },
+    }
+
+    -- Whether a luggable is still where the radar first saw it. One inside a
+    -- closed container has not moved since the objective started; one a player
+    -- has carried, dropped or put in a socket has, and is inside nothing. On
+    -- lm_rails a canister carried past a valve made the valve a "container",
+    -- and every valve holding nothing was then dropped as an empty one while
+    -- the game was marking it.
+    function _luggable_unmoved(unit, x, y, z)
+        local origin = LUGGABLE_HOLDER.origin[unit]
+
+        if origin == nil then
+            LUGGABLE_HOLDER.origin[unit] = { x, y, z }
+
+            return true
+        end
+
+        local dx = x - origin[1]
+        local dy = y - origin[2]
+        local dz = z - origin[3]
+
+        return dx * dx + dy * dy + dz * dz <= LUGGABLE_HOLDER.still_squared
+    end
+
+    -- The luggables the radar is tracking, whatever their own display setting:
+    -- tracking is not gated on it, drawing is. A socket is a `luggable_` kind
+    -- too, and holds nothing.
+    function _collect_objective_luggables()
+        local holder = LUGGABLE_HOLDER
+        local luggable_kind = holder.luggable_kind
+        local count = 0
+
+        for unit, data in pairs(mod._tracked_units) do
+            local kind = data and data.kind or nil
+
+            if kind ~= nil then
+                local is_luggable = luggable_kind[kind]
+
+                if is_luggable == nil then
+                    is_luggable = type(kind) == "string" and string_find(kind, "luggable_", 1, true) == 1
+                        and kind ~= "luggable_socket"
+                    luggable_kind[kind] = is_luggable
+                end
+
+                if is_luggable then
+                    local x, y, z = _vector3_components(_safe_unit_position(unit))
+
+                    if x ~= nil and _luggable_unmoved(unit, x, y, z) then
+                        count = count + 1
+                        holder.units[count] = unit
+                        holder.x[count] = x
+                        holder.y[count] = y
+                        holder.z[count] = z
+                    end
+                end
+            end
+        end
+
+        holder.count = count
+    end
+
+    -- The luggable inside `unit`, if one is.
+    function _luggable_inside(unit)
+        local x, y, z = _vector3_components(_safe_unit_position(unit))
+
+        if x == nil then
+            return nil
+        end
+
+        local holder = LUGGABLE_HOLDER
+        local height = holder.height
+
+        for i = 1, holder.count do
+            -- The luggables are filed under their objective too, as
+            -- interactables of their own, and one is not its own container.
+            if holder.units[i] ~= unit then
+                local dx = holder.x[i] - x
+                local dy = holder.y[i] - y
+                local dz = holder.z[i] - z
+
+                if dx * dx + dy * dy <= holder.reach_squared and dz <= height and dz >= -height then
+                    return holder.units[i]
+                end
+            end
+        end
+
+        return nil
+    end
+
+    -- The prefab a unit was spawned from, read once into `cache` and kept for the
+    -- mission: a unit never changes what it was spawned from. `false` in the
+    -- cache records that the engine could not say, and comes back as nil.
+    function _cached_unit_prefab(cache, unit)
+        local known = cache[unit]
+
+        if known == nil then
+            known = _safe_unit_prefab_name ~= nil and _safe_unit_prefab_name(unit) or false
+            cache[unit] = known
+        end
+
+        return known or nil
+    end
+
+    function _luggable_holder_prefab(unit)
+        return _cached_unit_prefab(LUGGABLE_HOLDER.prefab_of, unit)
+    end
+
+    -- A luggable in a container the radar is drawing: the container's marker
+    -- already stands where it is, and the luggable's own would only sit under
+    -- it. Only while the container is drawn, so the place is never left
+    -- unmarked -- and an opened container is retired and never drawn again, so
+    -- the luggable comes back the moment it is opened.
+    function _luggable_hidden_in_container(unit)
+        local container = LUGGABLE_HOLDER.inside[unit]
+
+        return container ~= nil and mod._tracked_units[container] ~= nil
+    end
+
+    function _note_luggable_holder(unit, objective_name, luggable)
+        LUGGABLE_HOLDER.holds[unit] = true
+        LUGGABLE_HOLDER.inside[luggable] = unit
+
+        local prefab = _luggable_holder_prefab(unit)
+
+        if prefab ~= nil then
+            local prefabs = LUGGABLE_HOLDER.container_prefabs[objective_name]
+
+            if prefabs == nil then
+                prefabs = {}
+                LUGGABLE_HOLDER.container_prefabs[objective_name] = prefabs
+            end
+
+            prefabs[prefab] = true
+        end
+
+        -- Once per container, so a run shows which of a bank were kept.
+        if mod:get("debug_mode") == true then
+            _log_once("luggable_holder:" .. _debug_unit_id(unit), string_format(
+                "Luggable container: mission=%s objective=%s prefab=%s position=%s",
+                tostring(_safe_mission_name()),
+                objective_name,
+                tostring(prefab),
+                _debug_unit_position_text(unit)
+            ))
+        end
+    end
+
+    -- A luggable objective files both its luggables and its sockets under its
+    -- name, and the game only lets a luggable into a socket of its own
+    -- objective, so the objective says what each socket takes.
+    function _note_luggable_cargo(unit, objective_name)
+        local tracked = mod._tracked_units[unit]
+        local kind = tracked and tracked.kind or nil
+        local holder = LUGGABLE_HOLDER
+
+        if kind == "luggable_socket" then
+            holder.socket_objective[unit] = objective_name
+
+            -- Once per socket, so a run shows what each was drawn as and why.
+            if holder.cargo[objective_name] ~= nil and mod:get("debug_mode") == true then
+                _log_once("luggable_socket:" .. _debug_unit_id(unit), string_format(
+                    "Luggable socket: mission=%s objective=%s cargo=%s drawn_as=%s position=%s",
+                    tostring(_safe_mission_name()),
+                    objective_name,
+                    holder.cargo[objective_name],
+                    _luggable_socket_display_kind(unit),
+                    _debug_unit_position_text(unit)
+                ))
+            end
+        elseif kind ~= nil and holder.cargo[objective_name] == nil and holder.luggable_kind[kind] == true then
+            holder.cargo[objective_name] = kind
+        end
+    end
+
+    -- What a socket is drawn as. A power cell's socket stays a power socket; one
+    -- for mission cargo -- capsules, canisters, rods, samples, the Prismata
+    -- case -- is a step of the mission's machinery, which the game marks as an
+    -- objective. Until its cargo is known, a socket is drawn as it always was.
+    function _luggable_socket_display_kind(unit)
+        local holder = LUGGABLE_HOLDER
+        local objective_name = holder.socket_objective[unit]
+        local cargo = objective_name ~= nil and holder.cargo[objective_name] or nil
+
+        if cargo ~= nil and holder.objective_cargo[cargo] == true then
+            return "mission_objective_other"
+        end
+
+        return "luggable_socket"
+    end
     local _scratch_seen_mission_objective_units = {}
     local _scratch_mission_objective_zone_units = {}
 
@@ -1605,6 +1852,8 @@ return function(env)
     local function _refresh_active_objective_names()
         local names = _scratch_active_objective_names
         table_clear(names)
+        table_clear(LUGGABLE_HOLDER.objectives)
+        LUGGABLE_HOLDER.active = false
 
         local objective_system = _safe_extension_system(MISSION_OBJECTIVE_SOURCE)
 
@@ -1630,6 +1879,13 @@ return function(env)
             if type(name) == "string" then
                 names[name] = true
                 found = true
+
+                _note_growth_objective(name, objective)
+
+                if rawget(objective, "_objective_type") == "luggable" then
+                    LUGGABLE_HOLDER.objectives[name] = true
+                    LUGGABLE_HOLDER.active = true
+                end
 
                 _debug_log_active_objective_fields(name, objective)
             end
@@ -1689,36 +1945,35 @@ return function(env)
     -- every mission that runs the event -- `..._corruptor_event` on Silo
     -- Cluster, `..._demolition_first/a/b/final` on Propaganda,
     -- `..._demo_floor_one/two` on Rise -- so a name list only ever covered the
-    -- missions written into it. What every growth does share is its shape: it
-    -- files three targets whose `_ui_target_type` is `demolition` a fraction of
-    -- a metre around its centre eye, which is what the game draws its three
-    -- pointers at the tentacles from. Across 21 logs no other objective uses
-    -- that value, and a client's copy of the target carries it too.
+    -- missions written into it. What does identify one is the objective's own
+    -- type: all nine growths logged, on four missions, are `demolition`
+    -- objectives, and across 23 logs nothing else is. The targets'
+    -- `_ui_target_type=demolition` is not the same thing: that is only the
+    -- game's marker style for "destroy this", and core_research's ice, cm_raid's
+    -- filtration tanks, km_heresy's Stimm tanks and op_train's cogitators carry
+    -- it too, under `goal` and `collect` objectives.
     --
-    -- Remembered per objective for the rest of the mission once seen, so the
-    -- centre eye cannot lose its icon if the game retires those targets before
-    -- it. Only the icon and the tentacle search depend on this: the marker is
-    -- claimed, coloured and retired exactly as any other objective step.
+    -- Remembered per objective for the rest of the mission once seen. Only the
+    -- icon, the tentacle search and the helper-target exception depend on this:
+    -- the marker is claimed, coloured and retired exactly as any other step.
     local _growth_objective_by_name = {}
 
     function _is_growth_objective_name(objective_name)
         return objective_name ~= nil and _growth_objective_by_name[objective_name] == true
     end
 
-    -- True only the scan an objective is first recognised, so the caller knows
-    -- to go back over the targets it has already passed.
-    function _note_growth_objective_target(objective_name, extension)
+    -- Read off the live objective as the active objectives are listed, before
+    -- any target is looked at. A field, never a call.
+    function _note_growth_objective(objective_name, objective)
         if _growth_objective_by_name[objective_name] == true
-            or _safe_objective_target_field(extension, "_ui_target_type") ~= "demolition" then
-            return false
+            or rawget(objective, "_objective_type") ~= "demolition" then
+            return
         end
 
         _growth_objective_by_name[objective_name] = true
         -- Reported once per objective, so a run shows exactly which objectives
         -- were recognised rather than leaving it to be inferred from the icons.
         _debug_log_growth_objective(objective_name)
-
-        return true
     end
 
     local MISSION_OBJECTIVE_MINIGAME_SYSTEM = "minigame_system"
@@ -1739,6 +1994,10 @@ return function(env)
     -- objective maps that fill it: the meta builder above needs it, and a local
     -- is invisible before its declaration.
     local _scratch_growth_objective_units = {}
+    -- Targets any other objective marks for destruction: ice on machinery,
+    -- tanks, cogitators. Their own kind, so they read neither as a growth nor as
+    -- a switch to press.
+    local _scratch_destroy_objective_units = {}
 
     -- Bare objective steps -- the train controls destroyed to stop the train --
     -- carry no completion state anywhere: not an interactee, no health, in no
@@ -1752,6 +2011,36 @@ return function(env)
     -- declaration.
     local _scratch_world_marker_units = {}
     local _world_marker_units_available = false
+
+    -- Steps used more than once. lm_rails' cargo valves stay active, unused and
+    -- offering their prompt for the whole objective; what says a valve is the
+    -- step right now is the game's objective marker on it, which comes and goes
+    -- as the capsules go into the sockets beside it. So an interactable the game
+    -- has marked as an objective this mission follows that marker from then on.
+    -- One the game never marks is shown as before, and with no readable marker
+    -- list nothing is hidden. The prompt a player gets standing next to
+    -- something is not a mark. Remembered in the unit's lifecycle state, which
+    -- the mission reset clears.
+    function _objective_marker_lapsed(unit)
+        if not _world_marker_units_available or _game_marks_as_objective == nil then
+            return false
+        end
+
+        local state = _mission_objective_lifecycle_by_unit[unit]
+
+        if _game_marks_as_objective(unit) then
+            if state == nil then
+                state = {}
+                _mission_objective_lifecycle_by_unit[unit] = state
+            end
+
+            state.objective_marked = true
+
+            return false
+        end
+
+        return state ~= nil and state.objective_marked == true
+    end
 
     -- Units the game is currently pointing at through something other than its
     -- own world marker list. Every objective system answers "is the HUD showing
@@ -1973,6 +2262,10 @@ return function(env)
 
         if _scratch_growth_objective_units[unit] == true then
             return "mission_objective_growth"
+        end
+
+        if _scratch_destroy_objective_units[unit] == true then
+            return "mission_objective_destroy"
         end
 
         return default_kind or "mission_objective_other"
@@ -2296,12 +2589,18 @@ return function(env)
         table_clear(_scratch_objective_has_start_marker)
         table_clear(_scratch_start_marker_by_unit)
         table_clear(_scratch_growth_objective_units)
+        table_clear(_scratch_destroy_objective_units)
+        table_clear(LUGGABLE_HOLDER.holds)
+        table_clear(LUGGABLE_HOLDER.inside)
+        LUGGABLE_HOLDER.count = 0
+
+        if LUGGABLE_HOLDER.active then
+            _collect_objective_luggables()
+        end
 
         if type(extension_map) ~= "table" then
             return
         end
-
-        local recognised_growth = false
 
         for unit, extension in pairs(extension_map) do
             local objective_name = _safe_objective_target_name(extension)
@@ -2324,12 +2623,23 @@ return function(env)
                         _objective_world_marker_seen[objective_name] = true
                     end
 
-                    if _note_growth_objective_target(objective_name, extension) then
-                        recognised_growth = true
-                    end
-
                     if _is_growth_objective_name(objective_name) then
                         _scratch_growth_objective_units[unit] = true
+                    elseif _safe_objective_target_field(extension, "_ui_target_type") == "demolition" then
+                        _scratch_destroy_objective_units[unit] = true
+                    end
+
+                    if LUGGABLE_HOLDER.objectives[objective_name] == true then
+                        _note_luggable_cargo(unit, objective_name)
+                    end
+
+                    if LUGGABLE_HOLDER.count > 0 and LUGGABLE_HOLDER.objectives[objective_name] == true
+                        and interactee_map ~= nil and interactee_map[unit] ~= nil then
+                        local luggable = _luggable_inside(unit)
+
+                        if luggable ~= nil then
+                            _note_luggable_holder(unit, objective_name, luggable)
+                        end
                     end
 
                     if _safe_objective_target_field(extension, "_add_marker_on_objective_start") == true then
@@ -2338,21 +2648,6 @@ return function(env)
                     end
                 else
                     _scratch_inactive_objective_units[unit] = true
-                end
-            end
-        end
-
-        -- A growth recognised part-way through the pass above has targets the
-        -- pass had already gone by, the centre eye among them if it came first.
-        -- They are collected here rather than a scan later, so the centre never
-        -- shows as a generic objective for a moment. Once per growth per mission.
-        if recognised_growth then
-            for unit, extension in pairs(extension_map) do
-                local objective_name = _safe_objective_target_name(extension)
-
-                if objective_name ~= nil and active_names[objective_name] == true
-                    and _is_growth_objective_name(objective_name) then
-                    _scratch_growth_objective_units[unit] = true
                 end
             end
         end
@@ -2418,14 +2713,7 @@ return function(env)
     -- candidate alike, which leaves the shape to decide on its own as it did
     -- before prefabs were read.
     function _growth_eye_prefab(unit)
-        local known = GROWTH_EYE.prefab_of[unit]
-
-        if known == nil then
-            known = _safe_unit_prefab_name ~= nil and _safe_unit_prefab_name(unit) or false
-            GROWTH_EYE.prefab_of[unit] = known
-        end
-
-        return known or nil
+        return _cached_unit_prefab(GROWTH_EYE.prefab_of, unit)
     end
 
     -- One marker per tentacle rather than three: at radar scale three markers
@@ -2779,12 +3067,15 @@ return function(env)
                 -- stacked four markers on one spot. The tentacles carry markers
                 -- of their own, so for these the start marker decides, as it did
                 -- before the override. A centre eye that is itself a demolition
-                -- target claims the start marker and is kept by it.
+                -- target claims the start marker and is kept by it. A growth's
+                -- alone: under any other objective a target styled that way is
+                -- the thing to destroy, and the game's marker keeps it.
                 if keep
                     and _scratch_objective_has_start_marker[objective_name] == true
                     and _scratch_start_marker_by_unit[unit] ~= true
                     and (not game_marks_unit
-                        or _safe_objective_target_field(extension, "_ui_target_type") == "demolition") then
+                        or (_is_growth_objective_name(objective_name)
+                            and _safe_objective_target_field(extension, "_ui_target_type") == "demolition")) then
                     -- An alternative the mission chose not to use.
                     keep = false
 
@@ -2835,11 +3126,33 @@ return function(env)
                         end
                     end
                 end
+
+                -- Of a bank of identical containers under a luggable objective,
+                -- only those holding a luggable. Only containers of a prefab
+                -- found holding one: see LUGGABLE_HOLDER.
+                if keep and LUGGABLE_HOLDER.objectives[objective_name] == true
+                    and LUGGABLE_HOLDER.holds[unit] ~= true
+                    and interactee_map ~= nil and interactee_map[unit] ~= nil then
+                    local prefab = _luggable_holder_prefab(unit)
+                    local containers = LUGGABLE_HOLDER.container_prefabs[objective_name]
+
+                    if prefab ~= nil and containers ~= nil and containers[prefab] == true then
+                        keep = false
+                    end
+                end
             end
 
             if keep and not (skip_units and skip_units[unit]) then
-                _claim_mission_objective_unit(unit, _mission_objective_unit_kind(unit, interactee_map, default_kind),
-                    enabled_by_kind, seen_units)
+                local kind = _mission_objective_unit_kind(unit, interactee_map, default_kind)
+
+                -- Generic interactables only: a puzzle device, a scan target or
+                -- a servo skull keeps its own state. See _objective_marker_lapsed.
+                if kind == "mission_objective_other" and interactee_map ~= nil and interactee_map[unit] ~= nil
+                    and _objective_marker_lapsed(unit) then
+                    kind = nil
+                end
+
+                _claim_mission_objective_unit(unit, kind, enabled_by_kind, seen_units)
             end
         end
     end
@@ -2920,6 +3233,18 @@ return function(env)
         table_clear(_scratch_mission_objective_zone_units)
         table_clear(_scratch_inactive_objective_units)
         table_clear(_scratch_growth_objective_units)
+        table_clear(_scratch_destroy_objective_units)
+        table_clear(LUGGABLE_HOLDER.objectives)
+        table_clear(LUGGABLE_HOLDER.holds)
+        table_clear(LUGGABLE_HOLDER.prefab_of)
+        table_clear(LUGGABLE_HOLDER.container_prefabs)
+        table_clear(LUGGABLE_HOLDER.units)
+        table_clear(LUGGABLE_HOLDER.inside)
+        table_clear(LUGGABLE_HOLDER.origin)
+        table_clear(LUGGABLE_HOLDER.cargo)
+        table_clear(LUGGABLE_HOLDER.socket_objective)
+        LUGGABLE_HOLDER.active = false
+        LUGGABLE_HOLDER.count = 0
         -- Keyed by objective name, which the next mission may reuse for an
         -- objective that is not a growth.
         table_clear(_growth_objective_by_name)
@@ -3982,6 +4307,31 @@ return function(env)
         ))
     end
 
+    -- One of an interactable's own answers about itself, for the probe below.
+    -- Interactee methods only, which the scan calls every pass anyway; never a
+    -- method on an objective extension.
+    function _debug_interactee_call(extension, method_name, argument)
+        local method = extension[method_name]
+
+        if type(method) ~= "function" then
+            return "-"
+        end
+
+        local ok, value = pcall(method, extension, argument)
+
+        return ok and tostring(value) or "error"
+    end
+
+    -- Whether it is active, whether it has been used, and whether it is offering
+    -- its prompt. A used or inactive interactable is dropped within a scan, so
+    -- one that stays on the radar after being used is still reporting itself
+    -- active and unused: this is what says so.
+    function _debug_interactee_state_text(extension)
+        return "active:" .. _debug_interactee_call(extension, "active")
+            .. ",used:" .. _debug_interactee_call(extension, "used")
+            .. ",prompt:" .. _debug_interactee_call(extension, "show_marker", _player_unit())
+    end
+
     -- Which of the game's own markers each objective marker on the radar has, by
     -- type, and how far away the player is. The world-marker set the scan reads
     -- counts every type alike, and an `interaction` marker is only the prompt a
@@ -4058,9 +4408,13 @@ return function(env)
 
                 types = types or "none"
 
-                -- Once per unit and set of types, so a run shows each marker
-                -- gaining and losing the game's markers rather than every scan.
-                local key = "objective_marker_types:" .. _debug_unit_id(unit) .. "|" .. types
+                local interactee = type(interactee_map) == "table" and interactee_map[unit] or nil
+                local state_text = interactee ~= nil and _debug_interactee_state_text(interactee) or "-"
+
+                -- Once per unit, set of types and interactable state, so a run
+                -- shows each marker gaining and losing the game's markers, and
+                -- each interactable being used, rather than every scan.
+                local key = "objective_marker_types:" .. _debug_unit_id(unit) .. "|" .. types .. "|" .. state_text
 
                 if not PROBE.marker_types_seen[key] then
                     PROBE.marker_types_seen[key] = true
@@ -4076,14 +4430,15 @@ return function(env)
                     end
 
                     _log_once(key, string_format(
-                        "Objective marker types: mission=%s kind=%s objective=%s interactee=%s types=%s distance=%.1f position=%s",
+                        "Objective marker types: mission=%s kind=%s objective=%s interactee=%s types=%s distance=%.1f position=%s state=%s",
                         mission_text,
                         kind,
                         tostring(objective_name),
-                        tostring(type(interactee_map) == "table" and interactee_map[unit] ~= nil),
+                        tostring(interactee ~= nil),
                         types,
                         distance,
-                        _debug_unit_position_text(unit)
+                        _debug_unit_position_text(unit),
+                        state_text
                     ))
                 end
             end

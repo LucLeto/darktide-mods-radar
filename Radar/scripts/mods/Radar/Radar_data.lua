@@ -419,6 +419,10 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
         icon = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_parasite",
         icon_colour = RadarColorSettings.mission_objective_growth_color,
     },
+    show_mission_objective_destroy = {
+        icon = "content/ui/materials/icons/mission_types/mission_type_01",
+        icon_colour = RadarColorSettings.vanilla_objective_color,
+    },
     show_martyr_skull = {
         icon = "content/ui/materials/hud/interactions/icons/enemy",
         icon_colour = { 255, 255, 215, 0 },
@@ -1803,6 +1807,28 @@ return {
                     },
                 },
                 {
+                    setting_id = "mission_objective_group",
+                    type = "group",
+                    tab = TAB_OBJECTIVES,
+                    tab_overrides = TAB_OVERRIDES_OBJECTIVES,
+                    sub_widgets = {
+                        _icon_scale_slider("mission_objective_icon_scale", nil),
+                        {
+                            setting_id = "nearby_highlight_mission_objective",
+                            type = "checkbox",
+                            default_value = false,
+                        },
+                        _nearby_highlight_radar_distance_text_checkbox(
+                            "nearby_highlight_distance_text_mission_objective"),
+                        _icon_distance_off_dropdown("show_mission_objective_scanner", "icon_only"),
+                        _icon_distance_off_dropdown("show_mission_objective_hacking", "icon_only"),
+                        _icon_distance_off_dropdown("show_mission_objective_servo_skull", "icon_only"),
+                        _icon_distance_off_dropdown("show_mission_objective_growth", "icon_only"),
+                        _icon_distance_off_dropdown("show_mission_objective_destroy", "icon_only"),
+                        _icon_distance_off_dropdown("show_mission_objective_other", "icon_only"),
+                    },
+                },
+                {
                     setting_id = "primary_objective_group",
                     type = "group",
                     tab = TAB_OBJECTIVES,
@@ -1882,27 +1908,6 @@ return {
                             type = "checkbox",
                             default_value = true,
                         },
-                    },
-                },
-                {
-                    setting_id = "mission_objective_group",
-                    type = "group",
-                    tab = TAB_OBJECTIVES,
-                    tab_overrides = TAB_OVERRIDES_OBJECTIVES,
-                    sub_widgets = {
-                        _icon_scale_slider("mission_objective_icon_scale", nil),
-                        {
-                            setting_id = "nearby_highlight_mission_objective",
-                            type = "checkbox",
-                            default_value = false,
-                        },
-                        _nearby_highlight_radar_distance_text_checkbox(
-                            "nearby_highlight_distance_text_mission_objective"),
-                        _icon_distance_off_dropdown("show_mission_objective_scanner", "icon_only"),
-                        _icon_distance_off_dropdown("show_mission_objective_hacking", "icon_only"),
-                        _icon_distance_off_dropdown("show_mission_objective_servo_skull", "icon_only"),
-                        _icon_distance_off_dropdown("show_mission_objective_growth", "icon_only"),
-                        _icon_distance_off_dropdown("show_mission_objective_other", "icon_only"),
                     },
                 },
                 {

@@ -7,6 +7,7 @@ local MISSION_OBJECTIVE_SETTING_BY_KIND = {
     mission_objective_servo_skull = "show_mission_objective_servo_skull",
     mission_objective_other = "show_mission_objective_other",
     mission_objective_growth = "show_mission_objective_growth",
+    mission_objective_destroy = "show_mission_objective_destroy",
 }
 
 local function assert_nil(value, message)
@@ -66,6 +67,7 @@ local function new_harness()
         show_mission_objective_servo_skull = "icon_only",
         show_mission_objective_other = "icon_only",
         show_mission_objective_growth = "icon_only",
+        show_mission_objective_destroy = "icon_only",
     }
     -- A mission with no Martyr's Skull riddle data, so nothing else writes
     -- tracked units or points during these scans.
@@ -76,6 +78,7 @@ local function new_harness()
     local interactee_map = {}
     local extension_systems = {}
     local active_objective_names = nil
+    local objective_types = {}
     local objective_system_available = true
     local log_entries = {}
     local probe_calls = 0
@@ -115,6 +118,15 @@ local function new_harness()
         return nil
     end
 
+    -- From the definitions module: how a target is layered and ranked.
+    function mod:get_target_render_layer()
+        return 0
+    end
+
+    function mod:get_target_selection_priority()
+        return 0
+    end
+
     function mod:register_hud_element()
     end
 
@@ -140,10 +152,22 @@ local function new_harness()
         mod = mod,
         Pickups = { by_name = {} },
         KIND_TO_SETTING = {},
+        -- From the definitions module; read where the radar targets are built.
+        EXPEDITION_MARKER_KINDS = {},
+        ENEMY_RADAR_DEFINITION_BY_KIND = {},
+        -- No nearby highlight is switched on.
+        NEARBY_HIGHLIGHT_SETTING_BY_GROUP = {},
         SCAN_INTERVAL = 0.25,
         CompanionServoSkullSettings = { STATES = {} },
         GameSession = {},
         CLASS = { InputService = {} },
+        -- Read once when tracking installs. Whatever the wielded slot holds is
+        -- equipped.
+        PlayerUnitVisualLoadout = {
+            slot_equipped = function()
+                return true
+            end,
+        },
     }
 
     setmetatable(env, { __index = _G })
@@ -189,7 +213,9 @@ local function new_harness()
             active_objectives = {}
 
             for i = 1, #active_objective_names do
-                active_objectives[{ _name = active_objective_names[i] }] = true
+                local name = active_objective_names[i]
+
+                active_objectives[{ _name = name, _objective_type = objective_types[name] }] = true
             end
         end
 
@@ -298,6 +324,12 @@ local function new_harness()
     -- which the objective scan does no world-marker filtering at all.
     local world_marker_units = nil
     local world_marker_list = nil
+    -- The units among them marked as an objective rather than with a prompt.
+    local objective_marker_units = {}
+
+    env._game_marks_as_objective = function(unit)
+        return objective_marker_units[unit] == true
+    end
 
     env._safe_world_markers_list = function()
         return world_marker_list
@@ -334,6 +366,8 @@ local function new_harness()
         settings = settings,
         interactee_map = interactee_map,
         scan_interactees = scan_interactees,
+        -- Where every radar target is built and its drawn kind decided.
+        collect_radar_targets = named_upvalue(update_internal, "_collect_radar_targets"),
     }
 
     -- Adds an interactee that no existing classifier recognizes, so it can only
@@ -460,6 +494,11 @@ local function new_harness()
         active_objective_names = names
     end
 
+    -- An objective's own type, `_objective_type` on the live objective.
+    function harness:set_objective_type(name, objective_type)
+        objective_types[name] = objective_type
+    end
+
     function harness:set_objective_system_available(value)
         objective_system_available = value
     end
@@ -500,6 +539,15 @@ local function new_harness()
     -- these, currently have one of the game's own world markers.
     function harness:set_world_marker_units(units)
         world_marker_units = units
+    end
+
+    -- Which of those the game marks as an objective, not with a prompt.
+    function harness:set_objective_marker_units(units)
+        objective_marker_units = {}
+
+        for i = 1, #units do
+            objective_marker_units[units[i]] = true
+        end
     end
 
     -- The game's own marker widgets, as `request_world_markers_list` returns them.
@@ -1951,8 +1999,9 @@ test("the active objective probe reports its own fields", function()
 end)
 
 -- Three targets a fraction of a metre around a growth's centre eye, filed with
--- `_ui_target_type` set to `demolition`. Every growth on Silo Cluster, Rise and
--- Propaganda files them, and no other objective in 21 logs does.
+-- `_ui_target_type` set to `demolition`: the game hangs its pointers at the
+-- tentacles off them. Other objectives give the same value to what they want
+-- destroyed, so it does not make an objective a growth; its own type does.
 local function add_demolition_targets(harness, objective_name, position)
     local targets = {}
 
@@ -1973,12 +2022,14 @@ local function add_demolition_targets(harness, objective_name, position)
     return targets
 end
 
--- A growth as every mission files it: the centre eye, which carries health and
--- claims the start marker, and its demolition targets. `centre_type` covers
--- Propaganda's first growth, whose centre eye is itself filed as a demolition
--- target. Returns the centre, then the demolition targets.
+-- A growth as every mission files it: a `demolition` objective with the centre
+-- eye, which carries health and claims the start marker, and its demolition
+-- targets. `centre_type` covers Propaganda's first growth, whose centre eye is
+-- itself filed as a demolition target. Returns the centre, then the targets.
 local function add_growth_site(harness, objective_name, position, centre_type)
     local centre = { name = "growth_centre", position = position, health_alive = true }
+
+    harness:set_objective_type(objective_name, "demolition")
 
     harness:add_to_system("mission_objective_target_system", centre, {
         _objective_name = objective_name,
@@ -1991,7 +2042,7 @@ end
 
 -- The objective name differs on every mission running the event. Only the
 -- first of these was ever in the name list the icon used to depend on.
-test("a growth is recognised by its demolition targets on every mission", function()
+test("a demolition objective is a growth on every mission", function()
     for _, objective_name in ipairs({
         "objective_dm_stockpile_corruptor_event",
         "objective_dm_rise_demo_floor_one",
@@ -2008,19 +2059,22 @@ test("a growth is recognised by its demolition targets on every mission", functi
     end
 end)
 
--- Name-independent the other way too: Silo Cluster's objective name without the
--- demolition targets is just an objective.
-test("an objective without demolition targets is not a growth, whatever it is called", function()
+-- Neither the name nor the targets' marker style makes a growth: Silo Cluster's
+-- objective name, with demolition targets, under an objective that is not a
+-- `demolition` one is just an objective.
+test("only a demolition objective is a growth, whatever it is called or its targets", function()
     local harness = new_harness()
     local step = { name = "step", position = { x = 3, y = 0, z = 0 }, health_alive = true }
 
     harness:add_to_system("mission_objective_target_system", step,
         { _objective_name = "objective_dm_stockpile_corruptor_event" })
+    add_demolition_targets(harness, "objective_dm_stockpile_corruptor_event", { x = 3, y = 0, z = 0 })
+    harness:set_objective_type("objective_dm_stockpile_corruptor_event", "goal")
     harness:set_active_objective_names({ "objective_dm_stockpile_corruptor_event" })
     harness:scan()
 
     assert_equal("mission_objective_other", harness:tracked_kind(step),
-        "an objective was recognised as a growth by its name")
+        "an objective was recognised as a growth by its name or its targets")
 end)
 
 -- Which objectives were recognised must be visible in a debug run, not only in
@@ -2038,10 +2092,9 @@ test("recognised growth objectives are named in debug mode", function()
         "the report does not name the objective")
 end)
 
--- The pass that recognises a growth is the same one collecting its targets, and
--- it meets them in the table's order. A centre met before any demolition
--- target must still be a growth on that same scan. Repeated, so both orders
--- are met.
+-- A growth is recognised from its objective before any target is looked at, so
+-- the order the targets are met in cannot matter and the centre is a growth on
+-- the first scan. Repeated, so both orders are met.
 test("a growth is recognised on its first scan whichever target comes first", function()
     for attempt = 1, 40 do
         local harness = new_harness()
@@ -2090,6 +2143,8 @@ test("a recognised growth is forgotten when the mission ends", function()
     assert_equal("mission_objective_growth", harness:tracked_kind(centre), "the growth was not recognised")
 
     harness.env._reset_mission_objective_marker_state()
+    -- The next mission's objective of the same name is an ordinary one.
+    harness:set_objective_type("objective_dm_stockpile_corruptor_event", "goal")
 
     for i = 1, #demolition do
         harness:remove_from_system("mission_objective_target_system", demolition[i])
@@ -2142,6 +2197,128 @@ test("a growth centre filed as a demolition target is still shown", function()
     end
 end)
 
+-- Targets to destroy under an ordinary objective, as core_research files its
+-- ice, cm_raid its filtration tanks, km_heresy its Stimm tanks and op_train its
+-- cogitators: each styled for destruction and, but for the heat-shield ice,
+-- claiming the start marker; each a destructible with health, but for the
+-- cogitators, which are neither.
+local function add_destroy_targets(harness, objective_name, objective_type, options)
+    options = options or {}
+
+    local targets = {}
+
+    for i = 1, options.count or 3 do
+        local target = { name = "destroy_target_" .. tostring(i), position = { x = 10 * i, y = 5, z = 0 } }
+
+        harness:add_to_system("mission_objective_target_system", target, {
+            _objective_name = objective_name,
+            _ui_target_type = "demolition",
+            _add_marker_on_objective_start = options.start_marker ~= false,
+        })
+
+        if not options.no_health then
+            target.health_alive = true
+            harness:add_to_system("destructible_system", target, {})
+        end
+
+        targets[i] = target
+    end
+
+    harness:set_objective_type(objective_name, objective_type)
+
+    return targets
+end
+
+-- hm_strain's growths were only seen with their centre eye tracked. It is the
+-- objective that says what it is, not how many helper targets it files.
+test("a demolition objective is a growth whatever its targets", function()
+    local harness = new_harness()
+    local centre = { name = "centre", position = { x = 1, y = 0, z = 0 }, health_alive = true }
+
+    harness:add_to_system("mission_objective_target_system", centre, {
+        _objective_name = "objective_hm_strain_demo_two",
+        _ui_target_type = "default",
+        _add_marker_on_objective_start = true,
+    })
+    harness:set_objective_type("objective_hm_strain_demo_two", "demolition")
+    harness:set_active_objective_names({ "objective_hm_strain_demo_two" })
+    harness:scan()
+
+    assert_equal("mission_objective_growth", harness:tracked_kind(centre),
+        "a demolition objective was not recognised as a growth")
+end)
+
+-- The screenshots: core_research's ice, cm_raid's filtration tanks, km_heresy's
+-- Stimm tanks and op_train's cogitators all drew as daemonic growth, because
+-- they share its marker style. Their objectives are `goal` and `collect`.
+test("targets to destroy under any other objective get their own kind", function()
+    for _, fixture in ipairs({
+        { name = "objective_core_research_break_ice", type = "goal" },
+        { name = "objective_core_research_heatshields_ice", type = "collect", start_marker = false },
+        { name = "objective_cm_raid_destroy_filtration_tanks", type = "goal" },
+        { name = "objective_km_heresy_disrupt_ritual", type = "goal" },
+        { name = "objective_flash_train_stop_train", type = "goal", no_health = true },
+    }) do
+        local harness = new_harness()
+        local targets = add_destroy_targets(harness, fixture.name, fixture.type, fixture)
+
+        harness:set_active_objective_names({ fixture.name })
+        harness:scan()
+
+        for i = 1, #targets do
+            assert_equal("mission_objective_destroy", harness:tracked_kind(targets[i]),
+                fixture.name .. ": target " .. i .. " is not a target to destroy")
+        end
+    end
+end)
+
+-- Their own category with a display mode of its own: switching it off hides
+-- them and nothing else, and switching Other off leaves them alone.
+test("targets to destroy have a setting of their own", function()
+    local harness = new_harness()
+    local targets = add_destroy_targets(harness, "objective_a", "goal")
+    local growth = add_growth_site(harness, "objective_b", { x = 0, y = 50, z = 0 })
+    local step = { name = "step", position = { x = 0, y = 80, z = 0 }, health_alive = true }
+
+    harness:add_to_system("mission_objective_target_system", step, { _objective_name = "objective_c" })
+    harness:set_active_objective_names({ "objective_a", "objective_b", "objective_c" })
+    harness.settings.show_mission_objective_destroy = "off"
+    harness:scan()
+
+    assert_nil(harness:tracked_kind(targets[1]), "a target to destroy ignored its own setting")
+    assert_equal("mission_objective_growth", harness:tracked_kind(growth), "switching them off hid the growth")
+    assert_equal("mission_objective_other", harness:tracked_kind(step), "switching them off hid another step")
+
+    harness.settings.show_mission_objective_destroy = "icon_only"
+    harness.settings.show_mission_objective_other = "off"
+    harness:scan()
+
+    assert_equal("mission_objective_destroy", harness:tracked_kind(targets[1]),
+        "switching Other off hid the targets to destroy")
+end)
+
+-- The exception that keeps a growth's helper targets off its centre eye is a
+-- growth's alone. Under any other objective a target styled for destruction is
+-- one to destroy, and the game's marker keeps it however it is flagged.
+test("the game's marker still keeps an unflagged target to destroy", function()
+    local harness = new_harness()
+    local flagged = add_destroy_targets(harness, "objective_a", "goal", { count = 1 })[1]
+    local unflagged = { name = "unflagged", position = { x = 30, y = 5, z = 0 }, health_alive = true }
+
+    harness:add_to_system("mission_objective_target_system", unflagged, {
+        _objective_name = "objective_a",
+        _ui_target_type = "demolition",
+        _add_marker_on_objective_start = false,
+    })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units({ flagged, unflagged })
+    harness:scan()
+
+    assert_equal("mission_objective_destroy", harness:tracked_kind(flagged), "the flagged target was dropped")
+    assert_equal("mission_objective_destroy", harness:tracked_kind(unflagged),
+        "the growth's exception reached a target to destroy the game is marking")
+end)
+
 -- Only the icon changes. An objective that is not recognised costs a distinct
 -- icon and nothing else, so the marker itself is untouched.
 test("an unmatched objective keeps the default icon", function()
@@ -2192,6 +2369,7 @@ test("only the live target of a health-bearing objective is marked", function()
     end
 
     add_demolition_targets(harness, "objective_dm_stockpile_corruptor_event", active_eye.position)
+    harness:set_objective_type("objective_dm_stockpile_corruptor_event", "demolition")
 
     harness:set_active_objective_names({ "objective_dm_stockpile_corruptor_event" })
     harness:set_world_marker_units({ active_eye })
@@ -2234,6 +2412,7 @@ test("candidates do not flash up before the markers are assigned", function()
     end
 
     add_demolition_targets(harness, "objective_dm_stockpile_corruptor_event", active_eye.position)
+    harness:set_objective_type("objective_dm_stockpile_corruptor_event", "demolition")
 
     harness:set_active_objective_names({ "objective_dm_stockpile_corruptor_event" })
     -- The event has begun but nothing has been marked yet.
@@ -2267,6 +2446,7 @@ test("the destructible probe follows one unit through its states", function()
     harness:add_to_system("mission_objective_target_system", growth_target,
         { _objective_name = "objective_dm_stockpile_corruptor_event" })
     add_demolition_targets(harness, "objective_dm_stockpile_corruptor_event", growth_target.position)
+    harness:set_objective_type("objective_dm_stockpile_corruptor_event", "demolition")
     harness:set_active_objective_names({ "objective_dm_stockpile_corruptor_event" })
     harness:add_to_system("destructible_system", eye, { _is_invulnerable = true, _health = 70, _is_dead = false })
     harness:add_to_system("destructible_system", far_away, { _is_invulnerable = false, _health = 5 })
@@ -2315,6 +2495,7 @@ test("the destructible probe ignores scenery and distant units", function()
     harness:add_to_system("mission_objective_target_system", growth_target,
         { _objective_name = "objective_dm_stockpile_corruptor_event" })
     add_demolition_targets(harness, "objective_dm_stockpile_corruptor_event", growth_target.position)
+    harness:set_objective_type("objective_dm_stockpile_corruptor_event", "demolition")
     harness:set_active_objective_names({ "objective_dm_stockpile_corruptor_event" })
     harness:add_to_system("destructible_system", far_away, { _is_invulnerable = false, _health = 5 })
     harness:add_to_system("destructible_system", wall, { _is_nav_gate = true, _health = 7 })
@@ -2534,6 +2715,21 @@ test("a tentacle is found in any pose", function()
     assert_equal(1, #marked_eyes(harness, eyes), "a tentacle out of its resting pose was not recognised")
 end)
 
+-- The tentacle search is a growth's alone. Ice and tanks stand among the
+-- level's own breakables -- 966 of them within reach on cm_raid.
+test("no tentacle is searched for around targets to destroy", function()
+    local harness = new_harness()
+
+    add_destroy_targets(harness, "objective_a", "goal", { count = 1 })
+    harness:set_active_objective_names({ "objective_a" })
+
+    local eyes = add_tentacle(harness, { x = 12, y = 5, z = 0 })
+
+    harness:scan()
+
+    assert_equal(0, #marked_eyes(harness, eyes), "a tentacle was searched for around a target to destroy")
+end)
+
 -- The world-marker set counts a prompt the same as an objective marker, and a
 -- player standing next to anything gets a prompt. This probe tells them apart
 -- for every objective marker on the radar.
@@ -2586,6 +2782,30 @@ test("the marker type probe reports each change once, not each scan", function()
 
     assert_contains(harness:log_text(), "types=objective", "the game's marker arriving is not reported")
     assert_equal(2, lines, "the marker type probe repeats itself")
+end)
+
+-- A used or inactive objective interactable is dropped within a scan, so one
+-- that stays on the radar after use is still reporting itself active and
+-- unused. The probe says what it reports, and again whenever that changes.
+test("the marker type probe reports the interactable's own state as it changes", function()
+    local harness = new_harness()
+    local step, state = harness:add_interactee({})
+
+    harness.settings.debug_mode = true
+    harness:add_to_system("mission_objective_target_system", step, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_list({})
+    harness:scan()
+
+    assert_contains(harness:log_text(), "state=active:true,used:false,prompt:true",
+        "the interactable's own state is not reported")
+
+    state.show_marker = false
+    harness:wait_for_marker_settle()
+    harness:scan()
+
+    assert_contains(harness:log_text(), "state=active:true,used:false,prompt:false",
+        "a change of the interactable's own state is not reported")
 end)
 
 test("the marker type probe is silent outside debug mode", function()
@@ -4025,6 +4245,561 @@ test("the demolition probe reports a destructible once", function()
     end
 
     assert_equal(3, reported, "a destructible was reported more than once")
+end)
+
+-- lm_rails' cargo and lm_scavenge's samples: a bank of identical lockers under
+-- a luggable objective, 2 m apart, of which a few hold the luggable. It stands
+-- where the game puts it, 0.43 m to the side of its locker's origin and 1.3 m
+-- above it. `holding` lists the lockers with one inside.
+local LOCKER_PREFAB = "#id[9b632bbfb996ef9d]"
+
+local function add_locker_bank(harness, objective_name, count, holding, options)
+    options = options or {}
+
+    local lockers = {}
+    local states = {}
+    local luggables = {}
+
+    for i = 1, count do
+        local locker, state = harness:add_interactee({ position = { x = 2 * i, y = 0, z = 0 } })
+
+        states[i] = state
+
+        if not options.no_prefab then
+            locker.prefab = LOCKER_PREFAB
+        end
+
+        harness:add_to_system("mission_objective_target_system", locker, { _objective_name = objective_name })
+        lockers[i] = locker
+    end
+
+    for _, i in ipairs(holding or {}) do
+        local luggable = {
+            name = "luggable_in_" .. tostring(i),
+            position = { x = 2 * i + 0.43, y = 0, z = options.luggable_height or 1.3 },
+        }
+
+        harness.mod._tracked_units[luggable] = { kind = options.kind or "luggable_special_issue_ammo", source = "test" }
+        luggables[#luggables + 1] = luggable
+    end
+
+    harness:set_objective_type(objective_name, options.objective_type or "luggable")
+    harness:set_active_objective_names({ objective_name })
+
+    return lockers, luggables, states
+end
+
+-- Which of `units` are on the radar, by position in the list.
+local function drawn_indices(harness, units)
+    local result = {}
+
+    for i = 1, #units do
+        if harness:tracked_kind(units[i]) ~= nil then
+            result[#result + 1] = tostring(i)
+        end
+    end
+
+    return table.concat(result, ",")
+end
+
+-- The neighbouring locker stands 2 m away, so a luggable is 1.57 m from it and
+-- keeps only its own.
+test("of a bank of lockers only those holding a luggable are drawn", function()
+    local harness = new_harness()
+    local lockers = add_locker_bank(harness, "objective_lm_rails_collect_cargo", 8, { 3, 6 })
+
+    harness:scan()
+
+    assert_equal("3,6", drawn_indices(harness, lockers), "the wrong lockers are drawn")
+end)
+
+-- Nothing found inside anything: no container scheme to go by, so the bank is
+-- drawn exactly as before.
+test("a bank with nothing found inside is left as it was", function()
+    local harness = new_harness()
+    local lockers = add_locker_bank(harness, "objective_lm_scavenge_deposit_assets", 8, {})
+
+    harness:scan()
+
+    assert_equal("1,2,3,4,5,6,7,8", drawn_indices(harness, lockers),
+        "lockers were dropped with no luggable found in any")
+end)
+
+-- lm_rails files two valves under the same objective as its lockers, and the
+-- game marks them as steps. Only containers of the prefab found holding a
+-- luggable are ever dropped.
+test("an objective's other steps are kept beside its lockers", function()
+    local harness = new_harness()
+
+    add_locker_bank(harness, "objective_lm_rails_collect_cargo", 8, { 2 })
+
+    local valve = harness:add_interactee({ position = { x = 40, y = 0, z = 0 } })
+
+    valve.prefab = "#id[e7ef4b7279eaef49]"
+    harness:add_to_system("mission_objective_target_system", valve,
+        { _objective_name = "objective_lm_rails_collect_cargo" })
+    harness:scan()
+
+    assert_equal("mission_objective_other", harness:tracked_kind(valve), "the valve was dropped with the empty lockers")
+end)
+
+-- lm_scavenge stacks its lockers on two floors 10.5 m apart. A luggable on the
+-- floor above is not inside the locker below it.
+test("a luggable on another floor does not make a locker a container", function()
+    local harness = new_harness()
+    local lockers = add_locker_bank(harness, "objective_a", 4, { 2 }, { luggable_height = 10.5 })
+
+    harness:scan()
+
+    assert_equal("1,2,3,4", drawn_indices(harness, lockers), "a luggable a floor away was taken as inside")
+end)
+
+-- A socket is a `luggable_` kind too, and holds nothing.
+test("a socket beside a locker does not make it a container", function()
+    local harness = new_harness()
+    local lockers = add_locker_bank(harness, "objective_a", 4, { 2 }, { kind = "luggable_socket" })
+
+    harness:scan()
+
+    assert_equal("1,2,3,4", drawn_indices(harness, lockers), "a socket was taken for a luggable")
+end)
+
+test("only a luggable objective's lockers are filtered", function()
+    local harness = new_harness()
+    local lockers = add_locker_bank(harness, "objective_a", 4, { 2 }, { objective_type = "goal" })
+
+    harness:scan()
+
+    assert_equal("1,2,3,4", drawn_indices(harness, lockers),
+        "lockers of an objective that is not a luggable one were dropped")
+end)
+
+-- Without prefab names "the same kind of container" cannot be established, and
+-- nothing is dropped rather than guessed at.
+test("without prefab names no locker is dropped", function()
+    local harness = new_harness()
+    local lockers = add_locker_bank(harness, "objective_a", 4, { 2 }, { no_prefab = true })
+
+    harness:scan()
+
+    assert_equal("1,2,3,4", drawn_indices(harness, lockers), "a locker was dropped without a prefab to compare")
+end)
+
+test("a container holding a luggable is named in debug mode", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+    add_locker_bank(harness, "objective_lm_rails_collect_cargo", 4, { 2 })
+    harness:scan()
+
+    assert_contains(harness:log_text(), "Luggable container:", "the container is not reported")
+    assert_contains(harness:log_text(), "objective=objective_lm_rails_collect_cargo", "the objective is not named")
+end)
+
+-- lm_rails: once the last luggable had been taken out of its locker nothing held
+-- anything any more, and every empty locker of the bank came back. Which prefab
+-- is the container is remembered for the mission; what holds a luggable is not.
+test("the bank stays filtered once every luggable has left its locker", function()
+    local harness = new_harness()
+    local lockers, luggables, states = add_locker_bank(harness, "objective_lm_rails_collect_cargo", 8, { 3, 6 })
+
+    harness:scan()
+
+    assert_equal("3,6", drawn_indices(harness, lockers), "the wrong lockers are drawn")
+
+    -- Both opened, and their luggables carried off.
+    states[3].used = true
+    states[6].used = true
+
+    for i = 1, #luggables do
+        harness.mod._tracked_units[luggables[i]] = nil
+    end
+
+    harness:scan()
+
+    assert_equal("", drawn_indices(harness, lockers), "the empty lockers came back once the luggables were out")
+end)
+
+-- Remembered by objective for the mission, and not into the next one.
+test("the container prefab is forgotten when the mission ends", function()
+    local harness = new_harness()
+    local lockers, luggables = add_locker_bank(harness, "objective_a", 4, { 2 })
+
+    harness:scan()
+
+    assert_equal("2", drawn_indices(harness, lockers), "the wrong lockers are drawn")
+
+    harness.env._reset_mission_objective_marker_state()
+
+    for i = 1, #luggables do
+        harness.mod._tracked_units[luggables[i]] = nil
+    end
+
+    harness:scan()
+
+    assert_equal("1,2,3,4", drawn_indices(harness, lockers), "a container prefab carried into the next mission")
+end)
+
+-- lm_rails files its canisters under the objective too, as interactables of
+-- their own. A luggable is not its own container.
+test("a luggable filed under its objective is not its own container", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+    add_locker_bank(harness, "objective_a", 4, {})
+
+    local canister = harness:add_interactee({ position = { x = 20, y = 0, z = 1.3 } })
+
+    canister.prefab = "#id[7ec896c48e96db88]"
+    harness:add_to_system("mission_objective_target_system", canister, { _objective_name = "objective_a" })
+    harness.mod._tracked_units[canister] = { kind = "luggable_special_issue_ammo", source = "test" }
+    harness:scan()
+
+    if string.find(harness:log_text(), "prefab=#id[7ec896c48e96db88]", 1, true) then
+        error("a luggable was taken for its own container")
+    end
+end)
+
+-- A luggable still shut in its locker sits under the locker's marker, so its
+-- own is hidden; it comes back once the locker is opened.
+test("a luggable is hidden while its locker is shut and drawn", function()
+    local harness = new_harness()
+    local _, luggables, states = add_locker_bank(harness, "objective_a", 4, { 2 })
+
+    harness:scan()
+
+    assert_equal(true, harness.env._luggable_hidden_in_container(luggables[1]),
+        "a luggable in a shut, drawn locker is still drawn")
+
+    states[2].used = true
+    harness:scan()
+
+    assert_equal(false, harness.env._luggable_hidden_in_container(luggables[1]),
+        "the luggable stayed hidden once its locker was opened")
+end)
+
+-- With nothing drawn in its place, the luggable is the only marker left there.
+test("a luggable stays visible when its locker is not drawn", function()
+    local harness = new_harness()
+    local _, luggables = add_locker_bank(harness, "objective_a", 4, { 2 })
+
+    harness.settings.show_mission_objective_other = "off"
+    harness:scan()
+
+    assert_equal(false, harness.env._luggable_hidden_in_container(luggables[1]),
+        "the luggable was hidden with nothing drawn in its place")
+end)
+
+-- The sockets ignore the radar's range and floor while the player carries a
+-- luggable, which is read off the wielded slot.
+test("carrying a luggable is read off the wielded slot", function()
+    local harness = new_harness()
+    local inventory = { wielded_slot = "slot_luggable" }
+    local extensions = {
+        unit_data_system = {
+            read_component = function(_, name)
+                return name == "inventory" and inventory or nil
+            end,
+        },
+        visual_loadout_system = {},
+    }
+
+    local function has_extension(_, system)
+        return extensions[system]
+    end
+
+    assert_equal(true, harness.env._unit_carries_luggable({}, has_extension), "a carried luggable is not seen")
+
+    inventory.wielded_slot = "slot_primary"
+
+    assert_equal(false, harness.env._unit_carries_luggable({}, has_extension), "a weapon was taken for a luggable")
+    assert_equal(false, harness.env._unit_carries_luggable({}, nil), "a player without extensions carries nothing")
+end)
+
+-- lm_rails: a canister carried past a valve made the valve a container, and
+-- every valve holding nothing was then dropped as an empty one while the game
+-- was marking it. Only a luggable still where it was first seen is inside
+-- anything.
+test("a luggable carried past an interactable does not make it a container", function()
+    local harness = new_harness()
+    local lockers = add_locker_bank(harness, "objective_lm_rails_collect_cargo", 4, { 2 })
+    local valves = {}
+
+    for i = 1, 2 do
+        local valve = harness:add_interactee({ position = { x = 40 + 10 * i, y = 0, z = 0 } })
+
+        valve.prefab = "#id[e7ef4b7279eaef49]"
+        harness:add_to_system("mission_objective_target_system", valve,
+            { _objective_name = "objective_lm_rails_collect_cargo" })
+        valves[i] = valve
+    end
+
+    -- A canister first seen out in the level, then carried up to the first valve.
+    local carried = { name = "carried", position = { x = 100, y = 0, z = 1 } }
+
+    harness.mod._tracked_units[carried] = { kind = "luggable_special_issue_ammo", source = "test" }
+    harness:scan()
+
+    carried.position = { x = 50.3, y = 0, z = 1.3 }
+    harness:scan()
+
+    assert_equal("2", drawn_indices(harness, lockers), "the lockers are no longer filtered")
+    assert_equal("1,2", drawn_indices(harness, valves),
+        "a valve was taken for a container and its twin dropped as an empty one")
+end)
+
+-- lm_rails' cargo valves stay active, unused and offering their prompt for the
+-- whole objective. What says one is the step right now is the game's objective
+-- marker on it, which comes and goes as capsules go into its sockets; once the
+-- game has marked it, it follows that marker.
+test("a step used more than once follows the game's objective marker", function()
+    local harness = new_harness()
+    local valve = harness:add_interactee({ position = { x = 30, y = 0, z = 0 } })
+
+    harness:add_to_system("mission_objective_target_system", valve, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units({ valve })
+    harness:set_objective_marker_units({ valve })
+    harness:scan()
+
+    assert_equal("mission_objective_other", harness:tracked_kind(valve), "the marked valve is not shown")
+
+    -- Turned: the game takes its objective marker off; the prompt stays.
+    harness:set_objective_marker_units({})
+    harness:scan()
+
+    assert_nil(harness:tracked_kind(valve), "the valve stayed after the game stopped marking it")
+
+    -- The next capsule is in, and the game marks it again.
+    harness:set_objective_marker_units({ valve })
+    harness:scan()
+
+    assert_equal("mission_objective_other", harness:tracked_kind(valve),
+        "the valve did not come back with the game's marker")
+end)
+
+-- Interactables are shown before the game marks them, and one it never marks
+-- as an objective is shown as it always was. A prompt is not a mark.
+test("an interactable the game never marks as an objective is shown as before", function()
+    local harness = new_harness()
+    local button = harness:add_interactee({})
+
+    harness:add_to_system("mission_objective_target_system", button, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units({ button })
+    harness:set_objective_marker_units({})
+    harness:scan()
+
+    assert_equal("mission_objective_other", harness:tracked_kind(button), "an unmarked interactable was hidden")
+end)
+
+test("an unreadable marker list hides nothing", function()
+    local harness = new_harness()
+    local valve = harness:add_interactee({})
+
+    harness:add_to_system("mission_objective_target_system", valve, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units({ valve })
+    harness:set_objective_marker_units({ valve })
+    harness:scan()
+
+    harness:set_world_marker_units(nil)
+    harness:set_objective_marker_units({})
+    harness:scan()
+
+    assert_equal("mission_objective_other", harness:tracked_kind(valve),
+        "an interactable was hidden without a marker list to go by")
+end)
+
+-- A puzzle device keeps its own state: lm_rails' door decoder lost the game's
+-- marker in the middle of its hack and was still the step.
+test("a puzzle device does not follow the game's objective marker", function()
+    local harness = new_harness()
+    local device = harness:add_interactee({ interaction_type = "decoder_device" })
+
+    harness:add_to_system("mission_objective_target_system", device, { _objective_name = "objective_a" })
+    harness:set_active_objective_names({ "objective_a" })
+    harness:set_world_marker_units({ device })
+    harness:set_objective_marker_units({ device })
+    harness:scan()
+
+    harness:set_objective_marker_units({})
+    harness:scan()
+
+    assert_equal("mission_objective_hacking", harness:tracked_kind(device),
+        "a puzzle device was hidden when the game's marker went")
+end)
+
+-- Mission cargo -- lm_rails' ammunition canisters, lm_scavenge's vacuum
+-- capsules, cryonic rods, Moebian samples, the Prismata case -- goes into the
+-- mission's own machinery rather than a power socket. An objective files its
+-- luggables and its sockets under one name, and the game lets a luggable into a
+-- socket of its own objective only, so that name says what a socket takes.
+local function add_cargo_socket(harness, objective_name, cargo_kind, options)
+    options = options or {}
+
+    local socket = harness:add_interactee({
+        interaction_type = "luggable_socket",
+        position = options.position or { x = 20, y = 0, z = 0 },
+    })
+    local luggable = { name = "cargo_of_" .. objective_name, position = { x = 5, y = 0, z = 0 } }
+
+    harness:add_to_system("mission_objective_target_system", socket, { _objective_name = objective_name })
+    harness.mod._tracked_units[luggable] = { kind = cargo_kind, source = "test" }
+    harness:add_to_system("mission_objective_target_system", luggable, { _objective_name = objective_name })
+    harness:set_objective_type(objective_name, "luggable")
+    harness:set_active_objective_names(options.active or { objective_name })
+
+    return socket, luggable
+end
+
+local function socket_display_kind(harness, socket)
+    return harness.env._luggable_socket_display_kind(socket)
+end
+
+-- The kind `unit` is drawn as, or nil when it is not on the radar.
+local function drawn_kind(harness, unit)
+    local targets = harness.collect_radar_targets()
+
+    for i = 1, #targets do
+        if targets[i].unit == unit then
+            return targets[i].kind
+        end
+    end
+
+    return nil
+end
+
+test("the sockets of mission cargo are drawn as objective steps", function()
+    for _, cargo in ipairs({
+        "luggable_special_issue_ammo",
+        "luggable_vacuum_capsule",
+        "luggable_cryonic_rod",
+        "luggable_moebian_pox_zetaphyte_13_sample",
+        "luggable_prismata_crystal_repository",
+    }) do
+        local harness = new_harness()
+        local socket = add_cargo_socket(harness, "objective_lm_rails_collect_cargo", cargo)
+
+        harness:scan()
+
+        assert_equal("luggable_socket", harness:tracked_kind(socket), "the socket lost its own kind (" .. cargo .. ")")
+        assert_equal("mission_objective_other", socket_display_kind(harness, socket),
+            "the socket is still drawn as a power socket (" .. cargo .. ")")
+    end
+end)
+
+test("a power cell's socket stays a power socket", function()
+    local harness = new_harness()
+    local socket = add_cargo_socket(harness, "objective_a", "luggable_power_cell_teal")
+
+    harness:scan()
+
+    assert_equal("luggable_socket", socket_display_kind(harness, socket), "a power socket was drawn as an objective step")
+end)
+
+-- lm_rails runs a power cell objective too. Each socket goes by its own.
+test("a socket goes by the cargo of its own objective", function()
+    local harness = new_harness()
+    local power_socket = add_cargo_socket(harness, "objective_a", "luggable_power_cell_teal")
+    local cargo_socket = add_cargo_socket(harness, "objective_b", "luggable_special_issue_ammo",
+        { position = { x = 25, y = 0, z = 0 }, active = { "objective_a", "objective_b" } })
+
+    harness:scan()
+
+    assert_equal("luggable_socket", socket_display_kind(harness, power_socket),
+        "another objective's cargo decided the power socket")
+    assert_equal("mission_objective_other", socket_display_kind(harness, cargo_socket),
+        "the canister socket is still drawn as a power socket")
+end)
+
+-- The last canister put in leaves no luggable to read.
+test("a socket keeps its category once its luggables are in", function()
+    local harness = new_harness()
+    local socket, luggable = add_cargo_socket(harness, "objective_a", "luggable_special_issue_ammo")
+
+    harness:scan()
+
+    harness.mod._tracked_units[luggable] = nil
+    harness:remove_from_system("mission_objective_target_system", luggable)
+    harness:scan()
+
+    assert_equal("mission_objective_other", socket_display_kind(harness, socket),
+        "the socket turned back into a power socket")
+end)
+
+test("a socket whose cargo is not known yet is drawn as before", function()
+    local harness = new_harness()
+    local socket = harness:add_interactee({ interaction_type = "luggable_socket" })
+
+    harness:add_to_system("mission_objective_target_system", socket, { _objective_name = "objective_a" })
+    harness:set_objective_type("objective_a", "luggable")
+    harness:set_active_objective_names({ "objective_a" })
+    harness:scan()
+
+    assert_equal("luggable_socket", socket_display_kind(harness, socket), "a socket of unknown cargo changed category")
+end)
+
+-- lm_rails files its lockers under the cargo objective, and the radar draws
+-- them before any canister is seen. A locker is not the cargo.
+test("a container of the objective is not taken for its cargo", function()
+    local harness = new_harness()
+
+    add_locker_bank(harness, "objective_a", 2, {})
+
+    local socket = harness:add_interactee({ interaction_type = "luggable_socket", position = { x = 30, y = 0, z = 0 } })
+
+    harness:add_to_system("mission_objective_target_system", socket, { _objective_name = "objective_a" })
+    harness:scan()
+    harness:scan()
+
+    local luggable = { name = "canister", position = { x = 50, y = 0, z = 0 } }
+
+    harness.mod._tracked_units[luggable] = { kind = "luggable_special_issue_ammo", source = "test" }
+    harness:add_to_system("mission_objective_target_system", luggable, { _objective_name = "objective_a" })
+    harness:scan()
+
+    assert_equal("mission_objective_other", socket_display_kind(harness, socket), "a locker was taken for the cargo")
+end)
+
+-- An objective name may come back in the next mission with other cargo.
+test("what an objective's sockets take is forgotten when the mission ends", function()
+    local harness = new_harness()
+    local socket, luggable = add_cargo_socket(harness, "objective_a", "luggable_special_issue_ammo")
+
+    harness:scan()
+    harness.env._reset_mission_objective_marker_state()
+    harness.mod._tracked_units[luggable] = { kind = "luggable_power_cell_teal", source = "test" }
+    harness:scan()
+
+    assert_equal("luggable_socket", socket_display_kind(harness, socket), "the last mission's cargo decided the socket")
+end)
+
+-- Drawn, and switched off, with the other objective steps; a power socket
+-- beside it keeps its own setting.
+test("a canister's socket is drawn and switched as an objective step", function()
+    local harness = new_harness()
+    local socket = add_cargo_socket(harness, "objective_a", "luggable_special_issue_ammo")
+
+    harness:scan()
+
+    assert_equal("mission_objective_other", drawn_kind(harness, socket), "the socket is not drawn as an objective step")
+
+    harness.settings.show_mission_objective_other = "off"
+
+    assert_nil(drawn_kind(harness, socket), "the socket ignored the setting of the objective steps")
+end)
+
+test("each socket is reported once in debug mode", function()
+    local harness = new_harness()
+
+    harness.settings.debug_mode = true
+    add_cargo_socket(harness, "objective_lm_rails_collect_cargo", "luggable_special_issue_ammo")
+    harness:scan()
+    harness:scan()
+
+    assert_contains(harness:log_text(), "Luggable socket: mission=test_mission objective=objective_lm_rails_collect_cargo"
+        .. " cargo=luggable_special_issue_ammo drawn_as=mission_objective_other", "the socket is not reported")
 end)
 
 local failures = {}

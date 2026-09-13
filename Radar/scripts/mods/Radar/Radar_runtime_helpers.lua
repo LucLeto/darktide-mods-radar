@@ -1243,6 +1243,7 @@ return function(env)
         mission_objective_servo_skull = 0.12,
         mission_objective_other = 0.12,
         mission_objective_growth = 0.12,
+        mission_objective_destroy = 0.12,
         luggable_power_cell_orange = 0.18,
         medicae_station = 0.2,
         luggable_socket = 0.18,
@@ -1345,8 +1346,13 @@ return function(env)
     -- filtering on visibility would make markers blink with distance. Returns
     -- false when the list cannot be read, so callers can fall back rather than
     -- treat an unavailable list as "nothing exists".
+    -- The units among them the game is marking as an objective, as opposed to
+    -- the prompt a player gets standing next to something. Refilled with them.
+    local _objective_marker_units = {}
+
     function _refresh_world_marker_units(out)
         table_clear(out)
+        table_clear(_objective_marker_units)
 
         local markers = _safe_world_markers_list()
 
@@ -1360,10 +1366,18 @@ return function(env)
 
             if unit ~= nil then
                 out[unit] = true
+
+                if marker.type == "objective" then
+                    _objective_marker_units[unit] = true
+                end
             end
         end
 
         return true
+    end
+
+    function _game_marks_as_objective(unit)
+        return _objective_marker_units[unit] == true
     end
 
     function mod:get_interaction_world_markers_by_unit()
