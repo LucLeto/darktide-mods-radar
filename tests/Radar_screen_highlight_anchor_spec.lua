@@ -247,6 +247,38 @@ test("only an objective marker counts as the game marking an objective", functio
     assert_equal(false, harness.env._game_marks_as_objective(locker), "a prompt was counted as an objective marker")
 end)
 
+-- The game's own reach test: a marker past its template's `max_distance` is
+-- not drawn, unless the marker lifts the limit; one not measured yet counts as
+-- drawn. Presence in the set is unaffected. Mortis Trials marks arenas 550 to
+-- 650 metres off against an objective marker's 300.
+test("a marker the game holds out of reach is not counted as drawn", function()
+    local harness = new_harness()
+    local template = { max_distance = 300 }
+    local near = {}
+    local far = {}
+    local lifted = {}
+    local unmeasured = {}
+
+    harness.env._safe_world_markers_list = function()
+        return {
+            { unit = near, type = "objective", template = template, distance = 55 },
+            { unit = far, type = "objective", template = template, distance = 600 },
+            { unit = lifted, type = "objective", template = template, distance = 600, block_max_distance = true },
+            { unit = unmeasured, type = "objective", template = template },
+        }
+    end
+
+    local out = {}
+
+    harness.env._refresh_world_marker_units(out)
+
+    assert_equal(true, out[far] == true, "a marker out of reach dropped out of the presence set")
+    assert_equal(true, harness.env._game_draws_marker_on(near), "a marker in reach is not counted as drawn")
+    assert_equal(false, harness.env._game_draws_marker_on(far), "a marker past its reach is counted as drawn")
+    assert_equal(true, harness.env._game_draws_marker_on(lifted), "a marker with its limit lifted is not counted")
+    assert_equal(true, harness.env._game_draws_marker_on(unmeasured), "a marker not measured yet is not counted")
+end)
+
 local failures = {}
 
 for i = 1, #tests do

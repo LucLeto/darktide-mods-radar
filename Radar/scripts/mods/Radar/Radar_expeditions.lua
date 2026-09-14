@@ -942,11 +942,13 @@ return function(env)
                 { x = -122.563, y = 157.702, z = 13.462 },
             },
         },
+        -- A door blocked by growth tentacles, which carry the riddle's marker
+        -- while they stand: `tentacles` marks the entry they stand beside. The
+        -- elevator's call button was listed here too, and is the mission's own
+        -- step.
         dm_forge = {
-            ["default|default|loc_interactable_button"] = {
-                { x = -8.578, y = 37.113, z = 5.007 },
-            },
             ["default|default|loc_interactable_button|#id[e9b4edfaf3e74a23]"] = {
+                tentacles = true,
                 { x = 60.767, y = -5.137, z = -11.409 },
             },
         },
@@ -1103,7 +1105,7 @@ return function(env)
 
     local MARTYR_SKULL_RIDDLE_DOOR_DEBUG_POINTS_BY_MISSION = {
         dm_forge = {
-            { x = -8.578, y = 37.113, z = 5.007, label = "riddle_button" },
+            { x = 60.767, y = -5.137, z = -11.409, label = "riddle_button" },
         },
         fm_cargo = {
             { x = -97.7419, y = -51.6034, z = 1.7982, label = "skull_marker" },
@@ -2705,6 +2707,22 @@ return function(env)
         -- Each candidate's prefab. `false` records that the engine could not
         -- say, so it is not asked again.
         prefab_of = {},
+        -- Each anchor's reach, squared: an event's targets reach its tentacles
+        -- at `range_squared`, a riddle's position at `riddle_range_squared`.
+        anchor_range = {},
+        -- A Martyr's Skull riddle blocked by growth tentacles: where it is,
+        -- from the riddle data, and how near a tentacle stands to be the
+        -- riddle's. dm_forge's stood 4.9 to 7.1 metres from the riddle's
+        -- button, the nearest of the growth event's own 24 metres away.
+        riddle_range_squared = 64,
+        -- Of those, only the ones at the door's own level block it. The two
+        -- that do stood 1.5 metres above the button; a third, 6.4 metres up
+        -- over the skull, is not needed to solve it and carries no marker.
+        riddle_height = 3,
+        riddle_x = {},
+        riddle_y = {},
+        riddle_z = {},
+        riddle_kind = { martyr_skull_riddle_interactable = true },
     }
 
     -- The prefab a tentacle candidate was spawned from, read once per unit: a
@@ -2716,6 +2734,76 @@ return function(env)
         return _cached_unit_prefab(GROWTH_EYE.prefab_of, unit)
     end
 
+    -- Where this mission's Martyr's Skull riddle is blocked by growth
+    -- tentacles: the riddle entries flagged `tentacles`. A mission lists a
+    -- handful of entries, so this is read every scan.
+    function _collect_riddle_tentacle_anchors()
+        local mission_name = _safe_mission_name()
+        local signatures = mission_name ~= nil and MARTYR_SKULL_RIDDLE_SIGNATURES_BY_MISSION[mission_name] or nil
+        local count = 0
+
+        if signatures == nil then
+            return 0
+        end
+
+        for _, entry in pairs(signatures) do
+            if type(entry) == "table" and entry.tentacles == true then
+                for i = 1, #entry do
+                    local position = entry[i]
+
+                    count = count + 1
+                    GROWTH_EYE.riddle_x[count] = position.x
+                    GROWTH_EYE.riddle_y[count] = position.y
+                    GROWTH_EYE.riddle_z[count] = position.z
+                end
+            end
+        end
+
+        return count
+    end
+
+    -- The marker a standing tentacle carries. One beside a Martyr's Skull
+    -- riddle is the riddle's and never a growth's, whatever event runs around
+    -- it: dm_forge's riddle door stands 26 metres from a growth. Any other is
+    -- the growth's only while it stands inside the live event. Tentacles are
+    -- remembered for the mission, and the riddle's, left standing, came back
+    -- 200 metres away when dm_forge's final event started.
+    function _growth_tentacle_kind(unit, growth_anchor_count, riddle_count, riddle_live)
+        local x, y, z = _vector3_components(_safe_unit_position(unit))
+
+        if x == nil then
+            return nil
+        end
+
+        local eye = GROWTH_EYE
+
+        for i = 1, riddle_count do
+            local dx = eye.riddle_x[i] - x
+            local dy = eye.riddle_y[i] - y
+            local dz = eye.riddle_z[i] - z
+
+            if dx * dx + dy * dy + dz * dz <= eye.riddle_range_squared then
+                if riddle_live and dz <= eye.riddle_height and dz >= -eye.riddle_height then
+                    return "martyr_skull_riddle_interactable"
+                end
+
+                return nil
+            end
+        end
+
+        for i = 1, growth_anchor_count do
+            local dx = eye.anchor_x[i] - x
+            local dy = eye.anchor_y[i] - y
+            local dz = eye.anchor_z[i] - z
+
+            if dx * dx + dy * dy + dz * dz <= eye.range_squared then
+                return "mission_objective_growth"
+            end
+        end
+
+        return nil
+    end
+
     -- One marker per tentacle rather than three: at radar scale three markers
     -- 40 cm apart are a single blob. It is carried by the tentacle's
     -- lowest-sorting living eye, so it survives the first two being destroyed
@@ -2723,13 +2811,23 @@ return function(env)
     -- when the last one goes. The event ending empties the anchor set, and the
     -- scan's own prune then drops whatever is left.
     local function _track_growth_tentacle_units(enabled_by_kind, seen_units)
-        if not enabled_by_kind["mission_objective_growth"] then
+        local growth_enabled = enabled_by_kind["mission_objective_growth"] == true
+        local riddle_count = _collect_riddle_tentacle_anchors()
+        -- A riddle's tentacles are looked for only while it is open and its
+        -- markers are on; the ones already known stay off the growth's either
+        -- way.
+        local riddle_live = riddle_count > 0
+            and not _is_current_mission_martyr_skull_riddle_solved()
+            and _kind_enabled("martyr_skull_riddle_interactable")
+
+        if not growth_enabled and not riddle_live then
             return
         end
 
         local anchor_x = GROWTH_EYE.anchor_x
         local anchor_y = GROWTH_EYE.anchor_y
         local anchor_z = GROWTH_EYE.anchor_z
+        local anchor_range = GROWTH_EYE.anchor_range
         local anchor_count = 0
         -- The tentacles carry no marker of their own: the game draws its three
         -- yellow pips on them with something that never reaches the marker list.
@@ -2740,18 +2838,34 @@ return function(env)
         -- Anchored on the live objective's own targets, which includes the
         -- event's unused spawn points. Tentacles stood 10 to 17 metres from the
         -- corruptor they belonged to.
-        for unit in pairs(_scratch_growth_objective_units) do
-            local x, y, z = _vector3_components(_safe_unit_position(unit))
+        if growth_enabled then
+            for unit in pairs(_scratch_growth_objective_units) do
+                local x, y, z = _vector3_components(_safe_unit_position(unit))
 
-            if x ~= nil then
-                anchor_count = anchor_count + 1
-                anchor_x[anchor_count] = x
-                anchor_y[anchor_count] = y
-                anchor_z[anchor_count] = z
+                if x ~= nil then
+                    anchor_count = anchor_count + 1
+                    anchor_x[anchor_count] = x
+                    anchor_y[anchor_count] = y
+                    anchor_z[anchor_count] = z
+                    anchor_range[anchor_count] = GROWTH_EYE.range_squared
+                end
+
+                if _world_marker_units_available and _scratch_world_marker_units[unit] == true
+                    and (_game_draws_marker_on == nil or _game_draws_marker_on(unit)) then
+                    growth_marked = true
+                end
             end
+        end
 
-            if _world_marker_units_available and _scratch_world_marker_units[unit] == true then
-                growth_marked = true
+        local growth_anchor_count = anchor_count
+
+        if riddle_live then
+            for i = 1, riddle_count do
+                anchor_count = anchor_count + 1
+                anchor_x[anchor_count] = GROWTH_EYE.riddle_x[i]
+                anchor_y[anchor_count] = GROWTH_EYE.riddle_y[i]
+                anchor_z[anchor_count] = GROWTH_EYE.riddle_z[i]
+                anchor_range[anchor_count] = GROWTH_EYE.riddle_range_squared
             end
         end
 
@@ -2769,7 +2883,6 @@ return function(env)
         local xs = GROWTH_EYE.x
         local ys = GROWTH_EYE.y
         local zs = GROWTH_EYE.z
-        local range_squared = GROWTH_EYE.range_squared
         local limit = GROWTH_EYE.candidate_limit
         local count = 0
         -- Counted whether or not anything matches. Silence is ambiguous between
@@ -2799,7 +2912,7 @@ return function(env)
                         local dy = anchor_y[i] - y
                         local dz = anchor_z[i] - z
 
-                        if dx * dx + dy * dy + dz * dz <= range_squared and count < limit then
+                        if dx * dx + dy * dy + dz * dz <= anchor_range[i] and count < limit then
                             count = count + 1
                             units[count] = unit
                             xs[count] = x
@@ -2924,33 +3037,39 @@ return function(env)
         -- tentacle leaves the radar only when its last eye does.
         for group, k in pairs(carrier) do
             local member = member_units[k]
+            local kind = _growth_tentacle_kind(member, growth_anchor_count, riddle_count, riddle_live)
 
-            -- Confirmed by the live objective these sit inside, not by the
-            -- target system, which has never heard of them.
-            _claim_mission_objective_unit(member, "mission_objective_growth", enabled_by_kind,
-                seen_units, true)
+            if kind == "martyr_skull_riddle_interactable" then
+                _claim_mission_objective_unit(member, kind, GROWTH_EYE.riddle_kind, seen_units, true)
+            elseif kind ~= nil then
+                -- Confirmed by the live objective these sit inside, not by the
+                -- target system, which has never heard of them.
+                _claim_mission_objective_unit(member, kind, enabled_by_kind, seen_units, true)
 
-            -- Only while the game is marking the growth, and only for the
-            -- tentacles of that growth. A breakable the event is not running on
-            -- is never in this set.
-            if growth_marked then
-                _scratch_objective_range_exempt[member] = true
+                -- Only while the game is marking the growth, and only for the
+                -- tentacles of that growth. A breakable the event is not running
+                -- on is never in this set.
+                if growth_marked then
+                    _scratch_objective_range_exempt[member] = true
+                end
             end
 
-            -- Reported per tentacle and per remaining eye count, so a run shows
-            -- each one being worn down rather than only that it was found.
+            -- Reported per tentacle, per remaining eye count and per marker, so
+            -- a run shows each one being worn down rather than only that it was
+            -- found.
             if mod:get("debug_mode") == true then
-                local key = "growth_tentacle:" .. group .. "|" .. standing[group]
+                local key = "growth_tentacle:" .. group .. "|" .. standing[group] .. "|" .. tostring(kind)
 
                 if not GROWTH_EYE.logged[key] then
                     GROWTH_EYE.logged[key] = true
 
                     _log_once(key, string_format(
-                        "Growth tentacle standing: mission=%s tentacle=%d eyes=%d position=%s",
+                        "Growth tentacle standing: mission=%s tentacle=%d eyes=%d position=%s as=%s",
                         tostring(_safe_mission_name()),
                         group,
                         standing[group],
-                        _debug_unit_position_text(member)
+                        _debug_unit_position_text(member),
+                        tostring(kind)
                     ))
                 end
             end
@@ -3011,7 +3130,18 @@ return function(env)
     -- they run, and it is rebuilt from scratch every scan, so an exemption lasts
     -- exactly as long as the state behind it.
     function _objective_ignores_radar_range(unit)
-        if _world_marker_units_available and _scratch_world_marker_units[unit] == true then
+        -- Only while the game is drawing its marker. Its objective markers stop
+        -- at 300 metres, and Mortis Trials marks the start of all three arenas,
+        -- two of them 550 to 650 metres off where no player is.
+        if _world_marker_units_available and _scratch_world_marker_units[unit] == true
+            and (_game_draws_marker_on == nil or _game_draws_marker_on(unit)) then
+            return true
+        end
+
+        -- A container still holding its objective's luggable stands in for the
+        -- cargo the mission is sending the player to find, which the radar
+        -- would otherwise only show once the player was standing near it.
+        if LUGGABLE_HOLDER.holds[unit] == true then
             return true
         end
 
@@ -3073,6 +3203,11 @@ return function(env)
                 if keep
                     and _scratch_objective_has_start_marker[objective_name] == true
                     and _scratch_start_marker_by_unit[unit] ~= true
+                    -- Nor is a container still holding the objective's luggable:
+                    -- lm_rails' lockers claim no start marker, and were dropped
+                    -- until the player stood at one, with the canister inside
+                    -- drawn in their place.
+                    and LUGGABLE_HOLDER.holds[unit] ~= true
                     and (not game_marks_unit
                         or (_is_growth_objective_name(objective_name)
                             and _safe_objective_target_field(extension, "_ui_target_type") == "demolition")) then

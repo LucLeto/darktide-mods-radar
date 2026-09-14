@@ -478,6 +478,10 @@ This holds however a device is recognised: a mission that places three devices a
 them never used drops that one along with the rest. Devices the mission does not attribute to any
 objective at all are exempt, since that is the only way they stay visible.
 
+A step the game is marking stays on the radar beyond its range, but only while the game is actually
+drawing that marker: its objective markers stop at 300 metres. Mortis Trials marks the start of all
+three of its arenas, and the two nobody is in lie far beyond that, so they stay off the radar.
+
 Objective devices that carry a puzzle -- Auspex decoding, bomb defusal, and the like -- say in colour
 whether they need somebody, following the device's own hologram:
 
@@ -516,7 +520,7 @@ above/below** is set to: an objective a floor up is exactly what you need to see
 | --- | --- |
 | Martyr's Skull Items | Groups the icon-size, nearby-highlight, distance-text, skull, riddle-interactable, and power-cell controls. |
 | Martyr's Skull | Shows the collectible Martyr's Skull. |
-| Riddle interactables | Shows active, supported Martyr's Skull riddle keys, levers, switches, buttons, and related puzzle controls. Completed or used steps clear automatically instead of returning on later scans. |
+| Riddle interactables | Shows active, supported Martyr's Skull riddle keys, levers, switches, buttons, and related puzzle controls. Completed or used steps clear automatically instead of returning on later scans. On Smelter Complex the two growth tentacles blocking the riddle's door carry this marker until they are destroyed; the one above the skull is not needed and is not drawn. |
 | Power Cell | Shows orange power cells used by Martyr's Skull riddles. |
 
 ### Environment Controls
@@ -813,9 +817,9 @@ Player tags intentionally stay flatter and cleaner than supported item markers. 
 | Scanner targets | Scan zone selection | The Auspex targets the active scan zone selected for this run, dropped individually as each one is scanned. |
 | Hacking terminals | Decoder device system | Decoder and hacking terminals used for mission progression. A puzzle device is red while it is running unattended, yellow while a player is at it, and the shared objective tint both before it starts and once it is solved. The marker stays until the objective ends. |
 | Servo skull objectives | Servo skull interaction | The mission servo skull while you follow it. |
-| Daemonic growth | Objective target system | Growth steps of a purge event, recognised by the objective's own type (`demolition`) rather than by its name, so every mission running the event is covered. The tentacles, each three destructible eyes of one prefab, get one marker each; the growth's helper targets, which stand under a metre from its centre eye, are not drawn. Its own category with its own display mode, color and icon. |
+| Daemonic growth | Objective target system | Growth steps of a purge event, recognised by the objective's own type (`demolition`) rather than by its name, so every mission running the event is covered. The tentacles, each three destructible eyes of one prefab, get one marker each; the growth's helper targets, which stand under a metre from its centre eye, are not drawn. A tentacle is drawn only while it stands inside the live event, so one left standing from an earlier event does not come back elsewhere, and the tentacles blocking a Martyr's Skull riddle are the riddle's rather than a growth's. Its own category with its own display mode, color and icon. |
 | Targets to destroy | Objective target system | What any other objective marks for destruction, such as ice on machinery, tanks and cogitators. Its own category with its own display mode, icon color, highlight color and icon. |
-| Other objective interactions | Objective target system | The remaining objective-bound interaction points of the active objective, such as switches, buttons, and destructible steps. Destructibles clear one at a time as each is broken, rather than all at once when the objective ends. Where a luggable objective hides its items in a bank of identical containers, only the containers holding one are drawn, and the luggable inside is not drawn until its container is opened. A step the game marks more than once, such as the cargo valves that are turned after each delivery, follows the game's own objective marker: shown while the game marks it, hidden in between. The sockets for mission cargo other than power cells -- vacuum capsules, ammunition canisters, cryonic rods, Moebian samples, and the Prismata case -- are drawn here too, with this category's setting and colours; which luggable a socket takes is read from the objective it shares with them. |
+| Other objective interactions | Objective target system | The remaining objective-bound interaction points of the active objective, such as switches, buttons, and destructible steps. Destructibles clear one at a time as each is broken, rather than all at once when the objective ends. Where a luggable objective hides its items in a bank of identical containers, only the containers holding one are drawn, at any distance, and the luggable inside is not drawn until its container is opened. A step the game marks more than once, such as the cargo valves that are turned after each delivery, follows the game's own objective marker: shown while the game marks it, hidden in between. The sockets for mission cargo other than power cells -- vacuum capsules, ammunition canisters, cryonic rods, Moebian samples, and the Prismata case -- are drawn here too, with this category's setting and colours; which luggable a socket takes is read from the objective it shares with them. |
 
 Each category has its own icon, drawn inside the diamond frame and backplate the game itself uses around
 objective markers, so the whole family is distinguishable at a glance from enemy markers and from standard points
@@ -872,7 +876,7 @@ These markers are driven by expedition navigation data rather than standard pick
 | Preview | Marker | Notes |
 | --- | --- | --- |
 | <img src="doc/img/pickup_martyr_skull.png"  width="80" alt="Martyr's Skull marker" /> | Martyr's Skull | Gold skull marker. |
-| <img src="doc/img/martyr_skull_riddle_interactables.png" width="80" alt="Martyr's Skull riddle interactables marker" /> | Riddle Interactables | Gold interaction marker for active Martyr's Skull riddle keys, levers, switches, buttons, and related puzzle controls. Completed or used steps clear automatically. |
+| <img src="doc/img/martyr_skull_riddle_interactables.png" width="80" alt="Martyr's Skull riddle interactables marker" /> | Riddle Interactables | Gold interaction marker for active Martyr's Skull riddle keys, levers, switches, buttons, and related puzzle controls, and for the growth tentacles blocking Smelter Complex's riddle door. Completed or used steps clear automatically. |
 | <img src="doc/img/luggable_power_cell_orange.png"  width="80" alt="Orange Power Cell marker" /> | Power Cell | Orange luggable marker used for the Martyr's Skull group. |
 
 ### Environment Markers

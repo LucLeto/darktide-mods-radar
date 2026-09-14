@@ -1349,10 +1349,31 @@ return function(env)
     -- The units among them the game is marking as an objective, as opposed to
     -- the prompt a player gets standing next to something. Refilled with them.
     local _objective_marker_units = {}
+    -- The units at least one of whose markers the game is drawing rather than
+    -- holding out of reach. Presence above is unaffected; this answers only
+    -- whether the game's marker is on screen, for what it lets past the
+    -- radar's range.
+    local _marker_in_reach_units = {}
+
+    -- The game's own test: the camera distance it keeps on the marker against
+    -- its template's `max_distance`, unless the marker lifts the limit. One it
+    -- has not measured yet counts as drawn, as every marker did before.
+    function _world_marker_in_reach(marker)
+        if marker.block_max_distance then
+            return true
+        end
+
+        local template = marker.template
+        local max_distance = type(template) == "table" and template.max_distance or nil
+        local distance = marker.distance
+
+        return type(max_distance) ~= "number" or type(distance) ~= "number" or distance <= max_distance
+    end
 
     function _refresh_world_marker_units(out)
         table_clear(out)
         table_clear(_objective_marker_units)
+        table_clear(_marker_in_reach_units)
 
         local markers = _safe_world_markers_list()
 
@@ -1370,6 +1391,10 @@ return function(env)
                 if marker.type == "objective" then
                     _objective_marker_units[unit] = true
                 end
+
+                if _world_marker_in_reach(marker) then
+                    _marker_in_reach_units[unit] = true
+                end
             end
         end
 
@@ -1378,6 +1403,10 @@ return function(env)
 
     function _game_marks_as_objective(unit)
         return _objective_marker_units[unit] == true
+    end
+
+    function _game_draws_marker_on(unit)
+        return _marker_in_reach_units[unit] == true
     end
 
     function mod:get_interaction_world_markers_by_unit()

@@ -490,6 +490,11 @@ local function new_harness()
         return zone_unit
     end
 
+    -- For the missions whose Martyr's Skull riddle data is under test.
+    function harness:set_mission_name(name)
+        mission_name = name
+    end
+
     function harness:set_active_objective_names(names)
         active_objective_names = names
     end
@@ -4800,6 +4805,280 @@ test("each socket is reported once in debug mode", function()
 
     assert_contains(harness:log_text(), "Luggable socket: mission=test_mission objective=objective_lm_rails_collect_cargo"
         .. " cargo=luggable_special_issue_ammo drawn_as=mission_objective_other", "the socket is not reported")
+end)
+
+-- lm_rails' lockers claim no start marker while other units of their objective
+-- do, so they were dropped as alternatives the mission had not chosen until
+-- the player stood at one, and the canister inside was drawn in their place.
+-- A locker holding the cargo is not an alternative.
+test("a locker holding a luggable is drawn though its objective chose other units at the start", function()
+    local harness = new_harness()
+    local lockers, luggables = add_locker_bank(harness, "objective_lm_rails_collect_cargo", 4, { 2 })
+    local valve = harness:add_interactee({ position = { x = 40, y = 0, z = 0 } })
+
+    harness:add_to_system("mission_objective_target_system", valve,
+        { _objective_name = "objective_lm_rails_collect_cargo", _add_marker_on_objective_start = true })
+    harness:scan()
+
+    assert_equal("2", drawn_indices(harness, lockers), "the locker holding the canister was dropped as an alternative")
+    assert_equal("mission_objective_other", harness:tracked_kind(valve), "the step claiming the start marker is gone")
+    assert_equal(true, harness.env._luggable_hidden_in_container(luggables[1]),
+        "the canister is not hidden in its drawn locker")
+end)
+
+-- The lockers holding cargo stood 54 to 68 metres off when the objective
+-- started, beyond the radar's range, and the game marks none of them there.
+test("a locker holding a luggable is drawn beyond the radar's range", function()
+    local harness = new_harness()
+    local lockers, luggables = add_locker_bank(harness, "objective_lm_rails_collect_cargo", 4, { 2 })
+
+    lockers[2].position = { x = 900, y = 0, z = 0 }
+    luggables[1].position = { x = 900.43, y = 0, z = 1.3 }
+    lockers[3].position = { x = 904, y = 0, z = 0 }
+    harness:scan()
+
+    assert_equal(true, harness.env._objective_ignores_radar_range(lockers[2]),
+        "the locker holding the canister keeps to the radar's range")
+    assert_equal(false, harness.env._objective_ignores_radar_range(lockers[3]),
+        "an empty locker was taken out of the radar's range")
+    assert_equal("mission_objective_other", drawn_kind(harness, lockers[2]),
+        "the locker holding the canister is not drawn 900 metres off")
+end)
+
+-- dm_forge: the Martyr's Skull riddle is a door blocked by two growth
+-- tentacles, a few metres from the riddle's button, while a growth event runs
+-- 26 metres away. A third stands 6.4 metres up over the skull and is not
+-- needed to solve it. Positions as measured in a run.
+local DM_FORGE_RIDDLE_TENTACLES = {
+    { x = 57.469, y = -1.906, z = -9.847 },
+    { x = 56.034, y = -2.671, z = -9.894 },
+    above = { x = 57.725, y = -3.929, z = -5.046 },
+}
+
+local function add_dm_forge_growth(harness)
+    add_growth_site(harness, "objective_dm_forge_purge_daemonic_growth", { x = 39.991, y = -21.261, z = -13.448 })
+    harness:set_active_objective_names({ "objective_dm_forge_purge_daemonic_growth" })
+
+    return add_tentacle(harness, { x = 33.673, y = -12.539, z = -11.598 }, { name = "event" })
+end
+
+local function single_marker_kind(harness, eyes)
+    local marked = marked_eyes(harness, eyes)
+
+    if #marked ~= 1 then
+        return "markers=" .. tostring(#marked)
+    end
+
+    return harness:tracked_kind(marked[1])
+end
+
+test("the tentacles at dm_forge's riddle carry the riddle's marker", function()
+    local harness = new_harness()
+    local tentacles = {}
+
+    harness:set_mission_name("dm_forge")
+
+    for i = 1, #DM_FORGE_RIDDLE_TENTACLES do
+        tentacles[i] = add_tentacle(harness, DM_FORGE_RIDDLE_TENTACLES[i], { name = "riddle_" .. tostring(i) })
+    end
+
+    harness:scan()
+
+    for i = 1, #tentacles do
+        assert_equal("martyr_skull_riddle_interactable", single_marker_kind(harness, tentacles[i]),
+            "riddle tentacle " .. tostring(i) .. " does not carry the riddle's marker")
+    end
+end)
+
+test("during the growth event the riddle's tentacles stay the riddle's", function()
+    local harness = new_harness()
+
+    harness:set_mission_name("dm_forge")
+
+    local event_eyes = add_dm_forge_growth(harness)
+    local riddle_eyes = add_tentacle(harness, DM_FORGE_RIDDLE_TENTACLES[1], { name = "riddle" })
+
+    harness:scan()
+
+    assert_equal("mission_objective_growth", single_marker_kind(harness, event_eyes), "the event's tentacle is not a growth")
+    assert_equal("martyr_skull_riddle_interactable", single_marker_kind(harness, riddle_eyes),
+        "the riddle's tentacle was drawn as the growth's")
+end)
+
+test("a solved riddle's tentacles are not drawn, not even as a growth", function()
+    local harness = new_harness()
+
+    harness:set_mission_name("dm_forge")
+    harness.mod._martyr_skull_riddle_solved_by_mission.dm_forge = true
+
+    local event_eyes = add_dm_forge_growth(harness)
+    local riddle_eyes = add_tentacle(harness, DM_FORGE_RIDDLE_TENTACLES[1], { name = "riddle" })
+
+    harness:scan()
+
+    assert_equal(0, #marked_eyes(harness, riddle_eyes), "a solved riddle's tentacle is still drawn")
+    assert_equal("mission_objective_growth", single_marker_kind(harness, event_eyes), "the event's tentacle is gone")
+end)
+
+test("the riddle's tentacles follow the riddle's setting", function()
+    local harness = new_harness()
+
+    harness:set_mission_name("dm_forge")
+    harness.env.KIND_TO_SETTING.martyr_skull_riddle_interactable = "show_martyr_skull_riddle_interactables"
+    harness.settings.show_martyr_skull_riddle_interactables = "off"
+
+    local riddle_eyes = add_tentacle(harness, DM_FORGE_RIDDLE_TENTACLES[1], { name = "riddle" })
+
+    harness:scan()
+
+    assert_equal(0, #marked_eyes(harness, riddle_eyes), "the riddle's tentacle ignored the riddle's setting")
+end)
+
+-- Not needed to solve the riddle, so no marker; and not a growth's either,
+-- though the growth event's tentacles stand within the event's reach of it.
+test("the tentacle above dm_forge's skull carries no marker", function()
+    local harness = new_harness()
+
+    harness:set_mission_name("dm_forge")
+
+    local event_eyes = add_dm_forge_growth(harness)
+    local above = add_tentacle(harness, DM_FORGE_RIDDLE_TENTACLES.above, { name = "above" })
+    local door = add_tentacle(harness, DM_FORGE_RIDDLE_TENTACLES[1], { name = "door" })
+
+    harness:scan()
+
+    assert_equal(0, #marked_eyes(harness, above), "the tentacle above the skull is drawn")
+    assert_equal("martyr_skull_riddle_interactable", single_marker_kind(harness, door),
+        "a tentacle blocking the door lost the riddle's marker")
+    assert_equal("mission_objective_growth", single_marker_kind(harness, event_eyes), "the event's tentacle is gone")
+end)
+
+-- Only those at the riddle: the event's spot, with no growth running, is 28
+-- metres from the riddle's button.
+test("a tentacle away from the riddle is not the riddle's", function()
+    local harness = new_harness()
+
+    harness:set_mission_name("dm_forge")
+
+    local eyes = add_tentacle(harness, { x = 33.673, y = -12.539, z = -11.598 }, { name = "elsewhere" })
+
+    harness:scan()
+
+    assert_equal(0, #marked_eyes(harness, eyes), "a tentacle 28 metres from the riddle was taken for the riddle's")
+end)
+
+-- dm_forge's final event: a tentacle of an earlier one, left standing, came
+-- back 200 metres from the live growth.
+test("a tentacle left standing far from the live growth is not drawn", function()
+    local harness = new_harness()
+
+    add_growth_site(harness, "objective_first_growth", { x = 0, y = 0, z = 0 })
+    harness:set_active_objective_names({ "objective_first_growth" })
+
+    local first = add_tentacle(harness, { x = 10, y = 0, z = 0 }, { name = "first" })
+
+    harness:scan()
+
+    assert_equal(1, #marked_eyes(harness, first), "the first event's tentacle is not drawn")
+
+    add_growth_site(harness, "objective_final_growth", { x = 200, y = 0, z = 0 })
+    harness:set_active_objective_names({ "objective_final_growth" })
+
+    local final = add_tentacle(harness, { x = 210, y = 0, z = 0 }, { name = "final" })
+
+    harness:scan()
+
+    assert_equal(0, #marked_eyes(harness, first), "a tentacle 200 metres from the live growth is drawn")
+    assert_equal(1, #marked_eyes(harness, final), "the live growth's tentacle is not drawn")
+end)
+
+-- The elevator's call button was listed as dm_forge's riddle button, and drawn
+-- as a Martyr's Skull marker while the mission asked for it.
+test("dm_forge's elevator call button is the mission's step, not the riddle's", function()
+    local harness = new_harness()
+
+    harness:set_mission_name("dm_forge")
+
+    local button = harness:add_interactee({
+        position = { x = -8.578, y = 37.113, z = 5.007 },
+        description = "loc_interactable_button",
+        unit_name = "#id[dfbf44eee4048cb3]",
+    })
+
+    harness:add_to_system("mission_objective_target_system", button,
+        { _objective_name = "objective_dm_forge_call_elevator" })
+    harness:set_active_objective_names({ "objective_dm_forge_call_elevator" })
+    harness:scan()
+
+    assert_equal("mission_objective_other", harness:tracked_kind(button), "the elevator button is not the mission's step")
+end)
+
+test("dm_forge's riddle button is still the riddle's", function()
+    local harness = new_harness()
+
+    harness:set_mission_name("dm_forge")
+
+    local button = harness:add_interactee({
+        position = { x = 60.767, y = -5.137, z = -11.409 },
+        description = "loc_interactable_button",
+        unit_name = "#id[e9b4edfaf3e74a23]",
+    })
+
+    harness:scan()
+
+    assert_equal("martyr_skull_riddle_interactable", harness:tracked_kind(button), "the riddle's button lost its marker")
+end)
+
+-- Mortis Trials marks the start of all three arenas; two stood 550 to 650
+-- metres off, past the 300 metres the game draws an objective marker to. The
+-- game's marker lifts the radar's range only while the game is drawing it.
+test("the game's marker lifts the radar's range only while the game draws it", function()
+    local harness = new_harness()
+    local near = harness:add_interactee({ position = { x = 50, y = 0, z = 0 } })
+    local far = harness:add_interactee({ position = { x = 600, y = 0, z = 0 } })
+
+    for _, unit in ipairs({ near, far }) do
+        harness:add_to_system("mission_objective_target_system", unit,
+            { _objective_name = "objective_psykhanium_start_waves", _add_marker_on_objective_start = true })
+    end
+
+    harness:set_active_objective_names({ "objective_psykhanium_start_waves" })
+    harness:set_world_marker_units({ near, far })
+    harness.env._game_draws_marker_on = function(unit)
+        return unit ~= far
+    end
+    harness:scan()
+
+    assert_equal(true, harness.env._objective_ignores_radar_range(near), "the start the game draws lost its exemption")
+    assert_equal(false, harness.env._objective_ignores_radar_range(far),
+        "a start past the game's own marker reach ignores the radar's range")
+    assert_nil(drawn_kind(harness, far), "the arena 600 metres off is drawn")
+    assert_equal("mission_objective_other", drawn_kind(harness, near), "the players' own start is not drawn")
+end)
+
+test("a growth's tentacles lift the radar's range only while the game draws its marker", function()
+    local harness = new_harness()
+    local corruptor = add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+    local drawn = true
+
+    harness:set_world_marker_units({ corruptor })
+    harness.env._game_draws_marker_on = function()
+        return drawn
+    end
+    harness:scan()
+
+    local marked = marked_eyes(harness, eyes)
+
+    assert_equal(1, #marked, "the tentacle is not marked once")
+    assert_equal(true, harness.env._objective_ignores_radar_range(marked[1]),
+        "the tentacle is not exempt while the game draws the growth")
+
+    drawn = false
+    harness:scan()
+
+    assert_equal(false, harness.env._objective_ignores_radar_range(marked[1]),
+        "the tentacle stayed exempt with the game's marker out of reach")
 end)
 
 local failures = {}

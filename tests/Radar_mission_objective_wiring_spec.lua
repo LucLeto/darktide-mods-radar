@@ -912,8 +912,12 @@ check(expeditions_source:find("if carrier[group] == nil then", 1, true) ~= nil,
     "the tentacle marker hops to another eye whenever any of them is destroyed")
 
 -- Through the shared claim, so the retirement, liveness and health gates that
--- every other objective marker passes apply to these too.
-check(expeditions_source:find('_claim_mission_objective_unit(member, "mission_objective_growth"', 1, true) ~= nil,
+-- every other objective marker passes apply to these too -- a growth's
+-- tentacles and a Martyr's Skull riddle's alike.
+check(expeditions_source:find("_claim_mission_objective_unit(member, kind, enabled_by_kind, seen_units, true)", 1, true)
+    ~= nil
+    and expeditions_source:find("_claim_mission_objective_unit(member, kind, GROWTH_EYE.riddle_kind, seen_units, true)",
+        1, true) ~= nil,
     "tentacle eyes must be claimed through the shared choke point, not tracked directly")
 
 -- Last of the passes: these units are in no objective system, so they must not
@@ -941,9 +945,13 @@ check(expeditions_source:find("function _objective_ignores_radar_range(unit)", 1
 check(select(2, expeditions_source:gsub("function _objective_ignores_radar_range", "")) == 1,
     "the range exemption is decided in more than one place")
 -- Without the availability guard, a mission where the list cannot be read would
--- fall back on a stale table from the previous one.
+-- fall back on a stale table from the previous one. And only while the game is
+-- drawing its marker: Mortis Trials marks arenas beyond an objective marker's
+-- reach. The second line's indentation is the exemption's own; the tentacles'
+-- guard shares the first.
 check(expeditions_source:find(
-    "if _world_marker_units_available and _scratch_world_marker_units[unit] == true then", 1, true) ~= nil,
+    "if _world_marker_units_available and _scratch_world_marker_units[unit] == true" .. LF
+        .. "            and (_game_draws_marker_on == nil or _game_draws_marker_on(unit)) then", 1, true) ~= nil,
     "the exemption does not check that the marker list was readable")
 -- Neither a tentacle nor a scan target reaches the game's marker list, so both
 -- need their own system to answer for them, into the shared set.
@@ -1018,11 +1026,18 @@ end
 -- unused alternative while the game was drawing an objective marker on it.
 -- The one exception, a growth's demolition targets, is pinned where the stacking
 -- it prevents is described; the override itself must stay for everything else.
-local start_marker_filter = expeditions_source:find(
+-- A container still holding its objective's luggable is exempt too, on the
+-- line just before the override.
+local start_marker_filter_head = expeditions_source:find(
     "if keep" .. LF
         .. "                    and _scratch_objective_has_start_marker[objective_name] == true" .. LF
-        .. "                    and _scratch_start_marker_by_unit[unit] ~= true" .. LF
-        .. "                    and (not game_marks_unit" .. LF, 1, true)
+        .. "                    and _scratch_start_marker_by_unit[unit] ~= true" .. LF, 1, true)
+local start_marker_filter_tail = start_marker_filter_head and expeditions_source:find(
+    "                    and LUGGABLE_HOLDER.holds[unit] ~= true" .. LF
+        .. "                    and (not game_marks_unit" .. LF, start_marker_filter_head, true)
+local start_marker_filter = start_marker_filter_tail ~= nil
+    and start_marker_filter_tail - start_marker_filter_head < 600
+    or nil
 local actionable_filter = expeditions_source:find(
     "if keep and not game_marks_unit" .. LF
         .. "                    and has_actionable", 1, true)
