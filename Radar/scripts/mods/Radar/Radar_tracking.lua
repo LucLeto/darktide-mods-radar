@@ -1206,9 +1206,6 @@ return function(env)
         table_clear(seen_interactees)
 
         local scan_hidden_mission_objectives = _refresh_mission_objective_markers()
-        -- Hoisted out of the per-interactee loop: this runs for every interactee
-        -- in the level on every scan.
-        local log_objective_rejections = mod:get("debug_mode") == true
 
         for unit, extension in pairs(interactee_map) do
             if _safe_unit_alive(unit) and extension then
@@ -1302,12 +1299,6 @@ return function(env)
                     else
                         _clear_tracked_unit_from_source(unit, "interactee_system")
                     end
-
-                    if not show_marker then
-                        if log_objective_rejections then
-                            _debug_log_rejected_mission_objective_marker(unit, extension, "show_marker")
-                        end
-                    end
                 else
                     -- An interactee that reports itself inactive is not part of
                     -- the current step. Missions place several copies of the same
@@ -1317,11 +1308,6 @@ return function(env)
                     -- `active` is not, because it is what distinguishes the live
                     -- device from its siblings.
                     _clear_tracked_unit_from_source(unit, "interactee_system")
-
-                    if log_objective_rejections then
-                        _debug_log_rejected_mission_objective_marker(unit, extension,
-                            is_used and "used" or "inactive")
-                    end
                 end
 
                 if martyr_skull_riddle_fallback_mission_name then
@@ -2573,7 +2559,6 @@ return function(env)
         mod._martyr_skull_riddle_solved_by_mission = {}
         mod._martyr_skull_riddle_fallback_state_by_position = {}
         _reset_mission_objective_marker_state()
-        _reset_screen_highlight_anchor_probe()
         mod._last_safe_zone_section_index = nil
         mod._last_expedition_in_safe_zone = nil
         mod._player_smart_tag_generation = 0

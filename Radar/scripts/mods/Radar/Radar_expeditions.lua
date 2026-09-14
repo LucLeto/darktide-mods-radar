@@ -12,13 +12,10 @@ return function(env)
     local math_floor = math.floor
     local math_sqrt = math.sqrt
     local string_find = string.find
-    local string_sub = string.sub
     local string_format = string.format
     local string_lower = string.lower
     local string_match = string.match
     local table_sort = table.sort
-    local table_concat = table.concat
-    local getmetatable = getmetatable
     local table_clear = table.clear or function(t)
         for k in pairs(t) do
             t[k] = nil
@@ -1727,9 +1724,8 @@ return function(env)
             prefabs[prefab] = true
         end
 
-        -- Once per container, so a run shows which of a bank were kept.
-        if mod:get("debug_mode") == true then
-            _log_once("luggable_holder:" .. _debug_unit_id(unit), string_format(
+        if _objective_debug_logging then
+            _log_once("luggable_container:" .. tostring(unit), string_format(
                 "Luggable container: mission=%s objective=%s prefab=%s position=%s",
                 tostring(_safe_mission_name()),
                 objective_name,
@@ -1750,9 +1746,8 @@ return function(env)
         if kind == "luggable_socket" then
             holder.socket_objective[unit] = objective_name
 
-            -- Once per socket, so a run shows what each was drawn as and why.
-            if holder.cargo[objective_name] ~= nil and mod:get("debug_mode") == true then
-                _log_once("luggable_socket:" .. _debug_unit_id(unit), string_format(
+            if _objective_debug_logging and holder.cargo[objective_name] ~= nil then
+                _log_once("luggable_socket:" .. tostring(unit), string_format(
                     "Luggable socket: mission=%s objective=%s cargo=%s drawn_as=%s position=%s",
                     tostring(_safe_mission_name()),
                     objective_name,
@@ -1888,8 +1883,6 @@ return function(env)
                     LUGGABLE_HOLDER.objectives[name] = true
                     LUGGABLE_HOLDER.active = true
                 end
-
-                _debug_log_active_objective_fields(name, objective)
             end
         end
 
@@ -1973,9 +1966,6 @@ return function(env)
         end
 
         _growth_objective_by_name[objective_name] = true
-        -- Reported once per objective, so a run shows exactly which objectives
-        -- were recognised rather than leaving it to be inferred from the icons.
-        _debug_log_growth_objective(objective_name)
     end
 
     local MISSION_OBJECTIVE_MINIGAME_SYSTEM = "minigame_system"
@@ -2286,14 +2276,10 @@ return function(env)
         -- Single choke point for retirement, so a step that has been completed
         -- cannot be re-claimed by any source.
         if _is_mission_objective_unit_retired(unit) then
-            _debug_log_unclaimed_mission_objective_unit(kind, "retired", unit)
-
             return
         end
 
         if not objective_confirmed and _is_unit_of_inactive_objective(unit) then
-            _debug_log_unclaimed_mission_objective_unit(kind, "inactive_objective", unit)
-
             return
         end
 
@@ -2323,6 +2309,10 @@ return function(env)
         seen_units[unit] = true
         _mission_objective_kind_by_unit[unit] = kind
         _track_unit(unit, kind, MISSION_OBJECTIVE_SOURCE, _minigame_marker_meta(unit, nil))
+
+        if _objective_debug_logging then
+            _debug_log_objective_marker(unit, kind)
+        end
     end
 
     -- The zone selection table is the only place a per-target scanned flag can
@@ -2439,15 +2429,11 @@ return function(env)
         local expected_outstanding = 0
         local marked_from_selection = 0
         local has_active_zone = false
-        -- Hoisted: the loop runs over every zone in the level on every scan.
-        local log_zones = mod:get("debug_mode") == true
 
         for zone_unit, extension in pairs(extension_map) do
             zone_units[zone_unit] = true
 
             if scanner_enabled and active_names ~= nil then
-                local selection_entries = -1
-                local claimed_here = marked_from_selection
                 local objective_name = _safe_objective_target_name(extension)
                 local is_active_objective = type(objective_name) == "string"
                     and active_names[objective_name] == true
@@ -2471,19 +2457,12 @@ return function(env)
 
                     if type(scannables) == "table" then
                         local scanned_is_true = _scanned_units_from_selection(scannables, progression)
-                        local still_active = 0
-                        selection_entries = 0
-
-                        for _ in pairs(scannables) do
-                            selection_entries = selection_entries + 1
-                        end
 
                         for key, value in pairs(scannables) do
                             local unit = _collection_unit(key, value)
                             local scanned = scanned_is_true == true and value == true
 
                             if unit ~= nil and not scanned and _is_scannable_still_active(scannable_map, unit) then
-                                still_active = still_active + 1
                                 marked_from_selection = marked_from_selection + 1
 
                                 _claim_mission_objective_unit(unit, "mission_objective_scanner", enabled_by_kind,
@@ -2499,16 +2478,7 @@ return function(env)
 
                     end
                 end
-
-                if log_zones then
-                    _debug_log_scan_zone_state(objective_name, is_active_objective, activated, progression, total,
-                        finished, selection_entries, marked_from_selection - claimed_here, zone_unit)
-                end
             end
-        end
-
-        if log_zones then
-            _debug_log_scan_zone_summary(has_active_zone, marked_from_selection, expected_outstanding)
         end
 
         if has_active_zone and marked_from_selection == 0 then
@@ -2702,8 +2672,6 @@ return function(env)
         group_next = 0,
         group_standing = {},
         group_carrier = {},
-        -- Keyed by position, so each tentacle reports itself once.
-        logged = {},
         -- Each candidate's prefab. `false` records that the engine could not
         -- say, so it is not asked again.
         prefab_of = {},
@@ -2885,22 +2853,8 @@ return function(env)
         local zs = GROWTH_EYE.z
         local limit = GROWTH_EYE.candidate_limit
         local count = 0
-        -- Counted whether or not anything matches. Silence is ambiguous between
-        -- "no tentacles standing here" and "this machine cannot see the
-        -- destructible system at all", and only the second is a defect.
-        local seen_destructibles = 0
-        local is_server = nil
 
         for unit, extension in pairs(extension_map) do
-
-            if type(extension) == "table" then
-                seen_destructibles = seen_destructibles + 1
-
-                if is_server == nil then
-                    is_server = rawget(extension, "_is_server")
-                end
-            end
-
             -- Nav gates are the level's monster wall volumes: numerous, never a
             -- target, and cheaper to reject than to measure.
             if type(extension) == "table" and rawget(extension, "_is_nav_gate") ~= true then
@@ -3054,55 +3008,16 @@ return function(env)
                 end
             end
 
-            -- Reported per tentacle, per remaining eye count and per marker, so
-            -- a run shows each one being worn down rather than only that it was
-            -- found.
-            if mod:get("debug_mode") == true then
-                local key = "growth_tentacle:" .. group .. "|" .. standing[group] .. "|" .. tostring(kind)
-
-                if not GROWTH_EYE.logged[key] then
-                    GROWTH_EYE.logged[key] = true
-
-                    _log_once(key, string_format(
-                        "Growth tentacle standing: mission=%s tentacle=%d eyes=%d position=%s as=%s",
-                        tostring(_safe_mission_name()),
-                        group,
-                        standing[group],
-                        _debug_unit_position_text(member),
-                        tostring(kind)
-                    ))
-                end
-            end
-        end
-
-        -- One line that says what this machine can see, logged whether or not a
-        -- tentacle was found. Everything the host/client question needs is here:
-        -- `server` says which side this is, `destructibles` whether the system
-        -- is populated at all, `near` whether the eyes reach this machine,
-        -- `registered` whether the shape can be matched here, and `standing`
-        -- follows a tentacle being worn down. Keyed on the whole tuple, so it
-        -- reports each distinct state once rather than every scan.
-        if mod:get("debug_mode") == true then
-            local standing_groups = 0
-
-            for _ in pairs(carrier) do
-                standing_groups = standing_groups + 1
-            end
-
-            local key = string_format("growth_scan:%s|%d|%d|%d|%d", tostring(is_server),
-                seen_destructibles, count, GROWTH_EYE.group_next, standing_groups)
-
-            if not GROWTH_EYE.logged[key] then
-                GROWTH_EYE.logged[key] = true
-
-                _log_once(key, string_format(
-                    "Growth tentacle scan: mission=%s server=%s destructibles=%d near=%d registered=%d standing=%d",
+            -- Per tentacle, remaining eye count and marker, so a run shows each
+            -- one being worn down and what it was drawn as.
+            if _objective_debug_logging then
+                _log_once("growth_tentacle:" .. group .. "|" .. standing[group] .. "|" .. tostring(kind), string_format(
+                    "Growth tentacle standing: mission=%s tentacle=%d eyes=%d as=%s position=%s",
                     tostring(_safe_mission_name()),
-                    tostring(is_server),
-                    seen_destructibles,
-                    count,
-                    GROWTH_EYE.group_next,
-                    standing_groups
+                    group,
+                    standing[group],
+                    tostring(kind),
+                    _debug_unit_position_text(member)
                 ))
             end
         end
@@ -3158,13 +3073,10 @@ return function(env)
 
         local has_actionable = nil
         local actionable_by_unit = nil
-        -- Hoisted: this runs for every unit in the target system on every scan.
-        local log_filtered_hints = false
 
         if require_active_objective then
             has_actionable = _scratch_objective_has_actionable
             actionable_by_unit = _scratch_objective_actionable_by_unit
-            log_filtered_hints = mod:get("debug_mode") == true
         end
 
         for unit, extension in pairs(extension_map) do
@@ -3213,20 +3125,12 @@ return function(env)
                             and _safe_objective_target_field(extension, "_ui_target_type") == "demolition")) then
                     -- An alternative the mission chose not to use.
                     keep = false
-
-                    if log_filtered_hints then
-                        _debug_log_filtered_objective_hint(objective_name, unit)
-                    end
                 end
 
                 if keep and not game_marks_unit
                     and has_actionable[objective_name] == true
                     and actionable_by_unit[unit] ~= true then
                     keep = false
-
-                    if log_filtered_hints then
-                        _debug_log_filtered_objective_hint(objective_name, unit)
-                    end
                 end
 
                 -- Applied to every objective target that is not an interactee.
@@ -3292,10 +3196,79 @@ return function(env)
         end
     end
 
+    -- Debug mode only: `_objective_debug_logging` is read once per scan, so none
+    -- of these lines costs anything outside it.
+    --
+    -- One line per objective marker the radar draws, once per unit, kind and
+    -- state of the game's own marker on it: enough to trace a report of a marker
+    -- drawn or missing to what the radar saw.
+    function _debug_log_objective_marker(unit, kind)
+        local game_marker = "unreadable"
+
+        if _world_marker_units_available then
+            if _game_marks_as_objective ~= nil and _game_marks_as_objective(unit) then
+                game_marker = "objective"
+            elseif _scratch_world_marker_units[unit] ~= nil then
+                game_marker = "other"
+            else
+                game_marker = "none"
+            end
+        end
+
+        local target_map = _safe_unit_to_extension_map(MISSION_OBJECTIVE_TARGET_SYSTEM)
+        local objective_name = type(target_map) == "table" and _safe_objective_target_name(target_map[unit]) or nil
+
+        _log_once("objective_marker:" .. tostring(unit) .. "|" .. kind .. "|" .. game_marker, string_format(
+            "Objective marker: mission=%s kind=%s objective=%s game_marker=%s position=%s",
+            tostring(_safe_mission_name()),
+            kind,
+            tostring(objective_name),
+            game_marker,
+            _debug_unit_position_text(unit)
+        ))
+    end
+
+    -- A unit the game marks as an objective that the radar draws nothing for:
+    -- the first thing to look at after a game patch or on a new mission. Once
+    -- per unit, and not while a just-started objective's markers are still held
+    -- back.
+    function _debug_log_untracked_objective_markers()
+        if not _world_marker_units_available or _game_marks_as_objective == nil then
+            return
+        end
+
+        local tracked_units = mod._tracked_units
+        local target_map = _safe_unit_to_extension_map(MISSION_OBJECTIVE_TARGET_SYSTEM)
+        local interactee_map = _safe_unit_to_extension_map("interactee_system")
+        local now = _safe_gameplay_time() or 0
+
+        for unit in pairs(_scratch_world_marker_units) do
+            if tracked_units[unit] == nil and _game_marks_as_objective(unit) then
+                local objective_name = type(target_map) == "table" and _safe_objective_target_name(target_map[unit])
+                    or nil
+                local first_active = objective_name ~= nil and _objective_first_active_t[objective_name] or nil
+
+                if first_active == nil or now - first_active >= OBJECTIVE_MARKER_SETTLE_SECONDS then
+                    _log_once("untracked_objective_marker:" .. tostring(unit), string_format(
+                        "Untracked objective marker: mission=%s objective=%s objective_active=%s retired=%s interactee=%s position=%s",
+                        tostring(_safe_mission_name()),
+                        tostring(objective_name),
+                        tostring(objective_name ~= nil and _scratch_active_objective_names[objective_name] == true),
+                        tostring(_is_mission_objective_unit_retired(unit)),
+                        tostring(type(interactee_map) == "table" and interactee_map[unit] ~= nil),
+                        _debug_unit_position_text(unit)
+                    ))
+                end
+            end
+        end
+    end
+
     -- Objective zones and targets are frequently not interactees at all, so they
     -- can never be reached through the interactee scan. This walks the objective
     -- systems directly and is the only path that can surface them.
     function _scan_mission_objective_targets(interactee_map)
+        _objective_debug_logging = mod:get("debug_mode") == true
+
         local tracked_units = mod._tracked_units
         local seen_units = _scratch_seen_mission_objective_units
         local zone_units = _scratch_mission_objective_zone_units
@@ -3338,27 +3311,13 @@ return function(env)
             end
         end
 
-        _debug_probe_marked_objective_markers(_scratch_active_objective_names)
-        _debug_probe_objective_world_markers()
-        _debug_probe_objective_target_fields()
-        _debug_probe_untracked_world_markers()
-        _debug_probe_nearby_destructibles()
-        _debug_probe_demolition_destructibles()
-        _debug_probe_objective_marker_types()
+        if _objective_debug_logging then
+            _debug_log_untracked_objective_markers()
+        end
     end
 
     -- Dropping the unit map keeps stale unit references out of the next mission.
     function _reset_mission_objective_marker_state()
-        _reset_objective_state_probe()
-        _reset_marked_objective_probe()
-        _reset_world_marker_probe()
-        _reset_target_field_probe()
-        _reset_untracked_marker_probe()
-        _reset_destructible_probe()
-        _reset_rejection_probe()
-        _reset_demolition_probe()
-        _reset_marker_types_probe()
-        _reset_active_objective_probe()
         _reset_mission_objective_lifecycle()
         table_clear(_minigame_state_by_unit)
         table_clear(_minigame_meta_by_unit)
@@ -3385,7 +3344,6 @@ return function(env)
         table_clear(_growth_objective_by_name)
         -- The only one of the tentacle arrays that holds unit references.
         table_clear(GROWTH_EYE.units)
-        table_clear(GROWTH_EYE.logged)
         table_clear(GROWTH_EYE.group_of)
         table_clear(GROWTH_EYE.member_units)
         table_clear(GROWTH_EYE.member_group)
@@ -3398,1352 +3356,14 @@ return function(env)
         table_clear(_scratch_objective_has_start_marker)
         table_clear(_scratch_start_marker_by_unit)
         _world_marker_units_available = false
-    end
 
-
-    -- A marker that outlives its objective gives no other trace: the kind says
-    -- nothing about which pass claimed it, and the tracked entry is the only
-    -- place the objective it belongs to and whether that objective is still live
-    -- can be seen together. Read through the field helpers only; no method on an
-    -- objective extension is ever called.
-    local MISSION_OBJECTIVE_STATE_PROBE_INTERVAL = 2
-    local _objective_state_probe_next_t = 0
-    local _objective_state_probe_window_t = nil
-    local _objective_state_probe_window_due = false
-
-    -- Declared here rather than assigned from the reset above, which runs before
-    -- these locals exist and would have written globals instead.
-    function _reset_objective_state_probe()
-        _objective_state_probe_next_t = 0
-        _objective_state_probe_window_t = nil
-        _objective_state_probe_window_due = false
-    end
-
-    -- One decision per scan, so the probe never walks its extension maps at the
-    -- scan rate.
-    function _objective_state_probe_due()
-        if mod:get("debug_mode") ~= true then
-            return false
-        end
-
-        local now = _safe_gameplay_time() or 0
-
-        if now ~= _objective_state_probe_window_t then
-            _objective_state_probe_window_t = now
-            _objective_state_probe_window_due = now >= _objective_state_probe_next_t
-
-            if _objective_state_probe_window_due then
-                _objective_state_probe_next_t = now + MISSION_OBJECTIVE_STATE_PROBE_INTERVAL
-            end
-        end
-
-        return _objective_state_probe_window_due
-    end
-
-    -- Every marker the objective scan is currently drawing, with the state that
-    -- ought to retire it. A marker that outlives its step shows up as a line
-    -- whose signature stops changing while the step itself is gone.
-    local MISSION_OBJECTIVE_MARKER_PROBE_SYSTEMS = {
-        "destructible_system",
-        "health_system",
-        "minigame_system",
-        "interactee_system",
-        "mission_objective_target_system",
-    }
-
-    local MISSION_OBJECTIVE_MARKER_PROBE_SYSTEM_COUNT = #MISSION_OBJECTIVE_MARKER_PROBE_SYSTEMS
-    -- Probe limits in one table rather than one local each: this module body is
-    -- at LuaJIT's ceiling of 200 locals in a function, and the debug scaffolding
-    -- is what pushed it there.
-    local PROBE = {
-        marker_budget = 80,
-        active_field_limit = 40,
-        active_budget = 40,
-        target_sample = 6,
-        target_field_limit = 20,
-        target_budget = 40,
-        destructible_left = 30,
-        destructible_link_limit = 10,
-        destructible_seen = {},
-        rejection_budget = 40,
-        rejection_left = 40,
-        rejection_seen = {},
-        -- Probe keys identify a unit by a number handed out here rather than by
-        -- its position. A servo skull flies, so a position in the key made it a
-        -- new unit on every scan: one of them took 59 of the marker probe's 80
-        -- line budget in a single mission and the probe then went silent for the
-        -- rest of it, two minutes before the next objective started.
-        unit_ids = {},
-        unit_id_next = 0,
-        -- The demolition probe. See _debug_probe_demolition_destructibles.
-        -- Two budgets, so a busy level cannot spend the summary's share on
-        -- individual destructibles: the summary is the line that answers the
-        -- question, and it would otherwise be the one that never appears.
-        demolition_budget = 100,
-        demolition_left = 100,
-        demolition_summary_budget = 40,
-        demolition_summary_left = 40,
-        demolition_seen = {},
-        demolition_summary_seen = {},
-        demolition_range_squared = 1600,
-        demolition_ref_limit = 24,
-        demolition_nested_fields = { "_parameters", "_destruction_info", "_visibility_info" },
-        demolition_objectives = {},
-        demolition_anchor_x = {},
-        demolition_anchor_y = {},
-        demolition_anchor_z = {},
-        demolition_id_counts = {},
-        demolition_id_list = {},
-        demolition_objective_list = {},
-        demolition_parts = {},
-        -- The marker type probe. See _debug_probe_objective_marker_types.
-        marker_types_budget = 200,
-        marker_types_left = 200,
-        marker_types_seen = {},
-        marker_types_objective = {},
-        marker_types_interaction = {},
-        marker_types_other = {},
-    }
-
-    -- Declared beside PROBE rather than with the other resets: those sit above
-    -- it in the file, and a local is invisible there.
-    function _reset_rejection_probe()
-        PROBE.rejection_left = PROBE.rejection_budget
-        table_clear(PROBE.rejection_seen)
-        table_clear(PROBE.unit_ids)
-        PROBE.unit_id_next = 0
-    end
-
-    function _reset_marker_types_probe()
-        PROBE.marker_types_left = PROBE.marker_types_budget
-        table_clear(PROBE.marker_types_seen)
-        table_clear(PROBE.marker_types_objective)
-        table_clear(PROBE.marker_types_interaction)
-        table_clear(PROBE.marker_types_other)
-    end
-
-    function _reset_demolition_probe()
-        PROBE.demolition_left = PROBE.demolition_budget
-        PROBE.demolition_summary_left = PROBE.demolition_summary_budget
-        table_clear(PROBE.demolition_seen)
-        table_clear(PROBE.demolition_summary_seen)
-    end
-
-    function _debug_unit_id(unit)
-        local id = PROBE.unit_ids[unit]
-
-        if id == nil then
-            id = PROBE.unit_id_next + 1
-            PROBE.unit_id_next = id
-            PROBE.unit_ids[unit] = id
-        end
-
-        return id
-    end
-
-    local _marker_probe_logs_left = PROBE.marker_budget
-    local _scratch_marker_probe_owners = {}
-    -- `_log_once` reports nothing back, so the budget needs its own record of
-    -- which states have already been logged.
-    local _marker_probe_seen = {}
-
-    function _reset_marked_objective_probe()
-        _marker_probe_logs_left = PROBE.marker_budget
-        table_clear(_marker_probe_seen)
-    end
-
-    -- The game draws its own world marker for objective units, and its frame is
-    -- an asset of the game's, not one this mod references. The marker widgets
-    -- come back through `request_world_markers_list`, so the materials it is
-    -- built from can be read off the live widget rather than guessed at.
-    local MISSION_OBJECTIVE_WORLD_MARKER_SAMPLE_LIMIT = 3
-    local MISSION_OBJECTIVE_WORLD_MARKER_FIELD_LIMIT = 24
-    local MISSION_OBJECTIVE_WORLD_MARKER_DEPTH = 4
-    local MISSION_OBJECTIVE_WORLD_MARKER_BUDGET = 24
-    local MATERIAL_PREFIX = "content/ui/materials/"
-    local _world_marker_probe_logs_left = MISSION_OBJECTIVE_WORLD_MARKER_BUDGET
-    local _world_marker_probe_seen = {}
-    local _scratch_world_marker_materials = {}
-
-    function _reset_world_marker_probe()
-        _world_marker_probe_logs_left = MISSION_OBJECTIVE_WORLD_MARKER_BUDGET
-        table_clear(_world_marker_probe_seen)
-    end
-
-    -- Only strings that name a material, wherever they sit in the widget: the
-    -- frame, the icon and the backplate are separate entries and none of them is
-    -- at a predictable key.
-    local function _debug_collect_materials(container, prefix, out, count, depth)
-        for key, value in pairs(container) do
-            if count >= MISSION_OBJECTIVE_WORLD_MARKER_FIELD_LIMIT then
-                break
-            end
-
-            if type(value) == "string" then
-                if value:sub(1, #MATERIAL_PREFIX) == MATERIAL_PREFIX then
-                    count = count + 1
-                    out[count] = prefix .. tostring(key) .. "=" .. value
-                end
-            elseif type(value) == "table" and depth > 1 then
-                count = _debug_collect_materials(value, prefix .. tostring(key) .. ".", out, count, depth - 1)
-            end
-        end
-
-        return count
-    end
-
-    -- An objective can file several alternatives under one name, one per stage,
-    -- and run them one at a time -- the Daemonic Growth sites are stages 2, 4, 6,
-    -- 8 and 10 of a single objective. Which stage is live is known only to the
-    -- objective itself, so its own fields are reported here to find the one that
-    -- says so. Field reads only: this is the class whose methods drive live
-    -- mission state.
-    local _active_objective_probe_logs_left = PROBE.active_budget
-    local _active_objective_probe_seen = {}
-    local _scratch_active_objective_fields = {}
-
-    function _reset_active_objective_probe()
-        _active_objective_probe_logs_left = PROBE.active_budget
-        table_clear(_active_objective_probe_seen)
-    end
-
-    function _debug_log_active_objective_fields(name, objective)
-        if _active_objective_probe_logs_left <= 0 or mod:get("debug_mode") ~= true then
-            return
-        end
-
-        local fields = _scratch_active_objective_fields
-        local count = 0
-
-        table_clear(fields)
-
-        for key, value in pairs(objective) do
-            if count >= PROBE.active_field_limit then
-                break
-            end
-
-            if type(key) == "string" then
-                local value_type = type(value)
-                local text = nil
-
-                if value_type == "boolean" then
-                    text = tostring(value)
-                elseif value_type == "number" then
-                    text = string_format("%g", value)
-                elseif value_type == "string" then
-                    text = value
-                end
-
-                if text ~= nil then
-                    count = count + 1
-                    fields[count] = key .. "=" .. text
-                end
-            end
-        end
-
-        local field_text = table_concat(fields, " ", 1, count)
-        -- Keyed on the objective and its stage, not on the whole field text. A
-        -- timed objective's progression changes every tick, and keying on it let
-        -- two of them consume the entire budget before the objective being
-        -- investigated was ever logged.
-        local key = "active_objective:" .. name .. "|" .. tostring(rawget(objective, "_stage"))
-
-        if not _active_objective_probe_seen[key] then
-            _active_objective_probe_seen[key] = true
-            _active_objective_probe_logs_left = _active_objective_probe_logs_left - 1
-
-            _log_once(key, string_format(
-                "Active objective fields: mission=%s objective=%s %s",
-                tostring(_safe_mission_name()),
-                name,
-                field_text
-            ))
+        -- The game's marker sets hold units too, and are otherwise only emptied
+        -- by the next refresh, which never comes with every objective category
+        -- switched off.
+        if _clear_world_marker_units ~= nil then
+            _clear_world_marker_units()
         end
     end
-
-    -- What a marked objective unit's own target extension holds. `_ui_target_type`
-    -- and the like are the level designer's description of the step, and are the
-    -- most likely place a distinction the mod cannot otherwise see is recorded --
-    -- which of a row of identical containers holds the cargo, or which target of
-    -- an event is armed before the others.
-    local _target_field_probe_logs_left = PROBE.target_budget
-    local _target_field_probe_seen = {}
-    local _scratch_target_fields = {}
-
-    function _reset_target_field_probe()
-        _target_field_probe_logs_left = PROBE.target_budget
-        table_clear(_target_field_probe_seen)
-    end
-
-    -- One level only: the nested tables here are the owning system, which the
-    -- marker report already names.
-    local function _debug_collect_scalars(container, out, count)
-        for key, value in pairs(container) do
-            if count >= PROBE.target_field_limit then
-                break
-            end
-
-            if type(key) == "string" then
-                local value_type = type(value)
-                local text = nil
-
-                if value_type == "boolean" then
-                    text = tostring(value)
-                elseif value_type == "number" then
-                    text = string_format("%g", value)
-                elseif value_type == "string" then
-                    text = value
-                end
-
-                if text ~= nil then
-                    count = count + 1
-                    out[count] = key .. "=" .. text
-                end
-            end
-        end
-
-        return count
-    end
-
-    -- The game marks the prerequisite growths of a purge event with its own world
-    -- markers, but those units are in no objective system, so nothing this mod
-    -- scans has ever seen them. This reports the markers the game holds on units
-    -- this mod does NOT track, with the systems that own them, so a marker the
-    -- mod should be following can be identified by what it actually is rather
-    -- than by the objective name it shares with inactive spawn points.
-    local _untracked_marker_probe_logs_left = 40
-    local _untracked_marker_probe_seen = {}
-
-    function _reset_untracked_marker_probe()
-        _untracked_marker_probe_logs_left = 40
-        table_clear(_untracked_marker_probe_seen)
-    end
-
-    function _debug_probe_untracked_world_markers()
-        if _untracked_marker_probe_logs_left <= 0 or not _objective_state_probe_due() then
-            return
-        end
-
-        local world_markers_list = _safe_world_markers_list
-        local markers = world_markers_list ~= nil and world_markers_list() or nil
-
-        if type(markers) ~= "table" then
-            return
-        end
-
-        local tracked_units = mod._tracked_units
-        local mission_text = tostring(_safe_mission_name())
-        local owners = _scratch_marker_probe_owners
-
-        for i = 1, #markers do
-            if _untracked_marker_probe_logs_left <= 0 then
-                break
-            end
-
-            local marker = markers[i]
-            local unit = marker and marker.unit or nil
-
-            -- Markers with no unit are reported too. The small eyes of a growth
-            -- tentacle carry the game's own yellow indicators, and if those are
-            -- position-anchored rather than unit-anchored, a probe that requires
-            -- a unit would never see them at all.
-            if unit == nil then
-                local key = "untracked_marker:no_unit|" .. tostring(marker and marker.type)
-
-                if not _untracked_marker_probe_seen[key] then
-                    _untracked_marker_probe_seen[key] = true
-                    _untracked_marker_probe_logs_left = _untracked_marker_probe_logs_left - 1
-
-                    _log_once(key, string_format(
-                        "Untracked world marker: mission=%s type=%s owners=<no unit>",
-                        mission_text,
-                        tostring(marker and marker.type)
-                    ))
-                end
-            elseif tracked_units[unit] == nil then
-                local owner_count = 0
-
-                table_clear(owners)
-
-                for system_index = 1, MISSION_OBJECTIVE_MARKER_PROBE_SYSTEM_COUNT do
-                    local system_name = MISSION_OBJECTIVE_MARKER_PROBE_SYSTEMS[system_index]
-                    local system_map = _safe_unit_to_extension_map(system_name)
-
-                    if type(system_map) == "table" and system_map[unit] ~= nil then
-                        owner_count = owner_count + 1
-                        owners[owner_count] = system_name
-                    end
-                end
-
-                do
-                    local owner_text = owner_count > 0 and table_concat(owners, ",", 1, owner_count)
-                        or "<none>"
-                    -- Why it is not tracked, for a unit the objective scan could
-                    -- have claimed. Knowing that the game marks something the
-                    -- radar does not is only half an answer; the gate that
-                    -- dropped it is the other half, and reading it off a run
-                    -- beats guessing at one of six.
-                    local gates = ""
-                    local target_map = _safe_unit_to_extension_map(MISSION_OBJECTIVE_TARGET_SYSTEM)
-                    local target_extension = type(target_map) == "table" and target_map[unit] or nil
-
-                    if target_extension ~= nil then
-                        local objective_name = _safe_objective_target_name(target_extension)
-                        local interactee_map = _safe_unit_to_extension_map("interactee_system")
-                        local interactee = type(interactee_map) == "table" and interactee_map[unit] or nil
-                        local interactee_active, interactee_used = nil, nil
-
-                        -- The same two getters the classifier itself calls, and
-                        -- through pcall for the same reason.
-                        if type(interactee) == "table" then
-                            -- Assigned in a branch rather than with `and`/`or`:
-                            -- `false` is the answer being looked for here, and
-                            -- `ok and value or nil` turns it into nil.
-                            if type(interactee.active) == "function" then
-                                local ok, value = pcall(interactee.active, interactee)
-
-                                if ok then
-                                    interactee_active = value
-                                end
-                            end
-
-                            if type(interactee.used) == "function" then
-                                local ok, value = pcall(interactee.used, interactee)
-
-                                if ok then
-                                    interactee_used = value
-                                end
-                            end
-                        end
-
-                        gates = string_format(
-                            " objective=%s objective_active=%s retired=%s inactive_set=%s actionable=%s"
-                                .. " start_marker=%s interactee_active=%s interactee_used=%s",
-                            tostring(objective_name),
-                            tostring(objective_name ~= nil
-                                and _scratch_active_objective_names[objective_name] == true),
-                            tostring(_is_mission_objective_unit_retired(unit)),
-                            tostring(_scratch_inactive_objective_units[unit] == true),
-                            tostring(_scratch_objective_actionable_by_unit[unit]),
-                            tostring(_scratch_start_marker_by_unit[unit] == true),
-                            tostring(interactee_active),
-                            tostring(interactee_used)
-                        )
-                    end
-
-                    local key = "untracked_marker:" .. tostring(marker.type) .. "|" .. owner_text
-                        .. "|" .. tostring(_safe_health_alive(unit)) .. "|" .. gates
-
-                    if not _untracked_marker_probe_seen[key] then
-                        _untracked_marker_probe_seen[key] = true
-                        _untracked_marker_probe_logs_left = _untracked_marker_probe_logs_left - 1
-
-                        _log_once(key, string_format(
-                            "Untracked world marker: mission=%s type=%s owners=%s health_alive=%s position=%s%s",
-                            mission_text,
-                            tostring(marker.type),
-                            owner_text,
-                            tostring(_safe_health_alive(unit)),
-                            _debug_unit_position_text(unit),
-                            gates
-                        ))
-                    end
-                end
-            end
-        end
-    end
-
-    function _debug_probe_objective_target_fields()
-        if _target_field_probe_logs_left <= 0 or not _objective_state_probe_due() then
-            return
-        end
-
-        local target_map = _safe_unit_to_extension_map(MISSION_OBJECTIVE_TARGET_SYSTEM)
-
-        if type(target_map) ~= "table" then
-            return
-        end
-
-        local mission_text = tostring(_safe_mission_name())
-        local fields = _scratch_target_fields
-        local sampled = 0
-
-        for unit, data in pairs(mod._tracked_units) do
-            if sampled >= PROBE.target_sample or _target_field_probe_logs_left <= 0 then
-                break
-            end
-
-            local kind = data and data.kind or nil
-            local extension = kind ~= nil and _is_mission_objective_marker_kind(kind) and target_map[unit] or nil
-
-            if type(extension) == "table" then
-                sampled = sampled + 1
-
-                table_clear(fields)
-
-                local count = _debug_collect_scalars(extension, fields, 0)
-                local position_text = _debug_unit_position_text(unit)
-                -- Keyed on the unit, not on where it is standing: a moving one
-                -- reports its fields once rather than once per step.
-                local key = "objective_target_fields:" .. _debug_unit_id(unit)
-
-                if not _target_field_probe_seen[key] then
-                    _target_field_probe_seen[key] = true
-                    _target_field_probe_logs_left = _target_field_probe_logs_left - 1
-
-                    _log_once(key, string_format(
-                        "Objective target fields: mission=%s kind=%s position=%s %s",
-                        mission_text,
-                        tostring(kind),
-                        position_text,
-                        table_concat(fields, " ", 1, count)
-                    ))
-                end
-            end
-        end
-    end
-
-    function _debug_probe_objective_world_markers()
-        if _world_marker_probe_logs_left <= 0 or not _objective_state_probe_due() then
-            return
-        end
-
-        -- Guarded rather than called outright, like every other cross-module
-        -- helper here: a missing one must not fail a scan.
-        local world_markers_list = _safe_world_markers_list
-        local markers = world_markers_list ~= nil and world_markers_list() or nil
-
-        if type(markers) ~= "table" then
-            return
-        end
-
-        local tracked_units = mod._tracked_units
-        local mission_text = tostring(_safe_mission_name())
-        local materials = _scratch_world_marker_materials
-        local sampled = 0
-
-        for i = 1, #markers do
-            if sampled >= MISSION_OBJECTIVE_WORLD_MARKER_SAMPLE_LIMIT then
-                break
-            end
-
-            local marker = markers[i]
-            local unit = marker and marker.unit or nil
-            local data = unit ~= nil and tracked_units[unit] or nil
-            local kind = data and data.kind or nil
-
-            -- Only markers on units this mod already treats as objectives, so
-            -- the level's other markers are never walked.
-            if kind ~= nil and _is_mission_objective_marker_kind(kind) then
-                sampled = sampled + 1
-
-                local widget = marker.widget
-
-                table_clear(materials)
-
-                local count = 0
-
-                if type(widget) == "table" then
-                    count = _debug_collect_materials(widget, "", materials, 0,
-                        MISSION_OBJECTIVE_WORLD_MARKER_DEPTH)
-                end
-
-                -- The vanilla marker's own geometry, so our frame and icon can
-                -- be matched to it by measurement rather than by eye: each layer
-                -- carries its own size and offset in the widget style.
-                local style = type(widget) == "table" and widget.style or nil
-
-                if type(style) == "table" then
-                    for style_key, style_entry in pairs(style) do
-                        if count >= MISSION_OBJECTIVE_WORLD_MARKER_FIELD_LIMIT then
-                            break
-                        end
-
-                        if type(style_key) == "string" and type(style_entry) == "table" then
-                            local entry_size = rawget(style_entry, "size")
-                            local entry_offset = rawget(style_entry, "offset")
-
-                            if type(entry_size) == "table" and type(entry_offset) == "table" then
-                                count = count + 1
-                                materials[count] = string_format("%s[size=%s,%s offset=%s,%s]",
-                                    style_key,
-                                    tostring(entry_size[1]), tostring(entry_size[2]),
-                                    tostring(entry_offset[1]), tostring(entry_offset[2]))
-                            end
-                        end
-                    end
-                end
-
-                local material_text = table_concat(materials, " ", 1, count)
-                local key = "world_marker_materials:" .. tostring(marker.type) .. "|" .. material_text
-
-                if not _world_marker_probe_seen[key] then
-                    _world_marker_probe_seen[key] = true
-                    _world_marker_probe_logs_left = _world_marker_probe_logs_left - 1
-
-                    _log_once(key, string_format(
-                        "World marker materials: mission=%s kind=%s type=%s position=%s %s",
-                        mission_text,
-                        tostring(kind),
-                        tostring(marker.type),
-                        _debug_unit_position_text(unit),
-                        material_text
-                    ))
-                end
-            end
-        end
-    end
-
-    function _debug_probe_marked_objective_markers(active_names)
-        if _marker_probe_logs_left <= 0 or not _objective_state_probe_due() then
-            return
-        end
-
-        local target_map = _safe_unit_to_extension_map(MISSION_OBJECTIVE_TARGET_SYSTEM)
-        local destructible_map = _safe_unit_to_extension_map("destructible_system")
-        local mission_text = tostring(_safe_mission_name())
-        local owners = _scratch_marker_probe_owners
-
-        for unit, data in pairs(mod._tracked_units) do
-            if _marker_probe_logs_left <= 0 then
-                break
-            end
-
-            local kind = data and data.kind or nil
-
-            if kind ~= nil and _is_mission_objective_marker_kind(kind) then
-                local target_extension = type(target_map) == "table" and target_map[unit] or nil
-                local objective_name = target_extension and _safe_objective_target_name(target_extension) or nil
-                local objective_active = objective_name ~= nil and active_names ~= nil
-                    and active_names[objective_name] == true
-                local owner_count = 0
-
-                table_clear(owners)
-
-                for i = 1, MISSION_OBJECTIVE_MARKER_PROBE_SYSTEM_COUNT do
-                    local system_map = _safe_unit_to_extension_map(MISSION_OBJECTIVE_MARKER_PROBE_SYSTEMS[i])
-
-                    if type(system_map) == "table" and system_map[unit] ~= nil then
-                        owner_count = owner_count + 1
-                        owners[owner_count] = MISSION_OBJECTIVE_MARKER_PROBE_SYSTEMS[i]
-                    end
-                end
-
-                local destructible = type(destructible_map) == "table" and destructible_map[unit] or nil
-                local destructible_visible = destructible and _safe_destructible_visible(destructible) or nil
-                local minigame_state = data.meta and data.meta.minigame_state or nil
-                -- A bare step is retired by the game's own world marker going
-                -- away. Whether this unit has one, and whether the list is
-                -- trusted for its objective at all, is the whole of that gate.
-                local world_marker = _scratch_world_marker_units[unit] == true
-                local objective_covered = objective_name ~= nil
-                    and _objective_world_marker_seen[objective_name] == true
-                local position_text = _debug_unit_position_text(unit)
-                local key = "objective_marker:" .. _debug_unit_id(unit)
-                    .. "|" .. tostring(kind)
-                    .. "|" .. tostring(objective_name)
-                    .. "|" .. tostring(objective_active)
-                    .. "|" .. tostring(_safe_unit_alive(unit))
-                    .. "|" .. tostring(_safe_health_alive(unit))
-                    .. "|" .. tostring(destructible_visible)
-                    .. "|" .. tostring(minigame_state)
-                    .. "|" .. tostring(world_marker) .. "|" .. tostring(objective_covered)
-                    .. "|" .. tostring(_world_marker_units_available)
-                    .. "|" .. table_concat(owners, ",", 1, owner_count)
-
-                if not _marker_probe_seen[key] then
-                    _marker_probe_seen[key] = true
-                    _marker_probe_logs_left = _marker_probe_logs_left - 1
-
-                    _log_once(key, string_format(
-                        "Objective marker state: mission=%s kind=%s objective=%s objective_active=%s source=%s alive=%s health_alive=%s destructible_visible=%s minigame_state=%s world_marker=%s objective_covered=%s marker_list=%s owners=%s position=%s",
-                        mission_text,
-                        tostring(kind),
-                        tostring(objective_name),
-                        tostring(objective_active),
-                        tostring(data.source),
-                        tostring(_safe_unit_alive(unit)),
-                        tostring(_safe_health_alive(unit)),
-                        tostring(destructible_visible),
-                        tostring(minigame_state),
-                        tostring(world_marker),
-                        tostring(objective_covered),
-                        tostring(_world_marker_units_available),
-                        table_concat(owners, ",", 1, owner_count),
-                        position_text
-                    ))
-                end
-            end
-        end
-    end
-
-    -- The scan zone pass is the only path that can surface scan targets, and it
-    -- can produce nothing for several different reasons -- a dormant objective, a
-    -- zone that never reports itself activated, a selection table that is empty
-    -- because it is server-only data. Each is reported so a run with no scan
-    -- markers says which gate closed rather than leaving it to be guessed at.
-    function _debug_log_scan_zone_state(objective_name, is_active_objective, activated, progression, total, finished,
-                                        selection_entries, claimed, zone_unit)
-        local position_text = _debug_unit_position_text(zone_unit)
-        local signature = tostring(objective_name) .. "|" .. tostring(is_active_objective)
-            .. "|" .. tostring(activated) .. "|" .. tostring(progression) .. "|" .. tostring(total)
-            .. "|" .. tostring(finished) .. "|" .. tostring(selection_entries) .. "|" .. tostring(claimed)
-
-        _log_once("scan_zone:" .. position_text .. "|" .. signature, string_format(
-            "Scan zone state: mission=%s objective=%s objective_active=%s activated=%s progression=%s total=%s finished=%s selection_entries=%s claimed=%s position=%s",
-            tostring(_safe_mission_name()),
-            tostring(objective_name),
-            tostring(is_active_objective),
-            tostring(activated),
-            tostring(progression),
-            tostring(total),
-            tostring(finished),
-            tostring(selection_entries),
-            tostring(claimed),
-            position_text
-        ))
-    end
-
-    function _debug_log_scan_zone_summary(has_active_zone, marked_from_selection, expected_outstanding)
-        _log_once("scan_zone_summary:" .. tostring(has_active_zone) .. "|" .. tostring(marked_from_selection)
-            .. "|" .. tostring(expected_outstanding), string_format(
-            "Scan zone summary: mission=%s has_active_zone=%s marked_from_selection=%s expected_outstanding=%s fallback=%s",
-            tostring(_safe_mission_name()),
-            tostring(has_active_zone),
-            tostring(marked_from_selection),
-            tostring(expected_outstanding),
-            tostring(has_active_zone and marked_from_selection == 0)
-        ))
-    end
-
-    -- Claims dropped at the choke point, which is where a marker disappears with
-    -- no other trace. Only reached by units that already passed their pass's own
-    -- filters, so this stays rare rather than firing for every dormant unit.
-    function _debug_log_unclaimed_mission_objective_unit(kind, reason, unit)
-        if mod:get("debug_mode") ~= true then
-            return
-        end
-
-        local position_text = _debug_unit_position_text(unit)
-
-        _log_once("mission_objective_unclaimed:" .. kind .. "|" .. reason .. "|" .. position_text, string_format(
-            "Mission objective marker not claimed: mission=%s kind=%s reason=%s position=%s",
-            tostring(_safe_mission_name()),
-            kind,
-            reason,
-            position_text
-        ))
-    end
-
-    -- Names every objective a growth suffix matched, so an over-broad suffix is
-    -- visible in a debug run instead of only in the markers it changed.
-    function _debug_log_growth_objective(objective_name)
-        if mod:get("debug_mode") ~= true then
-            return
-        end
-
-        _log_once("growth_objective:" .. objective_name, string_format(
-            "Daemonic growth objective matched: mission=%s objective=%s",
-            tostring(_safe_mission_name()),
-            objective_name
-        ))
-    end
-
-    -- A growth tentacle's three small eyes are destroyed one at a time, and the
-    -- tentacle's own target is protected until they are gone. `_is_invulnerable`
-    -- on the destructible extension is exactly that concept, so this watches it
-    -- per unit rather than reporting which shapes exist: each nearby breakable
-    -- logs a line whenever its watched state changes, giving a timeline of a
-    -- tentacle being cleared.
-    --
-    -- Nav gates are the level's monster wall volumes, which are numerous and
-    -- never a target, so they are left out. Debug only, behind the shared two
-    -- second window, and limited to units close to the player.
-    -- Within reach of a target of the live growth objective. Anchored there and
-    -- not on the player, because a budget spent walking the level at large was
-    -- exhausted hundreds of metres from the tentacles and never saw one.
-    local function _is_near_growth_target(position)
-        for unit in pairs(_scratch_growth_objective_units) do
-            local target_position = _safe_unit_position(unit)
-
-            if target_position ~= nil and _distance_squared(target_position, position) <= 625 then
-                return true
-            end
-        end
-
-        return false
-    end
-
-    -- Daemonic growth runs under a different objective name on every mission --
-    -- `..._corruptor_event` on Stockpile, `..._demolition_first/a/b/final` on
-    -- Propaganda, `..._demo_floor_one/two` on Rise. This probe is anchored on
-    -- what the missions share instead: every one of them files three targets
-    -- with `_ui_target_type` set to `demolition` around its centre eye. It
-    -- reads the target type itself rather than the growth classification, so
-    -- it stays a check on that classification rather than a copy of it.
-    --
-    -- What it answered, on Stockpile, Rise and Propaganda: the tentacle eyes
-    -- are one prefab (`debug_name` hash `#ID[ab4fec216e4f3c1c]`, on no
-    -- scenery) with the same triangle to the millimetre everywhere, a non-host
-    -- client sees them in the destructible system, and the extension keeps no
-    -- parent -- one level down there is only destruction data.
-    function _debug_probe_demolition_destructibles()
-        if PROBE.demolition_summary_left <= 0 or not _objective_state_probe_due() then
-            return
-        end
-
-        local target_map = _safe_unit_to_extension_map(MISSION_OBJECTIVE_TARGET_SYSTEM)
-
-        if type(target_map) ~= "table" then
-            return
-        end
-
-        local active_names = _scratch_active_objective_names
-        local objectives = PROBE.demolition_objectives
-        local objective_count = 0
-        -- Read off an objective target, which a client carries too, so the
-        -- report says which side it came from even when the destructible
-        -- system turns out to hold nothing -- the one case where that matters.
-        local target_is_server = nil
-
-        table_clear(objectives)
-
-        for _, extension in pairs(target_map) do
-            local name = _safe_objective_target_name(extension)
-
-            if name ~= nil and active_names[name] == true
-                and _safe_objective_target_field(extension, "_ui_target_type") == "demolition" then
-                if objectives[name] == nil then
-                    objectives[name] = "?"
-                    objective_count = objective_count + 1
-                end
-
-                if target_is_server == nil then
-                    target_is_server = _safe_objective_target_field(extension, "_is_server")
-                end
-            end
-        end
-
-        if objective_count == 0 then
-            return
-        end
-
-        -- The objective's own type, read here because the active-objective
-        -- probe stops at forty fields and cut it off on all three missions.
-        local objective_system = _safe_extension_system(MISSION_OBJECTIVE_SOURCE)
-        local active_objectives = type(objective_system) == "table"
-            and rawget(objective_system, "_active_objectives") or nil
-
-        if type(active_objectives) == "table" then
-            for key, value in pairs(active_objectives) do
-                local objective = type(key) == "table" and key or (type(value) == "table" and value or nil)
-                local name = objective and rawget(objective, "_name") or nil
-
-                if name ~= nil and objectives[name] ~= nil then
-                    objectives[name] = tostring(rawget(objective, "_objective_type"))
-                end
-            end
-        end
-
-        -- Every target of those objectives, the centre eye included: the
-        -- tentacles stood ten to seventeen metres from it on Stockpile.
-        local anchor_x = PROBE.demolition_anchor_x
-        local anchor_y = PROBE.demolition_anchor_y
-        local anchor_z = PROBE.demolition_anchor_z
-        local anchor_count = 0
-
-        for unit, extension in pairs(target_map) do
-            local name = _safe_objective_target_name(extension)
-
-            if name ~= nil and objectives[name] ~= nil then
-                local x, y, z = _vector3_components(_safe_unit_position(unit))
-
-                if x ~= nil then
-                    anchor_count = anchor_count + 1
-                    anchor_x[anchor_count] = x
-                    anchor_y[anchor_count] = y
-                    anchor_z[anchor_count] = z
-                end
-            end
-        end
-
-        if anchor_count == 0 then
-            return
-        end
-
-        local destructible_map = _safe_unit_to_extension_map("destructible_system")
-        local mission_text = tostring(_safe_mission_name())
-        local id_counts = PROBE.demolition_id_counts
-        local range_squared = PROBE.demolition_range_squared
-        local total = 0
-        local near = 0
-        local destructible_is_server = nil
-
-        table_clear(id_counts)
-
-        if type(destructible_map) == "table" then
-            for unit, extension in pairs(destructible_map) do
-                if type(extension) == "table" then
-                    total = total + 1
-
-                    if destructible_is_server == nil then
-                        destructible_is_server = rawget(extension, "_is_server")
-                    end
-
-                    if rawget(extension, "_is_nav_gate") ~= true then
-                        local x, y, z = _vector3_components(_safe_unit_position(unit))
-                        local nearest = nil
-
-                        if x ~= nil then
-                            for i = 1, anchor_count do
-                                local dx = anchor_x[i] - x
-                                local dy = anchor_y[i] - y
-                                local dz = anchor_z[i] - z
-                                local distance_squared = dx * dx + dy * dy + dz * dz
-
-                                if nearest == nil or distance_squared < nearest then
-                                    nearest = distance_squared
-                                end
-                            end
-                        end
-
-                        if nearest ~= nil and nearest <= range_squared then
-                            local id = tostring(_safe_unit_name(unit))
-
-                            near = near + 1
-                            id_counts[id] = (id_counts[id] or 0) + 1
-
-                            _debug_report_demolition_destructible(unit, extension, id, mission_text,
-                                target_is_server, math_sqrt(nearest))
-                        end
-                    end
-                end
-            end
-        end
-
-        local id_list = PROBE.demolition_id_list
-        local id_total = 0
-
-        table_clear(id_list)
-
-        for id, count in pairs(id_counts) do
-            id_total = id_total + 1
-            id_list[id_total] = id .. "x" .. count
-        end
-
-        table_sort(id_list)
-
-        local objective_list = PROBE.demolition_objective_list
-        local listed = 0
-
-        table_clear(objective_list)
-
-        for name, objective_type in pairs(objectives) do
-            listed = listed + 1
-            objective_list[listed] = name .. ":" .. objective_type
-        end
-
-        table_sort(objective_list)
-
-        -- In a branch, not `a ~= nil and a or b`: `false` is exactly the answer
-        -- being looked for here -- a client -- and that expression turns it into
-        -- whatever the destructible system says, which on an empty one is nil.
-        local server_flag = target_is_server
-
-        if server_flag == nil then
-            server_flag = destructible_is_server
-        end
-
-        local server_text = tostring(server_flag)
-        local id_text = id_total > 0 and table_concat(id_list, ",", 1, id_total) or "none"
-        -- Keyed on what is visible rather than on time, so each change of
-        -- composition -- a tentacle spawning, its last eye going -- reports once.
-        local key = "demolition_summary:" .. mission_text .. "|" .. server_text .. "|" .. total
-            .. "|" .. near .. "|" .. id_text
-
-        if not PROBE.demolition_summary_seen[key] then
-            PROBE.demolition_summary_seen[key] = true
-            PROBE.demolition_summary_left = PROBE.demolition_summary_left - 1
-
-            _log_once(key, string_format(
-                "Demolition probe: mission=%s server=%s objectives=%s destructibles=%d near=%d ids=%s",
-                mission_text,
-                server_text,
-                table_concat(objective_list, ",", 1, listed),
-                total,
-                near,
-                id_text
-            ))
-        end
-    end
-
-    -- One line per destructible near a demolition objective, once per unit:
-    -- its prefab id and position, which is enough to rebuild the three-eye
-    -- shape offline and compare its dimensions across missions, and one level
-    -- into the tables the extension keeps per unit, where a parent would be.
-    function _debug_report_demolition_destructible(unit, extension, id, mission_text, is_server, distance)
-        if PROBE.demolition_left <= 0 then
-            return
-        end
-
-        local key = "demolition_destructible:" .. _debug_unit_id(unit)
-
-        if PROBE.demolition_seen[key] then
-            return
-        end
-
-        PROBE.demolition_seen[key] = true
-        PROBE.demolition_left = PROBE.demolition_left - 1
-
-        local parts = PROBE.demolition_parts
-        local nested_fields = PROBE.demolition_nested_fields
-        local limit = PROBE.demolition_ref_limit
-        local count = 0
-
-        table_clear(parts)
-
-        for i = 1, #nested_fields do
-            local field = nested_fields[i]
-            local nested = rawget(extension, field)
-
-            if type(nested) == "table" then
-                for nested_key, value in pairs(nested) do
-                    if count >= limit then
-                        break
-                    end
-
-                    local value_type = type(value)
-
-                    if value_type == "userdata" or value_type == "table" then
-                        -- pcall: a __tostring of the game's own that raised
-                        -- would otherwise take the scan down with it.
-                        local ok_render, rendered = pcall(tostring, value)
-
-                        count = count + 1
-                        parts[count] = field .. "." .. tostring(nested_key) .. "=" .. value_type
-                            .. "(" .. (ok_render and tostring(rendered) or "?") .. ")"
-                    elseif value_type == "string" or value_type == "number" or value_type == "boolean" then
-                        count = count + 1
-                        parts[count] = field .. "." .. tostring(nested_key) .. "=" .. tostring(value)
-                    end
-                end
-            end
-        end
-
-        _log_once(key, string_format(
-            "Demolition destructible: mission=%s server=%s id=%s alive=%s distance=%.1f position=%s %s",
-            mission_text,
-            tostring(is_server),
-            id,
-            tostring(_safe_health_alive(unit)),
-            distance or -1,
-            _debug_unit_position_text(unit),
-            table_concat(parts, " ", 1, count)
-        ))
-    end
-
-    -- One of an interactable's own answers about itself, for the probe below.
-    -- Interactee methods only, which the scan calls every pass anyway; never a
-    -- method on an objective extension.
-    function _debug_interactee_call(extension, method_name, argument)
-        local method = extension[method_name]
-
-        if type(method) ~= "function" then
-            return "-"
-        end
-
-        local ok, value = pcall(method, extension, argument)
-
-        return ok and tostring(value) or "error"
-    end
-
-    -- Whether it is active, whether it has been used, and whether it is offering
-    -- its prompt. A used or inactive interactable is dropped within a scan, so
-    -- one that stays on the radar after being used is still reporting itself
-    -- active and unused: this is what says so.
-    function _debug_interactee_state_text(extension)
-        return "active:" .. _debug_interactee_call(extension, "active")
-            .. ",used:" .. _debug_interactee_call(extension, "used")
-            .. ",prompt:" .. _debug_interactee_call(extension, "show_marker", _player_unit())
-    end
-
-    -- Which of the game's own markers each objective marker on the radar has, by
-    -- type, and how far away the player is. The world-marker set the scan reads
-    -- counts every type alike, and an `interaction` marker is only the prompt a
-    -- player gets standing next to something: Scavenge's end event files
-    -- sixty-one lockers under its objective, and the few the player walked past
-    -- read as marked. This says whether an `objective` marker is what separates
-    -- a real step from a unit merely filed under one. Debug only; nothing is
-    -- decided from it.
-    function _debug_probe_objective_marker_types()
-        if PROBE.marker_types_left <= 0 or not _objective_state_probe_due() then
-            return
-        end
-
-        local world_markers_list = _safe_world_markers_list
-        local markers = world_markers_list ~= nil and world_markers_list() or nil
-
-        if type(markers) ~= "table" then
-            return
-        end
-
-        local has_objective = PROBE.marker_types_objective
-        local has_interaction = PROBE.marker_types_interaction
-        local other_type = PROBE.marker_types_other
-
-        table_clear(has_objective)
-        table_clear(has_interaction)
-        table_clear(other_type)
-
-        for i = 1, #markers do
-            local marker = markers[i]
-            local unit = type(marker) == "table" and marker.unit or nil
-
-            if unit ~= nil then
-                local marker_type = marker.type
-
-                if marker_type == "objective" then
-                    has_objective[unit] = true
-                elseif marker_type == "interaction" then
-                    has_interaction[unit] = true
-                elseif other_type[unit] == nil then
-                    other_type[unit] = tostring(marker_type)
-                end
-            end
-        end
-
-        local target_map = _safe_unit_to_extension_map(MISSION_OBJECTIVE_TARGET_SYSTEM)
-        local interactee_map = _safe_unit_to_extension_map("interactee_system")
-        local player_position = _safe_unit_position(_player_unit())
-        local mission_text = tostring(_safe_mission_name())
-
-        for unit, data in pairs(mod._tracked_units) do
-            if PROBE.marker_types_left <= 0 then
-                break
-            end
-
-            local kind = data and data.kind or nil
-
-            if kind ~= nil and _is_mission_objective_marker_kind(kind) then
-                -- In a fixed order, so one set reads the same whatever order the
-                -- game lists its markers in.
-                local types = nil
-
-                if has_objective[unit] then
-                    types = "objective"
-                end
-
-                if has_interaction[unit] then
-                    types = types and (types .. "+interaction") or "interaction"
-                end
-
-                if other_type[unit] ~= nil then
-                    types = types and (types .. "+" .. other_type[unit]) or other_type[unit]
-                end
-
-                types = types or "none"
-
-                local interactee = type(interactee_map) == "table" and interactee_map[unit] or nil
-                local state_text = interactee ~= nil and _debug_interactee_state_text(interactee) or "-"
-
-                -- Once per unit, set of types and interactable state, so a run
-                -- shows each marker gaining and losing the game's markers, and
-                -- each interactable being used, rather than every scan.
-                local key = "objective_marker_types:" .. _debug_unit_id(unit) .. "|" .. types .. "|" .. state_text
-
-                if not PROBE.marker_types_seen[key] then
-                    PROBE.marker_types_seen[key] = true
-                    PROBE.marker_types_left = PROBE.marker_types_left - 1
-
-                    local target_extension = type(target_map) == "table" and target_map[unit] or nil
-                    local objective_name = target_extension and _safe_objective_target_name(target_extension) or nil
-                    local unit_position = _safe_unit_position(unit)
-                    local distance = -1
-
-                    if player_position ~= nil and unit_position ~= nil then
-                        distance = math_sqrt(_distance_squared(player_position, unit_position))
-                    end
-
-                    _log_once(key, string_format(
-                        "Objective marker types: mission=%s kind=%s objective=%s interactee=%s types=%s distance=%.1f position=%s state=%s",
-                        mission_text,
-                        kind,
-                        tostring(objective_name),
-                        tostring(interactee ~= nil),
-                        types,
-                        distance,
-                        _debug_unit_position_text(unit),
-                        state_text
-                    ))
-                end
-            end
-        end
-    end
-
-    function _reset_destructible_probe()
-        PROBE.destructible_left = 60
-        table_clear(PROBE.destructible_seen)
-    end
-
-    function _debug_probe_nearby_destructibles()
-        if PROBE.destructible_left <= 0 or not _objective_state_probe_due() then
-            return
-        end
-
-        local extension_map = _safe_unit_to_extension_map("destructible_system")
-
-        if type(extension_map) ~= "table" then
-            return
-        end
-
-        local mission_text = tostring(_safe_mission_name())
-
-        for unit, extension in pairs(extension_map) do
-            if PROBE.destructible_left <= 0 then
-                break
-            end
-
-            local position = type(extension) == "table" and _safe_unit_position(unit) or nil
-
-            if position ~= nil and _is_near_growth_target(position)
-                and rawget(extension, "_is_nav_gate") ~= true then
-                local invulnerable = rawget(extension, "_is_invulnerable")
-                local health = rawget(extension, "_health")
-                local damage = rawget(extension, "_damage")
-                local dead = rawget(extension, "_is_dead")
-                local position_text = _debug_unit_position_text(unit)
-                -- Keyed per unit and per watched state, so a unit logs again
-                -- every time one of them changes and nothing else adds noise.
-                local key = "destructible:" .. position_text
-                    .. "|" .. tostring(invulnerable)
-                    .. "|" .. tostring(health)
-                    .. "|" .. tostring(dead)
-
-                if not PROBE.destructible_seen[key] then
-                    PROBE.destructible_seen[key] = true
-                    PROBE.destructible_left = PROBE.destructible_left - 1
-
-                    local fields = ""
-
-                    if invulnerable == nil and health == nil then
-                        local scratch = _scratch_target_fields
-
-                        table_clear(scratch)
-
-                        local count = _debug_collect_scalars(extension, scratch, 0)
-
-                        fields = " fields:" .. table_concat(scratch, " ", 1, count)
-
-                        -- Everything the scalar dump skips. A parent unit, if
-                        -- one exists, is a userdata reference and would never
-                        -- have appeared above, which is why the first pass at
-                        -- this looked like the extension carried nothing but
-                        -- numbers. Rendered as well as named, so three eyes of
-                        -- one tentacle pointing at the same parent can be seen
-                        -- to be pointing at the same parent.
-                        table_clear(scratch)
-
-                        local link_count = 0
-
-                        for field, value in pairs(extension) do
-                            if link_count >= PROBE.destructible_link_limit then
-                                break
-                            end
-
-                            local value_type = type(value)
-
-                            if value_type ~= "number" and value_type ~= "string"
-                                and value_type ~= "boolean" and value_type ~= "function" then
-                                -- Through pcall: this walks fields the mod knows
-                                -- nothing about, and a __tostring of the game's
-                                -- own that raised would take the scan with it.
-                                local ok, rendered = pcall(tostring, value)
-
-                                link_count = link_count + 1
-                                scratch[link_count] = tostring(field) .. "=" .. value_type
-                                    .. "(" .. (ok and tostring(rendered) or "?") .. ")"
-                            end
-                        end
-
-                        if link_count > 0 then
-                            fields = fields .. " links:" .. table_concat(scratch, " ", 1, link_count)
-                        end
-                    end
-
-                    _log_once(key, string_format(
-                        "Destructible state: mission=%s invulnerable=%s health=%s damage=%s dead=%s alive=%s position=%s%s",
-                        mission_text,
-                        tostring(invulnerable),
-                        tostring(health),
-                        tostring(damage),
-                        tostring(dead),
-                        tostring(_safe_health_alive(unit)),
-                        position_text,
-                        fields
-                    ))
-                end
-            end
-        end
-    end
-
-    -- Names any objective whose bare units were treated as position hints, so a
-    -- step that stops being marked can be identified from a debug run instead of
-    -- another round of probing. Callers hoist the debug-mode check.
-    function _debug_log_filtered_objective_hint(objective_name, unit)
-        _log_once("mission_objective_hint_filtered:" .. objective_name, string_format(
-            "Mission objective position hint filtered: mission=%s objective=%s position=%s",
-            tostring(_safe_mission_name()),
-            objective_name,
-            _debug_unit_position_text(unit)
-        ))
-    end
-
-    -- Records objective units that never reached classification, so a debug run
-    -- shows which gate is filtering objectives that should be shown.
-    -- The kind map is rebuilt after the interactee pass, so the kind is resolved
-    -- from the interactee itself rather than read from a map that is empty at
-    -- this point. Callers gate on debug mode, so the lookup only runs then.
-    function _debug_log_rejected_mission_objective_marker(unit, extension, reason)
-        if PROBE.rejection_left <= 0 then
-            return
-        end
-
-        local kind = _hidden_mission_objective_kind(extension, unit)
-
-        if not kind then
-            return
-        end
-
-        -- `show_marker` is deliberately bypassed for objective kinds: the point
-        -- of the feature is to draw a step before its interaction prompt exists.
-        -- So that reason is a note about the game, not a drop, and the line used
-        -- to claim the opposite -- 425 times in one run, all of them the one
-        -- servo skull, for a marker that was on the radar the whole time.
-        local dropped = reason ~= "show_marker"
-        -- Keyed on the unit rather than where it is standing, so a moving one
-        -- reports each state once instead of once per step.
-        local key = "mission_objective_marker_rejected:" .. _debug_unit_id(unit)
-            .. "|" .. kind .. "|" .. reason
-
-        if PROBE.rejection_seen[key] then
-            return
-        end
-
-        PROBE.rejection_seen[key] = true
-        PROBE.rejection_left = PROBE.rejection_left - 1
-
-        _log_once(key, string_format(
-            "%s: mission=%s kind=%s reason=%s position=%s unit_name=%s",
-            dropped and "Mission objective marker dropped"
-                or "Mission objective marked before its prompt",
-            tostring(_safe_mission_name()),
-            kind,
-            reason,
-            _debug_unit_position_text(unit),
-            tostring(_safe_unit_name(unit))
-        ))
-    end
-
 
     local function _classify_pickup_like(interaction_type, ui_interaction_type, icon, description, unit_name, pickup_name,
                                          pickup_data, marked_by_player_slot, unit, suppress_debug)

@@ -501,16 +501,9 @@ check(color_settings.anchored_color_settings
 check(hud_source:find("presentation.plate_color = _configured_objective_background_color", 1, true) ~= nil,
     "the backplate does not use the configured colour")
 
--- Keyed on the objective and its stage: a timed objective's progression changes
--- every tick, and keying on the whole field text let two of them consume the
--- probe budget before the objective under investigation was reached.
-check(expeditions_source:find('"active_objective:" .. name .. "|" .. tostring(rawget(objective, "_stage"))',
-    1, true) ~= nil,
-    "the active objective probe can be starved by a timed objective")
-
--- This module body sits near LuaJIT's ceiling of 200 locals in one function, and
--- the debug scaffolding is what pushed it there. Crossing it is a load-time
--- error, not a subtle one, but it is worth catching here rather than in game.
+-- This module body sits near LuaJIT's ceiling of 200 locals in one function.
+-- Crossing it is a load-time error, not a subtle one, but it is worth catching
+-- here rather than in game.
 local expeditions_locals = 0
 
 for _ in expeditions_source:gmatch(LF .. "    local [_%a]") do
@@ -530,11 +523,6 @@ end
 
 check(hud_locals < 200,
     "Radar_hud_element.lua declares " .. hud_locals .. " file level locals; LuaJIT allows 200")
-
--- The probe walks the game's markers for units the mod does not track, which is
--- the only way a unit in no objective system can be found at all.
-check(expeditions_source:find("function _debug_probe_untracked_world_markers", 1, true) ~= nil,
-    "the untracked world marker probe is missing")
 
 -- The frame is the base layer and carries the family's identity, so it has a
 -- colour of its own; the marker colour, and any puzzle state colour, belongs to
@@ -1054,21 +1042,9 @@ check(expeditions_source:find("local game_marks_unit = _world_marker_units_avail
     .. "                    and _scratch_world_marker_units[unit] ~= nil", 1, true) ~= nil,
     "the marker override is not read per unit per scan from the game's own list")
 
--- Probe keys must identify a thing, not a moment. Anything in a key that
--- changes on its own -- a position for a unit that moves, a timestamp for a
--- door that cycles -- mints a new key forever, which either floods the log or
--- eats a budget and leaves the probe silent. A havoc run lost the marker probe
--- two minutes before an objective started because one flying servo skull had
--- taken 59 of its 80 lines, and one door wrote 609 of that run's 1629 door
--- lines. Checked at the source: a spec cannot easily reach the door probe, and
--- the starvation is invisible until the budget runs out.
-check(expeditions_source:find('local key = "objective_marker:" .. _debug_unit_id(unit)', 1, true) ~= nil,
-    "the marker probe keys on where a unit is standing, so a moving one starves it")
-check(expeditions_source:find('local key = "objective_target_fields:" .. _debug_unit_id(unit)', 1, true) ~= nil,
-    "the target field probe keys on where a unit is standing, so a moving one starves it")
-check(expeditions_source:find([==[rejected:" .. _debug_unit_id(unit)]==], 1, true) ~= nil,
-    "the rejection probe keys on where a unit is standing, so a moving one floods it")
-
+-- A probe key must identify a thing, not a moment: a timestamp for a door that
+-- cycles mints a new key forever, and one door wrote 609 of a run's 1629 door
+-- lines. Checked at the source: a spec cannot easily reach the door probe.
 local door_key = expeditions_source:match(
     'local key = string_format%("martyr_skull_door_debug:(.-)' .. LF .. "                %)")
 
@@ -1076,63 +1052,16 @@ check(door_key ~= nil, "the door probe key is missing")
 check(door_key ~= nil and door_key:find("last_state_change", 1, true) == nil,
     "the door probe keys on when the door last changed, so every cycle writes another line")
 
--- Every budgeted probe needs its own seen-set, or the budget counts calls rather
--- than distinct reports and empties on the first busy scan.
--- The write, not just the read: without it the guard never trips, every scan
--- spends budget on the same line, and the probe empties on the first busy one.
-check(expeditions_source:find("PROBE.rejection_seen[key] = true", 1, true) ~= nil
-    and expeditions_source:find("if PROBE.rejection_seen[key] then", 1, true) ~= nil
-    and expeditions_source:find("PROBE.rejection_left = PROBE.rejection_left - 1", 1, true) ~= nil,
-    "the rejection probe is budgeted without a record of what it has already said")
-
 -- The screen highlight bracket takes its anchor from one of three places, best
 -- first: the game's own interaction marker for the unit, the unit's
 -- `ui_interaction_marker` node, and failing both the unit's origin -- which on a
 -- large prop is its pivot, usually on the floor rather than on the part being
--- aimed at. Scan targets cannot reach the first, so which of the other two they
--- land on decides whether the bracket is usable, and nothing recorded it.
+-- aimed at.
 local helpers_source = assert(io.open("Radar/scripts/mods/Radar/Radar_runtime_helpers.lua")):read("*a")
 
-check(helpers_source:find("function _debug_probe_screen_highlight_anchor", 1, true) ~= nil,
-    "the highlight anchor probe is missing")
--- The node result has to be carried to the probe, or it can only guess which
--- source won by repeating the lookup.
 check(helpers_source:find("node_position = _safe_unit_node_position(unit, \"ui_interaction_marker\")", 1, true) ~= nil
     and helpers_source:find("anchor_position = node_position or _safe_unit_position(unit)", 1, true) ~= nil,
-    "the anchor no longer tells the probe which source it used")
-check(helpers_source:find("_debug_probe_screen_highlight_anchor(unit, target.kind, node_position, z_offset)",
-    1, true) ~= nil, "the highlight anchor probe is never called")
--- Debug only and budgeted, with its own seen-set: this runs per highlighted
--- target per frame, which is the most expensive place in the mod to be wrong.
-check(helpers_source:find("if SCREEN_HIGHLIGHT_ANCHOR_PROBE.left <= 0 or unit == nil" .. LF
-    .. '            or mod:get("debug_mode") ~= true then', 1, true) ~= nil,
-    "the highlight anchor probe is not gated on debug mode")
--- Per kind, not just in total: a flat budget was spent by ammo and crates in the
--- first ninety seconds of a run, and the scan targets it was added to observe
--- turned up ninety seconds after it ran out.
-check(helpers_source:find("if used >= SCREEN_HIGHLIGHT_ANCHOR_PROBE.per_kind then", 1, true) ~= nil
-    and helpers_source:find("used_by_kind[kind_text] = used + 1", 1, true) ~= nil
-    and helpers_source:find("table_clear(SCREEN_HIGHLIGHT_ANCHOR_PROBE.used_by_kind)", 1, true) ~= nil,
-    "the highlight anchor probe has no per kind share, so a common kind starves a rare one")
-check(helpers_source:find("SCREEN_HIGHLIGHT_ANCHOR_PROBE.seen[key] = true", 1, true) ~= nil
-    and helpers_source:find("SCREEN_HIGHLIGHT_ANCHOR_PROBE.left = SCREEN_HIGHLIGHT_ANCHOR_PROBE.left - 1",
-        1, true) ~= nil,
-    "the highlight anchor probe is unbudgeted, so a highlighted target floods the log")
--- The scan targets came back with no vanilla marker and no node, so the bracket
--- sits on the prefab root. What else the unit offers is the open question, and
--- this walks engine functions the mod has never called: every one is checked for
--- existence and called through pcall, because a probe must not be the thing that
--- takes a mission down.
-check(helpers_source:find("function _debug_report_anchor_candidates", 1, true) ~= nil,
-    "the anchor candidate probe is missing")
-check(helpers_source:find('if source ~= "origin" or kind_text:sub(1, 18) ~= "mission_objective_" then', 1, true) ~= nil,
-    "the anchor candidate probe is not restricted to objectives that fell back to their origin")
-check(helpers_source:find("pcall(unit_api.num_nodes, unit)", 1, true) ~= nil
-    and helpers_source:find("pcall(unit_api.world_position, unit, index)", 1, true) ~= nil,
-    "the anchor candidate probe calls engine functions without pcall")
--- Refilled per mission, or a long session reports nothing after the first.
-check(tracking_source:find("_reset_screen_highlight_anchor_probe()", 1, true) ~= nil,
-    "the highlight anchor probe budget is never refilled")
+    "the bracket no longer falls back from the interaction node to the unit's origin")
 
 -- Every `math_`/`table_`/`string_` alias a file uses must also be declared in
 -- that file. An undeclared one is a nil call at runtime, and only on the path
@@ -1181,52 +1110,6 @@ check(helpers_source:find("            position = position or _safe_unit_positio
 
 check_local_use_before_declaration(helpers_source, "Radar_runtime_helpers.lua")
 
--- The demolition probe is anchored on the objective's shape -- targets whose
--- `_ui_target_type` is `demolition` -- rather than on the objective name, which
--- differs on every mission running daemonic growth. It must not fall back on
--- the name matcher, or it can only ever see the mission the matcher knows.
-local demolition_probe = expeditions_source:match(
-    "function _debug_probe_demolition_destructibles%(%)(.-)" .. LF .. "    end" .. LF)
-local demolition_report = expeditions_source:match(
-    "function _debug_report_demolition_destructible%(.-%)(.-)" .. LF .. "    end" .. LF)
-
-check(demolition_probe ~= nil, "the demolition probe is missing")
-check(demolition_report ~= nil, "the per-destructible demolition report is missing")
-
-if demolition_probe ~= nil then
-    check(demolition_probe:find('_safe_objective_target_field(extension, "_ui_target_type") == "demolition"',
-        1, true) ~= nil, "the demolition probe is not anchored on the demolition target type")
-    check(demolition_probe:find("_is_growth_objective_name", 1, true) == nil
-        and demolition_probe:find("_scratch_growth_objective_units", 1, true) == nil,
-        "the demolition probe depends on the growth name matcher, so it only sees Stockpile")
-    -- The host flag comes off an objective target, which a client carries, so an
-    -- empty destructible system on a client is still reported as a client.
-    check(demolition_probe:find('target_is_server = _safe_objective_target_field(extension, "_is_server")',
-        1, true) ~= nil, "the demolition probe cannot say it ran on a client when no destructible is visible")
-    -- `false` is the answer being looked for, and `a ~= nil and a or b` loses it.
-    check(demolition_probe:find("local server_flag = target_is_server" .. LF .. LF
-        .. "        if server_flag == nil then", 1, true) ~= nil,
-        "the host flag is chosen with an and/or expression, which turns a client's false into nil")
-    -- The summary has its own budget, so individual destructibles cannot spend it.
-    check(demolition_probe:find("PROBE.demolition_summary_seen[key] = true", 1, true) ~= nil
-        and demolition_probe:find("PROBE.demolition_summary_left = PROBE.demolition_summary_left - 1",
-            1, true) ~= nil,
-        "the demolition summary shares its budget, so a busy level can silence it")
-end
-
-if demolition_report ~= nil then
-    check(demolition_report:find("PROBE.demolition_seen[key] = true", 1, true) ~= nil
-        and demolition_report:find("PROBE.demolition_left = PROBE.demolition_left - 1", 1, true) ~= nil,
-        "the per-destructible demolition report is unbudgeted")
-    check(demolition_report:find("pcall(tostring, value)", 1, true) ~= nil,
-        "a nested reference is rendered without pcall")
-end
-
-check(expeditions_source:find("        _debug_probe_demolition_destructibles()", 1, true) ~= nil,
-    "the demolition probe is never called")
-check(expeditions_source:find("        _reset_demolition_probe()", 1, true) ~= nil,
-    "the demolition probe budget is never refilled between missions")
-
 -- A tentacle is three destructibles of one prefab. The level's own breakables
 -- near a growth can stand as close together as the eyes do, but not as three of
 -- one kind.
@@ -1240,13 +1123,6 @@ check(helpers_source:find("function _safe_unit_prefab_name(unit)", 1, true) ~= n
     and (helpers_source:match("function _safe_unit_prefab_name%(unit%)(.-)" .. LF .. "    end" .. LF) or "")
         :find("tostring(unit)", 1, true) == nil,
     "the prefab read falls back to a per-unit stand-in")
-
--- The marker type probe, which tells a vanilla objective marker from the prompt
--- a player gets standing next to something.
-check(expeditions_source:find("        _debug_probe_objective_marker_types()", 1, true) ~= nil,
-    "the marker type probe is never called")
-check(expeditions_source:find("        _reset_marker_types_probe()", 1, true) ~= nil,
-    "the marker type probe budget is never refilled between missions")
 
 -- Of a bank of identical containers under a luggable objective only those
 -- holding a luggable are drawn, and only containers of a prefab found holding
