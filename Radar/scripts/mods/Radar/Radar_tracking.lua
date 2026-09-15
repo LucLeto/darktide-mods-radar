@@ -2,7 +2,6 @@ return function(env)
     setfenv(1, env)
 
     local mod = mod
-
     local GameSession = GameSession
     local PlayerUnitVisualLoadout = PlayerUnitVisualLoadout
     local pcall = pcall
@@ -25,13 +24,187 @@ return function(env)
     local string_sub = string.sub
     local table_concat = table.concat
     local table_sort = table.sort
+
     local table_clear = table.clear or function(t)
         for k in pairs(t) do
             t[k] = nil
         end
     end
+
     local os_clock = os and os.clock or nil
 
+    -- ----------------------------------------------------------------------------
+    -- Constants
+    -- ----------------------------------------------------------------------------
+
+    local STATIC_SCAN_INTERVAL = SCAN_INTERVAL * 2
+
+    -- Only self-moving targets (enemies, teammates, companions) follow the
+    -- configurable rate. Droppable items (pocketables, deployables, expedition
+    -- drops, tag points) rescan at the fixed DROPPABLE_SCAN_INTERVAL, and fully
+    -- static props (chests, destructibles, hazards) keep the even slower
+    -- STATIC_SCAN_INTERVAL since they never move.
+    local SCAN_INTERVAL_BY_RATE = {
+        low = SCAN_INTERVAL,
+        medium = 0.1,
+        high = 0.05,
+    }
+    local DROPPABLE_SCAN_INTERVAL = SCAN_INTERVAL
+    local OVERVIEW_MIN_ZOOM_RANGE = 25
+    local OVERVIEW_MAX_ZOOM_RANGE = 500
+    local OVERVIEW_DEFAULT_ZOOM_RANGE = OVERVIEW_MAX_ZOOM_RANGE
+    local OVERVIEW_SCREEN_PADDING = 80
+    local OVERVIEW_RANGE_TRANSITION_DURATION = 0.28
+    local OVERVIEW_RANGE_TRANSITION_SCAN_INTERVAL = 0.05
+    local OVERVIEW_RESET_FIT_EDGE_FRACTION = 0.9
+    local OVERVIEW_RADAR_MARKER_LIMIT = 300
+    local NORMAL_RADAR_MIN_ZOOM_RANGE = 10
+    local NORMAL_RADAR_MAX_ZOOM_RANGE = 200
+    local NORMAL_RADAR_DEFAULT_ZOOM_RANGE = NORMAL_RADAR_MAX_ZOOM_RANGE
+    local NORMAL_RADAR_RESET_ZOOM_RANGE = NORMAL_RADAR_MIN_ZOOM_RANGE
+    local NORMAL_RADAR_ZOOM_MODIFIER_GRACE = 0.12
+    local NORMAL_RADAR_ZOOM_INDICATOR_DURATION = 1
+    local OVERVIEW_CAPTURED_ACTIONS_BY_DIRECTION = {
+        up = {
+            tactical_overlay_scroll_up = true,
+            wield_scroll_up = true,
+        },
+        down = {
+            tactical_overlay_scroll_down = true,
+            wield_scroll_down = true,
+        },
+    }
+    local SERVO_SKULL_OWNER_HIDE_DISTANCE_SQ = 2.5 * 2.5
+    local COMPANION_TARGET_OVERLAP_DISTANCE_SQ = 2 * 2
+    local COMPANION_ACTION_RENDER_LAYER = 6
+    local SERVO_SKULL_STATES = CompanionServoSkullSettings.STATES
+    local ROTTEN_ARMOR_BREED_ALIAS_BY_BASE_BREED = {
+        chaos_ogryn_executor = "chaos_ogryn_executor_gibbing_rotten_armor",
+        renegade_executor = "renegade_executor_gibbing_rotten_armor",
+        renegade_berzerker = "renegade_berzerker_gibbing_rotten_armor",
+    }
+    local ABILITY_OUTLINE_BRACKET_ALPHA = 220
+    local SUPPORTED_ABILITY_OUTLINE_CONFIG_BY_NAME = {
+        psyker_marked_target = {
+            default_color = { 255, 80, 160, 255 },
+            default_priority = 1,
+        },
+        veteran_smart_tag = {
+            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 255, 204, 102 },
+            default_priority = 1,
+        },
+        adamant_mark_target = {
+            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 128, 102, 255 },
+            default_priority = 2,
+        },
+        adamant_smart_tag = {
+            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 255, 64, 64 },
+            default_priority = 2,
+        },
+        broker_proximity_target = {
+            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 122, 204, 245 },
+            default_priority = 2,
+        },
+        special_target = {
+            default_priority = 3,
+        },
+    }
+    local VETERAN_SPECIAL_TARGET_BRACKET_COLOR = { 255, 220, 120, 26 }
+    local OGRYN_TAUNT_SHOUT_ABILITY_NAME = "ogryn_taunt_shout"
+    local PLAYER_CAPTURE_DISABLING_TYPES = {
+        grabbed = true,
+        consumed = true,
+        mutant_charged = true,
+        netted = true,
+        pounced = true,
+    }
+    local SLOT_LUGGABLE = "slot_luggable"
+
+    -- Sources whose units move on their own every frame (enemies, teammates,
+    -- companions). Units from any other source only get their stored position
+    -- refreshed on droppable-item ticks, since props never move and droppables
+    -- move rarely.
+    local MOVING_TRACK_SOURCES = {
+        unit_data_system = true,
+        player_manager = true,
+        player_companion = true,
+    }
+
+    -- Kinds that move under their own power even though they are tracked from a
+    -- slow scan tier. Their positions refresh at the configurable scan rate, so
+    -- a flying servo skull does not lag a quarter of a second behind.
+    local MOVING_TRACK_KINDS = {
+        mission_objective_servo_skull = true,
+    }
+    local ITEM_VERTICAL_ARROW_Z_DEADZONE = 2
+
+    -- The flying servo skull hovers well above head height and bobs as it moves,
+    -- so the shared 2 m deadzone reads it as being on another floor. A larger
+    -- deadzone keeps the arrow for genuine floor changes only. This overrides the
+    -- height at which an arrow appears; the player's own "show vertical arrows
+    -- within range" distance setting still applies unchanged.
+    local VERTICAL_ARROW_Z_DEADZONE_BY_KIND = {
+        mission_objective_servo_skull = 6,
+    }
+
+    -- Kinds that must never be hidden for being above or below the player.
+    -- Every mission objective marker qualifies: an objective a floor up is
+    -- exactly what you need to see, and losing the marker is worse than an
+    -- imprecise one. Objective kinds are matched by predicate so a new category
+    -- is covered without a second edit here.
+    local VERTICAL_HIDE_EXEMPT_KINDS = {
+        pickup_heretic_idol = true,
+    }
+
+    -- ----------------------------------------------------------------------------
+    -- Mutable runtime state
+    -- ----------------------------------------------------------------------------
+
+    mod._next_scan_t = 0
+    mod._tracked_units = {}
+    mod._tracked_points = {}
+    mod._logged_units = {}
+    mod._radar_targets = {}
+    mod._radar_snapshot = nil
+    mod._gameplay_run = false
+    mod._last_update_t = nil
+    mod._last_scan_signature = nil
+    mod._last_block_signature = nil
+    mod._dark_rites_marker_scan_cache_valid = false
+    mod._dark_rites_marker_scan_allowed = true
+    mod._dark_rites_marker_cached_circumstance_name = nil
+    mod._dark_rites_marker_cached_mission_name = nil
+    mod._screen_highlight_targets = {}
+    mod._unclustered_radar_targets = {}
+    mod._highlight_source_radar_targets = {}
+    mod._idol_destroyed_collectible_keys = {}
+    mod._idol_destroyed_units = {}
+    mod._martyr_skull_riddle_solved_by_mission = {}
+    mod._martyr_skull_riddle_fallback_state_by_position = {}
+    mod._last_safe_zone_section_index = nil
+    mod._last_expedition_in_safe_zone = nil
+    mod._player_smart_tag_generation = 0
+    mod._player_smart_tag_state_by_id = {}
+
+    local _scratch_kind_enabled_cache = {}
+    local _scratch_ignore_range_cache = {}
+    local _scratch_infinite_range_cache = {}
+    local _scratch_supports_vertical_cache = {}
+    local _scratch_render_layer_cache = {}
+    local _scratch_selection_priority_cache = {}
+    local _scratch_priority_target_cache = {}
+    local _scratch_seen_interactees = {}
+    local _scratch_seen_chests = {}
+    local _scratch_seen_destructibles = {}
+    local _scratch_seen_hazard_props = {}
+    local _scratch_seen_radar_players = {}
+    local _scratch_mastiff_disabled_enemy_units = {}
+    local _scratch_minion_kind_enabled_cache = {}
+    local CACHED_ABILITY_OUTLINE_BRACKET_COLORS = {}
+
+    -- ----------------------------------------------------------------------------
+    -- Generic helpers
+    -- ----------------------------------------------------------------------------
 
     local function _reuse_or_new_table(t)
         if t then
@@ -56,61 +229,6 @@ return function(env)
         mod._radar_player_unit_by_player = _reuse_or_new_table(mod._radar_player_unit_by_player)
     end
 
-    local _scratch_kind_enabled_cache = {}
-    local _scratch_ignore_range_cache = {}
-    local _scratch_infinite_range_cache = {}
-    local _scratch_supports_vertical_cache = {}
-    local _scratch_render_layer_cache = {}
-    local _scratch_selection_priority_cache = {}
-    local _scratch_priority_target_cache = {}
-    local _scratch_seen_interactees = {}
-    local _scratch_seen_chests = {}
-    local _scratch_seen_destructibles = {}
-    local _scratch_seen_hazard_props = {}
-    local _scratch_seen_radar_players = {}
-    local _scratch_mastiff_disabled_enemy_units = {}
-    local _scratch_minion_kind_enabled_cache = {}
-    local OVERVIEW_MIN_ZOOM_RANGE = 25
-    local OVERVIEW_MAX_ZOOM_RANGE = 500
-    local OVERVIEW_DEFAULT_ZOOM_RANGE = OVERVIEW_MAX_ZOOM_RANGE
-    local OVERVIEW_SCREEN_PADDING = 80
-    local OVERVIEW_RANGE_TRANSITION_DURATION = 0.28
-    local OVERVIEW_RANGE_TRANSITION_SCAN_INTERVAL = 0.05
-    local STATIC_SCAN_INTERVAL = SCAN_INTERVAL * 2
-    -- Only self-moving targets (enemies, teammates, companions) follow the
-    -- configurable rate. Droppable items (pocketables, deployables, expedition
-    -- drops, tag points) rescan at the fixed DROPPABLE_SCAN_INTERVAL, and fully
-    -- static props (chests, destructibles, hazards) keep the even slower
-    -- STATIC_SCAN_INTERVAL since they never move.
-    local SCAN_INTERVAL_BY_RATE = {
-        low = SCAN_INTERVAL,
-        medium = 0.1,
-        high = 0.05,
-    }
-    local DROPPABLE_SCAN_INTERVAL = SCAN_INTERVAL
-    local OVERVIEW_RESET_FIT_EDGE_FRACTION = 0.9
-    local OVERVIEW_RADAR_MARKER_LIMIT = 300
-    local NORMAL_RADAR_MIN_ZOOM_RANGE = 10
-    local NORMAL_RADAR_MAX_ZOOM_RANGE = 200
-    local NORMAL_RADAR_DEFAULT_ZOOM_RANGE = NORMAL_RADAR_MAX_ZOOM_RANGE
-    local NORMAL_RADAR_RESET_ZOOM_RANGE = NORMAL_RADAR_MIN_ZOOM_RANGE
-    local NORMAL_RADAR_ZOOM_MODIFIER_GRACE = 0.12
-    local NORMAL_RADAR_ZOOM_INDICATOR_DURATION = 1
-    local SERVO_SKULL_OWNER_HIDE_DISTANCE_SQ = 2.5 * 2.5
-    local COMPANION_TARGET_OVERLAP_DISTANCE_SQ = 2 * 2
-    local COMPANION_ACTION_RENDER_LAYER = 6
-    local SERVO_SKULL_STATES = CompanionServoSkullSettings.STATES
-    local OVERVIEW_CAPTURED_ACTIONS_BY_DIRECTION = {
-        up = {
-            tactical_overlay_scroll_up = true,
-            wield_scroll_up = true,
-        },
-        down = {
-            tactical_overlay_scroll_down = true,
-            wield_scroll_down = true,
-        },
-    }
-
     local function _clear_scratch_radar_caches()
         table_clear(_scratch_kind_enabled_cache)
         table_clear(_scratch_ignore_range_cache)
@@ -132,6 +250,47 @@ return function(env)
 
         return pool
     end
+
+    local function _distance_squared_horizontal(a, b)
+        if not a or not b then
+            return math_huge
+        end
+
+        local ax, ay = a.x, a.y
+        local bx, by = b.x, b.y
+
+        if not _is_finite_number(ax) or not _is_finite_number(ay) then
+            return math_huge
+        end
+
+        if not _is_finite_number(bx) or not _is_finite_number(by) then
+            return math_huge
+        end
+
+        local dx = ax - bx
+        local dy = ay - by
+
+        return dx * dx + dy * dy
+    end
+
+    local function _vertical_delta(a, b)
+        if not a or not b then
+            return nil
+        end
+
+        local az = a.z
+        local bz = b.z
+
+        if not _is_finite_number(az) or not _is_finite_number(bz) then
+            return nil
+        end
+
+        return bz - az
+    end
+
+    -- ----------------------------------------------------------------------------
+    -- Input and keybind helpers
+    -- ----------------------------------------------------------------------------
 
     local function _normalized_keybind_entry(value)
         if value == nil then
@@ -306,6 +465,10 @@ return function(env)
 
         mod._overview_capture_actions = capture_actions
     end
+
+    -- ----------------------------------------------------------------------------
+    -- Radar geometry and zoom helpers
+    -- ----------------------------------------------------------------------------
 
     local function _configured_radar_origin(size)
         local radar_size = tonumber(size) or mod:get_configured_radar_size()
@@ -508,11 +671,9 @@ return function(env)
         return _normalize_overview_zoom_range(stepped_range)
     end
 
-    local ROTTEN_ARMOR_BREED_ALIAS_BY_BASE_BREED = {
-        chaos_ogryn_executor = "chaos_ogryn_executor_gibbing_rotten_armor",
-        renegade_executor = "renegade_executor_gibbing_rotten_armor",
-        renegade_berzerker = "renegade_berzerker_gibbing_rotten_armor",
-    }
+    -- ----------------------------------------------------------------------------
+    -- Enemy and ability outline helpers
+    -- ----------------------------------------------------------------------------
 
     local function _resolve_enemy_breed_name(unit, breed_name)
         local rotten_armor_breed_name = ROTTEN_ARMOR_BREED_ALIAS_BY_BASE_BREED[breed_name]
@@ -525,36 +686,6 @@ return function(env)
 
         return breed_name
     end
-
-    local ABILITY_OUTLINE_BRACKET_ALPHA = 220
-    local SUPPORTED_ABILITY_OUTLINE_CONFIG_BY_NAME = {
-        psyker_marked_target = {
-            default_color = { 255, 80, 160, 255 },
-            default_priority = 1,
-        },
-        veteran_smart_tag = {
-            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 255, 204, 102 },
-            default_priority = 1,
-        },
-        adamant_mark_target = {
-            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 128, 102, 255 },
-            default_priority = 2,
-        },
-        adamant_smart_tag = {
-            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 255, 64, 64 },
-            default_priority = 2,
-        },
-        broker_proximity_target = {
-            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 122, 204, 245 },
-            default_priority = 2,
-        },
-        special_target = {
-            default_priority = 3,
-        },
-    }
-    local VETERAN_SPECIAL_TARGET_BRACKET_COLOR = { 255, 220, 120, 26 }
-    local CACHED_ABILITY_OUTLINE_BRACKET_COLORS = {}
-    local OGRYN_TAUNT_SHOUT_ABILITY_NAME = "ogryn_taunt_shout"
 
     local function _supported_ability_outline_config(outline_name)
         if outline_name == nil then
@@ -772,6 +903,10 @@ return function(env)
         return nil, nil, nil, nil
     end
 
+    -- ----------------------------------------------------------------------------
+    -- Companion and player state helpers
+    -- ----------------------------------------------------------------------------
+
     local function _player_companion_kind(unit, has_extension)
         if not unit or not has_extension or not _safe_unit_alive(unit) then
             return nil
@@ -879,28 +1014,6 @@ return function(env)
         return ok_unit and _safe_unit_alive(unit) and unit or nil
     end
 
-    local function _distance_squared_horizontal(a, b)
-        if not a or not b then
-            return math_huge
-        end
-
-        local ax, ay = a.x, a.y
-        local bx, by = b.x, b.y
-
-        if not _is_finite_number(ax) or not _is_finite_number(ay) then
-            return math_huge
-        end
-
-        if not _is_finite_number(bx) or not _is_finite_number(by) then
-            return math_huge
-        end
-
-        local dx = ax - bx
-        local dy = ay - by
-
-        return dx * dx + dy * dy
-    end
-
     local function _safe_companion_dog_target(unit)
         local blackboard = BLACKBOARDS and BLACKBOARDS[unit]
         local pounce_component = blackboard and blackboard.pounce
@@ -925,15 +1038,6 @@ return function(env)
     local function _servo_skull_state_is(state, state_name)
         return state == state_name or state == SERVO_SKULL_STATES[state_name]
     end
-
-    local PLAYER_CAPTURE_DISABLING_TYPES = {
-        grabbed = true,
-        consumed = true,
-        mutant_charged = true,
-        netted = true,
-        pounced = true,
-    }
-    local SLOT_LUGGABLE = "slot_luggable"
 
     local function _safe_player_component(unit_data_extension, component_name)
         if not unit_data_extension or not unit_data_extension.read_component then
@@ -999,6 +1103,10 @@ return function(env)
 
         return nil
     end
+
+    -- ----------------------------------------------------------------------------
+    -- Unit scans
+    -- ----------------------------------------------------------------------------
 
     local function _refresh_player_units()
         local mastiff_disabled_enemy_units = _scratch_mastiff_disabled_enemy_units
@@ -1692,23 +1800,6 @@ return function(env)
         end
     end
 
-    -- Sources whose units move on their own every frame (enemies, teammates,
-    -- companions). Units from any other source only get their stored position
-    -- refreshed on droppable-item ticks, since props never move and droppables
-    -- move rarely.
-    local MOVING_TRACK_SOURCES = {
-        unit_data_system = true,
-        player_manager = true,
-        player_companion = true,
-    }
-
-    -- Kinds that move under their own power even though they are tracked from a
-    -- slow scan tier. Their positions refresh at the configurable scan rate, so
-    -- a flying servo skull does not lag a quarter of a second behind.
-    local MOVING_TRACK_KINDS = {
-        mission_objective_servo_skull = true,
-    }
-
     local function _prune_units(refresh_item_positions)
         local now = _safe_gameplay_time() or 0
         local tracked_units = mod._tracked_units
@@ -1738,40 +1829,9 @@ return function(env)
         end
     end
 
-    local function _vertical_delta(a, b)
-        if not a or not b then
-            return nil
-        end
-
-        local az = a.z
-        local bz = b.z
-
-        if not _is_finite_number(az) or not _is_finite_number(bz) then
-            return nil
-        end
-
-        return bz - az
-    end
-
-    local ITEM_VERTICAL_ARROW_Z_DEADZONE = 2
-
-    -- The flying servo skull hovers well above head height and bobs as it moves,
-    -- so the shared 2 m deadzone reads it as being on another floor. A larger
-    -- deadzone keeps the arrow for genuine floor changes only. This overrides the
-    -- height at which an arrow appears; the player's own "show vertical arrows
-    -- within range" distance setting still applies unchanged.
-    local VERTICAL_ARROW_Z_DEADZONE_BY_KIND = {
-        mission_objective_servo_skull = 6,
-    }
-
-    -- Kinds that must never be hidden for being above or below the player.
-    -- Every mission objective marker qualifies: an objective a floor up is
-    -- exactly what you need to see, and losing the marker is worse than an
-    -- imprecise one. Objective kinds are matched by predicate so a new category
-    -- is covered without a second edit here.
-    local VERTICAL_HIDE_EXEMPT_KINDS = {
-        pickup_heretic_idol = true,
-    }
+    -- ----------------------------------------------------------------------------
+    -- Target filtering and expedition loot clustering
+    -- ----------------------------------------------------------------------------
 
     local function _is_vertical_hide_exempt(kind)
         return VERTICAL_HIDE_EXEMPT_KINDS[kind] == true or _is_mission_objective_marker_kind(kind)
@@ -2057,6 +2117,10 @@ return function(env)
 
         return pass_through_targets
     end
+
+    -- ----------------------------------------------------------------------------
+    -- Radar target collection and update
+    -- ----------------------------------------------------------------------------
 
     local function _compare_radar_targets_for_display(a, b)
         local a_priority = a and a.selection_priority or 0
@@ -2422,7 +2486,6 @@ return function(env)
         mod._last_radar_unclustered_marker_count = unclustered_total
         mod._last_radar_candidate_marker_count = target_total
         mod._last_radar_active_marker_count = #targets
-        mod._last_radar_marker_cap = max_markers
         mod._last_radar_marker_capped = was_capped
 
         return targets
@@ -2531,63 +2594,6 @@ return function(env)
             tostring(_safe_mechanism_name()),
             tostring(_safe_player_character_state_name(_player_unit()))
         ))
-    end
-
-    local function _reset_runtime_state()
-        mod._screen_highlight_targets = {}
-        mod._unclustered_radar_targets = {}
-        mod._highlight_source_radar_targets = {}
-        mod._next_scan_t = 0
-        mod._next_droppable_scan_t = 0
-        mod._next_static_scan_t = 0
-        mod._last_scan_cost_ms = nil
-        _invalidate_runtime_state_cache()
-        mod._tracked_units = {}
-        mod._tracked_points = {}
-        mod._logged_units = {}
-        mod._radar_targets = {}
-        mod._radar_snapshot = nil
-        mod._radar_target_pool = {}
-        mod._radar_player_unit_by_player = {}
-        mod._last_update_t = nil
-        mod._last_scan_signature = nil
-        mod._last_block_signature = nil
-        mod._last_state_gameplay = nil
-        _reset_dark_rites_marker_scan_cache()
-        mod._idol_destroyed_collectible_keys = {}
-        mod._idol_destroyed_units = {}
-        mod._martyr_skull_riddle_solved_by_mission = {}
-        mod._martyr_skull_riddle_fallback_state_by_position = {}
-        _reset_mission_objective_marker_state()
-        mod._last_safe_zone_section_index = nil
-        mod._last_expedition_in_safe_zone = nil
-        mod._player_smart_tag_generation = 0
-        mod._player_smart_tag_state_by_id = {}
-        mod._overview_mode_active = false
-        mod._overview_zoom_range = _normalize_overview_zoom_range(mod:get("overview_zoom_range"))
-        mod._overview_capture_actions = mod._overview_capture_actions or {}
-        mod._overview_range_transition_active = false
-        mod._overview_range_transition_start_t = nil
-        mod._overview_range_transition_from = nil
-        mod._overview_range_transition_to = nil
-        mod._normal_radar_zoom_modifier_t = nil
-        mod._normal_radar_zoom_indicator_t = nil
-        mod._last_radar_unclustered_marker_count = 0
-        mod._last_radar_candidate_marker_count = 0
-        mod._last_radar_active_marker_count = 0
-        mod._last_radar_marker_cap = 0
-        mod._last_radar_marker_capped = false
-        mod._overview_marker_high_raw = 0
-        mod._overview_marker_high_candidates = 0
-        mod._overview_marker_high_active = 0
-        mod._overview_marker_high_drawn = 0
-        mod._last_overview_marker_debug_signature = nil
-
-        if mod.reset_strikemap_integration then
-            mod:reset_strikemap_integration()
-        end
-
-        _refresh_overview_input_capture()
     end
 
     local function _debug_log_block(reason, gameplay_t, mission_name, activity, mechanism_name)
@@ -2741,6 +2747,66 @@ return function(env)
         _debug_log_scan()
     end
 
+    -- ----------------------------------------------------------------------------
+    -- Mission lifecycle
+    -- ----------------------------------------------------------------------------
+
+    local function _reset_runtime_state()
+        mod._screen_highlight_targets = {}
+        mod._unclustered_radar_targets = {}
+        mod._highlight_source_radar_targets = {}
+        mod._next_scan_t = 0
+        mod._next_droppable_scan_t = 0
+        mod._next_static_scan_t = 0
+        mod._last_scan_cost_ms = nil
+        _invalidate_runtime_state_cache()
+        mod._tracked_units = {}
+        mod._tracked_points = {}
+        mod._logged_units = {}
+        mod._radar_targets = {}
+        mod._radar_snapshot = nil
+        mod._radar_target_pool = {}
+        mod._radar_player_unit_by_player = {}
+        mod._last_update_t = nil
+        mod._last_scan_signature = nil
+        mod._last_block_signature = nil
+        mod._last_state_gameplay = nil
+        _reset_dark_rites_marker_scan_cache()
+        mod._idol_destroyed_collectible_keys = {}
+        mod._idol_destroyed_units = {}
+        mod._martyr_skull_riddle_solved_by_mission = {}
+        mod._martyr_skull_riddle_fallback_state_by_position = {}
+        _reset_mission_objective_marker_state()
+        mod._last_safe_zone_section_index = nil
+        mod._last_expedition_in_safe_zone = nil
+        mod._player_smart_tag_generation = 0
+        mod._player_smart_tag_state_by_id = {}
+        mod._overview_mode_active = false
+        mod._overview_zoom_range = _normalize_overview_zoom_range(mod:get("overview_zoom_range"))
+        mod._overview_capture_actions = mod._overview_capture_actions or {}
+        mod._overview_range_transition_active = false
+        mod._overview_range_transition_start_t = nil
+        mod._overview_range_transition_from = nil
+        mod._overview_range_transition_to = nil
+        mod._normal_radar_zoom_modifier_t = nil
+        mod._normal_radar_zoom_indicator_t = nil
+        mod._last_radar_unclustered_marker_count = 0
+        mod._last_radar_candidate_marker_count = 0
+        mod._last_radar_active_marker_count = 0
+        mod._last_radar_marker_capped = false
+        mod._overview_marker_high_raw = 0
+        mod._overview_marker_high_candidates = 0
+        mod._overview_marker_high_active = 0
+        mod._overview_marker_high_drawn = 0
+        mod._last_overview_marker_debug_signature = nil
+
+        if mod.reset_strikemap_integration then
+            mod:reset_strikemap_integration()
+        end
+
+        _refresh_overview_input_capture()
+    end
+
     mod.on_game_state_changed = function(status, state_name)
         if status == "enter" and state_name == "GameplayStateRun" then
             mod._gameplay_run = true
@@ -2771,96 +2837,9 @@ return function(env)
         end
     end
 
-    mod:register_hud_element({
-        class_name = "HudElementRadar",
-        filename = "Radar/scripts/mods/Radar/ui/Radar_hud_element",
-        visibility_groups = {
-            "communication_wheel",
-            "emote_wheel",
-            "alive",
-        },
-        use_hud_scale = true,
-    })
-
-    local function _neutralize_input_value(value)
-        local value_type = type(value)
-
-        if value_type == "boolean" then
-            return false
-        end
-
-        if value_type == "number" then
-            return 0
-        end
-
-        if value_type == "userdata" and Vector3 then
-            return Vector3(0, 0, 0)
-        end
-
-        return value
-    end
-
-    local function _overview_input_action_hook(func, self, action_name, ...)
-        local value = func(self, action_name, ...)
-
-        if not mod:should_capture_overview_input_action(action_name) then
-            return value
-        end
-
-        return _neutralize_input_value(value)
-    end
-
-    mod:hook(CLASS.InputService, "_get", _overview_input_action_hook)
-    mod:hook(CLASS.InputService, "_get_simulate", _overview_input_action_hook)
-
-    mod:hook_safe("StateGameplay", "update", function(self, dt, t, ...)
-        mod._last_state_gameplay = self
-        _update_internal(t)
-    end)
-
-    mod:hook_safe("CollectiblesManager", "rpc_player_destroyed_destructible_collectible",
-        function(self, channel_id, peer_id, local_player_id, section_id, id)
-            _clear_tracked_idol_by_collectible(section_id, id)
-        end)
-
-    mod:hook_safe("CollectiblesManager", "collectible_destroyed", function(self, data, attacking_unit)
-        if data then
-            _clear_tracked_idol_by_collectible(data.section_id, data.id)
-        end
-    end)
-
-    mod:hook_safe("DestructibleExtension", "rpc_destructible_last_destruction", function(self)
-        _mark_idol_unit_destroyed(self and self._unit or nil, self)
-    end)
-
-    mod:hook_safe("DestructibleExtension", "rpc_sync_destructible",
-        function(self, current_stage, visible, from_hot_join_sync)
-            if current_stage == 0 then
-                _mark_idol_unit_destroyed(self and self._unit or nil, self)
-            end
-        end)
-
-    mod.update = function()
-        if not mod._gameplay_run then
-            return
-        end
-
-        _update_internal(_safe_gameplay_time())
-    end
-
-    local previous_on_setting_changed = mod.on_setting_changed
-
-    mod.on_setting_changed = function(setting_id, ...)
-        if previous_on_setting_changed then
-            previous_on_setting_changed(setting_id, ...)
-        end
-
-        if setting_id == "overview_zoom_in_key" or setting_id == "overview_zoom_out_key" then
-            _refresh_overview_input_capture()
-        elseif setting_id == "show_player_state_icons" then
-            mod._next_scan_t = 0
-        end
-    end
+    -- ----------------------------------------------------------------------------
+    -- Public interface
+    -- ----------------------------------------------------------------------------
 
     function mod:is_overview_mode_active()
         return self._overview_mode_active == true
@@ -3856,4 +3835,105 @@ return function(env)
 
         return px, py
     end
+
+    -- ----------------------------------------------------------------------------
+    -- Hooks
+    -- ----------------------------------------------------------------------------
+
+    local function _neutralize_input_value(value)
+        local value_type = type(value)
+
+        if value_type == "boolean" then
+            return false
+        end
+
+        if value_type == "number" then
+            return 0
+        end
+
+        if value_type == "userdata" and Vector3 then
+            return Vector3(0, 0, 0)
+        end
+
+        return value
+    end
+
+    local function _overview_input_action_hook(func, self, action_name, ...)
+        local value = func(self, action_name, ...)
+
+        if not mod:should_capture_overview_input_action(action_name) then
+            return value
+        end
+
+        return _neutralize_input_value(value)
+    end
+
+    mod:hook(CLASS.InputService, "_get", _overview_input_action_hook)
+
+    mod:hook(CLASS.InputService, "_get_simulate", _overview_input_action_hook)
+
+    mod:hook_safe("StateGameplay", "update", function(self, dt, t, ...)
+        mod._last_state_gameplay = self
+        _update_internal(t)
+    end)
+
+    mod:hook_safe("CollectiblesManager", "rpc_player_destroyed_destructible_collectible",
+        function(self, channel_id, peer_id, local_player_id, section_id, id)
+            _clear_tracked_idol_by_collectible(section_id, id)
+        end)
+
+    mod:hook_safe("CollectiblesManager", "collectible_destroyed", function(self, data, attacking_unit)
+        if data then
+            _clear_tracked_idol_by_collectible(data.section_id, data.id)
+        end
+    end)
+
+    mod:hook_safe("DestructibleExtension", "rpc_destructible_last_destruction", function(self)
+        _mark_idol_unit_destroyed(self and self._unit or nil, self)
+    end)
+
+    mod:hook_safe("DestructibleExtension", "rpc_sync_destructible",
+        function(self, current_stage, visible, from_hot_join_sync)
+            if current_stage == 0 then
+                _mark_idol_unit_destroyed(self and self._unit or nil, self)
+            end
+        end)
+
+    -- ----------------------------------------------------------------------------
+    -- DMF callbacks and initialization
+    -- ----------------------------------------------------------------------------
+
+    mod.update = function()
+        if not mod._gameplay_run then
+            return
+        end
+
+        _update_internal(_safe_gameplay_time())
+    end
+
+    local previous_on_setting_changed = mod.on_setting_changed
+
+    mod.on_setting_changed = function(setting_id, ...)
+        if previous_on_setting_changed then
+            previous_on_setting_changed(setting_id, ...)
+        end
+
+        if setting_id == "overview_zoom_in_key" or setting_id == "overview_zoom_out_key" then
+            _refresh_overview_input_capture()
+        elseif setting_id == "show_player_state_icons" then
+            mod._next_scan_t = 0
+        end
+    end
+
+    mod:register_hud_element({
+        class_name = "HudElementRadar",
+        filename = "Radar/scripts/mods/Radar/ui/Radar_hud_element",
+        visibility_groups = {
+            "communication_wheel",
+            "emote_wheel",
+            "alive",
+        },
+        use_hud_scale = true,
+    })
+
 end

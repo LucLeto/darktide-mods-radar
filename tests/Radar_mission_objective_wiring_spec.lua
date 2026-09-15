@@ -79,6 +79,7 @@ local data_source = assert(io.open("Radar/scripts/mods/Radar/Radar_data.lua")):r
 local localization_source = assert(io.open("Radar/scripts/mods/Radar/Radar_localization.lua")):read("*a")
 local tracking_source = assert(io.open("Radar/scripts/mods/Radar/Radar_tracking.lua")):read("*a")
 local expeditions_source = assert(io.open("Radar/scripts/mods/Radar/Radar_expeditions.lua")):read("*a")
+local objectives_source = assert(io.open("Radar/scripts/mods/Radar/Radar_mission_objectives.lua")):read("*a")
 
 local problems = {}
 
@@ -428,25 +429,28 @@ end
 -- only ever covered the missions written into it; and the targets'
 -- `_ui_target_type=demolition` is only the game's marker style for "destroy
 -- this", which ice, tanks and cogitators carry under other objectives.
-check(expeditions_source:find('or rawget(objective, "_objective_type") ~= "demolition" then', 1, true) ~= nil
-    and expeditions_source:find("                _note_growth_objective(name, objective)", 1, true) ~= nil,
+check(objectives_source:find('or rawget(objective, "_objective_type") ~= "demolition" then', 1, true) ~= nil
+    and objectives_source:find("                _note_growth_objective(name, objective)", 1, true) ~= nil,
     "growth objectives are not recognised by their objective's own type")
-check(expeditions_source:find("_note_growth_objective_target", 1, true) == nil,
+check(expeditions_source:find("_note_growth_objective_target", 1, true) == nil
+    and objectives_source:find("_note_growth_objective_target", 1, true) == nil,
     "growth objectives are recognised by their targets' marker style again")
-check(expeditions_source:find('return "mission_objective_destroy"', 1, true) ~= nil,
+check(objectives_source:find('return "mission_objective_destroy"', 1, true) ~= nil,
     "targets to destroy are not classified as their own kind")
 check(expeditions_source:find('_corruptor_event"', 1, true) == nil
-    and expeditions_source:find("string_sub(objective_name, -#suffix)", 1, true) == nil,
+    and objectives_source:find('_corruptor_event"', 1, true) == nil
+    and expeditions_source:find("string_sub(objective_name, -#suffix)", 1, true) == nil
+    and objectives_source:find("string_sub(objective_name, -#suffix)", 1, true) == nil,
     "growth objectives are matched on their name again")
 -- Remembered per objective name, which the next mission may reuse.
-check(expeditions_source:find("        table_clear(_growth_objective_by_name)", 1, true) ~= nil,
+check(objectives_source:find("        table_clear(_growth_objective_by_name)", 1, true) ~= nil,
     "a growth recognised in one mission carries into the next")
 -- The game marks a growth's demolition targets only to hang its pointers off
 -- them, under a metre from the centre eye. Its marker must not override the
 -- start-marker filter for them, or four markers stack on one spot.
 -- And a growth's alone: under any other objective those targets are the things
 -- to destroy, and the override stands for them.
-check(expeditions_source:find("                    and (not game_marks_unit" .. LF
+check(objectives_source:find("                    and (not game_marks_unit" .. LF
     .. "                        or (_is_growth_objective_name(objective_name)" .. LF
     .. '                            and _safe_objective_target_field(extension, "_ui_target_type") == "demolition")) then',
     1, true) ~= nil,
@@ -459,10 +463,11 @@ check(expeditions_source:find("                    and (not game_marks_unit" .. 
 check(hud_source:find('overlay_icon = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_parasite"',
     1, true) ~= nil,
     "the growth icon is missing from its own presentation")
-check(expeditions_source:find('return "mission_objective_growth"', 1, true) ~= nil,
+check(objectives_source:find('return "mission_objective_growth"', 1, true) ~= nil,
     "growth units are not classified as their own kind")
 check(hud_source:find("objective_overlay_icon", 1, true) == nil
-    and expeditions_source:find("objective_overlay_icon", 1, true) == nil,
+    and expeditions_source:find("objective_overlay_icon", 1, true) == nil
+    and objectives_source:find("objective_overlay_icon", 1, true) == nil,
     "the icon override machinery is still present alongside the growth kind")
 
 -- Its own kind purely for its visuals: it shares the generic category's
@@ -512,6 +517,15 @@ end
 
 check(expeditions_locals < 200,
     "Radar_expeditions.lua declares " .. expeditions_locals .. " top level locals; LuaJIT allows 200")
+
+local objectives_locals = 0
+
+for _ in objectives_source:gmatch(LF .. "    local [_%a]") do
+    objectives_locals = objectives_locals + 1
+end
+
+check(objectives_locals < 200,
+    "Radar_mission_objectives.lua declares " .. objectives_locals .. " top level locals; LuaJIT allows 200")
 
 -- The same ceiling applies to a file's main chunk, and the HUD element declares
 -- its constants there. It has less room left than the line count suggests.
@@ -582,15 +596,15 @@ check(tracking_source:find("MOVING_TRACK_KINDS", 1, true) ~= nil,
 check(runtime_source:find("function _refresh_world_marker_units", 1, true) ~= nil,
     "the world marker unit set is missing")
 check(runtime_source:find("marker.draw", 1, true) ~= nil
-    and expeditions_source:find("_refresh_world_marker_units(_scratch_world_marker_units)", 1, true) ~= nil,
+    and objectives_source:find("_refresh_world_marker_units(_scratch_world_marker_units)", 1, true) ~= nil,
     "the objective scan does not build the world marker set")
-check(expeditions_source:find("_objective_world_marker_seen[objective_name] == true", 1, true) ~= nil,
+check(objectives_source:find("_objective_world_marker_seen[objective_name] == true", 1, true) ~= nil,
     "the world marker filter is not guarded by whether the list covers the objective")
 -- The guard is a mission-long latch: rebuilt per scan, an objective whose last
 -- unit is finished looks the same as one the list never described, and the
 -- filter switches itself off exactly when it is needed.
-check(expeditions_source:find("table_clear(_objective_world_marker_seen)", 1, true) ~= nil
-    and select(2, expeditions_source:gsub("table_clear%(_objective_world_marker_seen%)", "")) == 1,
+check(objectives_source:find("table_clear(_objective_world_marker_seen)", 1, true) ~= nil
+    and select(2, objectives_source:gsub("table_clear%(_objective_world_marker_seen%)", "")) == 1,
     "the world marker coverage latch must be cleared once per mission, not once per scan")
 
 -- No positional offsets: the sizes above are even and the renderer corrects the
@@ -858,7 +872,7 @@ end
 -- The growth tentacles are the one marker the mod finds by shape rather than by
 -- name, so the numbers that shape is measured against are checked here: they
 -- came off a run and a comfortable guess would quietly widen or narrow them.
-local growth_eye_link = expeditions_source:match("link_squared = ([%d.]+),")
+local growth_eye_link = objectives_source:match("link_squared = ([%d.]+),")
 
 check(growth_eye_link ~= nil, "the tentacle shape has no link distance")
 
@@ -873,91 +887,91 @@ if growth_eye_link ~= nil then
     check(link < 1, "the tentacle link distance of " .. growth_eye_link .. " m^2 is wide enough to join scenery")
 end
 
-check(expeditions_source:find("cluster_size = 3,", 1, true) ~= nil,
+check(objectives_source:find("cluster_size = 3,", 1, true) ~= nil,
     "a tentacle carries three eyes")
 
 -- A tentacle outlives its own eyes. The shape can only be matched while all
 -- three are standing, because a destroyed one leaves the destructible system
 -- entirely, so the tentacle has to be remembered by the units it was made of
 -- instead of re-derived every scan from whatever is left.
-check(expeditions_source:find("group_of[units[i]] == nil", 1, true) ~= nil
-    and expeditions_source:find("group_of[member] = group", 1, true) ~= nil,
+check(objectives_source:find("group_of[units[i]] == nil", 1, true) ~= nil
+    and objectives_source:find("group_of[member] = group", 1, true) ~= nil,
     "tentacle eyes are not registered to a tentacle, so the marker dies with the first eye")
 -- Both ends of the match, or a new tentacle at a cleared spawn point could
 -- absorb the remains of its predecessor.
-check(expeditions_source:find("if j ~= i and group_of[units[j]] == nil then", 1, true) ~= nil,
+check(objectives_source:find("if j ~= i and group_of[units[j]] == nil then", 1, true) ~= nil,
     "an eye already belonging to a tentacle can be matched into another one")
 -- Presence in the destructible system is the liveness signal, since that is how
 -- the game retires an eye.
-check(expeditions_source:find("if extension_map[member] ~= nil", 1, true) ~= nil,
+check(objectives_source:find("if extension_map[member] ~= nil", 1, true) ~= nil,
     "a tentacle's eyes are not checked against the destructible system itself")
 -- The marker rides the first eye still standing in registration order, so it
 -- moves only when the eye carrying it is destroyed. Checked against the source:
 -- registration order is hash order, so a rule taking the last standing eye
 -- instead agrees with this one whenever the carrier happens to be last, and a
 -- behavioural test cannot be relied on to tell them apart.
-check(expeditions_source:find("if carrier[group] == nil then", 1, true) ~= nil,
+check(objectives_source:find("if carrier[group] == nil then", 1, true) ~= nil,
     "the tentacle marker hops to another eye whenever any of them is destroyed")
 
 -- Through the shared claim, so the retirement, liveness and health gates that
 -- every other objective marker passes apply to these too -- a growth's
 -- tentacles and a Martyr's Skull riddle's alike.
-check(expeditions_source:find("_claim_mission_objective_unit(member, kind, enabled_by_kind, seen_units, true)", 1, true)
+check(objectives_source:find("_claim_mission_objective_unit(member, kind, enabled_by_kind, seen_units, true)", 1, true)
     ~= nil
-    and expeditions_source:find("_claim_mission_objective_unit(member, kind, GROWTH_EYE.riddle_kind, seen_units, true)",
+    and objectives_source:find("_claim_mission_objective_unit(member, kind, GROWTH_EYE.riddle_kind, seen_units, true)",
         1, true) ~= nil,
     "tentacle eyes must be claimed through the shared choke point, not tracked directly")
 
 -- Last of the passes: these units are in no objective system, so they must not
 -- take a classification away from one that is.
-local tentacle_call = expeditions_source:find(LF .. "            _track_growth_tentacle_units(", 1, true)
-local target_pass_call = expeditions_source:find("_track_mission_objective_units(MISSION_OBJECTIVE_TARGET_SYSTEM", 1, true)
+local tentacle_call = objectives_source:find(LF .. "            _track_growth_tentacle_units(", 1, true)
+local target_pass_call = objectives_source:find("_track_mission_objective_units(MISSION_OBJECTIVE_TARGET_SYSTEM", 1, true)
 
 check(tentacle_call ~= nil, "the objective scan never looks for growth tentacles")
 check(tentacle_call ~= nil and target_pass_call ~= nil and tentacle_call > target_pass_call,
     "the tentacle pass must run after the objective system's own passes")
 
 -- Quadratic in what the range test lets through, so it needs a ceiling.
-check(expeditions_source:find("candidate_limit", 1, true) ~= nil,
+check(objectives_source:find("candidate_limit", 1, true) ~= nil,
     "the tentacle pairwise pass is unbounded")
 
 -- An objective the game is itself marking is drawn however far away it is. The
 -- signal is the vanilla marker list, which is where the HUD gets its own
 -- markers, so the exemption lasts exactly as long as the marker the player can
 -- see and no approximation of it has to be maintained alongside.
-check(expeditions_source:find("function _objective_ignores_radar_range(unit)", 1, true) ~= nil,
+check(objectives_source:find("function _objective_ignores_radar_range(unit)", 1, true) ~= nil,
     "the range exemption has no accessor")
 -- One decision. Each objective system answers "is the HUD showing this" its own
 -- way and writes what it knows into one set, so a new objective type adds an
 -- answer rather than another branch here.
-check(select(2, expeditions_source:gsub("function _objective_ignores_radar_range", "")) == 1,
+check(select(2, objectives_source:gsub("function _objective_ignores_radar_range", "")) == 1,
     "the range exemption is decided in more than one place")
 -- Without the availability guard, a mission where the list cannot be read would
 -- fall back on a stale table from the previous one. And only while the game is
 -- drawing its marker: Mortis Trials marks arenas beyond an objective marker's
 -- reach. The second line's indentation is the exemption's own; the tentacles'
 -- guard shares the first.
-check(expeditions_source:find(
+check(objectives_source:find(
     "if _world_marker_units_available and _scratch_world_marker_units[unit] == true" .. LF
         .. "            and (_game_draws_marker_on == nil or _game_draws_marker_on(unit)) then", 1, true) ~= nil,
     "the exemption does not check that the marker list was readable")
 -- Neither a tentacle nor a scan target reaches the game's marker list, so both
 -- need their own system to answer for them, into the shared set.
-check(expeditions_source:find("return _scratch_objective_range_exempt[unit] == true", 1, true) ~= nil,
+check(objectives_source:find("return _scratch_objective_range_exempt[unit] == true", 1, true) ~= nil,
     "the systems that never reach the marker list have no way to exempt anything")
-check(expeditions_source:find("if growth_marked then", 1, true) ~= nil
-    and expeditions_source:find("_scratch_objective_range_exempt[member] = true", 1, true) ~= nil,
+check(objectives_source:find("if growth_marked then", 1, true) ~= nil
+    and objectives_source:find("_scratch_objective_range_exempt[member] = true", 1, true) ~= nil,
     "tentacles are exempted without checking that the game is marking their growth")
 -- A scan target the zone has selected and not yet had scanned is what the
 -- vanilla HUD draws its own marker from. Both claim paths, since the fallback
 -- one runs whenever the selection cannot be read.
-check(select(2, expeditions_source:gsub("_scratch_objective_range_exempt%[unit%] = true", "")) == 2,
+check(select(2, objectives_source:gsub("_scratch_objective_range_exempt%[unit%] = true", "")) == 2,
     "only one of the two scan target paths exempts what it claims")
 -- Rebuilt from nothing every scan and before any pass can write to it, so an
 -- exemption cannot outlive the state that earned it.
-check(expeditions_source:find("table_clear(_scratch_inactive_objective_units)", 1, true) ~= nil
-    and expeditions_source:find("table_clear(_scratch_objective_range_exempt)", 1, true)
-        < expeditions_source:find(LF .. "            _track_mission_objective_scan_zones(", 1, true),
+check(objectives_source:find("table_clear(_scratch_inactive_objective_units)", 1, true) ~= nil
+    and objectives_source:find("table_clear(_scratch_objective_range_exempt)", 1, true)
+        < objectives_source:find(LF .. "            _track_mission_objective_scan_zones(", 1, true),
     "the range exemption set is not cleared ahead of the passes that fill it")
 
 local bypass = tracking_source:find("_objective_ignores_radar_range(unit) then", 1, true)
@@ -984,13 +998,13 @@ check(bypass_block ~= nil and bypass_block:find("_is_mission_objective_marker_ki
 -- type's mapping, or the resolver's own fallback. The registry uses bare table
 -- keys, so being registered does not satisfy this.
 for _, kind in ipairs(KINDS) do
-    check(expeditions_source:find('"' .. kind .. '"', 1, true) ~= nil,
+    check(objectives_source:find('"' .. kind .. '"', 1, true) ~= nil,
         kind .. " is registered as a marker kind but no detection path can produce it")
 end
 
 -- And the reverse: nothing may be registered that is not in this spec's list,
 -- so a new kind cannot be added to the settings without being swept here.
-local registry = expeditions_source:match("local MISSION_OBJECTIVE_MARKER_KINDS = {(.-)" .. LF .. "    }")
+local registry = objectives_source:match("local MISSION_OBJECTIVE_MARKER_KINDS = {(.-)" .. LF .. "    }")
 
 check(registry ~= nil, "the marker kind registry is missing")
 
@@ -1016,17 +1030,17 @@ end
 -- it prevents is described; the override itself must stay for everything else.
 -- A container still holding its objective's luggable is exempt too, on the
 -- line just before the override.
-local start_marker_filter_head = expeditions_source:find(
+local start_marker_filter_head = objectives_source:find(
     "if keep" .. LF
         .. "                    and _scratch_objective_has_start_marker[objective_name] == true" .. LF
         .. "                    and _scratch_start_marker_by_unit[unit] ~= true" .. LF, 1, true)
-local start_marker_filter_tail = start_marker_filter_head and expeditions_source:find(
+local start_marker_filter_tail = start_marker_filter_head and objectives_source:find(
     "                    and LUGGABLE_HOLDER.holds[unit] ~= true" .. LF
         .. "                    and (not game_marks_unit" .. LF, start_marker_filter_head, true)
 local start_marker_filter = start_marker_filter_tail ~= nil
     and start_marker_filter_tail - start_marker_filter_head < 600
     or nil
-local actionable_filter = expeditions_source:find(
+local actionable_filter = objectives_source:find(
     "if keep and not game_marks_unit" .. LF
         .. "                    and has_actionable", 1, true)
 
@@ -1038,7 +1052,7 @@ check(actionable_filter ~= nil,
 -- Read per scan from the game's own list, so the override lasts exactly as long
 -- as the marker does. A latch here would keep a unit on the radar for the rest
 -- of the mission after one frame of being marked.
-check(expeditions_source:find("local game_marks_unit = _world_marker_units_available" .. LF
+check(objectives_source:find("local game_marks_unit = _world_marker_units_available" .. LF
     .. "                    and _scratch_world_marker_units[unit] ~= nil", 1, true) ~= nil,
     "the marker override is not read per unit per scan from the game's own list")
 
@@ -1091,6 +1105,7 @@ end
 
 check_declared_aliases(helpers_source, "Radar_runtime_helpers.lua")
 check_declared_aliases(expeditions_source, "Radar_expeditions.lua")
+check_declared_aliases(objectives_source, "Radar_mission_objectives.lua")
 check_declared_aliases(tracking_source, "Radar_tracking.lua")
 
 -- With no interaction marker from the game -- always the case for a scan target
@@ -1113,9 +1128,9 @@ check_local_use_before_declaration(helpers_source, "Radar_runtime_helpers.lua")
 -- A tentacle is three destructibles of one prefab. The level's own breakables
 -- near a growth can stand as close together as the eyes do, but not as three of
 -- one kind.
-check(expeditions_source:find("if _growth_eye_prefab(units[found[k]]) == prefab then", 1, true) ~= nil,
+check(objectives_source:find("if _growth_eye_prefab(units[found[k]]) == prefab then", 1, true) ~= nil,
     "a tentacle can be made of different prefabs, so decoration near a growth is drawn as one")
-check(expeditions_source:find("        table_clear(GROWTH_EYE.prefab_of)", 1, true) ~= nil,
+check(objectives_source:find("        table_clear(GROWTH_EYE.prefab_of)", 1, true) ~= nil,
     "the prefab cache keeps unit references into the next mission")
 -- Compared for equality, so a per-unit stand-in would make every unit its own
 -- prefab and no tentacle could ever be found.
@@ -1127,14 +1142,14 @@ check(helpers_source:find("function _safe_unit_prefab_name(unit)", 1, true) ~= n
 -- Of a bank of identical containers under a luggable objective only those
 -- holding a luggable are drawn, and only containers of a prefab found holding
 -- one are ever dropped, so the objective's other steps are untouched.
-check(expeditions_source:find('if rawget(objective, "_objective_type") == "luggable" then', 1, true) ~= nil,
+check(objectives_source:find('if rawget(objective, "_objective_type") == "luggable" then', 1, true) ~= nil,
     "luggable objectives are not recognised by their own type")
-check(expeditions_source:find("if prefab ~= nil and containers ~= nil and containers[prefab] == true then", 1, true)
+check(objectives_source:find("if prefab ~= nil and containers ~= nil and containers[prefab] == true then", 1, true)
     ~= nil,
     "containers are dropped without a prefab found holding a luggable")
-check(expeditions_source:find('and kind ~= "luggable_socket"', 1, true) ~= nil,
+check(objectives_source:find('and kind ~= "luggable_socket"', 1, true) ~= nil,
     "a socket is taken for a luggable")
-check(expeditions_source:find("        table_clear(LUGGABLE_HOLDER.prefab_of)", 1, true) ~= nil,
+check(objectives_source:find("        table_clear(LUGGABLE_HOLDER.prefab_of)", 1, true) ~= nil,
     "the container state keeps unit references into the next mission")
 
 -- Decided where every radar target is built, so the screen highlight follows:
@@ -1151,13 +1166,13 @@ check(tracking_source:find("and not socket_while_carrying", 1, true) ~= nil,
     "the sockets are hidden on another floor while a luggable is carried")
 -- A luggable is inside a container only while it is still where it was first
 -- seen: a carried one made a valve a container on lm_rails.
-check(expeditions_source:find("if x ~= nil and _luggable_unmoved(unit, x, y, z) then", 1, true) ~= nil,
+check(objectives_source:find("if x ~= nil and _luggable_unmoved(unit, x, y, z) then", 1, true) ~= nil,
     "a carried or dropped luggable makes whatever it is next to a container")
-check(expeditions_source:find("        table_clear(LUGGABLE_HOLDER.origin)", 1, true) ~= nil,
+check(objectives_source:find("        table_clear(LUGGABLE_HOLDER.origin)", 1, true) ~= nil,
     "where the luggables were first seen is kept into the next mission")
 -- A generic interactable the game has marked as an objective follows that
 -- marker, and only an objective marker counts, never the prompt.
-check(expeditions_source:find(
+check(objectives_source:find(
     'if kind == "mission_objective_other" and interactee_map ~= nil and interactee_map[unit] ~= nil', 1, true) ~= nil,
     "the game's objective marker is followed beyond generic interactables")
 check(helpers_source:find('if marker.type == "objective" then', 1, true) ~= nil,
@@ -1174,10 +1189,11 @@ check(socket_kind_at ~= nil and kind_enabled_at ~= nil and socket_kind_at < kind
     "a socket's setting is read before it is drawn as what goes into it")
 check(tracking_source:find("if is_socket then", 1, true) ~= nil,
     "a socket drawn as an objective step lost the range rule while a luggable is carried")
-check(expeditions_source:find("        table_clear(LUGGABLE_HOLDER.socket_objective)", 1, true) ~= nil,
+check(objectives_source:find("        table_clear(LUGGABLE_HOLDER.socket_objective)", 1, true) ~= nil,
     "the sockets' objectives keep unit references into the next mission")
 
 check_local_use_before_declaration(expeditions_source, "Radar_expeditions.lua")
+check_local_use_before_declaration(objectives_source, "Radar_mission_objectives.lua")
 check_local_use_before_declaration(tracking_source, "Radar_tracking.lua")
 
 if #problems > 0 then

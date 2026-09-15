@@ -1,6 +1,5 @@
 local mod = get_mod("Radar")
 local UIWidget = require("scripts/managers/ui/ui_widget")
-
 local Color = Color
 local Gui = Gui
 local Quaternion = Quaternion
@@ -24,9 +23,12 @@ local math_sin = math.sin
 local math_sqrt = math.sqrt
 local math_tan = math.tan
 local math_huge = math.huge
-
 local Gui_rect = Gui and Gui.rect
 local Quaternion_yaw = Quaternion and Quaternion.yaw
+
+-- ----------------------------------------------------------------------------
+-- Constants
+-- ----------------------------------------------------------------------------
 
 local function _widget_color(a, r, g, b)
     return { a, r, g, b }
@@ -48,6 +50,56 @@ local AUSPEX_FRAME_WIDGET_COLOR = { 210, 0, 255, 0 }
 local AUSPEX_DOTTED_FRAME_WIDGET_COLOR = { 190, 0, 255, 0 }
 local AUSPEX_INNER_GLOW_WIDGET_COLOR = { 80, 0, 255, 0 }
 local FULL_CIRCLE = math_pi * 2
+local AUSPEX_GUIDE_OPTIONS_WITH_OUTLINE = {
+    background_inset = 3,
+    sweep_inset = 3,
+    background_z_offset = 1,
+    draw_noise = false,
+    draw_scan_noise = false,
+    background_color = RADAR_OUTLINE_WIDGET_COLOR,
+    sweep_color = RADAR_OUTLINE_WIDGET_COLOR,
+}
+local AUSPEX_GUIDE_OPTIONS_NO_OUTLINE = {
+    background_inset = 0,
+    sweep_inset = 0,
+    background_z_offset = 1,
+    draw_noise = false,
+    draw_scan_noise = false,
+    background_color = RADAR_OUTLINE_WIDGET_COLOR,
+    sweep_color = RADAR_OUTLINE_WIDGET_COLOR,
+}
+local AUSPEX_FRAME_OPTIONS_WITH_OUTLINE = {
+    background_inset = 5,
+    sweep_inset = 5,
+}
+local AUSPEX_FRAME_OPTIONS_NO_OUTLINE = {
+    background_inset = 0,
+    sweep_inset = 0,
+}
+local AUSPEX_FRAME_OPTIONS_WITH_OUTLINE_BACKGROUND = {
+    background_inset = 5,
+    sweep_inset = 5,
+    material_layers = "background",
+}
+local AUSPEX_FRAME_OPTIONS_NO_OUTLINE_BACKGROUND = {
+    background_inset = 0,
+    sweep_inset = 0,
+    material_layers = "background",
+}
+local AUSPEX_FRAME_OPTIONS_WITH_OUTLINE_EFFECTS = {
+    background_inset = 5,
+    sweep_inset = 5,
+    material_layers = "effects",
+}
+local AUSPEX_FRAME_OPTIONS_NO_OUTLINE_EFFECTS = {
+    background_inset = 0,
+    sweep_inset = 0,
+    material_layers = "effects",
+}
+
+-- ----------------------------------------------------------------------------
+-- Drawing helpers
+-- ----------------------------------------------------------------------------
 
 local function _widget_to_color(color)
     if not color then
@@ -656,8 +708,6 @@ local function _view_cone_endpoint_square(center_x, center_y, left, top, right, 
     return center_x + dx * best_t, center_y + dy * best_t
 end
 
-local _draw_auspex_material_layers = nil
-
 local function _apply_layer_rotation(style, angle)
     if not style then
         return
@@ -679,59 +729,102 @@ local function _apply_layer_rotation(style, angle)
     style.angle = angle or 0
 end
 
-local AUSPEX_GUIDE_OPTIONS_WITH_OUTLINE = {
-    background_inset = 3,
-    sweep_inset = 3,
-    background_z_offset = 1,
-    draw_noise = false,
-    draw_scan_noise = false,
-    background_color = RADAR_OUTLINE_WIDGET_COLOR,
-    sweep_color = RADAR_OUTLINE_WIDGET_COLOR,
-}
+local function _apply_frame_layer_style(style, x, y, z, size, color)
+    if not style then
+        return
+    end
 
-local AUSPEX_GUIDE_OPTIONS_NO_OUTLINE = {
-    background_inset = 0,
-    sweep_inset = 0,
-    background_z_offset = 1,
-    draw_noise = false,
-    draw_scan_noise = false,
-    background_color = RADAR_OUTLINE_WIDGET_COLOR,
-    sweep_color = RADAR_OUTLINE_WIDGET_COLOR,
-}
+    local layer_offset = style.offset
+    local layer_size = style.size
+    local rounded_x = math_floor((tonumber(x) or 0) + 0.5)
+    local rounded_y = math_floor((tonumber(y) or 0) + 0.5)
+    local rounded_z = math_floor((tonumber(z) or 0) + 0.5)
+    local rounded_size = math_max(1, math_floor((tonumber(size) or 0) + 0.5))
 
-local AUSPEX_FRAME_OPTIONS_WITH_OUTLINE = {
-    background_inset = 5,
-    sweep_inset = 5,
-}
+    layer_offset[1] = rounded_x
+    layer_offset[2] = rounded_y
+    layer_offset[3] = rounded_z
+    layer_size[1] = rounded_size
+    layer_size[2] = rounded_size
+    style.color = color or WHITE_WIDGET_COLOR
+end
 
-local AUSPEX_FRAME_OPTIONS_NO_OUTLINE = {
-    background_inset = 0,
-    sweep_inset = 0,
-}
+local function _draw_auspex_material_layers(self, ui_renderer, x, y, z, size, camera_rotation, options)
+    local frame_widget = self and self._frame_widget
+    if not frame_widget then
+        return
+    end
 
-local AUSPEX_FRAME_OPTIONS_WITH_OUTLINE_BACKGROUND = {
-    background_inset = 5,
-    sweep_inset = 5,
-    material_layers = "background",
-}
+    options = options or {}
 
-local AUSPEX_FRAME_OPTIONS_NO_OUTLINE_BACKGROUND = {
-    background_inset = 0,
-    sweep_inset = 0,
-    material_layers = "background",
-}
+    local animated_sweep_enabled = mod:get("auspex_animated_sweep") ~= false
+    local camera_yaw = _safe_yaw(camera_rotation)
+    local rotation_angle = camera_yaw and -camera_yaw or 0
+    local background_inset = options.background_inset or 0
+    local noise_inset = options.noise_inset or 0
+    local scan_noise_inset = options.scan_noise_inset or noise_inset
+    local sweep_inset = options.sweep_inset or background_inset
+    local background_size = math_max(1, size - background_inset * 2)
+    local noise_size = math_max(1, size - noise_inset * 2)
+    local scan_noise_size = math_max(1, size - scan_noise_inset * 2)
+    local sweep_size = math_max(1, size - sweep_inset * 2)
+    local material_layers = options.material_layers
+    local draw_background = material_layers ~= "effects"
+    local effects_enabled = material_layers ~= "background"
+    local draw_noise = effects_enabled and options.draw_noise ~= false
+    local draw_scan_noise = effects_enabled and options.draw_scan_noise ~= false
 
-local AUSPEX_FRAME_OPTIONS_WITH_OUTLINE_EFFECTS = {
-    background_inset = 5,
-    sweep_inset = 5,
-    material_layers = "effects",
-}
+    frame_widget.content.background_material = draw_background and AUSPEX_BACKGROUND_MATERIAL or nil
+    frame_widget.content.noise_material = draw_noise and AUSPEX_BACKGROUND_NOISE_MATERIAL or nil
+    frame_widget.content.scan_noise_material = draw_scan_noise and AUSPEX_SCAN_NOISE_MATERIAL or nil
+    frame_widget.content.sweep_material = effects_enabled and animated_sweep_enabled and AUSPEX_SWEEP_MATERIAL or nil
 
-local AUSPEX_FRAME_OPTIONS_NO_OUTLINE_EFFECTS = {
-    background_inset = 0,
-    sweep_inset = 0,
-    material_layers = "effects",
-}
+    if draw_background then
+        _apply_frame_layer_style(
+            frame_widget.style.background,
+            x + background_inset,
+            y + background_inset,
+            z + (options.background_z_offset or 0),
+            background_size,
+            options.background_color or _configured_widget_color("auspex_background", AUSPEX_BACKGROUND_WIDGET_COLOR)
+        )
+        _apply_layer_rotation(frame_widget.style.background, rotation_angle)
+    end
+    if draw_noise then
+        _apply_frame_layer_style(
+            frame_widget.style.noise,
+            x + noise_inset,
+            y + noise_inset,
+            z + 1,
+            noise_size,
+            options.noise_color or _configured_widget_color("auspex_noise", AUSPEX_BACKGROUND_NOISE_WIDGET_COLOR)
+        )
+    end
+    if draw_scan_noise then
+        _apply_frame_layer_style(
+            frame_widget.style.scan_noise,
+            x + scan_noise_inset,
+            y + scan_noise_inset,
+            z + 2,
+            scan_noise_size,
+            options.scan_noise_color or _configured_widget_color("auspex_scan_noise", AUSPEX_SCAN_NOISE_WIDGET_COLOR)
+        )
+    end
+    if effects_enabled then
+        _apply_frame_layer_style(
+            frame_widget.style.sweep,
+            x + sweep_inset,
+            y + sweep_inset,
+            z + 3,
+            sweep_size,
+            animated_sweep_enabled and (options.sweep_color or _configured_widget_color("auspex_sweep", AUSPEX_SWEEP_WIDGET_COLOR))
+            or WHITE_WIDGET_COLOR
+        )
+        _apply_layer_rotation(frame_widget.style.sweep, rotation_angle)
+    end
+
+    UIWidget.draw(frame_widget, ui_renderer)
+end
 
 local function _draw_radar_guides(self, ui_renderer, x, y, z, size, is_circle, camera_rotation, phase)
     local guide_style = mod.get_radar_guides and mod:get_radar_guides() or "crosshair"
@@ -885,103 +978,6 @@ local function _draw_radar_frame_circle(ui_renderer, x, y, z, size, outline_styl
     elseif outline_style == "dotted" then
         _draw_circle_outline_dotted(ui_renderer, center_x, center_y, z + 1, radius, outline_color)
     end
-end
-
-local function _apply_frame_layer_style(style, x, y, z, size, color)
-    if not style then
-        return
-    end
-
-    local layer_offset = style.offset
-    local layer_size = style.size
-    local rounded_x = math_floor((tonumber(x) or 0) + 0.5)
-    local rounded_y = math_floor((tonumber(y) or 0) + 0.5)
-    local rounded_z = math_floor((tonumber(z) or 0) + 0.5)
-    local rounded_size = math_max(1, math_floor((tonumber(size) or 0) + 0.5))
-
-    layer_offset[1] = rounded_x
-    layer_offset[2] = rounded_y
-    layer_offset[3] = rounded_z
-    layer_size[1] = rounded_size
-    layer_size[2] = rounded_size
-    style.color = color or WHITE_WIDGET_COLOR
-end
-
-_draw_auspex_material_layers = function(self, ui_renderer, x, y, z, size, camera_rotation, options)
-    local frame_widget = self and self._frame_widget
-    if not frame_widget then
-        return
-    end
-
-    options = options or {}
-
-    local animated_sweep_enabled = mod:get("auspex_animated_sweep") ~= false
-    local camera_yaw = _safe_yaw(camera_rotation)
-    local rotation_angle = camera_yaw and -camera_yaw or 0
-    local background_inset = options.background_inset or 0
-    local noise_inset = options.noise_inset or 0
-    local scan_noise_inset = options.scan_noise_inset or noise_inset
-    local sweep_inset = options.sweep_inset or background_inset
-    local background_size = math_max(1, size - background_inset * 2)
-    local noise_size = math_max(1, size - noise_inset * 2)
-    local scan_noise_size = math_max(1, size - scan_noise_inset * 2)
-    local sweep_size = math_max(1, size - sweep_inset * 2)
-    local material_layers = options.material_layers
-    local draw_background = material_layers ~= "effects"
-    local effects_enabled = material_layers ~= "background"
-    local draw_noise = effects_enabled and options.draw_noise ~= false
-    local draw_scan_noise = effects_enabled and options.draw_scan_noise ~= false
-
-    frame_widget.content.background_material = draw_background and AUSPEX_BACKGROUND_MATERIAL or nil
-    frame_widget.content.noise_material = draw_noise and AUSPEX_BACKGROUND_NOISE_MATERIAL or nil
-    frame_widget.content.scan_noise_material = draw_scan_noise and AUSPEX_SCAN_NOISE_MATERIAL or nil
-    frame_widget.content.sweep_material = effects_enabled and animated_sweep_enabled and AUSPEX_SWEEP_MATERIAL or nil
-
-    if draw_background then
-        _apply_frame_layer_style(
-            frame_widget.style.background,
-            x + background_inset,
-            y + background_inset,
-            z + (options.background_z_offset or 0),
-            background_size,
-            options.background_color or _configured_widget_color("auspex_background", AUSPEX_BACKGROUND_WIDGET_COLOR)
-        )
-        _apply_layer_rotation(frame_widget.style.background, rotation_angle)
-    end
-    if draw_noise then
-        _apply_frame_layer_style(
-            frame_widget.style.noise,
-            x + noise_inset,
-            y + noise_inset,
-            z + 1,
-            noise_size,
-            options.noise_color or _configured_widget_color("auspex_noise", AUSPEX_BACKGROUND_NOISE_WIDGET_COLOR)
-        )
-    end
-    if draw_scan_noise then
-        _apply_frame_layer_style(
-            frame_widget.style.scan_noise,
-            x + scan_noise_inset,
-            y + scan_noise_inset,
-            z + 2,
-            scan_noise_size,
-            options.scan_noise_color or _configured_widget_color("auspex_scan_noise", AUSPEX_SCAN_NOISE_WIDGET_COLOR)
-        )
-    end
-    if effects_enabled then
-        _apply_frame_layer_style(
-            frame_widget.style.sweep,
-            x + sweep_inset,
-            y + sweep_inset,
-            z + 3,
-            sweep_size,
-            animated_sweep_enabled and (options.sweep_color or _configured_widget_color("auspex_sweep", AUSPEX_SWEEP_WIDGET_COLOR))
-            or WHITE_WIDGET_COLOR
-        )
-        _apply_layer_rotation(frame_widget.style.sweep, rotation_angle)
-    end
-
-    UIWidget.draw(frame_widget, ui_renderer)
 end
 
 local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera_rotation, phase)

@@ -14,9 +14,12 @@ local math_huge = math.huge
 local math_sqrt = math.sqrt
 local string_format = string.format
 local os_clock = os and os.clock or nil
-
 local Gui_triangle = Gui and Gui.triangle
 local Quaternion_forward = Quaternion and Quaternion.forward
+
+-- ----------------------------------------------------------------------------
+-- Constants
+-- ----------------------------------------------------------------------------
 
 local NAVMESH_CURRENT_FALLBACK_COLOR = { 80, 101, 133, 96 }
 local NAVMESH_BELOW_FALLBACK_COLOR = { 55, 120, 98, 76 }
@@ -32,6 +35,11 @@ local SELECTION_RANGE_SLACK = 4
 local SQUARE_RANGE_MULT = 1.4143
 local DRAW_FAILURE_COOLDOWN = 5
 local METRICS_LOG_INTERVAL = 5
+
+-- ----------------------------------------------------------------------------
+-- Mutable state
+-- ----------------------------------------------------------------------------
+
 local _visible = {}
 local _visible_count = 0
 local _sel_revision = -1
@@ -57,6 +65,11 @@ local _metric_band_below = 0
 local _metric_band_current = 0
 local _metric_band_above = 0
 local _next_metrics_log_t = 0
+local _was_active = false
+
+-- ----------------------------------------------------------------------------
+-- Helpers
+-- ----------------------------------------------------------------------------
 
 local function _is_finite(v)
     return type(v) == "number" and v == v and v ~= math_huge and v ~= -math_huge
@@ -430,9 +443,11 @@ local function _draw_geometry(ui_renderer, t, player_pos, rotation, center_x, ce
     end
 end
 
-local RadarNavmesh = {}
+-- ----------------------------------------------------------------------------
+-- Interface
+-- ----------------------------------------------------------------------------
 
-local _was_active = false
+local RadarNavmesh = {}
 
 function RadarNavmesh.is_active(suppressed)
     local source = mod.get_map_geometry_source and mod:get_map_geometry_source() or "off"

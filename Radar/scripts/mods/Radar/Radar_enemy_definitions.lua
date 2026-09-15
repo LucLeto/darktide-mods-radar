@@ -80,32 +80,6 @@ return function(env)
         pickup_stolen_rations = { 255, 150, 190, 60 },
     }
 
-    mod._next_scan_t = 0
-    mod._tracked_units = {}
-    mod._tracked_points = {}
-    mod._logged_units = {}
-    mod._radar_targets = {}
-    mod._radar_snapshot = nil
-    mod._gameplay_run = false
-    mod._last_update_t = nil
-    mod._last_scan_signature = nil
-    mod._last_block_signature = nil
-    mod._dark_rites_marker_scan_cache_valid = false
-    mod._dark_rites_marker_scan_allowed = true
-    mod._dark_rites_marker_cached_circumstance_name = nil
-    mod._dark_rites_marker_cached_mission_name = nil
-    mod._screen_highlight_targets = {}
-    mod._unclustered_radar_targets = {}
-    mod._highlight_source_radar_targets = {}
-    mod._idol_destroyed_collectible_keys = {}
-    mod._idol_destroyed_units = {}
-    mod._martyr_skull_riddle_solved_by_mission = {}
-    mod._martyr_skull_riddle_fallback_state_by_position = {}
-    mod._last_safe_zone_section_index = nil
-    mod._last_expedition_in_safe_zone = nil
-    mod._player_smart_tag_generation = 0
-    mod._player_smart_tag_state_by_id = {}
-
     MONSTROSITY_BREEDS = {
         chaos_daemonhost = true,
         chaos_beast_of_nurgle = true,
@@ -481,7 +455,7 @@ return function(env)
         return _enemy_radar_default_background_size(category) or _enemy_radar_default_icon_size(category)
     end
 
-    function _enemy_radar_def(category, icon, icon_color, background_color, setting_id, extra)
+    local function _enemy_radar_def(category, icon, icon_color, background_color, setting_id, extra)
         local def = extra or {}
         local default_icon_size = _enemy_radar_default_icon_size(category)
         local default_background_size = background_color and _enemy_radar_default_background_size(category) or nil

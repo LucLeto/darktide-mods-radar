@@ -1,7 +1,6 @@
 local mod = get_mod("Radar")
 local StrikemapCompatibility = mod:io_dofile("Radar/scripts/mods/Radar/compatibility/Radar_strikemap")
 local _clip_and_emit = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_triangle_clipper")
-
 local Color = Color
 local Gui = Gui
 local Quaternion = Quaternion
@@ -19,11 +18,14 @@ local math_sqrt = math.sqrt
 local string_format = string.format
 local string_gmatch = string.gmatch
 local string_match = string.match
-
 local Gui_triangle = Gui and Gui.triangle
 local Quaternion_forward = Quaternion and Quaternion.forward
 local Vector3_x = Vector3 and Vector3.x
 local Vector3_y = Vector3 and Vector3.y
+
+-- ----------------------------------------------------------------------------
+-- Constants
+-- ----------------------------------------------------------------------------
 
 local TRIANGLE_STRIDE = 7
 local CURRENT_FLOOR_HALF_HEIGHT = 2.5
@@ -36,7 +38,6 @@ local OVERVIEW_RANGE = 30
 local GRID_CELL_HASH_OFFSET = 4096
 local GRID_CELL_HASH_STRIDE = 8192
 local CULL_RANGE_FACTOR = 1.4143
-
 local CONTOUR_STRIDE = 5
 local STAIR_STRIDE = 6
 local HATCH_STRIDE = 5
@@ -72,6 +73,10 @@ local HATCH_ALPHA_MULT = 0.9
 local SLOPE_ALPHA_MULT = 1.3
 local SLOPE_BRIGHTEN = 0.2
 
+-- ----------------------------------------------------------------------------
+-- Mutable state
+-- ----------------------------------------------------------------------------
+
 local _grid = {
     context = nil,
     revision = nil,
@@ -88,7 +93,6 @@ local _grid = {
     max_cy = -1,
     cell_count = 0,
 }
-
 local _vectors = {
     context = nil,
     revision = nil,
@@ -99,12 +103,17 @@ local _vectors = {
     hatches = nil,
     slopes = nil,
 }
-
 local _view = {}
 local _style = {}
-
 local _diag_context = nil
 local _diag_revision = nil
+local _poly_ax, _poly_ay = {}, {}
+local _poly_bx, _poly_by = {}, {}
+local _triangle_supported = nil
+
+-- ----------------------------------------------------------------------------
+-- Helpers
+-- ----------------------------------------------------------------------------
 
 local function _reset_grid()
     _grid.context = nil
@@ -132,13 +141,6 @@ local function _reset_vectors()
     _vectors.stairs = nil
     _vectors.hatches = nil
     _vectors.slopes = nil
-end
-
-mod._strikemap_geometry_renderer_reset = function()
-    _reset_grid()
-    _reset_vectors()
-    _diag_context = nil
-    _diag_revision = nil
 end
 
 local function _forward_xy(rotation)
@@ -286,9 +288,6 @@ local function _parse_cell(cell_key)
     return bucket
 end
 
-local _poly_ax, _poly_ay = {}, {}
-local _poly_bx, _poly_by = {}, {}
-
 local function _clip_edge(src_x, src_y, src_count, dst_x, dst_y, edge, limit)
     local count = 0
     local prev_x = src_x[src_count]
@@ -384,8 +383,6 @@ local function _clip_triangle_to_square(px1, py1, px2, py2, px3, py3, limit)
 
     return count
 end
-
-local _triangle_supported = nil
 
 local function _probe_triangle(gui)
     if not Gui_triangle or not Vector3 then
@@ -1335,6 +1332,10 @@ local function _log_revision_diagnostics(context, vector_context, counts, revisi
         _vectors.cell_count))
 end
 
+-- ----------------------------------------------------------------------------
+-- Interface
+-- ----------------------------------------------------------------------------
+
 local RadarStrikemapGeometry = {}
 
 RadarStrikemapGeometry.is_active = function(t)
@@ -1418,6 +1419,13 @@ RadarStrikemapGeometry.draw = function(ui_renderer, snapshot, center_x, center_y
     if mod:get("debug_mode") == true then
         _log_revision_diagnostics(context, vector_context, vector_counts, revision)
     end
+end
+
+mod._strikemap_geometry_renderer_reset = function()
+    _reset_grid()
+    _reset_vectors()
+    _diag_context = nil
+    _diag_revision = nil
 end
 
 return RadarStrikemapGeometry

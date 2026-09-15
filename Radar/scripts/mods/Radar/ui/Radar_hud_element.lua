@@ -9,7 +9,6 @@ local RadarHudWidgets = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_hud_wid
 local RadarNavmesh = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_navmesh_renderer")
 local RadarStrikemapGeometry = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_strikemap_geometry")
 local RadarColorSettings = mod:io_dofile("Radar/scripts/mods/Radar/Radar_color_settings")
-
 local Color = Color
 local Vector3 = Vector3
 local pcall = pcall
@@ -30,6 +29,7 @@ local string_format = string.format
 local string_len = string.len
 local string_lower = string.lower
 local string_sub = string.sub
+
 local table_clear = table.clear or function(t)
     for k in pairs(t) do
         t[k] = nil
@@ -39,9 +39,17 @@ end
 local UIRenderer_begin_pass = UIRenderer.begin_pass
 local UIRenderer_draw_text = UIRenderer.draw_text
 local UIRenderer_end_pass = UIRenderer.end_pass
-
 local HudElementRadar = class("HudElementRadar", "HudElementBase")
 
+-- ----------------------------------------------------------------------------
+-- Constants and static presentation data
+-- ----------------------------------------------------------------------------
+
+local function _widget_color(a, r, g, b)
+    return { a, r, g, b }
+end
+
+local WHITE_WIDGET_COLOR = { 255, 255, 255, 255 }
 local Definitions = {
     scenegraph_definition = {
         screen = {
@@ -52,12 +60,6 @@ local Definitions = {
     },
     widget_definitions = {},
 }
-
-local LogBuckets = {
-    visuals = {},
-    draws = {},
-}
-
 local PLAYER_CLASS_ICONS = {
     veteran = "content/ui/materials/icons/classes/veteran",
     zealot = "content/ui/materials/icons/classes/zealot",
@@ -67,14 +69,12 @@ local PLAYER_CLASS_ICONS = {
     broker = "content/ui/materials/icons/classes/broker",
     cryptic = "content/ui/materials/icons/classes/cryptic",
 }
-
 local PLAYER_STATE_ICONS = {
     dead = "content/ui/materials/icons/player_states/dead",
     rescue = "content/ui/materials/hud/interactions/icons/help",
     captured = "content/ui/materials/icons/player_states/incapacitated",
     luggable = "content/ui/materials/icons/player_states/lugged",
 }
-
 local PLAYER_SMART_TAG_PRESENTATIONS = {
     location_attention = {
         icon = "content/ui/materials/hud/interactions/icons/attention",
@@ -93,7 +93,6 @@ local PLAYER_SMART_TAG_PRESENTATIONS = {
         size = 15,
     },
 }
-
 local EXPEDITION_OBJECTIVE_KINDS = {
     expedition_loot_converter = true,
     expedition_objective_opportunity = true,
@@ -102,14 +101,12 @@ local EXPEDITION_OBJECTIVE_KINDS = {
     expedition_objective_extraction = true,
     expedition_objective_arrival = true,
 }
-
 local EXPEDITION_MARKED_RING_MATERIAL = "content/ui/materials/backgrounds/scanner/scanner_map_marker"
 local EXPEDITION_MARKED_RING_SIZE_RATIO = 128 / 84
 local MEDICAL_CRATE_RADIUS_MATERIAL = "content/ui/materials/backgrounds/scanner/scanner_drill_wireframe_small"
 local MEDICAL_CRATE_HEALING_RADIUS = 4
 local MEDICAL_CRATE_RADIUS_WIDGET_COLOR = { 140, 38, 205, 26 }
 local PLAYER_BRIGHT_SLOT_COLORS = UISettings.player_bright_slot_colors or UISettings.player_slot_colors
-local PLAYER_COMPANION_VISUAL_CACHE = {}
 local PLAYER_COMPANION_PRESENTATIONS = {
     player_companion_dog = {
         glyph = "\238\129\145", -- U+E051, official companion glyph
@@ -147,24 +144,6 @@ local MARKED_RING_COLOR_FIELD_BY_INDEX = {
     "part_4_color",
 }
 
-local function _log_once(bucket, key, message)
-    if mod:get("debug_mode") ~= true then
-        return
-    end
-
-    if bucket[key] then
-        return
-    end
-
-    bucket[key] = true
-    mod:info(message)
-end
-
-local function _widget_color(a, r, g, b)
-    return { a, r, g, b }
-end
-
-local WHITE_WIDGET_COLOR = { 255, 255, 255, 255 }
 -- Matches the vanilla on-screen objective marker so the radar reads as the same
 -- family. Only a fallback: configured marker colors take precedence.
 local VANILLA_OBJECTIVE_WIDGET_COLOR = RadarColorSettings.vanilla_objective_color
@@ -176,11 +155,13 @@ local VANILLA_OBJECTIVE_WIDGET_COLOR = RadarColorSettings.vanilla_objective_colo
 -- own art inside the diamond. The icon is sized as a ratio of the frame, so the
 -- fit survives the icon-scale slider.
 local OBJECTIVE_FRAME_ICON = "content/ui/materials/hud/interactions/frames/point_of_interest_top"
+
 -- The plate the game draws behind that frame. Opt-in per marker: naming it is
 -- what turns the extra layer on, so enemy markers, which build their own
 -- coloured background into the base layer, are untouched.
 local OBJECTIVE_PLATE_ICON = "content/ui/materials/hud/interactions/frames/point_of_interest_back"
 local OBJECTIVE_FRAME_SIZE = 26
+
 -- The frame is shared by the whole family; the icon inside it is not. The
 -- game's icons are not normalised -- each was drawn to sit differently inside
 -- its own box -- so one number cannot fit them all, and a category has to be
@@ -203,12 +184,12 @@ local OBJECTIVE_ICON_SIZE_BY_KIND = {
     -- the frame than the rest and still matches the game's own marker.
     mission_objective_other = 20,
 }
-
 local RADAR_OUTLINE_WIDGET_COLOR = { 255, 213, 226, 206 }
 local RADAR_LEGEND_INDICATOR_WIDGET_COLOR = { 255, 213, 226, 206 }
 local MARKER_VALUE_TEXT_WIDGET_COLOR = { 255, 255, 225, 0 }
 local BOSS_DISTANCE_TEXT_WIDGET_COLOR = MARKER_VALUE_TEXT_WIDGET_COLOR
 local VERTICAL_ARROW_WIDGET_COLOR = { 255, 255, 255, 255 }
+
 -- Where the arrow sits and how big it is are two separate proportions of the
 -- marker, so one can be tuned without moving the other. They used to be pixel
 -- sums -- `size * 0.45 + 1` for the arrow, and half of that plus three for the
@@ -221,164 +202,16 @@ local VERTICAL_ARROW_WIDGET_COLOR = { 255, 255, 255, 255 }
 -- is the placement, and it is what the pixel sums worked out to at the default
 -- size, so it is unchanged from the geometry that was calibrated by eye.
 local VERTICAL_ARROW_CENTRE_RATIO = 0.885
+
 -- The arrow reads as a secondary indicator, not a second marker: at the 26px
 -- objective frame this is a 9px arrow against a 12px icon inside a 26px
 -- diamond. Sizing it off the centre ratio's own arithmetic, as an overlap did,
 -- meant shrinking the arrow also walked it outwards.
 local VERTICAL_ARROW_SIZE_RATIO = 0.34
+
 -- Below this the arrow stops reading as an arrow at all.
 local VERTICAL_ARROW_MIN_SIZE = 6
 local RADAR_ZOOM_INDICATOR_WIDGET_COLOR = { 210, 0, 255, 0 }
-
-local function _any_to_widget_color(color, fallback)
-    local src = color or fallback or WHITE_WIDGET_COLOR
-
-    return {
-        src[1] or src.a or 255,
-        src[2] or src.r or 255,
-        src[3] or src.g or 255,
-        src[4] or src.b or 255,
-    }
-end
-
-local function _style_color_table(style)
-    if style._radar_private_color ~= true then
-        style.color = _any_to_widget_color(style.color, WHITE_WIDGET_COLOR)
-        style._radar_private_color = true
-    end
-
-    return style.color
-end
-
-local function _copy_into_widget_color(destination, color, fallback)
-    local src = color or fallback or WHITE_WIDGET_COLOR
-
-    destination[1] = src[1] or src.a or 255
-    destination[2] = src[2] or src.r or 255
-    destination[3] = src[3] or src.g or 255
-    destination[4] = src[4] or src.b or 255
-
-    return destination
-end
-
-local function _configured_marker_color(kind, fallback)
-    local get_marker_color = mod.get_marker_color
-
-    return get_marker_color and get_marker_color(mod, kind, fallback) or fallback
-end
-
-local function _marker_color_kind(kind, meta)
-    local get_marker_color_kind = mod.get_marker_color_kind
-
-    return get_marker_color_kind and get_marker_color_kind(mod, kind, meta) or kind
-end
-
-local function _configured_marker_background_color(kind, fallback)
-    local get_marker_background_color = mod.get_marker_background_color
-
-    return get_marker_background_color and get_marker_background_color(mod, kind, fallback) or fallback
-end
-
-local function _configured_enemy_icon_color(kind, fallback)
-    local get_enemy_radar_icon_color = mod.get_enemy_radar_icon_color
-
-    return get_enemy_radar_icon_color and get_enemy_radar_icon_color(mod, kind, fallback) or fallback
-end
-
-local function _configured_enemy_background_color(kind, fallback)
-    local get_enemy_radar_background_color = mod.get_enemy_radar_background_color
-
-    return get_enemy_radar_background_color and get_enemy_radar_background_color(mod, kind, fallback) or fallback
-end
-
-local function _configured_radar_color(prefix, fallback)
-    local get_radar_color = mod.get_radar_color
-
-    return get_radar_color and get_radar_color(mod, prefix, fallback) or fallback
-end
-
-local function _with_alpha_widget(color, alpha)
-    local c = _any_to_widget_color(color)
-    c[1] = alpha or c[1] or 255
-    return c
-end
-
-local function _scaled_alpha(alpha, scale)
-    local base_alpha = tonumber(alpha) or 0
-    local alpha_scale = tonumber(scale) or 1
-
-    return math_max(0, math_min(255, math_floor(base_alpha * alpha_scale + 0.5)))
-end
-
-local function _normalized_radar_style(value)
-    value = tostring(value or "square")
-
-    if value ~= "circle" and value ~= "auspex" then
-        value = "square"
-    end
-
-    return value
-end
-
-local function _current_radar_style()
-    local value = mod:get("radar_style")
-
-    if value == nil and mod.get_radar_style then
-        value = mod:get_radar_style()
-    end
-
-    return _normalized_radar_style(value)
-end
-
-local function _is_finite_number(v)
-    return type(v) == "number" and v == v and v ~= math_huge and v ~= -math_huge
-end
-
-local function _ui_space_size()
-    local width = 1920.0
-    local height = 1080.0
-
-    if RESOLUTION_LOOKUP and RESOLUTION_LOOKUP.width and RESOLUTION_LOOKUP.height then
-        local inverse_scale = RESOLUTION_LOOKUP.inverse_scale or 1
-        width = RESOLUTION_LOOKUP.width * inverse_scale
-        height = RESOLUTION_LOOKUP.height * inverse_scale
-    end
-
-    return width, height
-end
-
-local function _sync_screen_scenegraph(self)
-    local scenegraph = self and self._ui_scenegraph
-    local screen = scenegraph and scenegraph.screen
-
-    if not screen then
-        return
-    end
-
-    local width, height = _ui_space_size()
-    width = math_max(1, math_floor(width + 0.5))
-    height = math_max(1, math_floor(height + 0.5))
-
-    screen.scale = "fit"
-
-    local size = screen.size
-    if size then
-        size[1] = width
-        size[2] = height
-    else
-        screen.size = { width, height }
-    end
-
-    local position = screen.position
-    if position then
-        position[1] = 0
-        position[2] = 0
-        position[3] = 0
-    else
-        screen.position = { 0, 0, 0 }
-    end
-end
-
 local TAINTED_SKULL_LIVE_EVENT_ICON = "content/ui/materials/icons/currencies/live_events/skulls_live_event_small"
 local SAINTS_LIVE_EVENT_SMALL_ICON = "content/ui/materials/icons/currencies/live_events/saints_live_event_small"
 local SAINTS_LIVE_EVENT_MEDIUM_ICON = "content/ui/materials/icons/currencies/live_events/saints_live_event_medium"
@@ -386,7 +219,6 @@ local SAINTS_LIVE_EVENT_LARGE_ICON = "content/ui/materials/icons/currencies/live
 local LEFTOVER_LIVE_EVENT_SMALL_ICON = "content/ui/materials/icons/currencies/live_events/leftover_live_event_small"
 local LEFTOVER_LIVE_EVENT_MEDIUM_ICON = "content/ui/materials/icons/currencies/live_events/leftover_live_event_medium"
 local LEFTOVER_LIVE_EVENT_LARGE_ICON = "content/ui/materials/icons/currencies/live_events/leftover_live_event_large"
-
 local SAINTS_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME = {
     live_event_saints_01_pickup_small = {
         icon = SAINTS_LIVE_EVENT_SMALL_ICON,
@@ -406,7 +238,6 @@ local SAINTS_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME = {
 }
 local DEFAULT_SAINTS_ARTWORK_PRESENTATION =
     SAINTS_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME.live_event_saints_01_pickup_small
-
 local LEFTOVER_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME = {
     live_event_leftover_01_pickup_small = {
         icon = LEFTOVER_LIVE_EVENT_SMALL_ICON,
@@ -426,7 +257,6 @@ local LEFTOVER_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME = {
 }
 local DEFAULT_LEFTOVER_ARTWORK_PRESENTATION =
     LEFTOVER_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME.live_event_leftover_01_pickup_small
-
 local ARTWORK_MODE_ICON_PRESENTATIONS = {
     crate_unknown = {
         icon = "content/ui/materials/icons/generic/loot",
@@ -514,7 +344,6 @@ local ARTWORK_MODE_ICON_PRESENTATIONS = {
         size = 14,
     },
 }
-
 local PRESENTATIONS = {
     enemy_daemonhost = {
         icon = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_heinous_rituals",
@@ -881,34 +710,53 @@ local PRESENTATIONS = {
         size = 14,
     },
 }
-
 local MAX_RADAR_MARKERS = RadarHudWidgets.MAX_RADAR_MARKERS
 local HEALTH_STATION_MAX_CHARGES = 4
 local AMMO_CACHE_DEPLOYABLE_MAX_CHARGES = 4
 local AMMO_CACHE_DEPLOYABLE_PICKUP_NAME = "ammo_cache_deployable"
 local HEALTH_STATION_SYSTEM_NAME = "health_station_system"
 local GAME_OBJECT_FIELD_CHARGES = "charges"
-
-local function _normalized_player_display_style(value)
-    value = tostring(value or "marked_icon")
-
-    if value ~= "icon_only"
-        and value ~= "marked_icon"
-        and value ~= "dot_only"
-        and value ~= "marked_dot" then
-        value = "marked_icon"
-    end
-
-    return value
-end
-
-local function _normalized_enemy_display_style(value)
-    value = tostring(value or "marked_icon")
-    return value == "icon_only" and "icon_only" or "marked_icon"
-end
-
-local _icon_scale_factor
 local DRAW_CACHE_REFRESH_INTERVAL = 1
+local MARKER_VALUE_TEXT_STYLE = table.merge_recursive(table.clone(UIFontSettings.body_small), {
+    font_size = 12,
+    font_type = "proxima_nova_bold",
+    text_horizontal_alignment = "center",
+    text_vertical_alignment = "center",
+    text_color = Color(255, 255, 225, 0),
+    offset = { 0, 0, 0 },
+})
+local OVERVIEW_SCALE_TEXT_STYLE = table.merge_recursive(table.clone(UIFontSettings.body_small), {
+    font_size = 18,
+    font_type = "proxima_nova_bold",
+    text_horizontal_alignment = "center",
+    text_vertical_alignment = "center",
+    text_color = Color(255, 213, 226, 206),
+    offset = { 0, 0, 0 },
+})
+local ITEM_VERTICAL_ARROW_UP_ICON = "content/ui/materials/icons/circumstances/more_resistance_01"
+local ITEM_VERTICAL_ARROW_DOWN_ICON = "content/ui/materials/icons/circumstances/less_resistance_01"
+local DEFAULT_INTERACTION_ICON = "content/ui/materials/hud/interactions/icons/default"
+local DEFAULT_EXPEDITION_UNMARKED_COLOR = _widget_color(255, 54, 198, 49)
+local PLAYER_STATE_ICON_SIZE = 15
+local EXPEDITION_UNMARKED_COLORS = {
+    expedition_loot_converter = _widget_color(255, 192, 160, 0),
+    expedition_objective_opportunity = DEFAULT_EXPEDITION_UNMARKED_COLOR,
+    expedition_objective_transition = DEFAULT_EXPEDITION_UNMARKED_COLOR,
+    expedition_objective_main_objective = DEFAULT_EXPEDITION_UNMARKED_COLOR,
+    expedition_objective_extraction = DEFAULT_EXPEDITION_UNMARKED_COLOR,
+    expedition_objective_arrival = DEFAULT_EXPEDITION_UNMARKED_COLOR,
+}
+local UNPOWERED_MEDICAE_STATION_WIDGET_COLOR = _widget_color(255, 190, 190, 190)
+
+-- ----------------------------------------------------------------------------
+-- Mutable state
+-- ----------------------------------------------------------------------------
+
+local LogBuckets = {
+    visuals = {},
+    draws = {},
+}
+local PLAYER_COMPANION_VISUAL_CACHE = {}
 local _draw_cache = {
     valid = false,
     color_generation = nil,
@@ -941,6 +789,225 @@ local _draw_cache = {
     marker_value_text_color = MARKER_VALUE_TEXT_WIDGET_COLOR,
     marker_distance_text_color = BOSS_DISTANCE_TEXT_WIDGET_COLOR,
 }
+local _marker_value_text_scratch = {
+    position = { 0, 0, 0 },
+    size = { 0, 0 },
+    color = { 255, 255, 225, 0 },
+    options = {},
+}
+local _overview_scale_text_scratch = {
+    position = { 0, 0, 0 },
+    size = { 0, 0 },
+    color = { 255, 213, 226, 206 },
+    options = {},
+}
+local _self_visual = {
+    icon = DEFAULT_INTERACTION_ICON,
+    color = nil,
+    size = 4,
+}
+
+-- ----------------------------------------------------------------------------
+-- Helpers
+-- ----------------------------------------------------------------------------
+
+local function _log_once(bucket, key, message)
+    if mod:get("debug_mode") ~= true then
+        return
+    end
+
+    if bucket[key] then
+        return
+    end
+
+    bucket[key] = true
+    mod:info(message)
+end
+
+local function _any_to_widget_color(color, fallback)
+    local src = color or fallback or WHITE_WIDGET_COLOR
+
+    return {
+        src[1] or src.a or 255,
+        src[2] or src.r or 255,
+        src[3] or src.g or 255,
+        src[4] or src.b or 255,
+    }
+end
+
+local function _style_color_table(style)
+    if style._radar_private_color ~= true then
+        style.color = _any_to_widget_color(style.color, WHITE_WIDGET_COLOR)
+        style._radar_private_color = true
+    end
+
+    return style.color
+end
+
+local function _copy_into_widget_color(destination, color, fallback)
+    local src = color or fallback or WHITE_WIDGET_COLOR
+
+    destination[1] = src[1] or src.a or 255
+    destination[2] = src[2] or src.r or 255
+    destination[3] = src[3] or src.g or 255
+    destination[4] = src[4] or src.b or 255
+
+    return destination
+end
+
+local function _configured_marker_color(kind, fallback)
+    local get_marker_color = mod.get_marker_color
+
+    return get_marker_color and get_marker_color(mod, kind, fallback) or fallback
+end
+
+local function _marker_color_kind(kind, meta)
+    local get_marker_color_kind = mod.get_marker_color_kind
+
+    return get_marker_color_kind and get_marker_color_kind(mod, kind, meta) or kind
+end
+
+local function _configured_marker_background_color(kind, fallback)
+    local get_marker_background_color = mod.get_marker_background_color
+
+    return get_marker_background_color and get_marker_background_color(mod, kind, fallback) or fallback
+end
+
+local function _configured_enemy_icon_color(kind, fallback)
+    local get_enemy_radar_icon_color = mod.get_enemy_radar_icon_color
+
+    return get_enemy_radar_icon_color and get_enemy_radar_icon_color(mod, kind, fallback) or fallback
+end
+
+local function _configured_enemy_background_color(kind, fallback)
+    local get_enemy_radar_background_color = mod.get_enemy_radar_background_color
+
+    return get_enemy_radar_background_color and get_enemy_radar_background_color(mod, kind, fallback) or fallback
+end
+
+local function _configured_radar_color(prefix, fallback)
+    local get_radar_color = mod.get_radar_color
+
+    return get_radar_color and get_radar_color(mod, prefix, fallback) or fallback
+end
+
+local function _with_alpha_widget(color, alpha)
+    local c = _any_to_widget_color(color)
+    c[1] = alpha or c[1] or 255
+    return c
+end
+
+local function _scaled_alpha(alpha, scale)
+    local base_alpha = tonumber(alpha) or 0
+    local alpha_scale = tonumber(scale) or 1
+
+    return math_max(0, math_min(255, math_floor(base_alpha * alpha_scale + 0.5)))
+end
+
+local function _normalized_radar_style(value)
+    value = tostring(value or "square")
+
+    if value ~= "circle" and value ~= "auspex" then
+        value = "square"
+    end
+
+    return value
+end
+
+local function _current_radar_style()
+    local value = mod:get("radar_style")
+
+    if value == nil and mod.get_radar_style then
+        value = mod:get_radar_style()
+    end
+
+    return _normalized_radar_style(value)
+end
+
+local function _is_finite_number(v)
+    return type(v) == "number" and v == v and v ~= math_huge and v ~= -math_huge
+end
+
+local function _ui_space_size()
+    local width = 1920.0
+    local height = 1080.0
+
+    if RESOLUTION_LOOKUP and RESOLUTION_LOOKUP.width and RESOLUTION_LOOKUP.height then
+        local inverse_scale = RESOLUTION_LOOKUP.inverse_scale or 1
+        width = RESOLUTION_LOOKUP.width * inverse_scale
+        height = RESOLUTION_LOOKUP.height * inverse_scale
+    end
+
+    return width, height
+end
+
+local function _sync_screen_scenegraph(self)
+    local scenegraph = self and self._ui_scenegraph
+    local screen = scenegraph and scenegraph.screen
+
+    if not screen then
+        return
+    end
+
+    local width, height = _ui_space_size()
+    width = math_max(1, math_floor(width + 0.5))
+    height = math_max(1, math_floor(height + 0.5))
+
+    screen.scale = "fit"
+
+    local size = screen.size
+    if size then
+        size[1] = width
+        size[2] = height
+    else
+        screen.size = { width, height }
+    end
+
+    local position = screen.position
+    if position then
+        position[1] = 0
+        position[2] = 0
+        position[3] = 0
+    else
+        screen.position = { 0, 0, 0 }
+    end
+end
+
+local function _normalized_player_display_style(value)
+    value = tostring(value or "marked_icon")
+
+    if value ~= "icon_only"
+        and value ~= "marked_icon"
+        and value ~= "dot_only"
+        and value ~= "marked_dot" then
+        value = "marked_icon"
+    end
+
+    return value
+end
+
+local function _normalized_enemy_display_style(value)
+    value = tostring(value or "marked_icon")
+    return value == "icon_only" and "icon_only" or "marked_icon"
+end
+
+local function _icon_scale_factor()
+    if mod:get("scale_icons_with_radar_size") == false then
+        return 1
+    end
+
+    local radar_size = mod.get_configured_radar_size and mod:get_configured_radar_size()
+        or tonumber(mod:get("radar_size")) or 300
+    local scale = radar_size / 300
+
+    if scale < 0.5 then
+        scale = 0.5
+    elseif scale > 3.0 then
+        scale = 3.0
+    end
+
+    return scale
+end
 
 local function _build_draw_cache(t)
     local draw_cache = _draw_cache
@@ -1043,24 +1110,6 @@ local function _build_draw_cache(t)
     draw_cache.next_refresh_t = now and (now + DRAW_CACHE_REFRESH_INTERVAL) or nil
 
     return draw_cache
-end
-
-_icon_scale_factor = function()
-    if mod:get("scale_icons_with_radar_size") == false then
-        return 1
-    end
-
-    local radar_size = mod.get_configured_radar_size and mod:get_configured_radar_size()
-        or tonumber(mod:get("radar_size")) or 300
-    local scale = radar_size / 300
-
-    if scale < 0.5 then
-        scale = 0.5
-    elseif scale > 3.0 then
-        scale = 3.0
-    end
-
-    return scale
 end
 
 local function _scaled_icon_size(base_size, icon_scale, min_size, max_size)
@@ -1324,35 +1373,6 @@ local function _should_draw_marker_brackets(target, draw_cache)
     return style == "marked_icon" or style == "marked_dot"
 end
 
-local MARKER_VALUE_TEXT_STYLE = table.merge_recursive(table.clone(UIFontSettings.body_small), {
-    font_size = 12,
-    font_type = "proxima_nova_bold",
-    text_horizontal_alignment = "center",
-    text_vertical_alignment = "center",
-    text_color = Color(255, 255, 225, 0),
-    offset = { 0, 0, 0 },
-})
-local _marker_value_text_scratch = {
-    position = { 0, 0, 0 },
-    size = { 0, 0 },
-    color = { 255, 255, 225, 0 },
-    options = {},
-}
-local OVERVIEW_SCALE_TEXT_STYLE = table.merge_recursive(table.clone(UIFontSettings.body_small), {
-    font_size = 18,
-    font_type = "proxima_nova_bold",
-    text_horizontal_alignment = "center",
-    text_vertical_alignment = "center",
-    text_color = Color(255, 213, 226, 206),
-    offset = { 0, 0, 0 },
-})
-local _overview_scale_text_scratch = {
-    position = { 0, 0, 0 },
-    size = { 0, 0 },
-    color = { 255, 213, 226, 206 },
-    options = {},
-}
-
 local function _marker_value_font_size(icon_size, digits)
     local font_size = math_max(10, math_floor(icon_size * 0.52 + 0.5))
 
@@ -1451,9 +1471,6 @@ local function _draw_marker_value_text(ui_renderer, value_text, x, y, z, icon_si
         options
     )
 end
-
-local ITEM_VERTICAL_ARROW_UP_ICON = "content/ui/materials/icons/circumstances/more_resistance_01"
-local ITEM_VERTICAL_ARROW_DOWN_ICON = "content/ui/materials/icons/circumstances/less_resistance_01"
 
 local function _overview_scale_font_size(radar_size)
     local font_size = math_floor((tonumber(radar_size) or 0) * 0.022 + 0.5)
@@ -1960,24 +1977,6 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
     end
 end
 
-local DEFAULT_INTERACTION_ICON = "content/ui/materials/hud/interactions/icons/default"
-local DEFAULT_EXPEDITION_UNMARKED_COLOR = _widget_color(255, 54, 198, 49)
-local _self_visual = {
-    icon = DEFAULT_INTERACTION_ICON,
-    color = nil,
-    size = 4,
-}
-local PLAYER_STATE_ICON_SIZE = 15
-
-local EXPEDITION_UNMARKED_COLORS = {
-    expedition_loot_converter = _widget_color(255, 192, 160, 0),
-    expedition_objective_opportunity = DEFAULT_EXPEDITION_UNMARKED_COLOR,
-    expedition_objective_transition = DEFAULT_EXPEDITION_UNMARKED_COLOR,
-    expedition_objective_main_objective = DEFAULT_EXPEDITION_UNMARKED_COLOR,
-    expedition_objective_extraction = DEFAULT_EXPEDITION_UNMARKED_COLOR,
-    expedition_objective_arrival = DEFAULT_EXPEDITION_UNMARKED_COLOR,
-}
-
 local function _expedition_unmarked_color(target)
     local kind = target and target.kind
 
@@ -2076,8 +2075,6 @@ local function _distance_text_from_squared_distance(distance_sq_3d, suffix)
 
     return math_floor(math_sqrt(distance_sq_3d) + 0.5) .. (suffix or " m")
 end
-
-local UNPOWERED_MEDICAE_STATION_WIDGET_COLOR = _widget_color(255, 190, 190, 190)
 
 local function _target_alive_unit(target)
     local unit = target and target.unit or nil
@@ -3112,18 +3109,6 @@ local function _draw_screen_highlights(self, ui_renderer, snapshot, z, draw_cach
     end
 end
 
-HudElementRadar.init = function(self, parent, draw_layer, start_scale, optional_context)
-    HudElementRadar.super.init(self, parent, draw_layer, start_scale, Definitions)
-    _sync_screen_scenegraph(self)
-    RadarHudWidgets.ensure_frame_widget(self)
-    RadarHudWidgets.ensure_overview_scale_widget(self)
-    RadarHudWidgets.ensure_marker_widgets(self)
-end
-
-HudElementRadar.update = function(self, dt, t)
-    return
-end
-
 local function _snap_center(value)
     return math_floor((tonumber(value) or 0) + 0.5)
 end
@@ -3502,6 +3487,22 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
     end
 
     self._last_active_marker_widget_index = last_active_marker_widget_index
+end
+
+-- ----------------------------------------------------------------------------
+-- HudElementRadar
+-- ----------------------------------------------------------------------------
+
+HudElementRadar.init = function(self, parent, draw_layer, start_scale, optional_context)
+    HudElementRadar.super.init(self, parent, draw_layer, start_scale, Definitions)
+    _sync_screen_scenegraph(self)
+    RadarHudWidgets.ensure_frame_widget(self)
+    RadarHudWidgets.ensure_overview_scale_widget(self)
+    RadarHudWidgets.ensure_marker_widgets(self)
+end
+
+HudElementRadar.update = function(self, dt, t)
+    return
 end
 
 HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input_service)

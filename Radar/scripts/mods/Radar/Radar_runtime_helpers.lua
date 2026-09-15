@@ -2,7 +2,6 @@ return function(env)
     setfenv(1, env)
 
     local mod = mod
-
     local PhysicsWorld = PhysicsWorld
     local pcall = pcall
     local pairs = pairs
@@ -20,32 +19,22 @@ return function(env)
     local string_len = string.len
     local string_lower = string.lower
     local string_sub = string.sub
+
     local table_clear = table.clear or function(t)
         for k in pairs(t) do
             t[k] = nil
         end
     end
+
+    -- ----------------------------------------------------------------------------
+    -- Constants
+    -- ----------------------------------------------------------------------------
+
     local DARK_RITES_CIRCUMSTANCE_PREFIX = "skulls_guns"
     local LEGACY_SKULLS_CIRCUMSTANCE_PREFIX = "skulls_event_01"
     local DARK_RITES_CIRCUMSTANCE_VARIANT_PREFIX = DARK_RITES_CIRCUMSTANCE_PREFIX .. "_"
     local LEGACY_SKULLS_CIRCUMSTANCE_VARIANT_PREFIX = LEGACY_SKULLS_CIRCUMSTANCE_PREFIX .. "_"
     local PSYKHANIUM_MISSION_NAME = "tg_shooting_range"
-    local _scratch_highlight_enabled_by_kind = {}
-
-    local function _reuse_screen_highlight_output()
-        local highlights = mod._screen_highlight_targets
-
-        if type(highlights) == "table" then
-            table_clear(highlights)
-            return highlights
-        end
-
-        highlights = {}
-        mod._screen_highlight_targets = highlights
-
-        return highlights
-    end
-
     local HUD_OCCLUSION_RAYCAST_FILTERS = {
         "filter_player_character_shooting",
         "filter_ray_projectile",
@@ -56,6 +45,107 @@ return function(env)
     local HUD_OCCLUSION_RAYCAST_MODE = "closest"
     local HUD_OCCLUSION_COLLISION_FILTER = "collision_filter"
     local HUD_OCCLUSION_RAYCAST_FILTER_COUNT = #HUD_OCCLUSION_RAYCAST_FILTERS
+    DEFAULT_RADAR_POS_X = 40
+    DEFAULT_RADAR_POS_Y = 220
+    DEFAULT_RADAR_MOVE_STEP = 10
+    DEFAULT_RADAR_ANCHOR = "top_left"
+    RADAR_ANCHORS = {
+        top_left = true,
+        top_right = true,
+        bottom_left = true,
+        bottom_right = true,
+    }
+    SCREEN_HIGHLIGHT_Z_OFFSET_BY_KIND = {
+        material_diamantine = 0.1,
+        material_plasteel = 0.1,
+        crate_unknown = 0.08,
+        pickup_ammo = 0.08,
+        pickup_ammo_small = 0.08,
+        pickup_ammo_big = 0.08,
+        pickup_grenade = 0.08,
+        pocketable_ammo_crate = 0.08,
+        pocketable_medical_crate = 0.08,
+        pocketable_syringe_ability = 0.08,
+        pocketable_syringe_corruption = 0.08,
+        pocketable_syringe_power = 0.08,
+        pocketable_syringe_speed = 0.08,
+        luggable_power_cell_teal = 0.18,
+        luggable_cryonic_rod = 0.18,
+        luggable_moebian_pox_zetaphyte_13_sample = 0.18,
+        luggable_vacuum_capsule = 0.18,
+        luggable_special_issue_ammo = 0.18,
+        luggable_prismata_crystal_repository = 0.18,
+        pickup_mortis_relic = 0.1,
+        pickup_coordinates_paper = 0.08,
+        pocketable_grimoire = 0.08,
+        pocketable_scripture = 0.08,
+        material_expeditions_currency = 0.1,
+        material_expeditions_loot = 0.1,
+        material_expeditions_loot_player_drop = 0.1,
+        luggable_data_reliquary = 0.18,
+        pickup_large_ammunition_crate = 0.1,
+        luggable_promethium_barrel = 0.12,
+        hazard_explosive_barrel = 0.12,
+        hazard_fire_barrel = 0.12,
+        pocketable_anti_rad_stimm = 0.08,
+        pocketable_airstrike = 0.08,
+        pocketable_artillery_strike = 0.08,
+        pocketable_big_grenade = 0.08,
+        pocketable_landmine_explosive = 0.08,
+        pocketable_landmine_fire = 0.08,
+        pocketable_landmine_shock = 0.08,
+        pocketable_valkyrie_hover = 0.08,
+        pocketable_void_shield = 0.08,
+        pickup_martyr_skull = 0.1,
+        martyr_skull_riddle_interactable = 0.12,
+        mission_objective_scanner = 0.12,
+        mission_objective_hacking = 0.12,
+        mission_objective_servo_skull = 0.12,
+        mission_objective_other = 0.12,
+        mission_objective_growth = 0.12,
+        mission_objective_destroy = 0.12,
+        luggable_power_cell_orange = 0.18,
+        medicae_station = 0.2,
+        luggable_socket = 0.18,
+        pickup_heretic_idol = 0.12,
+        pickup_tainted_skull = 0.1,
+        dark_rites_totem = 0.12,
+        dark_rites_servo_skull = 0.1,
+        pocketable_corrupted_auspex_scanner = 0.08,
+        pickup_saints = 0.12,
+        pickup_leftover = 0.12,
+        pickup_stolen_rations = 0.08,
+    }
+
+    -- ----------------------------------------------------------------------------
+    -- Mutable runtime state
+    -- ----------------------------------------------------------------------------
+
+    local _scratch_highlight_enabled_by_kind = {}
+
+    -- Reused instead of a per-call closure; the event manager invokes the
+    -- callback synchronously, so a single slot is enough.
+    local _world_markers_list_result = nil
+
+    -- Every unit the game currently holds a world marker for, whatever the
+    -- marker's type. Presence only, deliberately not `draw` or `widget.visible`:
+    -- a marker the player is too far away to see is still a live objective, and
+    -- filtering on visibility would make markers blink with distance. Returns
+    -- false when the list cannot be read, so callers can fall back rather than
+    -- treat an unavailable list as "nothing exists".
+    -- The units among them the game is marking as an objective, as opposed to
+    -- the prompt a player gets standing next to something. Refilled with them.
+    local _objective_marker_units = {}
+
+    -- The units at least one of whose markers the game is drawing rather than
+    -- holding out of reach. Presence above is unaffected; this answers only
+    -- whether the game's marker is on screen, for what it lets past the
+    -- radar's range.
+    local _marker_in_reach_units = {}
+
+    -- ----------------------------------------------------------------------------
+    -- Generic helpers
+    -- ----------------------------------------------------------------------------
 
     function _safe_gameplay_time()
         local time_manager = Managers and Managers.time
@@ -178,7 +268,7 @@ return function(env)
         return string_sub(value, 1, string_len(prefix)) == prefix
     end
 
-    function _safe_unit_data_string(unit, field_name)
+    local function _safe_unit_data_string(unit, field_name)
         local unit_api = Unit
         local has_data = unit_api and unit_api.has_data
         local get_data = unit_api and unit_api.get_data
@@ -301,18 +391,6 @@ return function(env)
         return n
     end
 
-    DEFAULT_RADAR_POS_X = 40
-    DEFAULT_RADAR_POS_Y = 220
-    DEFAULT_RADAR_MOVE_STEP = 10
-    DEFAULT_RADAR_ANCHOR = "top_left"
-
-    RADAR_ANCHORS = {
-        top_left = true,
-        top_right = true,
-        bottom_left = true,
-        bottom_right = true,
-    }
-
     function _clamp(value, min_value, max_value)
         if value < min_value then
             return min_value
@@ -340,6 +418,23 @@ return function(env)
         return width, height
     end
 
+    function _log_once(key, text)
+        if mod:get("debug_mode") ~= true then
+            return
+        end
+
+        if mod._logged_units[key] then
+            return
+        end
+
+        mod._logged_units[key] = true
+        mod:info(text)
+    end
+
+    -- ----------------------------------------------------------------------------
+    -- Radar position helpers
+    -- ----------------------------------------------------------------------------
+
     function _normalize_radar_anchor(value)
         if RADAR_ANCHORS[value] then
             return value
@@ -357,7 +452,7 @@ return function(env)
         return max_x, max_y
     end
 
-    function _round_radar_position_value(value, default_value)
+    local function _round_radar_position_value(value, default_value)
         return math_floor((tonumber(value) or default_value or 0) + 0.5)
     end
 
@@ -403,20 +498,11 @@ return function(env)
         return offset_x, offset_y, max_x, max_y
     end
 
-    function _log_once(key, text)
-        if mod:get("debug_mode") ~= true then
-            return
-        end
+    -- ----------------------------------------------------------------------------
+    -- Unit and extension helpers
+    -- ----------------------------------------------------------------------------
 
-        if mod._logged_units[key] then
-            return
-        end
-
-        mod._logged_units[key] = true
-        mod:info(text)
-    end
-
-    function _position_lookup(unit)
+    local function _position_lookup(unit)
         local position_lookup = POSITION_LOOKUP
 
         if not unit or not position_lookup then
@@ -589,7 +675,7 @@ return function(env)
         return nil
     end
 
-    function _is_owned_by_death_manager(unit)
+    local function _is_owned_by_death_manager(unit)
         local script_unit = ScriptUnit
         local has_extension = script_unit and script_unit.has_extension
 
@@ -633,7 +719,7 @@ return function(env)
         return true
     end
 
-    function _safe_world_rotation(unit, node)
+    local function _safe_world_rotation(unit, node)
         if not _safe_unit_alive(unit) then
             return nil
         end
@@ -653,7 +739,7 @@ return function(env)
         return nil
     end
 
-    function _safe_flat_direction_xy(vector_getter, rotation)
+    local function _safe_flat_direction_xy(vector_getter, rotation)
         if not rotation or not vector_getter then
             return nil, nil
         end
@@ -682,6 +768,109 @@ return function(env)
 
         return _safe_flat_direction_xy(forward, rotation)
     end
+
+    function _safe_extension_system(system_name)
+        local extension_manager = Managers and Managers.state and Managers.state.extension
+        local system_getter = extension_manager and extension_manager.system
+
+        if not system_getter then
+            return nil
+        end
+
+        local ok, system = pcall(system_getter, extension_manager, system_name)
+
+        if ok then
+            return system
+        end
+
+        return nil
+    end
+
+    function _safe_unit_to_extension_map(system_name)
+        local system = _safe_extension_system(system_name)
+        local unit_to_extension_map = system and system.unit_to_extension_map
+
+        if not unit_to_extension_map then
+            return nil
+        end
+
+        local ok, map = pcall(unit_to_extension_map, system)
+
+        if ok and type(map) == "table" then
+            return map
+        end
+
+        return nil
+    end
+
+    function _safe_outline_extension_data_map()
+        local outline_system = _safe_extension_system("outline_system")
+        local unit_extension_data = outline_system and rawget(outline_system, "_unit_extension_data")
+
+        if type(unit_extension_data) == "table" then
+            return unit_extension_data
+        end
+
+        return nil
+    end
+
+    function _safe_unit_outline_extension(unit, outline_extension_map)
+        if not unit then
+            return nil
+        end
+
+        local unit_extension_data = outline_extension_map or _safe_outline_extension_data_map()
+
+        if type(unit_extension_data) ~= "table" then
+            return nil
+        end
+
+        local extension = unit_extension_data[unit]
+
+        if type(extension) == "table" then
+            return extension
+        end
+
+        return nil
+    end
+
+    local function _safe_game_mode_manager()
+        return Managers and Managers.state and Managers.state.game_mode or nil
+    end
+
+    function _safe_game_mode()
+        local game_mode_manager = _safe_game_mode_manager()
+        if not game_mode_manager or not game_mode_manager.game_mode then
+            return nil
+        end
+
+        local ok, game_mode = pcall(game_mode_manager.game_mode, game_mode_manager)
+
+        if ok then
+            return game_mode
+        end
+
+        return nil
+    end
+
+    function _safe_game_mode_name()
+        local game_mode_manager = _safe_game_mode_manager()
+        if not game_mode_manager or not game_mode_manager.game_mode_name then
+            return nil
+        end
+
+        local ok, game_mode_name = pcall(game_mode_manager.game_mode_name, game_mode_manager)
+
+        if ok then
+            return game_mode_name
+        end
+
+        return nil
+    end
+
+    -- ----------------------------------------------------------------------------
+    -- Mission, circumstance and mechanism helpers
+    -- ----------------------------------------------------------------------------
 
     function _safe_mission_name()
         local state_gameplay = mod._last_state_gameplay
@@ -734,7 +923,7 @@ return function(env)
         return nil
     end
 
-    function _safe_circumstance_name()
+    local function _safe_circumstance_name()
         local state_gameplay = mod._last_state_gameplay
         if state_gameplay then
             local shared_state = state_gameplay._shared_state
@@ -921,6 +1110,10 @@ return function(env)
             or mechanism_name == "hub"
     end
 
+    -- ----------------------------------------------------------------------------
+    -- Player helpers
+    -- ----------------------------------------------------------------------------
+
     function _player_manager()
         return Managers and Managers.player
     end
@@ -955,7 +1148,7 @@ return function(env)
         return local_player and local_player.player_unit
     end
 
-    function _safe_player_character_state_component(player_unit)
+    local function _safe_player_character_state_component(player_unit)
         local script_unit = ScriptUnit
         local has_extension = script_unit and script_unit.has_extension
 
@@ -1077,7 +1270,7 @@ return function(env)
         return _is_player_unit_captured(player_unit)
     end
 
-    function _safe_camera_rotation()
+    local function _safe_camera_rotation()
         local local_player = _local_player()
         if not local_player then
             return nil
@@ -1152,22 +1345,9 @@ return function(env)
         return _safe_world_rotation(player_unit, 1)
     end
 
-    function _safe_extension_system(system_name)
-        local extension_manager = Managers and Managers.state and Managers.state.extension
-        local system_getter = extension_manager and extension_manager.system
-
-        if not system_getter then
-            return nil
-        end
-
-        local ok, system = pcall(system_getter, extension_manager, system_name)
-
-        if ok then
-            return system
-        end
-
-        return nil
-    end
+    -- ----------------------------------------------------------------------------
+    -- Colour helpers
+    -- ----------------------------------------------------------------------------
 
     function _copy_color_array(color)
         if not color then
@@ -1182,7 +1362,7 @@ return function(env)
         }
     end
 
-    function _darkened_color_array(color, multiplier)
+    local function _darkened_color_array(color, multiplier)
         local src = color or DEFAULT_COLOR_ARRAY_WHITE
         local mul = multiplier or 1
 
@@ -1194,69 +1374,7 @@ return function(env)
         }
     end
 
-    SCREEN_HIGHLIGHT_Z_OFFSET_BY_KIND = {
-        material_diamantine = 0.1,
-        material_plasteel = 0.1,
-        crate_unknown = 0.08,
-        pickup_ammo = 0.08,
-        pickup_ammo_small = 0.08,
-        pickup_ammo_big = 0.08,
-        pickup_grenade = 0.08,
-        pocketable_ammo_crate = 0.08,
-        pocketable_medical_crate = 0.08,
-        pocketable_syringe_ability = 0.08,
-        pocketable_syringe_corruption = 0.08,
-        pocketable_syringe_power = 0.08,
-        pocketable_syringe_speed = 0.08,
-        luggable_power_cell_teal = 0.18,
-        luggable_cryonic_rod = 0.18,
-        luggable_moebian_pox_zetaphyte_13_sample = 0.18,
-        luggable_vacuum_capsule = 0.18,
-        luggable_special_issue_ammo = 0.18,
-        luggable_prismata_crystal_repository = 0.18,
-        pickup_mortis_relic = 0.1,
-        pickup_coordinates_paper = 0.08,
-        pocketable_grimoire = 0.08,
-        pocketable_scripture = 0.08,
-        material_expeditions_currency = 0.1,
-        material_expeditions_loot = 0.1,
-        material_expeditions_loot_player_drop = 0.1,
-        luggable_data_reliquary = 0.18,
-        pickup_large_ammunition_crate = 0.1,
-        luggable_promethium_barrel = 0.12,
-        hazard_explosive_barrel = 0.12,
-        hazard_fire_barrel = 0.12,
-        pocketable_anti_rad_stimm = 0.08,
-        pocketable_airstrike = 0.08,
-        pocketable_artillery_strike = 0.08,
-        pocketable_big_grenade = 0.08,
-        pocketable_landmine_explosive = 0.08,
-        pocketable_landmine_fire = 0.08,
-        pocketable_landmine_shock = 0.08,
-        pocketable_valkyrie_hover = 0.08,
-        pocketable_void_shield = 0.08,
-        pickup_martyr_skull = 0.1,
-        martyr_skull_riddle_interactable = 0.12,
-        mission_objective_scanner = 0.12,
-        mission_objective_hacking = 0.12,
-        mission_objective_servo_skull = 0.12,
-        mission_objective_other = 0.12,
-        mission_objective_growth = 0.12,
-        mission_objective_destroy = 0.12,
-        luggable_power_cell_orange = 0.18,
-        medicae_station = 0.2,
-        luggable_socket = 0.18,
-        pickup_heretic_idol = 0.12,
-        pickup_tainted_skull = 0.1,
-        dark_rites_totem = 0.12,
-        dark_rites_servo_skull = 0.1,
-        pocketable_corrupted_auspex_scanner = 0.08,
-        pickup_saints = 0.12,
-        pickup_leftover = 0.12,
-        pickup_stolen_rations = 0.08,
-    }
-
-    function _screen_highlight_color_for_kind(kind)
+    local function _screen_highlight_color_for_kind(kind)
         if mod.get_nearby_highlight_color then
             return mod:get_nearby_highlight_color(kind)
         end
@@ -1264,36 +1382,11 @@ return function(env)
         return _copy_color_array(NEARBY_OUTLINE_COLOR_BY_KIND[kind])
     end
 
-    function _safe_interactee_ui_interaction_type(unit, interactee_extension_map)
-        if not unit then
-            return nil
-        end
+    -- ----------------------------------------------------------------------------
+    -- World marker helpers
+    -- ----------------------------------------------------------------------------
 
-        local extension = interactee_extension_map and interactee_extension_map[unit] or nil
-
-        if type(extension) ~= "table" then
-            local script_unit = ScriptUnit
-            local has_extension = script_unit and script_unit.has_extension
-
-            extension = has_extension and has_extension(unit, "interactee_system") or nil
-        end
-
-        local ui_interaction_type = extension and extension.ui_interaction_type
-
-        if type(ui_interaction_type) ~= "function" then
-            return nil
-        end
-
-        local ok_type, value = pcall(ui_interaction_type, extension)
-
-        if ok_type then
-            return _safe_lower_string(value)
-        end
-
-        return nil
-    end
-
-    function _interaction_world_marker_cache()
+    local function _interaction_world_marker_cache()
         local cache = mod._interaction_world_markers_by_unit
 
         if type(cache) ~= "table" then
@@ -1305,10 +1398,6 @@ return function(env)
 
         return cache
     end
-
-    -- Reused instead of a per-call closure; the event manager invokes the
-    -- callback synchronously, so a single slot is enough.
-    local _world_markers_list_result = nil
 
     local function _world_markers_list_response(response)
         _world_markers_list_result = response
@@ -1339,25 +1428,10 @@ return function(env)
         return markers
     end
 
-    -- Every unit the game currently holds a world marker for, whatever the
-    -- marker's type. Presence only, deliberately not `draw` or `widget.visible`:
-    -- a marker the player is too far away to see is still a live objective, and
-    -- filtering on visibility would make markers blink with distance. Returns
-    -- false when the list cannot be read, so callers can fall back rather than
-    -- treat an unavailable list as "nothing exists".
-    -- The units among them the game is marking as an objective, as opposed to
-    -- the prompt a player gets standing next to something. Refilled with them.
-    local _objective_marker_units = {}
-    -- The units at least one of whose markers the game is drawing rather than
-    -- holding out of reach. Presence above is unaffected; this answers only
-    -- whether the game's marker is on screen, for what it lets past the
-    -- radar's range.
-    local _marker_in_reach_units = {}
-
     -- The game's own test: the camera distance it keeps on the marker against
     -- its template's `max_distance`, unless the marker lifts the limit. One it
     -- has not measured yet counts as drawn, as every marker did before.
-    function _world_marker_in_reach(marker)
+    local function _world_marker_in_reach(marker)
         if marker.block_max_distance then
             return true
         end
@@ -1420,6 +1494,10 @@ return function(env)
             table_clear(cache)
         end
     end
+
+    -- ----------------------------------------------------------------------------
+    -- HUD projection interface
+    -- ----------------------------------------------------------------------------
 
     function mod:get_interaction_world_markers_by_unit()
         local cache = _interaction_world_marker_cache()
@@ -1570,7 +1648,7 @@ return function(env)
         return nil
     end
 
-    function _hud_rotation_basis(rotation)
+    local function _hud_rotation_basis(rotation)
         if not rotation then
             return nil
         end
@@ -1611,7 +1689,7 @@ return function(env)
         }
     end
 
-    function _safe_hud_physics_world()
+    local function _safe_hud_physics_world()
         local physics_manager = Managers and Managers.state and Managers.state.physics
 
         if physics_manager and type(physics_manager.physics_world) == "function" then
@@ -1678,7 +1756,7 @@ return function(env)
         return nil
     end
 
-    function _extract_hud_raycast_distance(a, b, c, d)
+    local function _extract_hud_raycast_distance(a, b, c, d)
         return _extract_hud_raycast_distance_from_value(a)
             or _extract_hud_raycast_distance_from_value(b)
             or _extract_hud_raycast_distance_from_value(c)
@@ -1838,7 +1916,54 @@ return function(env)
         return near_size + (far_size - near_size) * t
     end
 
-    function _screen_highlight_anchor_position(target, interactee_extension_map)
+    -- ----------------------------------------------------------------------------
+    -- Screen highlights
+    -- ----------------------------------------------------------------------------
+
+    local function _reuse_screen_highlight_output()
+        local highlights = mod._screen_highlight_targets
+
+        if type(highlights) == "table" then
+            table_clear(highlights)
+            return highlights
+        end
+
+        highlights = {}
+        mod._screen_highlight_targets = highlights
+
+        return highlights
+    end
+
+    local function _safe_interactee_ui_interaction_type(unit, interactee_extension_map)
+        if not unit then
+            return nil
+        end
+
+        local extension = interactee_extension_map and interactee_extension_map[unit] or nil
+
+        if type(extension) ~= "table" then
+            local script_unit = ScriptUnit
+            local has_extension = script_unit and script_unit.has_extension
+
+            extension = has_extension and has_extension(unit, "interactee_system") or nil
+        end
+
+        local ui_interaction_type = extension and extension.ui_interaction_type
+
+        if type(ui_interaction_type) ~= "function" then
+            return nil
+        end
+
+        local ok_type, value = pcall(ui_interaction_type, extension)
+
+        if ok_type then
+            return _safe_lower_string(value)
+        end
+
+        return nil
+    end
+
+    local function _screen_highlight_anchor_position(target, interactee_extension_map)
         local unit = target and target.unit or nil
         local position = target and target.position
 
@@ -2099,85 +2224,4 @@ return function(env)
         return highlights
     end
 
-    function _safe_unit_to_extension_map(system_name)
-        local system = _safe_extension_system(system_name)
-        local unit_to_extension_map = system and system.unit_to_extension_map
-
-        if not unit_to_extension_map then
-            return nil
-        end
-
-        local ok, map = pcall(unit_to_extension_map, system)
-
-        if ok and type(map) == "table" then
-            return map
-        end
-
-        return nil
-    end
-
-    function _safe_outline_extension_data_map()
-        local outline_system = _safe_extension_system("outline_system")
-        local unit_extension_data = outline_system and rawget(outline_system, "_unit_extension_data")
-
-        if type(unit_extension_data) == "table" then
-            return unit_extension_data
-        end
-
-        return nil
-    end
-
-    function _safe_unit_outline_extension(unit, outline_extension_map)
-        if not unit then
-            return nil
-        end
-
-        local unit_extension_data = outline_extension_map or _safe_outline_extension_data_map()
-
-        if type(unit_extension_data) ~= "table" then
-            return nil
-        end
-
-        local extension = unit_extension_data[unit]
-
-        if type(extension) == "table" then
-            return extension
-        end
-
-        return nil
-    end
-
-    function _safe_game_mode_manager()
-        return Managers and Managers.state and Managers.state.game_mode or nil
-    end
-
-    function _safe_game_mode()
-        local game_mode_manager = _safe_game_mode_manager()
-        if not game_mode_manager or not game_mode_manager.game_mode then
-            return nil
-        end
-
-        local ok, game_mode = pcall(game_mode_manager.game_mode, game_mode_manager)
-
-        if ok then
-            return game_mode
-        end
-
-        return nil
-    end
-
-    function _safe_game_mode_name()
-        local game_mode_manager = _safe_game_mode_manager()
-        if not game_mode_manager or not game_mode_manager.game_mode_name then
-            return nil
-        end
-
-        local ok, game_mode_name = pcall(game_mode_manager.game_mode_name, game_mode_manager)
-
-        if ok then
-            return game_mode_name
-        end
-
-        return nil
-    end
 end

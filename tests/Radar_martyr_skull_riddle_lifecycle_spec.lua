@@ -1,4 +1,5 @@
 local EXPEDITIONS_PATH = "Radar/scripts/mods/Radar/Radar_expeditions.lua"
+local MISSION_OBJECTIVES_PATH = "Radar/scripts/mods/Radar/Radar_mission_objectives.lua"
 local TRACKING_PATH = "Radar/scripts/mods/Radar/Radar_tracking.lua"
 
 local BUTTONS = {
@@ -258,6 +259,7 @@ local function new_harness()
     end
 
     install(EXPEDITIONS_PATH, env)
+    install(MISSION_OBJECTIVES_PATH, env)
     install(TRACKING_PATH, env)
 
     local update_internal = named_upvalue(captured.state_gameplay_update, "_update_internal")

@@ -1,12 +1,26 @@
 local mod = get_mod("Radar")
 local UIFontSettings = require("scripts/managers/ui/ui_font_settings")
 local UIWidget = require("scripts/managers/ui/ui_widget")
-
 local string_format = string.format
+
+-- ----------------------------------------------------------------------------
+-- Constants
+-- ----------------------------------------------------------------------------
+
 local WHITE_WIDGET_COLOR = { 255, 255, 255, 255 }
+local MAX_RADAR_MARKERS = 301
+
+-- ----------------------------------------------------------------------------
+-- Mutable state
+-- ----------------------------------------------------------------------------
+
 local LogBuckets = {
     draws = {},
 }
+
+-- ----------------------------------------------------------------------------
+-- Helpers and widget definitions
+-- ----------------------------------------------------------------------------
 
 local function _white_widget_color()
     return {
@@ -348,8 +362,6 @@ local function _marker_definition()
         },
     }, "screen")
 end
-
-local MAX_RADAR_MARKERS = 301
 
 local function _create_frame_widget()
     return UIWidget.init("RadarFrame_Auspex", _frame_definition())
