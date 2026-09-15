@@ -399,6 +399,30 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
         icon = "content/ui/materials/hud/interactions/icons/time_syringe",
         icon_colour = DROPDOWN_ICON_COLOUR_WHITE,
     },
+    show_mission_objective_scanner = {
+        icon = "content/ui/materials/icons/mission_types/mission_type_03",
+        icon_colour = RadarColorSettings.vanilla_objective_color,
+    },
+    show_mission_objective_hacking = {
+        icon = "content/ui/materials/icons/pocketables/hud/auspex_scanner",
+        icon_colour = RadarColorSettings.vanilla_objective_color,
+    },
+    show_mission_objective_servo_skull = {
+        icon = "content/ui/materials/icons/abilities/default",
+        icon_colour = RadarColorSettings.vanilla_objective_color,
+    },
+    show_mission_objective_other = {
+        icon = "content/ui/materials/hud/interactions/icons/objective_main",
+        icon_colour = RadarColorSettings.vanilla_objective_color,
+    },
+    show_mission_objective_growth = {
+        icon = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_parasite",
+        icon_colour = RadarColorSettings.mission_objective_growth_color,
+    },
+    show_mission_objective_destroy = {
+        icon = "content/ui/materials/icons/mission_types/mission_type_01",
+        icon_colour = RadarColorSettings.vanilla_objective_color,
+    },
     show_martyr_skull = {
         icon = "content/ui/materials/hud/interactions/icons/enemy",
         icon_colour = { 255, 255, 215, 0 },
@@ -924,7 +948,10 @@ local function _color_setting_group_title(descriptor, anchor_widget)
     local label_suffix = descriptor.label_suffix or (label_role and _localized_color_label_suffix(label_role))
 
     if label_suffix then
-        local label_prefix = descriptor.label_prefix or _localized_setting_title(anchor_widget)
+        -- An explicit prefix may be a localization key; anything already
+        -- localized, including the anchor widget's own title, passes straight
+        -- back out.
+        local label_prefix = _localized_or_raw(descriptor.label_prefix) or _localized_setting_title(anchor_widget)
 
         if label_prefix and label_prefix ~= "" then
             return label_prefix .. label_suffix
@@ -1777,6 +1804,28 @@ return {
                         _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_materials"),
                         _artwork_icon_off_dropdown("show_diamantine"),
                         _artwork_icon_off_dropdown("show_plasteel"),
+                    },
+                },
+                {
+                    setting_id = "mission_objective_group",
+                    type = "group",
+                    tab = TAB_OBJECTIVES,
+                    tab_overrides = TAB_OVERRIDES_OBJECTIVES,
+                    sub_widgets = {
+                        _icon_scale_slider("mission_objective_icon_scale", nil),
+                        {
+                            setting_id = "nearby_highlight_mission_objective",
+                            type = "checkbox",
+                            default_value = false,
+                        },
+                        _nearby_highlight_radar_distance_text_checkbox(
+                            "nearby_highlight_distance_text_mission_objective"),
+                        _icon_distance_off_dropdown("show_mission_objective_scanner", "icon_only"),
+                        _icon_distance_off_dropdown("show_mission_objective_hacking", "icon_only"),
+                        _icon_distance_off_dropdown("show_mission_objective_servo_skull", "icon_only"),
+                        _icon_distance_off_dropdown("show_mission_objective_growth", "icon_only"),
+                        _icon_distance_off_dropdown("show_mission_objective_destroy", "icon_only"),
+                        _icon_distance_off_dropdown("show_mission_objective_other", "icon_only"),
                     },
                 },
                 {

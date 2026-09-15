@@ -5,7 +5,6 @@ local _clip_and_emit = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_triangle
 local Color = Color
 local Gui = Gui
 local Quaternion = Quaternion
-local Vector2 = Vector2
 local Vector3 = Vector3
 local pairs = pairs
 local pcall = pcall

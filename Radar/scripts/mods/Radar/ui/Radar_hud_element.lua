@@ -8,6 +8,7 @@ local RadarHudRenderer = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_hud_re
 local RadarHudWidgets = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_hud_widgets")
 local RadarNavmesh = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_navmesh_renderer")
 local RadarStrikemapGeometry = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_strikemap_geometry")
+local RadarColorSettings = mod:io_dofile("Radar/scripts/mods/Radar/Radar_color_settings")
 
 local Color = Color
 local Vector3 = Vector3
@@ -164,11 +165,69 @@ local function _widget_color(a, r, g, b)
 end
 
 local WHITE_WIDGET_COLOR = { 255, 255, 255, 255 }
+-- Matches the vanilla on-screen objective marker so the radar reads as the same
+-- family. Only a fallback: configured marker colors take precedence.
+local VANILLA_OBJECTIVE_WIDGET_COLOR = RadarColorSettings.vanilla_objective_color
+
+-- The frame the game draws around its own objective markers, read off a live
+-- marker widget rather than guessed: its `content.frame`. Every objective kind
+-- shares it and shares one size, so the whole family has a single footprint and
+-- reads as one group; each kind then sets `overlay_base_size` alone to fit its
+-- own art inside the diamond. The icon is sized as a ratio of the frame, so the
+-- fit survives the icon-scale slider.
+local OBJECTIVE_FRAME_ICON = "content/ui/materials/hud/interactions/frames/point_of_interest_top"
+-- The plate the game draws behind that frame. Opt-in per marker: naming it is
+-- what turns the extra layer on, so enemy markers, which build their own
+-- coloured background into the base layer, are untouched.
+local OBJECTIVE_PLATE_ICON = "content/ui/materials/hud/interactions/frames/point_of_interest_back"
+local OBJECTIVE_FRAME_SIZE = 26
+-- The frame is shared by the whole family; the icon inside it is not. The
+-- game's icons are not normalised -- each was drawn to sit differently inside
+-- its own box -- so one number cannot fit them all, and a category has to be
+-- able to be tuned without moving its neighbours.
+--
+-- Nominal sizes against the 26px frame. The user's icon scale multiplies the
+-- frame afterwards and the icon follows by ratio, so a fit calibrated here holds
+-- at every scale. Keep them even: that is what centres the icon exactly at the
+-- nominal size, and the renderer corrects the parity at the scales where the two
+-- floors would otherwise disagree.
+local OBJECTIVE_ICON_SIZE_BY_KIND = {
+    mission_objective_scanner = 8,
+    mission_objective_hacking = 10,
+    mission_objective_servo_skull = 9,
+    -- The parasite art fills its own box more than the others do.
+    mission_objective_growth = 8,
+    -- The same mission-type art as the scanner's, so the same share of the frame.
+    mission_objective_destroy = 8,
+    -- Its texture already carries the inset, so it takes a much larger share of
+    -- the frame than the rest and still matches the game's own marker.
+    mission_objective_other = 20,
+}
+
 local RADAR_OUTLINE_WIDGET_COLOR = { 255, 213, 226, 206 }
 local RADAR_LEGEND_INDICATOR_WIDGET_COLOR = { 255, 213, 226, 206 }
 local MARKER_VALUE_TEXT_WIDGET_COLOR = { 255, 255, 225, 0 }
 local BOSS_DISTANCE_TEXT_WIDGET_COLOR = MARKER_VALUE_TEXT_WIDGET_COLOR
 local VERTICAL_ARROW_WIDGET_COLOR = { 255, 255, 255, 255 }
+-- Where the arrow sits and how big it is are two separate proportions of the
+-- marker, so one can be tuned without moving the other. They used to be pixel
+-- sums -- `size * 0.45 + 1` for the arrow, and half of that plus three for the
+-- corner overlap -- which held at the default size and drifted everywhere else:
+-- the part of the arrow hanging past the marker grew from nothing at half scale
+-- to a sixth of the marker at double, so a large marker's arrow looked detached
+-- while a small one's looked tucked in.
+--
+-- The arrow's centre, as a fraction of the marker from its top left corner. This
+-- is the placement, and it is what the pixel sums worked out to at the default
+-- size, so it is unchanged from the geometry that was calibrated by eye.
+local VERTICAL_ARROW_CENTRE_RATIO = 0.885
+-- The arrow reads as a secondary indicator, not a second marker: at the 26px
+-- objective frame this is a 9px arrow against a 12px icon inside a 26px
+-- diamond. Sizing it off the centre ratio's own arithmetic, as an overlap did,
+-- meant shrinking the arrow also walked it outwards.
+local VERTICAL_ARROW_SIZE_RATIO = 0.34
+-- Below this the arrow stops reading as an arrow at all.
+local VERTICAL_ARROW_MIN_SIZE = 6
 local RADAR_ZOOM_INDICATOR_WIDGET_COLOR = { 210, 0, 255, 0 }
 
 local function _any_to_widget_color(color, fallback)
@@ -206,6 +265,12 @@ local function _configured_marker_color(kind, fallback)
     local get_marker_color = mod.get_marker_color
 
     return get_marker_color and get_marker_color(mod, kind, fallback) or fallback
+end
+
+local function _marker_color_kind(kind, meta)
+    local get_marker_color_kind = mod.get_marker_color_kind
+
+    return get_marker_color_kind and get_marker_color_kind(mod, kind, meta) or kind
 end
 
 local function _configured_marker_background_color(kind, fallback)
@@ -606,6 +671,72 @@ local PRESENTATIONS = {
         icon = "content/ui/materials/hud/interactions/icons/default",
         color = _widget_color(255, 255, 215, 0),
         size = 14,
+    },
+    mission_objective_scanner = {
+        icon = OBJECTIVE_FRAME_ICON,
+        plate_icon = OBJECTIVE_PLATE_ICON,
+        overlay_icon = "content/ui/materials/icons/mission_types/mission_type_03",
+        color = VANILLA_OBJECTIVE_WIDGET_COLOR,
+        size = OBJECTIVE_FRAME_SIZE,
+        background_base_size = OBJECTIVE_FRAME_SIZE,
+        overlay_base_size = OBJECTIVE_ICON_SIZE_BY_KIND.mission_objective_scanner,
+    },
+    mission_objective_hacking = {
+        icon = OBJECTIVE_FRAME_ICON,
+        plate_icon = OBJECTIVE_PLATE_ICON,
+        overlay_icon = "content/ui/materials/icons/pocketables/hud/auspex_scanner",
+        color = VANILLA_OBJECTIVE_WIDGET_COLOR,
+        size = OBJECTIVE_FRAME_SIZE,
+        background_base_size = OBJECTIVE_FRAME_SIZE,
+        overlay_base_size = OBJECTIVE_ICON_SIZE_BY_KIND.mission_objective_hacking,
+    },
+    mission_objective_servo_skull = {
+        icon = OBJECTIVE_FRAME_ICON,
+        plate_icon = OBJECTIVE_PLATE_ICON,
+        overlay_icon = "content/ui/materials/icons/abilities/default",
+        color = VANILLA_OBJECTIVE_WIDGET_COLOR,
+        size = OBJECTIVE_FRAME_SIZE,
+        background_base_size = OBJECTIVE_FRAME_SIZE,
+        overlay_base_size = OBJECTIVE_ICON_SIZE_BY_KIND.mission_objective_servo_skull,
+    },
+    -- Growth steps of a purge event. Its own kind purely so its icon carries its
+    -- own size and position: it shares the generic category's dropdown, colour
+    -- and scale group.
+    mission_objective_growth = {
+        icon = OBJECTIVE_FRAME_ICON,
+        plate_icon = OBJECTIVE_PLATE_ICON,
+        overlay_icon = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_parasite",
+        color = VANILLA_OBJECTIVE_WIDGET_COLOR,
+        size = OBJECTIVE_FRAME_SIZE,
+        background_base_size = OBJECTIVE_FRAME_SIZE,
+        overlay_base_size = OBJECTIVE_ICON_SIZE_BY_KIND.mission_objective_growth,
+    },
+    -- Targets any other objective marks for destruction: ice on machinery,
+    -- tanks, cogitators. The game gives them no finer type, so one icon; the
+    -- generic category's colour.
+    mission_objective_destroy = {
+        icon = OBJECTIVE_FRAME_ICON,
+        plate_icon = OBJECTIVE_PLATE_ICON,
+        overlay_icon = "content/ui/materials/icons/mission_types/mission_type_01",
+        color = VANILLA_OBJECTIVE_WIDGET_COLOR,
+        size = OBJECTIVE_FRAME_SIZE,
+        background_base_size = OBJECTIVE_FRAME_SIZE,
+        overlay_base_size = OBJECTIVE_ICON_SIZE_BY_KIND.mission_objective_destroy,
+    },
+    mission_objective_other = {
+        icon = OBJECTIVE_FRAME_ICON,
+        plate_icon = OBJECTIVE_PLATE_ICON,
+        overlay_icon = "content/ui/materials/hud/interactions/icons/objective_main",
+        color = VANILLA_OBJECTIVE_WIDGET_COLOR,
+        size = OBJECTIVE_FRAME_SIZE,
+        background_base_size = OBJECTIVE_FRAME_SIZE,
+        -- `objective_main` carries its inset inside the texture, so it needs a
+        -- larger share of the frame than the other icons -- but not the whole
+        -- frame, which drew it larger than the game's own marker. Kept even, and
+        -- an even fraction of an even frame: the frame's centre and the icon's
+        -- half size are floored separately, and only matching parity makes the
+        -- two cancel, which is what keeps this centred without an offset.
+        overlay_base_size = OBJECTIVE_ICON_SIZE_BY_KIND.mission_objective_other,
     },
     pickup_tainted_skull = {
         icon = TAINTED_SKULL_LIVE_EVENT_ICON,
@@ -1589,6 +1720,11 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         _style_color_table(overlay_icon_style),
         visual and visual.overlay_color or nil
     ) or nil
+    local plate_icon_style_for_color = widget.style.plate_icon
+    local plate_color = plate_icon_style_for_color and _copy_into_widget_color(
+        _style_color_table(plate_icon_style_for_color),
+        visual and visual.plate_color or nil
+    ) or nil
     local title_color = title_icon_style and _copy_into_widget_color(
         _style_color_table(title_icon_style),
         visual and visual.color or nil
@@ -1634,6 +1770,7 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
     widget.content.radius_icon_size = radius_size
     widget.content.icon = visual and visual.icon or nil
     widget.content.glyph_icon = glyph_icon
+    widget.content.plate_icon = visual and visual.plate_icon or nil
     widget.content.overlay_icon = visual and visual.overlay_icon or nil
     widget.content.title_icon = visual and visual.title_icon or nil
     widget.content.arrow_icon = arrow_icon
@@ -1645,7 +1782,11 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
     local arrow_anchor_x = nil
     local arrow_anchor_y = nil
     local arrow_anchor_size = nil
-    local arrow_size_base = nil
+    -- Some icon art sits small inside its box, so its presentation raises `size`
+    -- to compensate. `arrow_base_size` lets the vertical arrow keep the
+    -- proportions it would have at the nominal size instead of scaling with the
+    -- inflated box. Nil means the arrow tracks the marker exactly as before.
+    local arrow_size_base = visual and tonumber(visual.arrow_base_size) or nil
 
     icon_offset[1] = math_floor((x or 0) + 0.5)
     icon_offset[2] = math_floor((y or 0) + 0.5)
@@ -1653,6 +1794,24 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
     icon_size_tbl[1] = size
     icon_size_tbl[2] = size
     icon_style.color = color
+
+    -- An opt-in layer behind the base icon, for markers that want a backplate
+    -- under their art. A marker enables it purely by naming a `plate_icon`; kinds
+    -- that do not name one -- every enemy marker among them, which composes its
+    -- own background into the base layer instead -- are drawn exactly as before.
+    local plate_icon_style = widget.style.plate_icon
+
+    if plate_icon_style then
+        local plate_offset = plate_icon_style.offset
+        local plate_size_tbl = plate_icon_style.size
+
+        plate_offset[1] = icon_offset[1]
+        plate_offset[2] = icon_offset[2]
+        plate_offset[3] = icon_z - 1
+        plate_size_tbl[1] = size
+        plate_size_tbl[2] = size
+        plate_icon_style.color = plate_color or color
+    end
 
     if radius_icon_style and radius_icon and radius_size then
         local radius_offset = radius_icon_style.offset
@@ -1695,21 +1854,23 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
             arrow_anchor_size = math_floor(anchor_size + 0.5)
         end
 
-        arrow_size_base = size
+        arrow_size_base = arrow_size_base or size
     end
 
     if overlay_icon_style then
-        local overlay_size = nil
         local overlay_base_size = visual and tonumber(visual.overlay_base_size) or nil
         local background_base_size = visual and tonumber(visual.background_base_size or visual.size) or nil
+        -- Kept unrounded: the parity correction below needs to know which way
+        -- the rounding went to pick the nearer of the two candidates.
+        local exact_overlay_size = nil
 
         if overlay_base_size and background_base_size and background_base_size > 0 then
-            overlay_size = math_floor(size * (overlay_base_size / background_base_size) + 0.5)
+            exact_overlay_size = size * (overlay_base_size / background_base_size)
         else
-            overlay_size = math_floor((visual and visual.overlay_size or (size - 2)) + 0.5)
+            exact_overlay_size = visual and visual.overlay_size or (size - 2)
         end
 
-        overlay_size = math_max(4, overlay_size)
+        local overlay_size = math_max(4, math_floor(exact_overlay_size + 0.5))
 
         local overlay_offset = overlay_icon_style.offset
         local overlay_size_tbl = overlay_icon_style.size
@@ -1723,6 +1884,28 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
             overlay_offset[2] = icon_offset[2] + size - overlap
             overlay_offset[3] = icon_z + 3
         else
+            -- The frame's centre and the icon's half size are floored
+            -- independently, so they only cancel when the two sizes share a
+            -- parity: an odd icon inside an even frame -- or the reverse --
+            -- lands half a pixel off centre. Both the nominal sizes are even, but
+            -- the user's scale is applied to each of them separately and about
+            -- half of the scale values break the match. 120% did (frame 31, icon
+            -- 24) while 125% did not (33 and 25), which is what a static offset
+            -- could never have fixed.
+            --
+            -- So the icon is moved to the nearer integer of the frame's own
+            -- parity. That costs at most a pixel of size and buys exact centring
+            -- at every scale.
+            if (overlay_size - size) % 2 ~= 0 then
+                -- Whichever of the two neighbours is nearer the exact size,
+                -- except at the minimum, where there is only one way to go.
+                if exact_overlay_size > overlay_size or overlay_size <= 4 then
+                    overlay_size = overlay_size + 1
+                else
+                    overlay_size = overlay_size - 1
+                end
+            end
+
             overlay_offset[1] = icon_center_x - math_floor(overlay_size * 0.5)
             overlay_offset[2] = icon_center_y - math_floor(overlay_size * 0.5)
             overlay_offset[3] = icon_z + 1
@@ -1758,11 +1941,18 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         local base_x = arrow_anchor_x or icon_offset[1]
         local base_y = arrow_anchor_y or icon_offset[2]
         local base_size = arrow_anchor_size or size
-        local arrow_size = math_max(6, math_floor((arrow_size_base or base_size) * 0.45 + 1))
-        local overlap = math_floor(arrow_size * 0.5 + 1) + 2
+        local arrow_base = arrow_size_base or base_size
+        local arrow_size = math_max(VERTICAL_ARROW_MIN_SIZE,
+            math_floor(arrow_base * VERTICAL_ARROW_SIZE_RATIO + 0.5))
+        local arrow_centre = arrow_base * VERTICAL_ARROW_CENTRE_RATIO
+        -- The arrow anchor box is centred on the marker, so a smaller arrow base
+        -- keeps the arrow beside the glyph instead of drifting out to the corner
+        -- of an oversized box. With no override this is zero and the placement is
+        -- unchanged.
+        local inset = (base_size - arrow_base) * 0.5
 
-        arrow_offset[1] = base_x + base_size - overlap
-        arrow_offset[2] = base_y + base_size - overlap
+        arrow_offset[1] = math_floor(base_x + inset + arrow_centre - arrow_size * 0.5 + 0.5)
+        arrow_offset[2] = math_floor(base_y + inset + arrow_centre - arrow_size * 0.5 + 0.5)
         arrow_offset[3] = icon_z + 3
         arrow_size_tbl[1] = arrow_size
         arrow_size_tbl[2] = arrow_size
@@ -2389,6 +2579,21 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
     return result
 end
 
+-- PRESENTATIONS entries are shared tables, mutated per target as each is drawn.
+-- An icon override therefore has to be reapplied or reset on every marker, or
+-- the first overridden one leaves its icon on every later marker of that kind.
+local function _configured_objective_background_color(fallback)
+    local get_color = mod.get_mission_objective_background_color
+
+    return get_color and get_color(mod) or fallback
+end
+
+local function _configured_objective_frame_color(fallback)
+    local get_color = mod.get_mission_objective_frame_color
+
+    return get_color and get_color(mod) or fallback
+end
+
 local function _artwork_mode(kind, draw_cache)
     local mode = nil
 
@@ -2775,7 +2980,18 @@ local function _target_visual(target, draw_cache)
         end
 
         if display_mode ~= "artwork" then
-            presentation.color = _configured_marker_color(target_kind, presentation.color)
+            local marker_color = _configured_marker_color(_marker_color_kind(target_kind, meta), presentation.color)
+
+            if presentation.plate_icon ~= nil then
+                -- A framed marker's base layer is the frame, which is the family's
+                -- identity and has a colour of its own. The marker colour, and
+                -- any state colour, belongs to the icon on top of it.
+                presentation.color = _configured_objective_frame_color(marker_color)
+                presentation.overlay_color = marker_color
+                presentation.plate_color = _configured_objective_background_color(presentation.plate_color)
+            else
+                presentation.color = marker_color
+            end
         end
 
         presentation.accent_color = _configured_marker_background_color(target_kind, presentation.accent_color)

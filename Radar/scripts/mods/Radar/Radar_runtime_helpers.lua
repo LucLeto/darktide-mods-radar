@@ -95,6 +95,28 @@ return function(env)
         return tostring(unit)
     end
 
+    -- The resource a unit was spawned from, the same for every unit of one
+    -- prefab: hashed in a shipping build (`#ID[ab4fec216e4f3c1c]`) but still
+    -- comparable. nil when the engine cannot say, never a stand-in like the one
+    -- `_safe_unit_name` returns -- callers compare these, and a per-unit
+    -- stand-in would make every unit its own prefab.
+    function _safe_unit_prefab_name(unit)
+        local unit_api = Unit
+        local debug_name = unit_api and unit_api.debug_name
+
+        if not debug_name then
+            return nil
+        end
+
+        local ok, result = pcall(debug_name, unit, false)
+
+        if ok and type(result) == "string" and result ~= "" then
+            return result
+        end
+
+        return nil
+    end
+
     function _is_finite_number(v)
         return type(v) == "number" and v == v and v ~= math_huge and v ~= -math_huge
     end
@@ -1215,6 +1237,12 @@ return function(env)
         pocketable_void_shield = 0.08,
         pickup_martyr_skull = 0.1,
         martyr_skull_riddle_interactable = 0.12,
+        mission_objective_scanner = 0.12,
+        mission_objective_hacking = 0.12,
+        mission_objective_servo_skull = 0.12,
+        mission_objective_other = 0.12,
+        mission_objective_growth = 0.12,
+        mission_objective_destroy = 0.12,
         luggable_power_cell_orange = 0.18,
         medicae_station = 0.2,
         luggable_socket = 0.18,
@@ -1278,22 +1306,126 @@ return function(env)
         return cache
     end
 
-    function mod:get_interaction_world_markers_by_unit()
-        local cache = _interaction_world_marker_cache()
+    -- Reused instead of a per-call closure; the event manager invokes the
+    -- callback synchronously, so a single slot is enough.
+    local _world_markers_list_result = nil
+
+    local function _world_markers_list_response(response)
+        _world_markers_list_result = response
+    end
+
+    -- Shared by every world-marker consumer so the request is issued the same
+    -- way each time. Returns the live list owned by the HUD element; callers
+    -- must only read it.
+    function _safe_world_markers_list()
         local managers = Managers
         local event_manager = managers and managers.event or nil
         local trigger = event_manager and event_manager.trigger or nil
 
         if not trigger then
-            return cache
+            return nil
         end
 
-        local markers = nil
-        local ok = pcall(trigger, event_manager, "request_world_markers_list", function(response)
-            markers = response
-        end)
+        _world_markers_list_result = nil
+
+        local ok = pcall(trigger, event_manager, "request_world_markers_list", _world_markers_list_response)
+        local markers = _world_markers_list_result
+        _world_markers_list_result = nil
 
         if not ok or type(markers) ~= "table" then
+            return nil
+        end
+
+        return markers
+    end
+
+    -- Every unit the game currently holds a world marker for, whatever the
+    -- marker's type. Presence only, deliberately not `draw` or `widget.visible`:
+    -- a marker the player is too far away to see is still a live objective, and
+    -- filtering on visibility would make markers blink with distance. Returns
+    -- false when the list cannot be read, so callers can fall back rather than
+    -- treat an unavailable list as "nothing exists".
+    -- The units among them the game is marking as an objective, as opposed to
+    -- the prompt a player gets standing next to something. Refilled with them.
+    local _objective_marker_units = {}
+    -- The units at least one of whose markers the game is drawing rather than
+    -- holding out of reach. Presence above is unaffected; this answers only
+    -- whether the game's marker is on screen, for what it lets past the
+    -- radar's range.
+    local _marker_in_reach_units = {}
+
+    -- The game's own test: the camera distance it keeps on the marker against
+    -- its template's `max_distance`, unless the marker lifts the limit. One it
+    -- has not measured yet counts as drawn, as every marker did before.
+    function _world_marker_in_reach(marker)
+        if marker.block_max_distance then
+            return true
+        end
+
+        local template = marker.template
+        local max_distance = type(template) == "table" and template.max_distance or nil
+        local distance = marker.distance
+
+        return type(max_distance) ~= "number" or type(distance) ~= "number" or distance <= max_distance
+    end
+
+    function _refresh_world_marker_units(out)
+        table_clear(out)
+        table_clear(_objective_marker_units)
+        table_clear(_marker_in_reach_units)
+
+        local markers = _safe_world_markers_list()
+
+        if not markers then
+            return false
+        end
+
+        for i = 1, #markers do
+            local marker = markers[i]
+            local unit = marker and marker.unit or nil
+
+            if unit ~= nil then
+                out[unit] = true
+
+                if marker.type == "objective" then
+                    _objective_marker_units[unit] = true
+                end
+
+                if _world_marker_in_reach(marker) then
+                    _marker_in_reach_units[unit] = true
+                end
+            end
+        end
+
+        return true
+    end
+
+    function _game_marks_as_objective(unit)
+        return _objective_marker_units[unit] == true
+    end
+
+    function _game_draws_marker_on(unit)
+        return _marker_in_reach_units[unit] == true
+    end
+
+    -- For the mission reset: each of these holds units, and is otherwise only
+    -- emptied by the next refresh.
+    function _clear_world_marker_units()
+        table_clear(_objective_marker_units)
+        table_clear(_marker_in_reach_units)
+
+        local cache = mod._interaction_world_markers_by_unit
+
+        if type(cache) == "table" then
+            table_clear(cache)
+        end
+    end
+
+    function mod:get_interaction_world_markers_by_unit()
+        local cache = _interaction_world_marker_cache()
+        local markers = _safe_world_markers_list()
+
+        if not markers then
             return cache
         end
 
@@ -1711,9 +1843,11 @@ return function(env)
         local position = target and target.position
 
         local anchor_position = nil
+        local node_position = nil
 
         if unit then
-            anchor_position = _safe_unit_node_position(unit, "ui_interaction_marker") or _safe_unit_position(unit)
+            node_position = _safe_unit_node_position(unit, "ui_interaction_marker")
+            anchor_position = node_position or _safe_unit_position(unit)
         end
 
         if not anchor_position and not position then
@@ -1740,12 +1874,70 @@ return function(env)
         }
     end
 
+    -- The centre of the unit's oriented bounding box. A prefab's root is wherever
+    -- its author put the pivot, which on a wall-mounted terminal is the mounting
+    -- point rather than the panel, and a highlight bracket wants the middle of
+    -- what it frames. `Unit.box` returns the box's pose and half extents and the
+    -- pose's translation is its centre -- the same call, and the same reason,
+    -- the Strikemap mod uses to centre its door bars on the leaf instead of the
+    -- hinge.
+    --
+    -- Engine functions the mod has not relied on before, so each is checked for
+    -- existence and called through pcall, and any failure is simply "no box":
+    -- the caller keeps the origin it would have used anyway.
+    function _safe_unit_box_center(unit)
+        if not _safe_unit_alive(unit) then
+            return nil
+        end
+
+        local unit_api = Unit
+        local box = unit_api and unit_api.box
+        local matrix_api = Matrix4x4
+        local translation = matrix_api and matrix_api.translation
+
+        if not box or not translation then
+            return nil
+        end
+
+        local ok_box, pose = pcall(box, unit)
+
+        if not ok_box or pose == nil then
+            return nil
+        end
+
+        local ok_center, center = pcall(translation, pose)
+
+        if not ok_center or center == nil then
+            return nil
+        end
+
+        return _copy_vector3(center)
+    end
+
+    -- Where the bracket is actually placed whenever the game is not drawing its
+    -- own interaction marker for the unit -- which for a scan target is always.
+    -- The anchor above only feeds the occlusion test on the path where that
+    -- marker exists; it never positions the bracket.
     function _screen_highlight_projection_fallback_position(target)
         local unit = target and target.unit or nil
+        local kind = target and target.kind or nil
         local position = nil
 
         if unit then
-            position = _safe_unit_position(unit)
+            -- Objectives are framed on the middle of the prop. Pickups keep their
+            -- origin on purpose (#103): their `ui_interaction_marker` floats above
+            -- the item where the prompt goes, and with no prompt showing a
+            -- bracket up there looks detached, so the lower anchor is right for
+            -- them. A scan target is the opposite case -- a wall terminal whose
+            -- root is its mounting point -- and the bracket sat above and beside
+            -- the panel the auspex had to be pointed at. All six scan targets of
+            -- an Archivum Sycorax run had neither the game's marker nor a node,
+            -- so this is the only thing that can place them.
+            if type(kind) == "string" and kind:sub(1, 18) == "mission_objective_" then
+                position = _safe_unit_box_center(unit)
+            end
+
+            position = position or _safe_unit_position(unit)
         end
 
         position = position or (target and target.position) or nil
@@ -1824,6 +2016,9 @@ return function(env)
         local get_marker_scale_group = mod.get_marker_scale_group
         local highlight_setting_by_group = NEARBY_HIGHLIGHT_SETTING_BY_GROUP
         local screen_highlight_color_for_kind = _screen_highlight_color_for_kind
+        local marker_color_kind = mod.get_marker_color_kind or function(_, kind)
+            return kind
+        end
         local get_occluded_highlight_color = mod.get_occluded_highlight_color
         local screen_highlight_anchor_position = _screen_highlight_anchor_position
         local screen_highlight_projection_fallback_position = _screen_highlight_projection_fallback_position
@@ -1853,6 +2048,16 @@ return function(env)
                     local setting_id = group_name and highlight_setting_by_group[group_name] or nil
 
                     enabled = setting_id ~= nil and get_setting(mod, setting_id) == true or false
+
+                    -- The radar-side highlight honours the per-kind exclusion
+                    -- list through `is_nearby_highlight_enabled_for_kind`, but
+                    -- this screen-space bracket is a separate gate and used to
+                    -- ignore it, so an excluded kind still got a bracket drawn
+                    -- around it in the world.
+                    if enabled and NEARBY_HIGHLIGHT_EXCLUDED_KINDS[kind] then
+                        enabled = false
+                    end
+
                     highlight_enabled_by_kind[kind] = enabled
                 end
 
@@ -1865,7 +2070,10 @@ return function(env)
                     end
 
                     if distance_sq ~= nil and distance_sq <= max_distance_sq then
-                        local color = screen_highlight_color_for_kind(kind)
+                        -- Follows the radar marker, so a puzzle's bracket and its
+                        -- dot never disagree about whether it needs a player.
+                        local color = screen_highlight_color_for_kind(
+                            marker_color_kind(mod, kind, target.meta))
                         local world_position = screen_highlight_anchor_position(target, interactee_extension_map)
                         local fallback_world_position = screen_highlight_projection_fallback_position(target)
 

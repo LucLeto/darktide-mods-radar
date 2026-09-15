@@ -23,6 +23,7 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 - Adds optional nearby screen-space highlight brackets for supported non-enemy marker groups, with configurable thickness, per-marker highlight colors, and optional distance labels on the screen highlight, the radar marker, or both.
 - Adds optional remaining-charge annotations for Medicae Stations and deployed Ammo Crates, plus a scaled healing-radius ring for deployed Medical Crates.
 - Adds dedicated **Martyr's Skull riddle interactable** markers for supported mission-specific keys, levers, switches, buttons, and related puzzle controls. Markers clear automatically when individual steps are used or the riddle is completed.
+- Adds **Mission Objective Interactable** markers for the world interactions that drive mission progression, split into **Scanner targets**, **Hacking terminals**, **Servo skull objectives**, **Daemonic growth**, **Targets to destroy**, and **Other objective interactions**, each with its own **Icon only**, **Icon + Distance m**, and **Off** display mode and icon. Markers come from the game's own objective systems rather than from what the HUD happens to be drawing, so a step appears as soon as it becomes relevant instead of only once you are close enough for the interaction prompt, and clears again the moment it is completed.
 - Adds dedicated **Expedition POI** support for numbered **Sites of Interest**, **Deadsider Sanctuaries**, **Data Reliquary Harvesters**, **Main Objective**, **Valkyrie Extraction Zone**, and **Valkyrie Arrival Zone**, with per-category **Icon only**, **Icon + Distance m**, and **Off** display modes. Player-marked navigation POIs show an evenly divided ring containing the slot colors of up to four marking players.
 - Supports tech-remnant loot modes for **Default**, **Scale by value**, and **Merge nearby piles**, plus optional cluster value text and radius tuning.
 - Includes optional distance text for bosses, player tags, nearby marker highlights, and expedition POIs, per-enemy-category vertical arrow toggles, **Infinite** boss and teammate range modes, **debug logs**, and an **unknown pickups** toggle for discovery and troubleshooting.
@@ -343,6 +344,7 @@ Each major option group now includes an **Icon size (%)** slider. These sliders 
 | Collectable Materials | Diamantine and Plasteel |
 | Primary Objective Items | Mission luggables and primary objective pickups |
 | Secondary Objective Items | Grimoires and Scriptures |
+| Mission Objective Interactables | Scanner targets, hacking terminals, servo skull objectives, daemonic growth, and other objective interaction points |
 | Expeditions POI | Sites of Interest, sanctuaries, harvesters, main objective, extraction, and arrival markers |
 | Expeditions-Specific Items | Salvage, Tech-Remnants, expedition pocketables, and related expedition pickups |
 | Martyr's Skull Items | Martyr's Skull markers, riddle interactables, and related power cell markers |
@@ -407,6 +409,7 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Collectable Materials | Highlights nearby diamantine and plasteel. |
 | Primary Objective Items | Highlights nearby mission luggables and main objective pickups. |
 | Secondary Objective Items | Highlights nearby grimoires and scriptures. |
+| Mission Objective Interactables | Highlights nearby scanner targets, hacking terminals, and other active objective interaction points. Servo skull objectives are excluded because the game already draws its own on-screen marker for them. |
 | Expeditions-Specific Items | Highlights nearby salvage, tech-remnants, expedition pocketables, and related expedition pickups. |
 | Martyr's Skull Items | Highlights nearby Martyr's Skull items, riddle interactables, and orange power cell markers. |
 | Environment | Highlights nearby medicae stations, power sockets, heretic idols, and hazard barrels. |
@@ -435,13 +438,89 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Valkyrie Extraction Zone | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls extraction points with the dedicated extraction icon. |
 | Valkyrie Arrival Zone | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls arrival points with the dedicated arrival icon. |
 
+### Mission Objective Interactable Controls
+
+Radar reads these markers from the game's own objective systems. A step appears as soon as the game
+arms it, rather than only once you are close enough for the interaction prompt to be drawn, which is
+what makes objectives visible from across a room. A marker clears when the step reports itself used or
+inactive, when a scan target is scanned, when a puzzle is solved, when a destructible step is broken,
+or when the objective system drops it.
+
+Missions often place several copies of the same device and arm one at a time, so only the armed copy is
+marked. An unarmed copy appears once the mission arms it.
+
+Missions often file several alternatives under one objective and use only one of them -- nine possible
+cargo containers where one holds the cargo, several possible spawn sites for an event. When an
+objective says which of its units it will mark at the start, the ones it passes over are left off the
+radar; when it says nothing of the sort, every unit is kept.
+
+Objectives that mix real steps with pure position hints show only the steps. A luggable objective holds
+the items and their sockets, which you can act on, alongside spawn points and waypoints, which you
+cannot, so the bare units in it are left off the radar. An objective made of nothing but bare units is
+read the other way round: there the bare units are the step, as with the train controls destroyed to
+stop the train, and all of them are marked. Those steps carry no state of their own at all, so they are
+cleared one at a time by the game's own world marker for each of them going away. The same rule picks
+the live target of an objective that files several identical candidates, such as the dormant growth
+sites of a purge event: the game marks only the one that is live. It applies to objective targets that
+are not interactables -- an interactable is deliberately shown before the game marks it -- and holds its
+candidates back for a moment when an objective starts, since the game does not assign its markers in the
+same frame and every candidate would otherwise flash up at once. It applies only for an objective the
+game's marker list has been seen to cover, so a list that says nothing about an objective
+never hides it. Once an objective has appeared in that list it stays trusted for the rest of the
+mission, since otherwise its last remaining step finishing would look the same as an objective the list
+never described. This is decided per objective, since missions run several
+at once. Objective units that already have their own marker kind, such as luggables and their sockets,
+keep it instead of gaining a second one.
+
+Only the currently active objective is shown. A mission holds around a hundred objective-bound units
+across all of its stages, so anything the game does not tie to the live objective stays off the radar.
+This holds however a device is recognised: a mission that places three devices and finishes with one of
+them never used drops that one along with the rest. Devices the mission does not attribute to any
+objective at all are exempt, since that is the only way they stay visible.
+
+A step the game is marking stays on the radar beyond its range, but only while the game is actually
+drawing that marker: its objective markers stop at 300 metres. Mortis Trials marks the start of all
+three of its arenas, and the two nobody is in lie far beyond that, so they stay off the radar.
+
+Objective devices that carry a puzzle -- Auspex decoding, bomb defusal, and the like -- say in colour
+whether they need somebody, following the device's own hologram:
+
+| Puzzle | Marker |
+| --- | --- |
+| Not started yet | the shared objective tint, like any other objective marker |
+| Running, nobody at it | **red** -- it is asking for a player |
+| A player at the device | **yellow** -- it is being worked on |
+| Solved | the shared objective tint again -- the device stays part of the objective |
+
+A device keeps its marker for as long as its objective runs, whether or not its puzzle is solved, so
+nothing blinks out and returns in red when an objective arms the same device for another round. The
+marker goes when the objective itself ends.
+
+The two live colours have their own sliders under **Hacking terminals**, since that is where every
+puzzle device is configured whichever category it belongs to. The icon, display mode and icon size stay
+those of the device's own category; only the colour follows the puzzle, and the on-screen highlight
+bracket follows it too. Objective devices without a puzzle keep the shared objective tint throughout.
+
+Objective markers are never hidden for being above or below you, whatever **Hide vertical markers
+above/below** is set to: an objective a floor up is exactly what you need to see.
+
+| Option | Modes / default | What it controls |
+| --- | --- | --- |
+| Mission Objective Interactables | Option group | Groups the icon-size, nearby-highlight, distance-text, and per-category display mode controls. |
+| Scanner targets | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls scanning targets tied to the current mission objective. |
+| Hacking terminals | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls hacking terminals and decoding spots tied to the current mission objective. |
+| Servo skull objectives | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls the mission servo skull while you follow it. Its position updates at the configured **Marker update rate** rather than the slower pickup rate, since it moves. It gets no nearby highlight bracket and needs a larger height difference than other markers before a vertical arrow appears, because it hovers and bobs in flight. |
+| Daemonic growth | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls the daemonic growth targets of a purge event. Has its own icon and color rather than the shared objective tint. |
+| Targets to destroy | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls the targets any other objective marks for destruction, such as ice on machinery, tanks and cogitators. Has its own icon, icon color and highlight color. |
+| Other objective interactions | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls the remaining objective-bound interaction points, such as switches, buttons, and mission-scripted interactions that do not fall into the categories above. |
+
 ### Martyr's Skull Controls
 
 | Option | What it controls |
 | --- | --- |
 | Martyr's Skull Items | Groups the icon-size, nearby-highlight, distance-text, skull, riddle-interactable, and power-cell controls. |
 | Martyr's Skull | Shows the collectible Martyr's Skull. |
-| Riddle interactables | Shows active, supported Martyr's Skull riddle keys, levers, switches, buttons, and related puzzle controls. Completed or used steps clear automatically instead of returning on later scans. |
+| Riddle interactables | Shows active, supported Martyr's Skull riddle keys, levers, switches, buttons, and related puzzle controls. Completed or used steps clear automatically instead of returning on later scans. On Smelter Complex the two growth tentacles blocking the riddle's door carry this marker until they are destroyed; the one above the skull is not needed and is not drawn. |
 | Power Cell | Shows orange power cells used by Martyr's Skull riddles. |
 
 ### Environment Controls
@@ -453,7 +532,7 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Fire Barrels | Shows static fire/promethium hazard barrels. Supports **Icon**, **Icon + Distance**, and **Off**; defaults to **Icon**. |
 | Medicae Station | Shows medicae station and equivalent health station interactions. |
 | Medicae Station Charges | Shows the remaining healing charges on visible Medicae Station markers. Unpowered stations with a missing battery use a light grey marker, while fully depleted stations follow the game's marker visibility. |
-| Power Socket | Shows luggable power socket targets. |
+| Power Socket | Shows luggable power socket targets. Sockets for other mission cargo, such as vacuum capsules, ammunition canisters, cryonic rods, Moebian samples, and the Prismata case, follow Other objective interactions instead. |
 | Heretic Idol | Shows active heretic idols while they are still present. |
 
 ### Deployed Items Controls
@@ -731,6 +810,33 @@ Player tags intentionally stay flatter and cleaner than supported item markers. 
 | <img src="doc/img/pocketable_grimoire.png"  width="80" alt="Grimoire marker" /> | Grimoire | Secondary objective pocketable. |
 | <img src="doc/img/pocketable_scripture.png"  width="80" alt="Scripture marker" /> | Scripture | Secondary objective pocketable. |
 
+### Mission Objective Interactables
+
+| Marker | Source | Notes |
+| --- | --- | --- |
+| Scanner targets | Scan zone selection | The Auspex targets the active scan zone selected for this run, dropped individually as each one is scanned. |
+| Hacking terminals | Decoder device system | Decoder and hacking terminals used for mission progression. A puzzle device is red while it is running unattended, yellow while a player is at it, and the shared objective tint both before it starts and once it is solved. The marker stays until the objective ends. |
+| Servo skull objectives | Servo skull interaction | The mission servo skull while you follow it. |
+| Daemonic growth | Objective target system | Growth steps of a purge event, recognised by the objective's own type (`demolition`) rather than by its name, so every mission running the event is covered. The tentacles, each three destructible eyes of one prefab, get one marker each; the growth's helper targets, which stand under a metre from its centre eye, are not drawn. A tentacle is drawn only while it stands inside the live event, so one left standing from an earlier event does not come back elsewhere, and the tentacles blocking a Martyr's Skull riddle are the riddle's rather than a growth's. Its own category with its own display mode, color and icon. |
+| Targets to destroy | Objective target system | What any other objective marks for destruction, such as ice on machinery, tanks and cogitators. Its own category with its own display mode, icon color, highlight color and icon. |
+| Other objective interactions | Objective target system | The remaining objective-bound interaction points of the active objective, such as switches, buttons, and destructible steps. Destructibles clear one at a time as each is broken, rather than all at once when the objective ends. Where a luggable objective hides its items in a bank of identical containers, only the containers holding one are drawn, at any distance, and the luggable inside is not drawn until its container is opened. A step the game marks more than once, such as the cargo valves that are turned after each delivery, follows the game's own objective marker: shown while the game marks it, hidden in between. The sockets for mission cargo other than power cells -- vacuum capsules, ammunition canisters, cryonic rods, Moebian samples, and the Prismata case -- are drawn here too, with this category's setting and colours; which luggable a socket takes is read from the objective it shares with them. |
+
+Each category has its own icon, drawn inside the diamond frame and backplate the game itself uses around
+objective markers, so the whole family is distinguishable at a glance from enemy markers and from standard points
+of interest. All five share one frame size and the vanilla objective marker tint, so the radar reads as
+the same family as the on-screen HUD marker. Each icon is sized as a proportion of the frame, so it
+keeps its fit at any icon scale, and each carries its own size, since the game's icons are not drawn to
+a common visual size. An icon whose own texture already carries the inset is linked to the frame size
+instead, exactly as the game links them, which also keeps it perfectly centered at every scale. Each has its own icon color sliders. The frame and its backplate have one shared color each, so the
+frame stays the family's identity while each icon keeps its own color and its own state colors; they
+default to the vanilla objective tint and to the near-black the game uses behind its own objective
+markers.
+
+Scan targets are the one case where the radar has to reconstruct what the game knows. The zone that
+owns them publishes which targets this run selected, and each target carries its own active flag that
+clears when it is scanned. On a client the selection itself is not replicated, so it is recovered from
+those flags instead, and only used when its size agrees with the zone's own outstanding count.
+
 ### Expedition POIs
 
 | Preview | Marker | Notes |
@@ -770,7 +876,7 @@ These markers are driven by expedition navigation data rather than standard pick
 | Preview | Marker | Notes |
 | --- | --- | --- |
 | <img src="doc/img/pickup_martyr_skull.png"  width="80" alt="Martyr's Skull marker" /> | Martyr's Skull | Gold skull marker. |
-| <img src="doc/img/martyr_skull_riddle_interactables.png" width="80" alt="Martyr's Skull riddle interactables marker" /> | Riddle Interactables | Gold interaction marker for active Martyr's Skull riddle keys, levers, switches, buttons, and related puzzle controls. Completed or used steps clear automatically. |
+| <img src="doc/img/martyr_skull_riddle_interactables.png" width="80" alt="Martyr's Skull riddle interactables marker" /> | Riddle Interactables | Gold interaction marker for active Martyr's Skull riddle keys, levers, switches, buttons, and related puzzle controls, and for the growth tentacles blocking Smelter Complex's riddle door. Completed or used steps clear automatically. |
 | <img src="doc/img/luggable_power_cell_orange.png"  width="80" alt="Orange Power Cell marker" /> | Power Cell | Orange luggable marker used for the Martyr's Skull group. |
 
 ### Environment Markers
@@ -778,7 +884,7 @@ These markers are driven by expedition navigation data rather than standard pick
 | Preview | Marker | Notes |
 | --- | --- | --- |
 | <img src="doc/img/medicae_station.png"  width="80" alt="Medicae Station marker" /> | Medicae Station | Green medical interaction marker used for medicae stations and equivalent health-station interactions. Can show remaining healing charges as a top-right number. Unpowered stations with a missing battery use a light grey marker. |
-| <img src="doc/img/luggable_socket.png"  width="80" alt="Power Socket marker" /> | Power Socket | Yellow power socket marker for luggable socket targets. |
+| <img src="doc/img/luggable_socket.png"  width="80" alt="Power Socket marker" /> | Power Socket | Yellow power socket marker for luggable socket targets. While you carry a luggable, sockets stay on the radar beyond its range and on any floor. Sockets for mission cargo -- vacuum capsules, ammunition canisters, cryonic rods, Moebian samples, and the Prismata case -- feed the mission's own machinery rather than a power line, so they are drawn as Other objective interactions instead. |
 | <img src="doc/img/heretic_idol.png"  width="80" alt="Heretic Idol marker" /> | Heretic Idol | Sickly green idol marker shown while the idol is still active. Active idols now appear reliably on the radar. |
 | <img src="doc/img/hazard_explosive_barrel.png"  width="80" alt="Explosive Barrel marker" /> | Explosive Barrel | Tan hazard marker for static explosive barrels. Supports **Icon**, **Icon + Distance**, and **Off**. |
 | <img src="doc/img/hazard_fire_barrel.png"  width="80" alt="Fire Barrel marker" /> | Fire Barrel | Orange hazard marker for static fire/promethium barrels. Supports **Icon**, **Icon + Distance**, and **Off**. |
