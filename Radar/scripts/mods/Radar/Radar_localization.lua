@@ -1,3 +1,19 @@
+--- Radar's DMF localization table for all twelve supported languages.
+-- Returns a table from localization id to a table of texts by language code; DMF resolves
+-- `mod:localize(id)` against it. Settings titles, tooltips, dropdown options and colour slider
+-- labels live here. Text shared by many entries (option names, colour channel names and
+-- colour labels) is declared once above the table, and entries that name game content
+-- (enemies, talents, abilities) are built from the game's own localization with `Localize`, so
+-- they follow the player's game language.
+--
+-- Loaded by DMF as `mod_localization`, as declared in `Radar.mod`; not part of the runtime's
+-- shared environment. Traditional Chinese texts are edited against the Darktide translation
+-- glossary linked in the README.
+-- module: Radar_localization
+-- author: LucLeto
+-- author: CaimaoLittle2
+-- author: SyuanTsai
+--- Language codes every localization entry provides.
 local _localization_languages = {
     "en",
     "fr",
@@ -13,6 +29,9 @@ local _localization_languages = {
     "zh-tw",
 }
 
+--- Returns a localization entry with the same text in every language.
+-- string: text text
+-- treturn: tab texts by language code
 local function _localized_text_for_all_languages(text)
     local localization = {}
 
@@ -23,10 +42,16 @@ local function _localized_text_for_all_languages(text)
     return localization
 end
 
+--- Returns a localization entry holding the game's own text for a key, in the game's current language.
+-- string: localization_key game localization key
+-- treturn: tab texts by language code
 local function _localized_game_text(localization_key)
     return _localized_text_for_all_languages(Localize(localization_key))
 end
 
+--- Localizes a list of game keys.
+-- tab: localization_keys game localization keys
+-- treturn: tab localized names
 local function _localized_game_names(localization_keys)
     local localized_names = {}
 
@@ -37,6 +62,10 @@ local function _localized_game_names(localization_keys)
     return localized_names
 end
 
+--- Joins names into an enumeration, such as `a, b and c`.
+-- tab: localized_names names
+-- string: conjunction word before the last name
+-- treturn: string
 local function _join_localized_names(localized_names, conjunction)
     local count = #localized_names
 
@@ -61,6 +90,9 @@ local function _join_localized_names(localized_names, conjunction)
     return result .. " " .. conjunction .. " " .. localized_names[count]
 end
 
+--- Builds a tooltip listing example enemies by their game names, in every language.
+-- tab: localization_keys game localization keys of the enemies
+-- treturn: tab texts by language code
 local function _enemy_examples_tooltip(localization_keys)
     local localized_names = _localized_game_names(localization_keys)
 
@@ -80,6 +112,9 @@ local function _enemy_examples_tooltip(localization_keys)
     }
 end
 
+--- Builds the tooltip of an enemy marker dropdown with the enemy's game name, in every language.
+-- string: localization_key game localization key of the enemy
+-- treturn: tab texts by language code
 local function _enemy_marker_display_tooltip(localization_key)
     local enemy_name = Localize(localization_key)
 
@@ -99,6 +134,7 @@ local function _enemy_marker_display_tooltip(localization_key)
     }
 end
 
+--- Game keys of the abilities and talents whose enemy outlines the ability-marked enemies option supports.
 local _ability_marked_enemy_outline_localization_keys = {
     "loc_talent_psyker_marked_enemies_passive",
     "loc_talent_broker_ability_focus_improved",
@@ -109,6 +145,9 @@ local _ability_marked_enemy_outline_localization_keys = {
     "loc_ability_ogryn_taunt_shout",
 }
 
+--- Localizes a list of game keys, each wrapped in quotes.
+-- tab: localization_keys game localization keys
+-- treturn: tab quoted names
 local function _quoted_localized_game_names(localization_keys)
     local quoted_names = {}
 
@@ -119,6 +158,8 @@ local function _quoted_localized_game_names(localization_keys)
     return quoted_names
 end
 
+--- Builds the tooltip of the ability-marked enemies option, naming the supported abilities, in every language.
+-- treturn: tab texts by language code
 local function _ability_marked_enemies_tooltip()
     local ability_outline_names = _quoted_localized_game_names(_ability_marked_enemy_outline_localization_keys)
 
@@ -161,6 +202,7 @@ local function _ability_marked_enemies_tooltip()
     }
 end
 
+--- Option texts shared by many dropdowns.
 local _text_off = {
     en = "Off",
     fr = "Désactivé",
@@ -266,6 +308,7 @@ local _text_icon_distance_m = {
     ["zh-tw"] = "圖示 + 距離 m",
 }
 
+--- Colour channel names, colour slider group labels and colour slider tooltips, by key.
 local _color_channel_names = {
     opacity = {
         en = "Opacity",
@@ -919,14 +962,22 @@ local _color_tooltip_texts = {
     },
 }
 
+--- Returns the localization entry of a colour label, or the key itself in every language.
+-- treturn: tab texts by language code
 local function _color_label_text(label_key)
     return _color_label_texts[label_key] or _localized_text_for_all_languages(tostring(label_key))
 end
 
+--- Returns the localization entry of a colour tooltip, or the key itself in every language.
+-- treturn: tab texts by language code
 local function _color_tooltip_text(tooltip_key)
     return _color_tooltip_texts[tooltip_key] or _localized_text_for_all_languages(tostring(tooltip_key))
 end
 
+--- Builds the title of one colour channel slider, `<label> - <channel>`, in every language.
+-- string: label_key colour label key
+-- string: channel_key `opacity`, `red`, `green` or `blue`
+-- treturn: tab texts by language code
 local function _color_channel_text(label_key, channel_key)
     channel_key = string.lower(tostring(channel_key or ""))
 
@@ -943,6 +994,7 @@ local function _color_channel_text(label_key, channel_key)
     return localization
 end
 
+--- The DMF localization table.
 return {
     mod_name = {
         en = "Radar",

@@ -1,3 +1,22 @@
+--- Marker kind registry, enemy radar definitions and the enemy scan.
+-- Declares the static tables every other runtime module reads to turn a marker kind into
+-- settings, icon scale, display mode, highlight colour, selection priority and render
+-- layer, and defines per enemy breed how it is drawn on the radar. It also classifies and
+-- tracks live enemies, migrates settings from older versions and preloads the UI packages
+-- that hold Radar's icons.
+--
+-- Installer module, installed first into Radar's shared runtime environment (see
+-- `Radar.lua`), so its upper-case tables exist before any other module installs. It
+-- installs the colour runtime from `Radar_color_settings.lua`.
+--
+-- Contributes to `shared_env` the registries (`KIND_TO_SETTING`, `EXPEDITION_*`,
+-- `ARTWORK_MODE_*`, `NEARBY_*`, `ENEMY_RADAR_*`, `RADAR_GAME_MODE_SETTING_BY_ID`,
+-- `SCAN_INTERVAL`), `_classify_enemy_from_breed` and `_scan_minions`, and the display mode,
+-- scale and priority `mod` methods. `_scan_minions` relies at call time on tracking
+-- (`_track_unit`, `_kind_enabled`), player (`_marked_by_player_slot_for_unit`,
+-- `_supported_ability_marker_state_for_unit`) and runtime helper functions installed later.
+-- module: Radar_enemy_definitions
+-- author: LucLeto
 return function(env)
     setfenv(1, env)
 
@@ -22,10 +41,13 @@ return function(env)
 
     RadarColorSettings.install_runtime(mod)
 
+    --- Base scan interval in seconds; `Radar_tracking.lua` derives its scan tiers from it.
     SCAN_INTERVAL = 0.25
 
+    --- RGB multiplier applied to a nearby highlight bracket whose target is hidden behind geometry.
     NEARBY_OUTLINE_OCCLUDED_MULTIPLIER = 0.6
 
+    --- Marker kinds that have a default nearby highlight colour.
     local NEARBY_OUTLINE_KINDS = {
         "material_diamantine",
         "material_plasteel",
@@ -88,8 +110,8 @@ return function(env)
         "pickup_stolen_rations",
     }
 
-    -- Each kind's default highlight colour, read from the colour settings so
-    -- the default is written down in one place only.
+    --- Default highlight colour per marker kind.
+    -- Read from the colour registry, so each default is written down in one place only.
     NEARBY_OUTLINE_COLOR_BY_KIND = {}
 
     for i = 1, #NEARBY_OUTLINE_KINDS do
@@ -98,6 +120,7 @@ return function(env)
         NEARBY_OUTLINE_COLOR_BY_KIND[kind] = RadarColorSettings.default_highlight_color(kind)
     end
 
+    --- Boss breed sets, matched by exact name before the name patterns in `_classify_enemy_from_breed`.
     MONSTROSITY_BREEDS = {
         chaos_daemonhost = true,
         chaos_beast_of_nurgle = true,
@@ -116,6 +139,7 @@ return function(env)
         renegade_twin_captain_two = true,
     }
 
+    --- Visibility setting of each marker kind; the enemy kinds are added from their definitions below.
     KIND_TO_SETTING = {
         pickup_ammo = "show_ammo_small",
         pickup_ammo_small = "show_ammo_small",
@@ -184,6 +208,7 @@ return function(env)
         medical_crate_deployable = "show_medical_crate_deployable",
     }
 
+    --- Expedition location marker kinds, the icon / icon and distance / off dropdown of each, and the dropdown defaults.
     EXPEDITION_MARKER_KINDS = {
         expedition_loot_converter = true,
         expedition_objective_opportunity = true,
@@ -211,6 +236,7 @@ return function(env)
         show_expedition_loot_converter = "icon_only",
     }
 
+    --- Other kinds using an icon / icon and distance / off dropdown, and the dropdown defaults.
     local ICON_DISTANCE_MARKER_DISPLAY_MODE_KIND_TO_SETTING = {
         hazard_explosive_barrel = "show_explosive_barrels",
         hazard_fire_barrel = "show_fire_barrels",
@@ -233,6 +259,7 @@ return function(env)
         show_mission_objective_destroy = "icon_only",
     }
 
+    --- Icon of each Expedition location marker kind when the game provides none.
     EXPEDITION_OBJECTIVE_ICON_DEFAULTS = {
         expedition_loot_converter = "content/ui/materials/hud/interactions/icons/expeditions",
         expedition_objective_transition = "content/ui/materials/backgrounds/scanner/scanner_map_exit",
@@ -241,6 +268,7 @@ return function(env)
         expedition_objective_arrival = "content/ui/materials/icons/mission_types/mission_type_05",
     }
 
+    --- Kinds using an artwork / icon / off dropdown, and dropdowns with an explicit default.
     ARTWORK_MODE_KIND_TO_SETTING = {
         crate_unknown = "show_crates",
         material_diamantine = "show_diamantine",
@@ -267,6 +295,9 @@ return function(env)
         show_leftover = "artwork",
     }
 
+    --- Settings group of each non-enemy marker kind.
+    -- The group selects the icon scale slider and the nearby highlight settings, and
+    -- `event_group` marks live event kinds. Every `enemy_` kind belongs to `enemies_group`.
     local MARKER_SCALE_GROUP_BY_KIND = {
         crate_unknown = "common_pickups_group",
         pickup_ammo = "common_pickups_group",
@@ -346,6 +377,7 @@ return function(env)
         pickup_unknown = "debug_group",
     }
 
+    --- Icon scale slider of each settings group.
     local ICON_SCALE_SETTING_BY_GROUP = {
         common_pickups_group = "common_pickups_icon_scale",
         materials_group = "materials_icon_scale",
@@ -364,6 +396,7 @@ return function(env)
         debug_group = "debug_icon_scale",
     }
 
+    --- Boss kinds, which share one icon scale slider instead of their category's.
     local ENEMY_RADAR_SCALE_SETTING_BY_KIND = {
         enemy_daemonhost = "enemy_boss_icon_scale",
         enemy_monstrosity = "enemy_boss_icon_scale",
@@ -371,6 +404,7 @@ return function(env)
         enemy_karnak_twin = "enemy_boss_icon_scale",
     }
 
+    --- Default enemy icon and background colours, copied from the colour registry for the definitions below.
     local ENEMY_RADAR_DEFAULT_COLOR = RadarColorSettings.default_color("enemy_background_marker")
     local ENEMY_RADAR_DEFAULT_HORDE_COLOR = RadarColorSettings.default_color("enemy_horde_marker")
     local ENEMY_RADAR_DEFAULT_DREG_COLOR = RadarColorSettings.default_color("enemy_dreg_marker")
@@ -383,12 +417,14 @@ return function(env)
 
     local ENEMY_RADAR_BACKGROUND_ICON = "content/ui/materials/hud/interactions/icons/default"
 
+    --- Shared visibility setting of the enemy categories whose definitions name no setting of their own.
     local ENEMY_RADAR_GROUP_SETTING_IDS = {
         shooter = "show_enemy_shooter",
         common = "show_enemy_common",
         horde = "show_enemy_horde",
     }
 
+    --- Icon scale slider of each enemy category.
     local ENEMY_RADAR_SCALE_SETTING_BY_CATEGORY = {
         special = "enemy_special_icon_scale",
         elite = "enemy_elite_icon_scale",
@@ -398,6 +434,7 @@ return function(env)
         misc = "enemy_misc_icon_scale",
     }
 
+    --- Vertical arrow settings for the boss kinds and for each enemy category.
     local ENEMY_RADAR_VERTICAL_ARROW_SETTING_BY_KIND = {
         enemy_daemonhost = "show_enemy_boss_vertical_arrows",
         enemy_monstrosity = "show_enemy_boss_vertical_arrows",
@@ -414,6 +451,9 @@ return function(env)
         misc = "show_enemy_misc_vertical_arrows",
     }
 
+    --- Selection priority and render layer per enemy priority group and for other special kinds.
+    -- Targets with a higher selection priority are drawn first when the radar sorts its
+    -- targets, and so survive the marker limit; a higher render layer draws above lower ones.
     local ENEMY_RADAR_SELECTION_PRIORITY = {
         boss = 500,
         special = 400,
@@ -441,6 +481,9 @@ return function(env)
     local EXPEDITION_PLAYER_DROP_SELECTION_PRIORITY = 650
     local EXPEDITION_PLAYER_DROP_RENDER_LAYER = 6
 
+    --- Returns the default icon size in pixels of an enemy category.
+    -- string: category enemy category
+    -- treturn: int
     local function _enemy_radar_default_icon_size(category)
         if category == "horde" then
             return 8
@@ -457,6 +500,9 @@ return function(env)
         return 10
     end
 
+    --- Returns the default background size in pixels of an enemy category.
+    -- string: category enemy category
+    -- treturn: ?int nil for hordes, which draw without a background
     local function _enemy_radar_default_background_size(category)
         if category == "horde" then
             return nil
@@ -477,6 +523,16 @@ return function(env)
         return _enemy_radar_default_background_size(category) or _enemy_radar_default_icon_size(category)
     end
 
+    --- Builds an enemy radar definition with category defaults.
+    -- The marker, background and bracket sizes fall back to the category defaults unless
+    -- `extra` sets them; without a background colour the definition has no background layer.
+    -- string: category enemy category (`special`, `elite`, `shooter`, `common`, `horde`, `misc`)
+    -- string: icon icon material
+    -- tab: icon_color default icon colour
+    -- ?tab: background_color default background colour, nil for no background
+    -- ?string: setting_id visibility setting, the category's shared setting when nil
+    -- ?tab: extra definition fields to keep; filled in and returned
+    -- treturn: tab definition
     local function _enemy_radar_def(category, icon, icon_color, background_color, setting_id, extra)
         local def = extra or {}
         local default_icon_size = _enemy_radar_default_icon_size(category)
@@ -498,6 +554,9 @@ return function(env)
         return def
     end
 
+    --- Radar definition of every supported enemy breed, keyed by breed name.
+    -- Each definition holds the category, icon, colours, sizes and visibility setting of the
+    -- breed's marker. Boss breeds are not listed here; they are classified by name.
     ENEMY_RADAR_DEFINITIONS_BY_BREED = {
         renegade_grenadier = _enemy_radar_def(
             "special",
@@ -997,6 +1056,8 @@ return function(env)
         ),
     }
 
+    --- Enemy definitions and visibility settings keyed by marker kind (`enemy_<breed>`).
+    -- Derived from the breed table, which also gains `breed_name` and `kind` on every definition.
     ENEMY_RADAR_DEFINITION_BY_KIND = {}
     ENEMY_RADAR_SETTING_BY_KIND = {}
 
@@ -1012,6 +1073,7 @@ return function(env)
     end
 
 
+    --- Setting that enables the radar in each supported game mode.
     RADAR_GAME_MODE_SETTING_BY_ID = {
         regular_missions = "enable_in_regular_missions",
         havoc = "enable_in_havoc",
@@ -1019,6 +1081,7 @@ return function(env)
         expeditions = "enable_in_expeditions",
     }
 
+    --- Dropdown settings that were checkboxes in older versions, migrated on load.
     ARTWORK_MODE_SETTING_IDS = {
         "show_crates",
         "show_diamantine",
@@ -1049,12 +1112,14 @@ return function(env)
     }
 
 
-    -- Kinds the game already marks on screen. A radar marker is still useful,
-    -- but a second highlight bracket around the same object is not.
+    --- Kinds the game already marks on screen.
+    -- A radar marker is still useful for them, but a second highlight bracket around the same
+    -- object is not, so they never get a nearby highlight.
     NEARBY_HIGHLIGHT_EXCLUDED_KINDS = {
         mission_objective_servo_skull = true,
     }
 
+    --- Nearby highlight toggle, and the toggle for its distance text, of each settings group.
     NEARBY_HIGHLIGHT_SETTING_BY_GROUP = {
         common_pickups_group = "nearby_highlight_common_pickups",
         materials_group = "nearby_highlight_materials",
@@ -1080,18 +1145,25 @@ return function(env)
         event_group = "nearby_highlight_distance_text_event",
     }
 
+    --- Shared white ARGB colour used as a fallback; must not be modified.
     DEFAULT_COLOR_ARRAY_WHITE = { 255, 255, 255, 255 }
 
-    -- Enemy classification and scan: what a live unit is drawn as, from its
-    -- breed and the definitions above.
+    --- Breeds whose rotten armour mutator variant has a definition of its own under the aliased name.
     local ROTTEN_ARMOR_BREED_ALIAS_BY_BASE_BREED = {
         chaos_ogryn_executor = "chaos_ogryn_executor_gibbing_rotten_armor",
         renegade_executor = "renegade_executor_gibbing_rotten_armor",
         renegade_berzerker = "renegade_berzerker_gibbing_rotten_armor",
     }
+    --- Marker kind per breed name (`false` for breeds without one), and a per-scan kind enablement cache.
     local _enemy_kind_by_breed_cache = {}
     local _scratch_minion_kind_enabled_cache = {}
 
+    --- Returns the breed name to classify a unit by, resolving rotten armour variants.
+    -- The variant keeps its base breed name, so it is recognised by the `rotten_armor` keyword
+    -- or the `mutator_rotten_armor` buff.
+    -- !Unit: unit enemy unit
+    -- string: breed_name breed name reported by the unit
+    -- treturn: string
     local function _resolve_enemy_breed_name(unit, breed_name)
         local rotten_armor_breed_name = ROTTEN_ARMOR_BREED_ALIAS_BY_BASE_BREED[breed_name]
 
@@ -1104,6 +1176,12 @@ return function(env)
         return breed_name
     end
 
+    --- Returns the radar marker kind of an enemy breed.
+    -- Daemonhosts, twins, captains and monstrosities are matched by name pattern so new
+    -- variants of these bosses are covered; every other breed needs a definition. Results,
+    -- including misses, are cached per breed name.
+    -- ?string: breed_name breed name
+    -- treturn: ?string marker kind, or nil for breeds the radar does not draw
     function _classify_enemy_from_breed(breed_name)
         local cache_key = breed_name or ""
         local cached = _enemy_kind_by_breed_cache[cache_key]
@@ -1140,6 +1218,11 @@ return function(env)
         return kind
     end
 
+    --- Tracks every live enemy with a radar definition from the unit data system.
+    -- An enemy is tracked while its kind is enabled or while an ability of the local player
+    -- outlines it (when that option is on); otherwise it is removed from tracking. The meta
+    -- records the breed, the player slot that tagged it (when only tagged enemies are shown)
+    -- and the ability outline state.
     function _scan_minions()
         local unit_data_map = _safe_unit_to_extension_map("unit_data_system")
         if not unit_data_map then
@@ -1204,6 +1287,10 @@ return function(env)
         end
     end
 
+    --- Normalises an artwork dropdown value, including legacy checkbox values.
+    -- param: value setting value
+    -- ?string: default_value mode used for unset or `true`, `artwork` when nil
+    -- treturn: string `artwork`, `icon` or `off`
     local function _normalize_marker_display_mode(value, default_value)
         if value == nil then
             return default_value or "artwork"
@@ -1224,6 +1311,10 @@ return function(env)
         return "artwork"
     end
 
+    --- Normalises an icon / icon and distance / off dropdown value, including legacy checkbox values.
+    -- param: value setting value
+    -- ?string: default_value mode used for unknown values, `icon_only` when nil
+    -- treturn: string `icon_only`, `icon_distance` or `off`
     local function _normalize_expedition_marker_display_mode(value, default_value)
         if value == "icon_only" or value == "icon_distance" or value == "off" then
             return value
@@ -1244,6 +1335,8 @@ return function(env)
         return default_value or "icon_only"
     end
 
+    --- Normalises an enemy dropdown value, including legacy checkbox values.
+    -- treturn: string `icon_only`, `marked_icon` or `off`
     local function _normalize_enemy_marker_display_mode(value)
         if value == false or value == "off" then
             return "off"
@@ -1256,6 +1349,8 @@ return function(env)
         return "icon_only"
     end
 
+    --- Normalises a player marker style, defaulting to `marked_icon`.
+    -- treturn: string `icon_only`, `marked_icon`, `dot_only` or `marked_dot`
     local function _normalize_player_display_style(value)
         if value == "icon_only" or value == "marked_icon" or value == "dot_only" or value == "marked_dot" then
             return value
@@ -1264,6 +1359,9 @@ return function(env)
         return "marked_icon"
     end
 
+    --- Returns the settings group of a marker kind.
+    -- ?string: kind marker kind
+    -- treturn: ?string group name, `enemies_group` for every enemy kind
     function mod:get_marker_scale_group(kind)
         if not kind then
             return nil
@@ -1276,10 +1374,16 @@ return function(env)
         return MARKER_SCALE_GROUP_BY_KIND[kind]
     end
 
+    --- Returns whether a marker kind belongs to a live event.
+    -- treturn: bool
     function mod:is_event_marker_kind(kind)
         return kind ~= nil and MARKER_SCALE_GROUP_BY_KIND[kind] == "event_group"
     end
 
+    --- Converts a percentage slider into a scale factor clamped to 0.5 to 3.
+    -- tab: self mod object
+    -- ?string: setting_id slider setting; 1 when nil
+    -- treturn: number
     local function _percent_scale_from_setting(self, setting_id)
         if not setting_id then
             return 1
@@ -1296,12 +1400,17 @@ return function(env)
         return value / 100
     end
 
+    --- Returns the icon scale factor of a settings group.
+    -- ?string: group_name group from `get_marker_scale_group`
+    -- treturn: number 1 for groups without a slider
     function mod:get_marker_scale_factor(group_name)
         local setting_id = ICON_SCALE_SETTING_BY_GROUP[group_name]
 
         return _percent_scale_from_setting(self, setting_id)
     end
 
+    --- Returns the radar definition of an enemy marker kind or breed name.
+    -- treturn: ?tab definition
     function mod:get_enemy_radar_definition(kind_or_breed)
         if not kind_or_breed then
             return nil
@@ -1310,6 +1419,8 @@ return function(env)
         return ENEMY_RADAR_DEFINITION_BY_KIND[kind_or_breed] or ENEMY_RADAR_DEFINITIONS_BY_BREED[kind_or_breed]
     end
 
+    --- Returns whether vertical arrows are enabled for an enemy, by boss kind or by category.
+    -- treturn: bool
     function mod:show_enemy_vertical_arrows(kind_or_breed)
         local direct_setting_id = rawget(ENEMY_RADAR_VERTICAL_ARROW_SETTING_BY_KIND, kind_or_breed)
 
@@ -1329,6 +1440,10 @@ return function(env)
         return setting_id ~= nil and self:get(setting_id) == true
     end
 
+    --- Returns the display mode of an enemy marker kind.
+    -- The shared horde setting only supports showing or hiding.
+    -- ?string: kind marker kind
+    -- treturn: ?string `icon_only`, `marked_icon` or `off`; nil for kinds without an enemy setting
     function mod:get_enemy_marker_mode(kind)
         local setting_id = ENEMY_RADAR_SETTING_BY_KIND[kind]
 
@@ -1349,6 +1464,8 @@ return function(env)
         return _normalize_enemy_marker_display_mode(value)
     end
 
+    --- Returns the icon scale factor of an enemy, by boss kind or by the definition's scale category.
+    -- treturn: number
     function mod:get_enemy_category_scale_factor(kind_or_breed)
         local direct_setting_id = rawget(ENEMY_RADAR_SCALE_SETTING_BY_KIND, kind_or_breed)
 
@@ -1368,6 +1485,9 @@ return function(env)
         return _percent_scale_from_setting(self, setting_id)
     end
 
+    --- Returns a marker kind's selection priority; higher priorities are kept first under the marker limit.
+    -- ?string: kind marker kind
+    -- treturn: number 0 for kinds without a priority
     function mod:get_target_selection_priority(kind)
         if self:is_event_marker_kind(kind) then
             return EVENT_MARKER_SELECTION_PRIORITY
@@ -1397,6 +1517,9 @@ return function(env)
         return 0
     end
 
+    --- Returns a marker kind's render layer offset; higher layers draw above lower ones.
+    -- ?string: kind marker kind
+    -- treturn: number 0 for kinds without a layer
     function mod:get_target_render_layer(kind)
         if self:is_event_marker_kind(kind) then
             return EVENT_MARKER_RENDER_LAYER
@@ -1430,6 +1553,9 @@ return function(env)
         return 0
     end
 
+    --- Returns the artwork dropdown mode of a marker kind.
+    -- ?string: kind marker kind
+    -- treturn: ?string `artwork`, `icon` or `off`; nil for kinds without that dropdown
     function mod:get_marker_display_mode(kind)
         local setting_id = ARTWORK_MODE_KIND_TO_SETTING[kind]
         if not setting_id then
@@ -1439,6 +1565,9 @@ return function(env)
         return _normalize_marker_display_mode(mod:get(setting_id), ARTWORK_MODE_DEFAULT_BY_SETTING[setting_id])
     end
 
+    --- Returns the icon / icon and distance / off dropdown mode of a non-Expedition marker kind.
+    -- ?string: kind marker kind
+    -- treturn: ?string `icon_only`, `icon_distance` or `off`; nil for kinds without that dropdown
     function mod:get_icon_distance_marker_display_mode(kind)
         local setting_id = ICON_DISTANCE_MARKER_DISPLAY_MODE_KIND_TO_SETTING[kind]
         if not setting_id then
@@ -1451,6 +1580,9 @@ return function(env)
         )
     end
 
+    --- Returns the dropdown mode of an Expedition location marker kind.
+    -- ?string: kind marker kind
+    -- treturn: ?string `icon_only`, `icon_distance` or `off`; nil for other kinds
     function mod:get_expedition_marker_display_mode(kind)
         local setting_id = EXPEDITION_MARKER_DISPLAY_MODE_KIND_TO_SETTING[kind]
         if not setting_id then
@@ -1463,6 +1595,7 @@ return function(env)
         )
     end
 
+    --- Converts artwork dropdown settings saved as checkboxes into dropdown values.
     local function _migrate_marker_display_mode_settings()
         local mod_get = mod.get
         local mod_set = mod.set
@@ -1479,6 +1612,7 @@ return function(env)
         end
     end
 
+    --- Converts Expedition marker dropdown settings saved as checkboxes into dropdown values.
     local function _migrate_expedition_marker_display_mode_settings()
         local mod_get = mod.get
         local mod_set = mod.set
@@ -1495,6 +1629,8 @@ return function(env)
         end
     end
 
+    --- Seeds the per-breed enemy settings split out of the old common and shooter settings.
+    -- Only settings that were never saved take the old category's value.
     local function _migrate_split_enemy_category_settings()
         local mod_get = mod.get
         local mod_set = mod.set
@@ -1537,6 +1673,7 @@ return function(env)
         end
     end
 
+    --- Folds the old teammate checkbox and player style into the player marker dropdown, once.
     local function _migrate_player_visibility_settings()
         if mod:get("show_players") ~= nil then
             return
@@ -1549,6 +1686,10 @@ return function(env)
         end
     end
 
+    --- DMF callback run once all mods are loaded.
+    -- Migrates settings saved by older versions, then requests the UI packages that contain the
+    -- icon materials Radar draws, which the game otherwise only loads for its own views.
+    -- Packages already loaded are skipped, and failures are only logged in debug mode.
     function mod.on_all_mods_loaded()
         if mod.migrate_marker_enabled_dropdown_settings then
             mod:migrate_marker_enabled_dropdown_settings()
@@ -1564,7 +1705,6 @@ return function(env)
 
         local debug_mode = mod:get("debug_mode") == true
 
-        -- Preload icon packages
         local function load_package(package_name)
             local ok, err = pcall(function()
                 local managers = Managers

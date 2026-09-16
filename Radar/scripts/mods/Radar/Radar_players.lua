@@ -1,3 +1,21 @@
+--- Teammates, player companions, player smart tags and ability-marked enemies.
+-- Tracks the other players with their archetype and rescue/captured/luggable state, the
+-- companions every player owns (cyber mastiff and servo skull, with what they are doing),
+-- and the location tags players place. It also reads which enemies a player tagged and
+-- which ones an ability of the local player outlines, and whether a player carries a
+-- luggable.
+--
+-- Installer module, installed as the first feature module into Radar's shared runtime
+-- environment (see `Radar.lua`). Contributes `_refresh_player_units` and
+-- `_scan_player_tag_points` (driven by the tracking update), the attribution helpers
+-- `_marked_by_player_slot_for_unit`, `_supported_ability_marker_state_for_unit` and
+-- `_safe_player_slot`, the companion rules `_player_companion_action_active`,
+-- `_is_servo_skull_hidden_by_owner` and `_mastiff_disabled_enemy_units`,
+-- `_unit_carries_luggable`, `_is_player_smart_tag_kind`, and the player settings `mod`
+-- getters. Relies on the runtime helpers, `_track_unit`/`_track_point` from tracking, and
+-- the Expedition smart tag section rules from `Radar_expeditions.lua`.
+-- module: Radar_players
+-- author: LucLeto
 return function(env)
     setfenv(1, env)
 
@@ -24,14 +42,20 @@ return function(env)
     -- Constants
     -- ----------------------------------------------------------------------------
 
+    --- Smart tag templates tracked as location markers (the template name is also the marker kind).
     local PLAYER_SMART_TAG_KINDS = {
         location_attention = true,
         location_ping = true,
         location_threat = true,
     }
+    --- Squared distances within which a following servo skull hides behind its owner, and a mastiff counts as on its target.
     local SERVO_SKULL_OWNER_HIDE_DISTANCE_SQ = 2.5 * 2.5
     local COMPANION_TARGET_OVERLAP_DISTANCE_SQ = 2 * 2
     local SERVO_SKULL_STATES = CompanionServoSkullSettings.STATES
+    --- Ability outlines Radar recognises on enemies, with fallback bracket colours and priorities.
+    -- The game's own outline settings take precedence when they carry a colour or priority.
+    -- `special_target` has no colour of its own; it borrows the Executioner's Stance colour
+    -- and only counts while the local player is in that stance.
     local ABILITY_OUTLINE_BRACKET_ALPHA = 220
     local SUPPORTED_ABILITY_OUTLINE_CONFIG_BY_NAME = {
         psyker_marked_target = {
@@ -60,6 +84,7 @@ return function(env)
     }
     local VETERAN_SPECIAL_TARGET_BRACKET_COLOR = { 255, 220, 120, 26 }
     local OGRYN_TAUNT_SHOUT_ABILITY_NAME = "ogryn_taunt_shout"
+    --- Disabling types that show a teammate as captured by an enemy.
     local PLAYER_CAPTURE_DISABLING_TYPES = {
         grabbed = true,
         consumed = true,
@@ -67,12 +92,14 @@ return function(env)
         netted = true,
         pounced = true,
     }
+    --- Inventory slot a carried luggable is wielded in.
     local SLOT_LUGGABLE = "slot_luggable"
 
     -- ----------------------------------------------------------------------------
     -- Mutable runtime state
     -- ----------------------------------------------------------------------------
 
+    --- Scratch sets reused by the player and tag scans, and the cache of normalised ability outline colours.
     local _scratch_seen_player_tag_ids = {}
     local _scratch_seen_radar_players = {}
     local _scratch_mastiff_disabled_enemy_units = {}
@@ -82,12 +109,17 @@ return function(env)
     -- Player kinds and tag attribution
     -- ----------------------------------------------------------------------------
 
+    --- Returns whether a kind is a player location tag (attention, ping or threat).
+    -- treturn: bool
     function _is_player_smart_tag_kind(kind)
         return kind == "location_attention"
             or kind == "location_ping"
             or kind == "location_threat"
     end
 
+    --- Returns a player's slot, which selects the player's colour.
+    -- ?tab: player player object
+    -- treturn: ?int
     function _safe_player_slot(player)
         local slot_fn = player and player.slot
 
@@ -104,6 +136,9 @@ return function(env)
         return nil
     end
 
+    --- Returns the slot of the player whose smart tag is on a unit.
+    -- param: unit unit handle
+    -- treturn: ?int player slot, nil when the unit is not tagged
     function _marked_by_player_slot_for_unit(unit)
         if not _safe_unit_alive(unit) then
             return nil
@@ -137,6 +172,7 @@ return function(env)
     -- ----------------------------------------------------------------------------
 
 
+    --- Returns Radar's configuration of an ability outline, or nil for outlines Radar ignores.
     local function _supported_ability_outline_config(outline_name)
         if outline_name == nil then
             return nil
@@ -145,6 +181,8 @@ return function(env)
         return SUPPORTED_ABILITY_OUTLINE_CONFIG_BY_NAME[tostring(outline_name)]
     end
 
+    --- Returns why the local player sees special target outlines, currently only the Veteran's Executioner's Stance.
+    -- treturn: ?string
     local function _special_target_local_context(player_unit)
         if not _safe_unit_alive(player_unit) then
             return nil
@@ -157,6 +195,7 @@ return function(env)
         return nil
     end
 
+    --- Returns the bracket colour of a special target outline in the local player's current context.
     local function _special_target_fallback_bracket_color()
         local player_unit = _player_unit()
         local local_context = _special_target_local_context(player_unit)
@@ -168,6 +207,7 @@ return function(env)
         return nil
     end
 
+    --- Returns Radar's fallback bracket colour of a supported ability outline.
     local function _default_ability_outline_bracket_color(outline_name)
         local config = _supported_ability_outline_config(outline_name)
 
@@ -182,6 +222,12 @@ return function(env)
         return config.default_color
     end
 
+    --- Converts a game outline colour into a cached ARGB bracket colour.
+    -- Accepts `a`/`r`/`g`/`b` tables and RGB or ARGB arrays, in 0 to 1 or 0 to 255 ranges; a
+    -- missing alpha uses the bracket alpha. Unreadable colours fall back to Radar's default.
+    -- string: outline_name outline name
+    -- ?tab: color colour from the game's outline settings
+    -- treturn: ?tab ARGB colour array, shared through the cache
     local function _cached_ability_outline_bracket_color(outline_name, color)
         if type(color) ~= "table" then
             return _default_ability_outline_bracket_color(outline_name)
@@ -245,6 +291,7 @@ return function(env)
         return cached_color
     end
 
+    --- Returns the bracket colour of an outline from the outline extension's settings.
     local function _outline_setting_bracket_color(outline_extension, outline_name)
         if type(outline_extension) ~= "table" or outline_name == nil then
             return nil
@@ -257,6 +304,7 @@ return function(env)
         return _cached_ability_outline_bracket_color(outline_name, color)
     end
 
+    --- Returns an outline's priority from the outline extension's settings, or Radar's default priority.
     local function _outline_setting_priority(outline_extension, outline_name)
         if outline_name == nil then
             return 0
@@ -278,6 +326,11 @@ return function(env)
         return priority or 0
     end
 
+    --- Reads the supported ability outlines currently on a unit.
+    -- treturn: ?tab names of the supported outlines, nil when there are none
+    -- treturn: ?tab bracket colour of the highest priority outline that has one
+    -- treturn: ?string name of the highest priority outline
+    -- treturn: ?number its priority
     local function _supported_ability_outline_state_for_unit(unit, outline_extension_map, local_player_unit)
         local outline_extension = _safe_unit_outline_extension(unit, outline_extension_map)
 
@@ -332,12 +385,24 @@ return function(env)
         return outline_names, bracket_color, primary_outline_name, primary_outline_priority
     end
 
+    --- Returns whether an enemy is taunted.
     local function _unit_has_supported_ogryn_taunt_marker(unit)
         return _safe_unit_has_keyword(unit, "taunted")
             or _safe_unit_has_buff_template(unit, "taunted")
             or _safe_unit_has_buff_template(unit, "taunted_short")
     end
 
+    --- Returns whether and how an enemy is marked by an ability for the "ability-marked enemies" option.
+    -- Supported ability outlines count for everyone; the Ogryn's taunt counts only while the
+    -- local player has the taunt shout equipped, since it leaves no outline.
+    -- param: unit enemy unit
+    -- ?tab: outline_extension_map outline data by unit
+    -- param: local_player_unit local player unit
+    -- ?string: local_combat_ability_name local player's combat ability name
+    -- treturn: ?tab marker names, nil when the enemy is not marked
+    -- treturn: ?tab bracket colour
+    -- treturn: ?string primary marker name
+    -- treturn: ?number primary marker priority
     function _supported_ability_marker_state_for_unit(unit, outline_extension_map, local_player_unit, local_combat_ability_name)
         local marker_names, bracket_color, primary_marker_name, primary_marker_priority = _supported_ability_outline_state_for_unit(unit, outline_extension_map, local_player_unit)
 
@@ -357,6 +422,8 @@ return function(env)
     -- Companion and player state helpers
     -- ----------------------------------------------------------------------------
 
+    --- Returns the marker kind of a player companion from its breed.
+    -- treturn: ?string `player_companion_dog` or `player_companion_servo_skull`
     local function _player_companion_kind(unit, has_extension)
         if not unit or not has_extension or not _safe_unit_alive(unit) then
             return nil
@@ -387,6 +454,7 @@ return function(env)
         return nil
     end
 
+    --- Returns whether a mastiff pouncing on this target pins it down (the target's breed uses the human pounce action).
     local function _companion_dog_target_uses_disable_action(unit, has_extension)
         local unit_data_extension = has_extension and has_extension(unit, "unit_data_system")
         local breed_fn = unit_data_extension and unit_data_extension.breed
@@ -401,6 +469,7 @@ return function(env)
         return pounce_setting and pounce_setting.companion_pounce_action == "human" or false
     end
 
+    --- Returns the companion a player's spawner created for a talent rule.
     local function _safe_spawned_companion_unit(companion_spawner_extension, special_rule)
         local lookup_fn = companion_spawner_extension and companion_spawner_extension.spawned_unit_lookup
 
@@ -413,6 +482,10 @@ return function(env)
         return ok_lookup and unit or nil
     end
 
+    --- Reads a networked game object field of a unit through the game session.
+    -- param: unit unit handle
+    -- string: field_name game object field
+    -- return: field value, or nil when it cannot be read
     local function _safe_unit_game_object_field(unit, field_name)
         local state = Managers and Managers.state
         local game_session_manager = state and state.game_session
@@ -446,6 +519,7 @@ return function(env)
         return ok_field and value or nil
     end
 
+    --- Returns the live unit of a networked game object id.
     local function _safe_unit_from_game_object_id(game_object_id)
         if game_object_id == nil then
             return nil
@@ -464,6 +538,12 @@ return function(env)
         return ok_unit and _safe_unit_alive(unit) and unit or nil
     end
 
+    --- Returns a mastiff's current target.
+    -- Uses the blackboard's pounce target when the mastiff has a blackboard and is pouncing,
+    -- otherwise the networked target id.
+    -- param: unit mastiff unit
+    -- return: target unit, or nil
+    -- treturn: ?bool true while pouncing, false with a blackboard but no pounce, nil without a blackboard
     local function _safe_companion_dog_target(unit)
         local blackboard = BLACKBOARDS and BLACKBOARDS[unit]
         local pounce_component = blackboard and blackboard.pounce
@@ -485,10 +565,12 @@ return function(env)
         return target_unit, nil
     end
 
+    --- Returns whether a networked servo skull state matches a state name or its numeric id.
     local function _servo_skull_state_is(state, state_name)
         return state == state_name or state == SERVO_SKULL_STATES[state_name]
     end
 
+    --- Reads a component of a player's unit data extension.
     local function _safe_player_component(unit_data_extension, component_name)
         if not unit_data_extension or not unit_data_extension.read_component then
             return nil
@@ -499,8 +581,12 @@ return function(env)
         return ok and component or nil
     end
 
-    -- Whether a player is carrying a luggable: wielding the luggable slot with
-    -- something equipped in it.
+    --- Returns whether a player is carrying a luggable.
+    -- True while the luggable slot is wielded with something equipped in it. The one reading
+    -- used for both the teammates' state and the local player.
+    -- param: unit player unit
+    -- func: has_extension `ScriptUnit.has_extension`
+    -- treturn: bool
     function _unit_carries_luggable(unit, has_extension)
         local unit_data_extension = has_extension and has_extension(unit, "unit_data_system") or nil
         local inventory_component = _safe_player_component(unit_data_extension, "inventory")
@@ -521,6 +607,8 @@ return function(env)
         return ok and equipped and true or false
     end
 
+    --- Returns the state icon of a teammate's radar marker.
+    -- treturn: ?string `rescue`, `dead`, `captured` or `luggable`; nil for none
     local function _player_radar_state(unit, has_extension)
         local unit_data_extension = has_extension and has_extension(unit, "unit_data_system") or nil
         local character_state_component = _safe_player_component(unit_data_extension, "character_state")
@@ -558,6 +646,11 @@ return function(env)
     -- Player and companion scan
     -- ----------------------------------------------------------------------------
 
+    --- Tracks the other players and every player's companions.
+    -- Teammates are tracked with name, slot, archetype and state; companions with their owner,
+    -- whether a servo skull is following its owner, its talent role and what it is doing.
+    -- Mastiffs pinning a target are collected for `_mastiff_disabled_enemy_units`. A player
+    -- whose unit changed or who left has the old unit removed.
     function _refresh_player_units()
         local mastiff_disabled_enemy_units = _scratch_mastiff_disabled_enemy_units
         table_clear(mastiff_disabled_enemy_units)
@@ -753,8 +846,13 @@ return function(env)
     -- Companion target rules
     -- ----------------------------------------------------------------------------
 
-    -- A companion at work is drawn on the companion layer: a skull hacking,
-    -- injecting or burning, or a mastiff on top of the target it is holding.
+    --- Returns whether a companion is at work and so drawn on the companion layer.
+    -- A servo skull is at work while hacking, injecting or burning, and a mastiff while it is
+    -- on top of its target.
+    -- ?string: kind marker kind
+    -- tab: position companion position
+    -- ?tab: meta companion meta
+    -- treturn: bool
     function _player_companion_action_active(kind, position, meta)
         local companion_action = meta and meta.companion_action or nil
         local companion_action_target = meta and meta.companion_action_target or nil
@@ -771,7 +869,10 @@ return function(env)
             or companion_overlapping_target
     end
 
-    -- A servo skull following its owner sits on the owner's own marker.
+    --- Returns whether a servo skull following its owner sits on the owner's visible marker and is hidden.
+    -- tab: position servo skull position
+    -- ?tab: meta servo skull meta
+    -- treturn: bool
     function _is_servo_skull_hidden_by_owner(position, meta)
         if meta
             and meta.owner_marker_visible
@@ -788,7 +889,8 @@ return function(env)
         return false
     end
 
-    -- Enemies a mastiff is holding down, refilled by every player scan.
+    --- Returns the enemies a mastiff is holding down, refilled by every player scan.
+    -- treturn: tab set of enemy units
     function _mastiff_disabled_enemy_units()
         return _scratch_mastiff_disabled_enemy_units
     end
@@ -797,6 +899,7 @@ return function(env)
     -- Player smart tags
     -- ----------------------------------------------------------------------------
 
+    --- Returns the lower-case template name of a smart tag.
     local function _safe_smart_tag_template_name(tag)
         local template_fn = tag and tag.template
 
@@ -814,6 +917,9 @@ return function(env)
         return _safe_lower_string(template_name)
     end
 
+    --- Returns where a smart tag points, from its target location or its target unit.
+    -- treturn: ?tab position
+    -- return: target unit, or nil
     local function _safe_smart_tag_target_position(tag)
         local target_unit = nil
         local target_unit_fn = tag and tag.target_unit
@@ -844,6 +950,7 @@ return function(env)
         return nil, nil
     end
 
+    --- Returns the player who placed a smart tag.
     local function _safe_smart_tag_tagger_player(tag)
         local tagger_player_fn = tag and tag.tagger_player
 
@@ -860,6 +967,9 @@ return function(env)
         return nil
     end
 
+    --- Tracks every player location tag as a radar point, coloured by the tagging player.
+    -- Reads the smart tag system's tag list directly. Expedition tags from another section are
+    -- skipped, and the Expedition tag state of tags that disappeared is pruned.
     function _scan_player_tag_points()
         local smart_tag_system = _safe_extension_system("smart_tag_system")
         local all_tags = type(smart_tag_system) == "table" and rawget(smart_tag_system, "_all_tags") or nil
@@ -905,6 +1015,8 @@ return function(env)
     -- Public interface
     -- ----------------------------------------------------------------------------
 
+    --- Returns how teammates are drawn, with the style setting from before the dropdown as a fallback.
+    -- treturn: string `icon_only`, `marked_icon`, `dot_only` or `marked_dot`
     function mod:get_player_display_style()
         local value = self:get("show_players")
 
@@ -927,6 +1039,8 @@ return function(env)
         return value
     end
 
+    --- Returns whether teammates are shown, with the teammate checkbox from before the dropdown as a fallback.
+    -- treturn: bool
     function mod:get_show_players()
         local value = self:get("show_players")
 
@@ -937,12 +1051,16 @@ return function(env)
         return value ~= false and value ~= "off"
     end
 
+    --- Returns whether the local player's centre dot is drawn.
+    -- treturn: bool
     function mod:get_show_player_center_dot()
         local value = self:get("show_player_center_dot")
 
         return value ~= false and value ~= "off"
     end
 
+    --- Returns the teammate marker range mode.
+    -- treturn: string `normal` or `infinite`
     function mod:get_player_marker_range_mode()
         local value = tostring(self:get("player_marker_range_mode") or "normal")
 

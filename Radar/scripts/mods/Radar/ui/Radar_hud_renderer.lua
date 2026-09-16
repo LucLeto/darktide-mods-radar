@@ -1,3 +1,19 @@
+--- Immediate-mode drawing primitives for the radar frame, guides and marker brackets.
+-- Draws the radar background, outline and guide overlays for the square, circle and Auspex
+-- styles, plus the rectangles and brackets the HUD element uses around markers. All
+-- coordinates are unscaled UI pixels; `Gui.rect` positions are scaled by the renderer's UI
+-- scale and layered on top of `render_settings.start_layer`.
+--
+-- Explicit module loaded by `ui/Radar_hud_element.lua` through `mod:io_dofile`; the chunk
+-- returns a table of draw functions. Colours come from `mod:get_radar_color` when the colour
+-- runtime is installed, and the style settings from `mod:get_radar_style`,
+-- `mod:get_radar_outline` and `mod:get_radar_guides`.
+--
+-- The frame can be drawn in one pass or split into a background and a foreground phase, so
+-- the map geometry layer can be drawn above the radar background but below the outline,
+-- guides and Auspex effects.
+-- module: Radar_hud_renderer
+-- author: LucLeto
 local mod = get_mod("Radar")
 local UIWidget = require("scripts/managers/ui/ui_widget")
 local Color = Color
@@ -30,10 +46,17 @@ local Quaternion_yaw = Quaternion and Quaternion.yaw
 -- Constants
 -- ----------------------------------------------------------------------------
 
+--- Builds an ARGB widget colour array.
+-- number: a alpha
+-- number: r red
+-- number: g green
+-- number: b blue
+-- treturn: tab `{ a, r, g, b }`
 local function _widget_color(a, r, g, b)
     return { a, r, g, b }
 end
 
+--- Fallback widget colours and Auspex materials used when no configured colour applies.
 local WHITE_WIDGET_COLOR = { 255, 255, 255, 255 }
 local RADAR_OUTLINE_WIDGET_COLOR = { 255, 213, 226, 206 }
 local RADAR_BACKGROUND_WIDGET_COLOR = { 90, 0, 0, 0 }
@@ -50,6 +73,9 @@ local AUSPEX_FRAME_WIDGET_COLOR = { 210, 0, 255, 0 }
 local AUSPEX_DOTTED_FRAME_WIDGET_COLOR = { 190, 0, 255, 0 }
 local AUSPEX_INNER_GLOW_WIDGET_COLOR = { 80, 0, 255, 0 }
 local FULL_CIRCLE = math_pi * 2
+--- Option sets for `_draw_auspex_material_layers`, chosen per outline style and draw phase.
+-- Preallocated so a frame draw builds no tables. The guide sets have their colours
+-- overwritten with the configured outline colour on every guide draw.
 local AUSPEX_GUIDE_OPTIONS_WITH_OUTLINE = {
     background_inset = 3,
     sweep_inset = 3,
@@ -101,6 +127,10 @@ local AUSPEX_FRAME_OPTIONS_NO_OUTLINE_EFFECTS = {
 -- Drawing helpers
 -- ----------------------------------------------------------------------------
 
+--- Converts an ARGB widget colour array (or an `a`/`r`/`g`/`b` table) into an engine `Color`.
+-- Missing channels default to 255.
+-- ?tab: color widget colour, or nil for white
+-- treturn: Color engine colour; the white widget colour array when `color` is nil
 local function _widget_to_color(color)
     if not color then
         return WHITE_WIDGET_COLOR
@@ -114,6 +144,10 @@ local function _widget_to_color(color)
     return Color(a, r, g, b)
 end
 
+--- Returns the configured widget colour for a colour setting prefix.
+-- string: prefix colour setting prefix, such as `radar_outline`
+-- tab: fallback widget colour used while the colour runtime is not installed
+-- treturn: tab widget colour array
 local function _configured_widget_color(prefix, fallback)
     local get_radar_color = mod.get_radar_color
 
@@ -124,6 +158,9 @@ local function _configured_color(prefix, fallback)
     return _widget_to_color(_configured_widget_color(prefix, fallback))
 end
 
+--- Normalises a radar style setting value to `square`, `circle` or `auspex`.
+-- param: value raw setting value
+-- treturn: string
 local function _normalized_radar_style(value)
     value = tostring(value or "square")
 
@@ -134,6 +171,8 @@ local function _normalized_radar_style(value)
     return value
 end
 
+--- Returns the effective radar style, falling back to `mod:get_radar_style` when the setting is unset.
+-- treturn: string `square`, `circle` or `auspex`
 local function _current_radar_style()
     local value = mod:get("radar_style")
 
@@ -144,6 +183,9 @@ local function _current_radar_style()
     return _normalized_radar_style(value)
 end
 
+--- Returns the yaw of a rotation, or nil when it is missing or not a finite number.
+-- ?Quaternion: rotation camera rotation
+-- treturn: ?number yaw in radians
 local function _safe_yaw(rotation)
     if not rotation or not Quaternion_yaw then
         return nil
@@ -159,6 +201,15 @@ local function _safe_yaw(rotation)
     return yaw
 end
 
+--- Draws a filled rectangle in unscaled UI pixels.
+-- Does nothing without a GUI or for an empty size.
+-- tab: ui_renderer active UI renderer
+-- number: x left edge
+-- number: y top edge
+-- number: z layer offset above the pass start layer
+-- number: w width
+-- number: h height
+-- param: color engine `Color`
 local function _draw_box(ui_renderer, x, y, z, w, h, color)
     local gui = ui_renderer and ui_renderer.gui
 
@@ -185,6 +236,15 @@ local function _draw_box(ui_renderer, x, y, z, w, h, color)
     Gui_rect(gui, position, size, color)
 end
 
+--- Draws four corner brackets one pixel outside a square marker box.
+-- The bracket arm length is 35% of the box size, at least 4 pixels.
+-- tab: ui_renderer active UI renderer
+-- number: x left edge of the marker box
+-- number: y top edge of the marker box
+-- number: z layer offset
+-- number: size marker box size
+-- tab: color widget colour array
+-- ?number: thickness_override line thickness; 1 pixel when nil or not positive
 local function _draw_marker_brackets(ui_renderer, x, y, z, size, color, thickness_override)
     x = math_floor((tonumber(x) or 0) + 0.5)
     y = math_floor((tonumber(y) or 0) + 0.5)
@@ -219,6 +279,7 @@ local function _draw_marker_brackets(ui_renderer, x, y, z, size, color, thicknes
     _draw_box(ui_renderer, right - thickness, bottom - length, z, thickness, length, bracket_color)
 end
 
+--- Fills a pixel-aligned circle with one horizontal span per row.
 local function _draw_circle_fill(ui_renderer, center_x, center_y, z, radius, color)
     local integer_radius = math_max(1, math_floor((radius or 0) + 0.5))
     local radius_sq = integer_radius * integer_radius
@@ -233,6 +294,10 @@ local function _round(n)
     return math_floor(n + 0.5)
 end
 
+--- Converts a widget colour into an engine `Color` with its alpha scaled, for feathered edges.
+-- tab: color widget colour array
+-- number: scale alpha multiplier
+-- treturn: Color
 local function _color_with_alpha_scale(color, scale)
     if not color then
         return WHITE_WIDGET_COLOR
@@ -247,6 +312,14 @@ local function _color_with_alpha_scale(color, scale)
     return Color(scaled_alpha, r, g, b)
 end
 
+--- Derives the pixel-snapped centre and radius of the circle inscribed in a square frame.
+-- The radius leaves a one pixel margin for the soft edge.
+-- number: x left edge of the frame
+-- number: y top edge of the frame
+-- number: size frame size
+-- treturn: int centre x
+-- treturn: int centre y
+-- treturn: int radius
 local function _circle_metrics(x, y, size)
     local snapped_size = math_max(2, math_floor((tonumber(size) or 0) + 0.5))
     local center_x = math_floor(x + snapped_size * 0.5 + 0.5)
@@ -268,6 +341,7 @@ local function _draw_circle_pixel(ui_renderer, x, y, z, color)
     _draw_box(ui_renderer, x, y, z, 1, 1, color)
 end
 
+--- Plots the symmetric points of one midpoint-circle step without drawing shared pixels twice.
 local function _plot_circle_octants(ui_renderer, center_x, center_y, z, x, y, color)
     if x == 0 and y == 0 then
         _draw_circle_pixel(ui_renderer, center_x, center_y, z, color)
@@ -308,6 +382,7 @@ local function _plot_circle_octants(ui_renderer, center_x, center_y, z, x, y, co
     _draw_circle_pixel(ui_renderer, center_x - y, center_y - x, z, color)
 end
 
+--- Draws a one pixel circle outline with the midpoint circle algorithm.
 local function _draw_circle_perimeter(ui_renderer, center_x, center_y, z, radius, color)
     radius = math_max(1, math_floor((radius or 0) + 0.5))
 
@@ -329,6 +404,7 @@ local function _draw_circle_perimeter(ui_renderer, center_x, center_y, z, radius
     end
 end
 
+--- Draws a ring as concentric one pixel circles, inwards from the outer radius.
 local _draw_circle_ring = function(ui_renderer, center_x, center_y, z, outer_radius, thickness, color)
     local outer_r = math_max(1, math_floor((outer_radius or 0) + 0.5))
     local band = math_max(1, math_floor((thickness or 1) + 0.5))
@@ -342,6 +418,7 @@ local _draw_circle_ring = function(ui_renderer, center_x, center_y, z, outer_rad
     end
 end
 
+--- Draws a ring with a faint one pixel feather on both sides.
 local _draw_circle_ring_soft = function(ui_renderer, center_x, center_y, z, outer_radius, thickness, color)
     local outer_r = math_max(1, math_floor((outer_radius or 0) + 0.5))
     local main_thickness = math_max(1, math_floor((thickness or 1) + 0.5))
@@ -356,6 +433,7 @@ local _draw_circle_ring_soft = function(ui_renderer, center_x, center_y, z, oute
     end
 end
 
+--- Fills a circle whose outermost pixel ring is drawn at reduced alpha.
 local function _draw_circle_fill_soft(ui_renderer, center_x, center_y, z, radius, color)
     local integer_radius = math_max(1, math_floor((radius or 0) + 0.5))
 
@@ -372,6 +450,18 @@ local function _draw_circle_outline(ui_renderer, center_x, center_y, z, radius, 
     _draw_circle_ring_soft(ui_renderer, center_x, center_y, z, radius, 1, color)
 end
 
+--- Draws a dashed horizontal line whose dashes exactly span its length.
+-- The number of dashes is fitted to the length and the leftover space is spread over the
+-- gaps, so both ends finish on a dash.
+-- tab: ui_renderer active UI renderer
+-- number: x left edge
+-- number: y top edge
+-- number: z layer offset
+-- number: length line length
+-- number: thickness line thickness
+-- param: color engine `Color`
+-- ?number: dash dash length, at least 1
+-- ?number: gap nominal gap length
 local function _draw_hline_dotted(ui_renderer, x, y, z, length, thickness, color, dash, gap)
     length = math_max(0, _round(length))
     dash = math_max(1, _round(dash or 1))
@@ -415,6 +505,7 @@ local function _draw_hline_dotted(ui_renderer, x, y, z, length, thickness, color
     end
 end
 
+--- Draws a dashed vertical line; the vertical counterpart of `_draw_hline_dotted`.
 local function _draw_vline_dotted(ui_renderer, x, y, z, thickness, length, color, dash, gap)
     length = math_max(0, _round(length))
     dash = math_max(1, _round(dash or 1))
@@ -458,6 +549,9 @@ local function _draw_vline_dotted(ui_renderer, x, y, z, thickness, length, color
     end
 end
 
+--- Draws a dashed square outline with solid L-shaped corners.
+-- The corners keep the frame readable at any dash spacing; the dashed edges fill the space
+-- between them.
 local function _draw_square_outline_dotted_cornered(ui_renderer, x, y, z, size, thickness, color, dash, gap)
     x = _round(x)
     y = _round(y)
@@ -501,6 +595,7 @@ local function _draw_square_outline_dotted_cornered(ui_renderer, x, y, z, size, 
     end
 end
 
+--- Draws a dotted circle outline of 64 dots, two pixels wide on large radars.
 local function _draw_circle_outline_dotted(ui_renderer, center_x, center_y, z, radius, color)
     local point_size = radius >= 90 and 2 or 1
     local steps = 64
@@ -514,6 +609,7 @@ local function _draw_circle_outline_dotted(ui_renderer, center_x, center_y, z, r
     end
 end
 
+--- Draws a solid square outline, or a filled square when the size leaves no interior.
 local function _draw_square_outline(ui_renderer, x, y, z, size, thickness, color)
     x = _round(x)
     y = _round(y)
@@ -532,6 +628,7 @@ local function _draw_square_outline(ui_renderer, x, y, z, size, thickness, color
     _draw_box(ui_renderer, x + size - thickness, y + thickness, z, thickness, size - thickness * 2, color)
 end
 
+--- Fills a square whose one pixel border is drawn at reduced alpha.
 local function _draw_square_fill_soft(ui_renderer, x, y, z, size, color)
     size = math_max(1, _round(size))
 
@@ -549,6 +646,7 @@ local function _draw_square_fill_soft(ui_renderer, x, y, z, size, color)
     _draw_box(ui_renderer, x + size - 1, y + 1, z, 1, size - 2, feather_color)
 end
 
+--- Draws one pixel at already scaled screen coordinates.
 local function _draw_screen_pixel(ui_renderer, screen_x, screen_y, z, color)
     local gui = ui_renderer and ui_renderer.gui
 
@@ -567,6 +665,9 @@ local function _draw_screen_pixel(ui_renderer, screen_x, screen_y, z, color)
     )
 end
 
+--- Draws a one pixel line between two UI points with Bresenham's algorithm.
+-- The points are scaled first so the line stays one screen pixel wide; the end points
+-- themselves are not drawn.
 local function _draw_diagonal_line(ui_renderer, x1, y1, x2, y2, z, color)
     local scale = ui_renderer.scale or 1
 
@@ -605,6 +706,8 @@ local function _draw_diagonal_line(ui_renderer, x1, y1, x2, y2, z, color)
     end
 end
 
+--- Returns the local player through the player manager, or nil when it cannot be read.
+-- treturn: ?tab player
 local function _safe_local_player()
     local player_manager = Managers and Managers.state and Managers.state.player
     if not player_manager then
@@ -625,6 +728,10 @@ local function _safe_local_player()
     return nil
 end
 
+--- Returns the local player's horizontal field of view in radians.
+-- The camera manager reports the vertical field of view; it is converted with the current
+-- resolution's aspect ratio (16:9 when unknown).
+-- treturn: ?number horizontal field of view, or nil without a camera
 local function _safe_player_horizontal_fov()
     local local_player = _safe_local_player()
     if not local_player then
@@ -664,6 +771,9 @@ local function _safe_player_horizontal_fov()
     return 2 * math_atan(math_tan(vertical_fov * 0.5) * aspect_ratio)
 end
 
+--- Returns half of the view cone angle drawn by the view guides, clamped to 15 to 85 degrees.
+-- Falls back to a 90 degree field of view when the camera cannot be read.
+-- treturn: number half angle in radians
 local function _view_cone_half_angle()
     local horizontal_fov = _safe_player_horizontal_fov() or math_rad(90)
     local half_angle = horizontal_fov * 0.5
@@ -671,16 +781,22 @@ local function _view_cone_half_angle()
     return math_clamp(half_angle, math_rad(15), math_rad(85))
 end
 
+--- Returns the screen direction of a view cone edge; angle 0 points straight up.
+-- number: angle angle from the forward direction in radians
+-- treturn: number x component
+-- treturn: number y component
 local function _view_cone_direction(angle)
     return math_sin(angle), -math_cos(angle)
 end
 
+--- Returns where a view cone edge meets the circle of the given radius.
 local function _view_cone_endpoint_circle(center_x, center_y, radius, angle)
     local dx, dy = _view_cone_direction(angle)
 
     return center_x + dx * radius, center_y + dy * radius
 end
 
+--- Returns where a view cone edge leaves the given rectangle.
 local function _view_cone_endpoint_square(center_x, center_y, left, top, right, bottom, angle)
     local dx, dy = _view_cone_direction(angle)
     local best_t = nil
@@ -708,6 +824,9 @@ local function _view_cone_endpoint_square(center_x, center_y, left, top, right, 
     return center_x + dx * best_t, center_y + dy * best_t
 end
 
+--- Rotates a widget style layer around its own centre.
+-- ?tab: style widget style layer; ignored when nil
+-- ?number: angle rotation in radians, 0 when nil
 local function _apply_layer_rotation(style, angle)
     if not style then
         return
@@ -729,6 +848,13 @@ local function _apply_layer_rotation(style, angle)
     style.angle = angle or 0
 end
 
+--- Positions and sizes a square frame widget layer in place, rounded to whole pixels.
+-- ?tab: style widget style layer; ignored when nil
+-- number: x left edge
+-- number: y top edge
+-- number: z layer offset
+-- number: size layer size
+-- ?tab: color widget colour array, white when nil
 local function _apply_frame_layer_style(style, x, y, z, size, color)
     if not style then
         return
@@ -749,6 +875,19 @@ local function _apply_frame_layer_style(style, x, y, z, size, color)
     style.color = color or WHITE_WIDGET_COLOR
 end
 
+--- Draws the Auspex scanner materials through the HUD element's frame widget.
+-- Sets which material layers the widget shows (background, noise, scan noise, animated
+-- sweep), places each with its inset and layer offset, and rotates the background and
+-- sweep against the camera yaw so they turn with the view. `options.material_layers`
+-- restricts the draw to `background` or `effects` for the split frame phases.
+-- tab: self HUD element that owns `_frame_widget`
+-- tab: ui_renderer active UI renderer
+-- number: x left edge of the radar
+-- number: y top edge of the radar
+-- number: z layer offset
+-- number: size radar size
+-- ?Quaternion: camera_rotation camera rotation used for the material rotation
+-- ?tab: options insets, layer selection and colour overrides
 local function _draw_auspex_material_layers(self, ui_renderer, x, y, z, size, camera_rotation, options)
     local frame_widget = self and self._frame_widget
     if not frame_widget then
@@ -826,6 +965,19 @@ local function _draw_auspex_material_layers(self, ui_renderer, x, y, z, size, ca
     UIWidget.draw(frame_widget, ui_renderer)
 end
 
+--- Draws the configured guide overlay (crosshair, view cone, range rings or Auspex backdrop).
+-- The Auspex backdrop belongs to the background phase and every other guide to the
+-- foreground phase; with no phase all of them are drawn. The backdrop takes the configured
+-- outline colour, written into the shared guide option tables.
+-- tab: self HUD element
+-- tab: ui_renderer active UI renderer
+-- number: x left edge of the radar
+-- number: y top edge of the radar
+-- number: z layer offset
+-- number: size radar size
+-- bool: is_circle whether the radar is drawn as a circle
+-- ?Quaternion: camera_rotation camera rotation
+-- ?string: phase `background`, `foreground` or nil for a single pass
 local function _draw_radar_guides(self, ui_renderer, x, y, z, size, is_circle, camera_rotation, phase)
     local guide_style = mod.get_radar_guides and mod:get_radar_guides() or "crosshair"
 
@@ -933,6 +1085,7 @@ local function _draw_radar_guides(self, ui_renderer, x, y, z, size, is_circle, c
     end
 end
 
+--- Draws the square radar background (every phase but foreground) and outline (every phase but background).
 local function _draw_radar_frame_square(ui_renderer, x, y, z, size, outline_style, phase)
     local thickness = 2
 
@@ -958,6 +1111,7 @@ local function _draw_radar_frame_square(ui_renderer, x, y, z, size, outline_styl
     end
 end
 
+--- Draws the circular radar background and outline, split by phase like the square frame.
 local function _draw_radar_frame_circle(ui_renderer, x, y, z, size, outline_style, phase)
     local center_x, center_y, radius = _circle_metrics(x, y, size)
 
@@ -980,6 +1134,9 @@ local function _draw_radar_frame_circle(ui_renderer, x, y, z, size, outline_styl
     end
 end
 
+--- Draws the Auspex radar frame.
+-- The background phase draws the fill and backdrop material, the foreground phase the
+-- noise, sweep and frame outline; the outline thickness and dashes scale with the radar size.
 local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera_rotation, phase)
     local outline_style = mod.get_radar_outline and mod:get_radar_outline() or "solid"
     local with_outline = outline_style ~= "off"
@@ -1028,6 +1185,16 @@ local function _draw_radar_frame_auspex(self, ui_renderer, x, y, z, size, camera
     end
 end
 
+--- Draws the radar frame and guides for the current radar style and draw phase.
+-- The Auspex style draws no separate guides.
+-- tab: self HUD element
+-- tab: ui_renderer active UI renderer
+-- number: x left edge of the radar
+-- number: y top edge of the radar
+-- number: z layer offset
+-- number: size radar size
+-- ?Quaternion: camera_rotation camera rotation
+-- ?string: phase `background`, `foreground` or nil for a single pass
 local function _draw_radar_frame_phase(self, ui_renderer, x, y, z, size, camera_rotation, phase)
     local radar_style = _current_radar_style()
 
@@ -1049,18 +1216,22 @@ local function _draw_radar_frame_phase(self, ui_renderer, x, y, z, size, camera_
     _draw_radar_guides(self, ui_renderer, x, y, z + 1, size, is_circle, camera_rotation, phase)
 end
 
+--- Draws the whole radar frame in one pass.
 local function _draw_radar_frame(self, ui_renderer, x, y, z, size, camera_rotation)
     _draw_radar_frame_phase(self, ui_renderer, x, y, z, size, camera_rotation, nil)
 end
 
+--- Draws the part of the radar frame that sits below the map geometry layer.
 local function _draw_radar_frame_background(self, ui_renderer, x, y, z, size, camera_rotation)
     _draw_radar_frame_phase(self, ui_renderer, x, y, z, size, camera_rotation, "background")
 end
 
+--- Draws the part of the radar frame that sits above the map geometry layer.
 local function _draw_radar_frame_foreground(self, ui_renderer, x, y, z, size, camera_rotation)
     _draw_radar_frame_phase(self, ui_renderer, x, y, z, size, camera_rotation, "foreground")
 end
 
+--- Module interface consumed by `ui/Radar_hud_element.lua`.
 return {
     draw_box = _draw_box,
     draw_marker_brackets = _draw_marker_brackets,

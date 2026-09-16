@@ -1,3 +1,21 @@
+--- Expedition-specific detection, state, filtering and marker handling.
+-- An Expedition is split into sections separated by sanctuaries (safe zones). This module
+-- resolves which section a unit belongs to and keeps items, pickups and player tags from
+-- other sections off the radar, clears them when the players move on, classifies the
+-- Expedition pickups (Tech-Remnants, currency, luggables, pocketables), attaches Tech-Remnant
+-- values and optionally clusters Tech-Remnant piles into one marker, and tracks the
+-- navigation points of the current section (opportunities, exits, extractions, main
+-- objectives and arrivals) with the players who marked them.
+--
+-- Installer module, installed after `Radar_mission_objectives.lua` into Radar's shared
+-- runtime environment (see `Radar.lua`). Contributes the section rules
+-- `_is_valid_expedition_item_for_current_section` (used by `_track_unit`) and
+-- `_is_valid_expedition_player_smart_tag_for_current_section`, `_sync_expedition_item_state`,
+-- `_scan_expedition_objectives`, the pickup classifiers, `_cluster_expedition_loot_targets`,
+-- the safe zone and store checks, the resets and the Tech-Remnant settings `mod` getters.
+-- Every game mode read is guarded, and outside an Expedition every rule lets everything pass.
+-- module: Radar_expeditions
+-- author: LucLeto
 return function(env)
     setfenv(1, env)
 
@@ -17,6 +35,8 @@ return function(env)
     -- Constants
     -- ----------------------------------------------------------------------------
 
+    --- Candidate unit spawner methods, lookup tables and unit data fields that map a unit to its level or section.
+    -- Each list is tried in order and the first name that yields a value is used.
     local UNIT_LEVEL_METHOD_NAMES = {
         "level_by_unit",
         "get_level_by_unit",
@@ -55,6 +75,7 @@ return function(env)
         "level_index",
     }
 
+    --- Bit of each player slot in a mask of the players who marked a navigation point.
     local PLAYER_SLOT_MASK_BY_SLOT = {
         1,
         2,
@@ -62,12 +83,14 @@ return function(env)
         8,
     }
 
+    --- Fixed Tech-Remnant value of each loot pile tier.
     local EXPEDITION_LOOT_VALUE_BY_PICKUP_NAME = {
         expedition_loot_small_tier_1 = 10,
         expedition_loot_small_tier_2 = 25,
         expedition_loot_small_tier_3 = 50,
     }
 
+    --- Marker kind of each Expedition item, by pickup name; currency and loot piles are matched by prefix.
     local EXPEDITION_ITEM_KIND_BY_PICKUP_NAME = {
         expedition_loot_player_drop = "material_expeditions_loot_player_drop",
         large_ammunition_crate = "pickup_large_ammunition_crate",
@@ -90,17 +113,22 @@ return function(env)
     -- Mutable runtime state
     -- ----------------------------------------------------------------------------
 
+    --- Section state; the last sanctuary section and whether the players were in a sanctuary, and the player tag generation and per-tag state.
+    -- The generation increases on every sanctuary transition, which invalidates the tags placed before it.
     mod._last_safe_zone_section_index = nil
     mod._last_expedition_in_safe_zone = nil
     mod._player_smart_tag_generation = 0
     mod._player_smart_tag_state_by_id = {}
 
+    --- Entries reused to sort navigation points by level index without allocating.
     local _scratch_expedition_registered_entries = {}
 
     -- ----------------------------------------------------------------------------
     -- Generic helpers
     -- ----------------------------------------------------------------------------
 
+    --- Returns a position table from a boxed vector, an engine vector or a plain position table.
+    -- treturn: ?tab `{ x, y, z }`
     local function _safe_vector3_unbox(value)
         if not value then
             return nil
@@ -125,10 +153,14 @@ return function(env)
     -- Expedition runtime and level lookups
     -- ----------------------------------------------------------------------------
 
+    --- Returns whether the current game mode is an Expedition.
     local function _is_expedition_runtime()
         return _safe_game_mode_name() == "expedition"
     end
 
+    --- Returns the fixed Tech-Remnant value of a loot pile.
+    -- ?string: pickup_name pickup name
+    -- treturn: ?number
     function _expedition_loot_value_for_pickup_name(pickup_name)
         if not pickup_name then
             return nil
@@ -137,6 +169,7 @@ return function(env)
         return EXPEDITION_LOOT_VALUE_BY_PICKUP_NAME[pickup_name]
     end
 
+    --- Returns the Expedition game mode's loot handler.
     local function _safe_expedition_loot_handler()
         if not _is_expedition_runtime() then
             return nil
@@ -169,6 +202,8 @@ return function(env)
         return nil
     end
 
+    --- Returns how many Tech-Remnants a player dropped in a pickup, from the loot handler.
+    -- treturn: ?int
     local function _safe_expedition_player_drop_amount(unit)
         if not unit then
             return nil
@@ -186,6 +221,8 @@ return function(env)
         return nil
     end
 
+    --- Returns whether the players are in a sanctuary.
+    -- treturn: bool
     function _is_in_expedition_safe_zone()
         if not _is_expedition_runtime() then
             return false
@@ -203,6 +240,9 @@ return function(env)
         return ok and value == true or false
     end
 
+    --- Returns whether a unit is a sanctuary store product while the players are outside a sanctuary.
+    -- param: unit interactee unit
+    -- treturn: bool
     function _should_hide_expedition_store_product_in_open_zone(unit)
         if not unit or not _is_expedition_runtime() or _is_in_expedition_safe_zone() then
             return false
@@ -234,14 +274,17 @@ return function(env)
         return false
     end
 
+    --- Returns the unit spawner manager.
     local function _safe_unit_spawner()
         return Managers and Managers.state and Managers.state.unit_spawner or nil
     end
 
+    --- Normalises a level or section index to a number where possible, so indices from different sources compare equal.
     local function _normalized_expedition_index(index)
         return tonumber(index) or index
     end
 
+    --- Reads a raw data field authored on a unit.
     local function _safe_unit_data_value(unit, field_name)
         local unit_api = Unit
         local has_data = unit_api and unit_api.has_data
@@ -264,6 +307,7 @@ return function(env)
         return nil
     end
 
+    --- Returns the first index found in a unit's data fields.
     local function _safe_unit_data_index(unit, field_names)
         for i = 1, #field_names do
             local value = _safe_unit_data_value(unit, field_names[i])
@@ -276,6 +320,7 @@ return function(env)
         return nil
     end
 
+    --- Returns the first value a unit spawner method from the list returns for a unit.
     local function _safe_unit_spawner_method_lookup(unit_spawner, unit, method_names)
         if not unit_spawner or not unit then
             return nil
@@ -296,6 +341,7 @@ return function(env)
         return nil
     end
 
+    --- Returns the first value a unit spawner lookup table from the list holds for a unit.
     local function _safe_unit_spawner_table_lookup(unit_spawner, unit, table_names)
         if type(unit_spawner) ~= "table" or not unit then
             return nil
@@ -316,6 +362,7 @@ return function(env)
         return nil
     end
 
+    --- Returns the level a unit belongs to, from the engine or the unit spawner.
     local function _safe_unit_level(unit)
         local unit_api = Unit
         local level_fn = unit_api and unit_api.level
@@ -338,6 +385,7 @@ return function(env)
         return _safe_unit_spawner_table_lookup(unit_spawner, unit, UNIT_LEVEL_LOOKUP_TABLE_NAMES)
     end
 
+    --- Returns the index of the level a unit belongs to, from its data or the unit spawner.
     local function _safe_unit_level_index(unit)
         local data_index = _safe_unit_data_index(unit, UNIT_LEVEL_INDEX_DATA_FIELDS)
 
@@ -357,6 +405,7 @@ return function(env)
         return _normalized_expedition_index(level_index)
     end
 
+    --- Returns the unit spawner's index of a level.
     local function _safe_expedition_level_index(level)
         local unit_spawner = _safe_unit_spawner()
 
@@ -377,6 +426,7 @@ return function(env)
         return nil
     end
 
+    --- Returns the level with a unit spawner index.
     local function _safe_expedition_level_by_index(level_index, sub_level_index)
         local unit_spawner = _safe_unit_spawner()
 
@@ -397,6 +447,7 @@ return function(env)
         return nil
     end
 
+    --- Returns the Expedition's level data of a level.
     local function _safe_expedition_level_data_by_level(game_mode, level)
         if not game_mode or not level or type(game_mode.get_level_data) ~= "function" then
             return nil
@@ -411,6 +462,7 @@ return function(env)
         return nil
     end
 
+    --- Returns the Expedition's level data of a level index.
     local function _safe_expedition_level_data_by_index(game_mode, level_index, sub_level_index)
         if not game_mode or type(game_mode.get_level_data) ~= "function" then
             return nil
@@ -424,6 +476,7 @@ return function(env)
         return _safe_expedition_level_data_by_level(game_mode, level)
     end
 
+    --- Returns the section index stored in level data.
     local function _safe_expedition_section_index_from_level_data(level_data)
         local section = level_data and level_data.section or nil
         local section_index = section and section.index or nil
@@ -431,18 +484,24 @@ return function(env)
         return _normalized_expedition_index(section_index)
     end
 
+    --- Returns the section a level belongs to.
     local function _safe_expedition_section_index_by_level(game_mode, level)
         local level_data = _safe_expedition_level_data_by_level(game_mode, level)
 
         return _safe_expedition_section_index_from_level_data(level_data)
     end
 
+    --- Returns the section a level index belongs to.
     local function _safe_expedition_section_index_by_level_index(game_mode, level_index, sub_level_index)
         local level_data = _safe_expedition_level_data_by_index(game_mode, level_index, sub_level_index)
 
         return _safe_expedition_section_index_from_level_data(level_data)
     end
 
+    --- Returns the section a unit belongs to, from its data, its level or its level index.
+    -- tab: game_mode Expedition game mode
+    -- param: unit unit handle
+    -- return: section index, or nil when it cannot be resolved
     local function _safe_unit_expedition_section_index(game_mode, unit)
         local section_index = _safe_unit_data_index(unit, UNIT_SECTION_DATA_FIELDS)
 
@@ -466,6 +525,7 @@ return function(env)
         return nil
     end
 
+    --- Returns the section of the current sanctuary, read from the game mode logic.
     local function _safe_current_safe_zone_section_index(game_mode)
         local logic = game_mode and game_mode._game_mode_logic or nil
         local index = logic and logic._current_safe_zone_section_index or nil
@@ -473,6 +533,9 @@ return function(env)
         return _normalized_expedition_index(index)
     end
 
+    --- Returns the section the players are in; the sanctuary's section inside a sanctuary, otherwise the current location.
+    -- ?tab: game_mode Expedition game mode
+    -- return: section index, or nil when unknown
     local function _safe_expedition_active_section_index(game_mode)
         if not game_mode then
             return nil
@@ -509,6 +572,8 @@ return function(env)
         return nil
     end
 
+    --- Returns whether a level lies in the active section; anything unresolvable counts as in it.
+    -- treturn: bool
     local function _is_expedition_level_in_active_section(game_mode, active_section_index, level_index, sub_level_index)
         if active_section_index == nil or level_index == nil then
             return true
@@ -522,6 +587,8 @@ return function(env)
         return section_index == _normalized_expedition_index(active_section_index)
     end
 
+    --- Returns the scanner map glyph of an opportunity, cycling through the 24 Greek letter icons by level index.
+    -- treturn: string material path
     local function _expedition_opportunity_icon(level_index)
         local numeric_index = tonumber(level_index) or 0
         local icon_index = 1 + numeric_index % 24
@@ -529,6 +596,8 @@ return function(env)
         return string_format("content/ui/materials/backgrounds/scanner/scanner_map_greek_%02d", icon_index)
     end
 
+    --- Returns the scanner map number icon of an opportunity's location id.
+    -- treturn: string material path
     local function _expedition_opportunity_title_icon(location_id)
         local numeric_id = tonumber(location_id) or 0
         return string_format("content/ui/materials/backgrounds/scanner/scanner_map_%d", numeric_id % 9)
@@ -538,10 +607,13 @@ return function(env)
     -- Expedition marker kinds and section filtering
     -- ----------------------------------------------------------------------------
 
+    --- Returns whether a kind is an Expedition location marker.
+    -- treturn: bool
     function _is_expedition_marker_kind(kind)
         return EXPEDITION_MARKER_KINDS[kind] == true
     end
 
+    --- Returns whether a kind is filtered by section; items only, not players, companions, tags, enemies or locations.
     local function _is_expedition_section_filtered_item_kind(kind)
         if not kind then
             return false
@@ -560,6 +632,12 @@ return function(env)
         return true
     end
 
+    --- Returns whether an item may be tracked in the section the players are in.
+    -- Everything passes outside an Expedition, for kinds that are not section-filtered, and
+    -- whenever the active or the unit's section cannot be resolved (logged once).
+    -- ?string: kind marker kind
+    -- param: unit unit handle
+    -- treturn: bool
     function _is_valid_expedition_item_for_current_section(kind, unit)
         if not _is_expedition_runtime() then
             return true
@@ -591,6 +669,7 @@ return function(env)
     -- Expedition item state
     -- ----------------------------------------------------------------------------
 
+    --- Drops every tracked unit that is not valid for the current section.
     local function _clear_invalid_expedition_item_units()
         local tracked_units = mod._tracked_units
 
@@ -601,16 +680,21 @@ return function(env)
         end
     end
 
+    --- Resets the sanctuary flag and the player tag generation and state.
     local function _reset_expedition_player_smart_tag_state()
         mod._last_expedition_in_safe_zone = nil
         mod._player_smart_tag_generation = 0
         mod._player_smart_tag_state_by_id = {}
     end
 
+    --- Starts a new player tag generation, invalidating the tags placed before it.
     local function _advance_expedition_player_smart_tag_generation()
         mod._player_smart_tag_generation = (tonumber(mod._player_smart_tag_generation) or 0) + 1
     end
 
+    --- Follows sanctuary transitions and drops items of other sections, once per droppable scan.
+    -- Entering or leaving a sanctuary, or reaching a new sanctuary section, starts a new player
+    -- tag generation. Outside an Expedition the state is reset.
     function _sync_expedition_item_state()
         if not _is_expedition_runtime() then
             mod._last_safe_zone_section_index = nil
@@ -656,6 +740,9 @@ return function(env)
     -- Expedition pickup classification
     -- ----------------------------------------------------------------------------
 
+    --- Returns the marker kind of an Expedition pickup.
+    -- ?string: pickup_name pickup name
+    -- treturn: ?string
     function _expedition_item_kind_for_pickup_name(pickup_name)
         local kind = EXPEDITION_ITEM_KIND_BY_PICKUP_NAME[pickup_name]
 
@@ -674,6 +761,12 @@ return function(env)
         return nil
     end
 
+    --- Classifies the Tech-Remnant loot converter and gives it its default icon.
+    -- ?string: interaction_type lower-case interaction type
+    -- ?string: ui_interaction_type lower-case UI interaction type
+    -- ?string: pickup_name pickup name
+    -- tab: meta classification meta, extended in place
+    -- treturn: ?string `expedition_loot_converter`
     function _classify_expedition_loot_converter(interaction_type, ui_interaction_type, pickup_name, meta)
         if interaction_type == "expedition_loot_converter"
             or (ui_interaction_type == "point_of_interest" and pickup_name == "expedition_loot_converter") then
@@ -684,8 +777,11 @@ return function(env)
         return nil
     end
 
-    -- Tech-Remnant piles carry their value: a fixed one by tier, or what the
-    -- player dropped.
+    --- Adds a Tech-Remnant pile's value to its meta; a fixed value by tier, or the amount a player dropped.
+    -- ?string: kind marker kind
+    -- tab: meta classification meta, extended in place
+    -- ?string: pickup_name pickup name
+    -- param: unit pickup unit
     function _apply_expedition_loot_meta(kind, meta, pickup_name, unit)
         if kind == "material_expeditions_loot" then
             meta.remnant_value = _expedition_loot_value_for_pickup_name(pickup_name)
@@ -700,6 +796,7 @@ return function(env)
     -- Tech-Remnant clustering
     -- ----------------------------------------------------------------------------
 
+    --- Returns the Tech-Remnant value of a radar target, 0 when unknown.
     local function _expedition_loot_target_value(target)
         local meta = target and target.meta or nil
         local value = meta and tonumber(meta.remnant_value or meta.remnant_cluster_value) or nil
@@ -713,10 +810,13 @@ return function(env)
         return _expedition_loot_value_for_pickup_name(pickup_name) or 0
     end
 
+    --- Returns whether a target is a positioned Tech-Remnant pile that may be clustered (player drops never are).
     local function _should_cluster_expedition_loot_target(target)
         return target ~= nil and target.kind == "material_expeditions_loot" and target.position ~= nil
     end
 
+    --- Returns the value-weighted centre of a Tech-Remnant cluster.
+    -- treturn: ?tab `{ x, y, z }`
     local function _expedition_loot_cluster_center(cluster_members)
         local total_weight = 0
         local sum_x = 0
@@ -753,6 +853,10 @@ return function(env)
         }
     end
 
+    --- Applies the radar's floor rules to a cluster position.
+    -- treturn: ?number vertical delta
+    -- treturn: ?string `up` or `down`
+    -- treturn: bool whether the cluster is hidden as being on another floor
     local function _expedition_loot_vertical_state(player_pos, position, item_vertical_arrow_threshold_sq,
                                                    item_vertical_hide_threshold)
         local vertical_delta = _vertical_delta(player_pos, position)
@@ -779,6 +883,8 @@ return function(env)
         return vertical_delta, vertical_state, false
     end
 
+    --- Builds the radar target of a Tech-Remnant cluster with its total value.
+    -- treturn: ?tab target, nil when the cluster is hidden by the floor rules
     local function _create_expedition_loot_cluster_target(cluster_members, player_pos, item_vertical_arrow_threshold_sq,
                                                           item_vertical_hide_threshold)
         local position = _expedition_loot_cluster_center(cluster_members)
@@ -827,6 +933,14 @@ return function(env)
         }
     end
 
+    --- Merges nearby Tech-Remnant piles into cluster targets when the loot marker mode is `clustered`.
+    -- Piles join a cluster while they lie within the horizontal and vertical radii of its
+    -- growing weighted centre. A cluster hidden by the floor rules keeps its piles as they were.
+    -- tab: targets radar targets
+    -- tab: player_pos player position
+    -- number: item_vertical_arrow_threshold_sq squared vertical arrow distance
+    -- number: item_vertical_hide_threshold floor hide height
+    -- treturn: tab the targets, a new list when clustering is on
     function _cluster_expedition_loot_targets(targets, player_pos, item_vertical_arrow_threshold_sq,
                                                     item_vertical_hide_threshold)
         if mod:get_expedition_loot_marker_mode() ~= "clustered" then
@@ -915,6 +1029,7 @@ return function(env)
     -- Player smart tag section validation
     -- ----------------------------------------------------------------------------
 
+    --- Returns the per-tag section state table, creating it when missing.
     local function _smart_tag_state_by_id()
         local state_by_id = mod._player_smart_tag_state_by_id
 
@@ -926,10 +1041,18 @@ return function(env)
         return state_by_id
     end
 
+    --- Returns the current player tag generation.
     local function _current_player_smart_tag_generation()
         return tonumber(mod._player_smart_tag_generation) or 0
     end
 
+    --- Returns whether a player location tag belongs to the section the players are in.
+    -- A tag remembers the generation and section it was first seen in. Tags from an earlier
+    -- generation, or whose target unit or remembered section lies in another section, are
+    -- invalid. Everything passes outside an Expedition.
+    -- param: tag_id smart tag id
+    -- ?Unit: target_unit unit the tag points at
+    -- treturn: bool
     function _is_valid_expedition_player_smart_tag_for_current_section(tag_id, target_unit)
         if not _is_expedition_runtime() then
             return true
@@ -979,6 +1102,8 @@ return function(env)
         return tag_state.section_index == active_section_index
     end
 
+    --- Forgets the section state of tags that no longer exist.
+    -- tab: seen_tag_ids ids of the tags seen this scan
     function _prune_player_smart_tag_states(seen_tag_ids)
         local state_by_id = mod._player_smart_tag_state_by_id
 
@@ -993,6 +1118,7 @@ return function(env)
         end
     end
 
+    --- Forgets every tag's section state.
     function _reset_player_smart_tag_states()
         mod._player_smart_tag_state_by_id = {}
     end
@@ -1001,6 +1127,12 @@ return function(env)
     -- Expedition objectives
     -- ----------------------------------------------------------------------------
 
+    --- Picks the player slot to colour a navigation point by, and builds the mask of every marking slot.
+    -- The local player's slot is preferred, then the lowest numeric slot.
+    -- tab: marked_slots map from slot to marked level index
+    -- param: marked_level_index level index to filter by, nil for all
+    -- return: player slot, or nil
+    -- treturn: ?int slot mask
     local function _marked_player_slots_result(marked_slots, marked_level_index)
         local local_player_slot = tonumber(_safe_player_slot(_local_player()))
         local preferred_local_slot = nil
@@ -1036,6 +1168,9 @@ return function(env)
             marked_player_slots_mask ~= 0 and marked_player_slots_mask or nil
     end
 
+    --- Returns which players marked a navigation level, from whichever query the navigation handler provides.
+    -- return: player slot, or nil
+    -- treturn: ?int slot mask
     local function _safe_navigation_handler_marked_by_slot(navigation_handler, level_index)
         if not navigation_handler or level_index == nil then
             return nil
@@ -1083,6 +1218,7 @@ return function(env)
         return nil
     end
 
+    --- Returns whether the navigation handler reports a level as completed.
     local function _safe_navigation_handler_level_completed(navigation_handler, level_index)
         local is_level_completed = navigation_handler and navigation_handler.is_level_completed
 
@@ -1095,6 +1231,7 @@ return function(env)
         return ok and completed == true or false
     end
 
+    --- Returns the level data of a section's parent level by reference name.
     local function _safe_expedition_parent_level_data(section, parent_level_reference_name)
         if not section or not section.levels_data then
             return nil
@@ -1112,6 +1249,7 @@ return function(env)
         return nil
     end
 
+    --- Returns the world position of a tagged level's slot unit in its parent level.
     local function _safe_expedition_level_slot_position(level_data)
         if not level_data then
             return nil
@@ -1141,6 +1279,15 @@ return function(env)
         return nil
     end
 
+    --- Tracks the registered navigation points of one kind in the active section.
+    -- Opportunities are skipped once completed and numbered by location; other kinds are
+    -- numbered by level index order.
+    -- tab: game_mode Expedition game mode
+    -- ?tab: navigation_handler navigation handler
+    -- param: active_section_index active section
+    -- ?tab: points boxed positions by level index
+    -- string: kind marker kind
+    -- string: objective_tag navigation tag of the kind
     local function _track_expedition_registered_points(game_mode, navigation_handler, active_section_index, points, kind,
                                                        objective_tag)
         if type(points) ~= "table" then
@@ -1271,6 +1418,7 @@ return function(env)
         end
     end
 
+    --- Tracks the levels of the current location carrying a tag (main objective or arrival) as points.
     local function _track_expedition_tagged_levels(game_mode, navigation_handler, current_location_index, level_tag, kind)
         if not game_mode or not game_mode.get_all_levels_of_specified_tag or current_location_index == nil then
             return
@@ -1311,6 +1459,7 @@ return function(env)
         end
     end
 
+    --- Tracks the Expedition's navigation points for the current section.
     function _scan_expedition_objectives()
         if not _is_expedition_runtime() then
             return
@@ -1388,6 +1537,7 @@ return function(env)
     -- Mission lifecycle
     -- ----------------------------------------------------------------------------
 
+    --- Resets all Expedition section and tag state on mission reset.
     function _reset_expedition_runtime_state()
         mod._last_safe_zone_section_index = nil
         mod._last_expedition_in_safe_zone = nil
@@ -1399,6 +1549,8 @@ return function(env)
     -- Public interface
     -- ----------------------------------------------------------------------------
 
+    --- Returns how Tech-Remnant piles are drawn.
+    -- treturn: string `default`, `scaled` or `clustered`
     function mod:get_expedition_loot_marker_mode()
         local value = tostring(self:get("expedition_loot_marker_mode") or "default")
 
@@ -1409,14 +1561,20 @@ return function(env)
         return value
     end
 
+    --- Returns whether Tech-Remnant values are shown next to their markers.
+    -- treturn: bool
     function mod:get_show_expedition_loot_cluster_value()
         return self:get("show_expedition_loot_cluster_value") == true
     end
 
+    --- Returns whether Tech-Remnant value text is shown; follows the cluster value setting.
+    -- treturn: bool
     function mod:get_show_expedition_loot_value_text()
         return self:get_show_expedition_loot_cluster_value()
     end
 
+    --- Returns the horizontal radius in metres within which Tech-Remnant piles cluster (1 to 10).
+    -- treturn: number
     function mod:get_expedition_loot_cluster_horizontal_radius()
         local value = tonumber(self:get("expedition_loot_cluster_horizontal_radius")) or 5
 
@@ -1429,6 +1587,8 @@ return function(env)
         return value
     end
 
+    --- Returns the height difference in metres within which Tech-Remnant piles cluster (1 to 5).
+    -- treturn: number
     function mod:get_expedition_loot_cluster_vertical_radius()
         local value = tonumber(self:get("expedition_loot_cluster_vertical_radius")) or 3
 

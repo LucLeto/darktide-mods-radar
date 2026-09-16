@@ -1,18 +1,35 @@
+--- Single source of truth for every configurable Radar colour.
+-- Declares each colour's setting prefix and default ARGB value, which marker kinds,
+-- backgrounds, highlights and enemy icons resolve to which prefix, and under which settings
+-- widget (the anchor) its colour sliders appear. A colour with prefix `p` is stored in the
+-- settings `p_opacity`, `p_red`, `p_green` and `p_blue`, unless the opacity setting is renamed.
+--
+-- Explicit module loaded through `mod:io_dofile`; the chunk returns `ColorSettings`. It is
+-- loaded separately by `Radar_data.lua` (settings widgets and dropdown icon colours),
+-- `Radar_enemy_definitions.lua` (runtime) and `ui/Radar_hud_element.lua` (fallback colours);
+-- each load builds its own identical registry. `ColorSettings.install_runtime` adds the
+-- cached colour getters to `mod` once, from the first caller (the enemy definitions).
+-- module: Radar_color_settings
+-- alias: ColorSettings
+-- author: LucLeto
 local ColorSettings = {}
 
 local math_floor = math.floor
 local tonumber = tonumber
 
+--- Builds an ARGB colour array.
+-- treturn: tab `{ a, r, g, b }`
 local function _color(a, r, g, b)
     return { a, r, g, b }
 end
 
 local WHITE = _color(255, 255, 255, 255)
 
--- Mission objective markers are tinted to match the vanilla objective marker so
--- they read as the same family as the on-screen HUD marker. Taken from the
--- game's own HUD tint when it can be resolved, with the shipped value as a
--- fallback so a moved settings path cannot break marker colors.
+--- Returns the tint of the game's own on-screen objective marker.
+-- Mission objective markers use it so they read as the same family as the vanilla HUD
+-- marker. Read from the game's HUD settings when available, with the shipped value as a
+-- fallback so a moved settings path cannot break marker colours.
+-- treturn: tab ARGB colour array
 local function _vanilla_objective_color()
     local ok, hud_settings = pcall(require, "scripts/settings/ui/ui_hud_settings")
     local tint = ok and type(hud_settings) == "table" and hud_settings.color_tint_main_1 or nil
@@ -24,10 +41,18 @@ local function _vanilla_objective_color()
     return _color(255, 223, 229, 219)
 end
 
+--- Shared default colours referenced by several registrations.
 local VANILLA_OBJECTIVE = _vanilla_objective_color()
 local RADAR_OUTLINE = _color(255, 213, 226, 206)
 local AUSPEX_GREEN = _color(255, 0, 255, 0)
 
+--- Colour registry filled by the registration calls below and exported on `ColorSettings`.
+-- `marker_prefix_by_kind`, `marker_background_prefix_by_kind`,
+-- `marker_highlight_prefix_by_kind` and `enemy_icon_prefix_by_kind` map a marker kind to a
+-- colour prefix. `default_by_prefix` holds each prefix's default colour, `highlight_prefixes`
+-- lists every highlight prefix, the opacity maps name opacity settings that do not follow
+-- the `p_opacity` pattern (and their pre-migration names), and `anchored_color_settings`
+-- lists the slider descriptors to insert under each settings widget id.
 local marker_prefix_by_kind = {}
 local marker_background_prefix_by_kind = {}
 local marker_highlight_prefix_by_kind = {}
@@ -42,6 +67,9 @@ local legacy_opacity_setting_by_prefix = {
 }
 local anchored_color_settings = {}
 
+--- Returns a copy of an ARGB colour array with missing channels set to 255.
+-- tab: color colour array
+-- treturn: tab
 local function _copy_color(color)
     return {
         color[1] or 255,
@@ -51,12 +79,16 @@ local function _copy_color(color)
     }
 end
 
+--- Registers a prefix's default colour; the first registration of a prefix wins.
 local function _add_default(prefix, color)
     if prefix and color and default_by_prefix[prefix] == nil then
         default_by_prefix[prefix] = _copy_color(color)
     end
 end
 
+--- Adds a colour slider descriptor under a settings widget id.
+-- ?string: anchor setting id the sliders are inserted after; nothing is added when nil
+-- tab: descriptor slider group descriptor (`prefix`, `default`, `title_prefix`, `tooltip`, labels)
 local function _add_anchor(anchor, descriptor)
     if not anchor then
         return
@@ -72,6 +104,13 @@ local function _add_anchor(anchor, descriptor)
     anchored[#anchored + 1] = descriptor
 end
 
+--- Registers the colours of one marker kind.
+-- Always registers the marker colour, named `<kind>_marker` unless `prefix` or
+-- `icon_prefix` is given (an icon prefix takes `icon_default` as its default). Optionally
+-- registers a background colour (`background_prefix`) and a nearby highlight colour
+-- (`supports_highlight`, named `<kind>_highlight` by default). `aliases` resolve to the
+-- same marker and highlight prefixes. Each registered colour gets its sliders under `anchor`.
+-- tab: descriptor marker colour descriptor
 local function _add_marker(descriptor)
     local kind = descriptor.kind
     local prefix = descriptor.prefix or descriptor.icon_prefix or (kind and kind .. "_marker")
@@ -142,6 +181,13 @@ local function _add_marker(descriptor)
     end
 end
 
+--- Registers a colour that belongs to no marker kind, such as the radar frame or map geometry bands.
+-- string: anchor setting id the sliders are inserted after
+-- string: prefix colour setting prefix
+-- tab: default default ARGB colour
+-- string: title_prefix localization prefix of the slider group title
+-- ?string: tooltip slider tooltip localization id
+-- ?tab: channels channels to expose, all four when nil
 local function _add_radar_color(anchor, prefix, default, title_prefix, tooltip, channels)
     _add_default(prefix, default)
     _add_anchor(anchor, {
@@ -153,16 +199,19 @@ local function _add_radar_color(anchor, prefix, default, title_prefix, tooltip, 
     })
 end
 
+--- Maps an enemy marker kind to the colour prefix of its radar icon.
 local function _add_enemy_kind(kind, icon_prefix)
     enemy_icon_prefix_by_kind[kind] = icon_prefix
 end
 
+--- Maps several enemy marker kinds to one icon colour prefix.
 local function _add_enemy_kinds(icon_prefix, kinds)
     for i = 1, #kinds do
         _add_enemy_kind(kinds[i], icon_prefix)
     end
 end
 
+-- Radar frame, Auspex, text and map geometry band colours.
 _add_radar_color("radar_colors_group", "radar_background", _color(90, 0, 0, 0), "radar_background_color",
     "radar_background_color_slider_tooltip")
 _add_radar_color("radar_colors_group", "radar_outline", RADAR_OUTLINE, "radar_outline_color")
@@ -184,6 +233,7 @@ _add_radar_color("map_geometry_source", "radar_navmesh", _color(80, 101, 133, 96
 _add_radar_color("map_geometry_source", "radar_navmesh_above", _color(32, 120, 150, 185), "radar_navmesh_above_color")
 _add_radar_color("map_geometry_source", "radar_navmesh_below", _color(55, 120, 98, 76), "radar_navmesh_below_color")
 
+-- Enemy icon and background colours, shared by many enemy kinds and anchored below.
 _add_default("enemy_boss_marker", _color(255, 255, 64, 64))
 _add_default("enemy_boss_background", _color(220, 255, 0, 0))
 _add_default("enemy_background_marker", _color(220, 255, 0, 0))
@@ -256,6 +306,7 @@ _add_anchor("show_enemy_horde_vertical_arrows", {
     tooltip = "enemy_marker_color_slider_tooltip",
 })
 
+-- Which enemy kinds use which enemy icon colour.
 _add_enemy_kinds("enemy_scab_marker", {
     "enemy_renegade_grenadier",
     "enemy_renegade_gunner",
@@ -308,6 +359,7 @@ _add_enemy_kinds("enemy_horde_marker", {
     "enemy_chaos_armored_infected",
 })
 
+-- Marker kind colours, each anchored under the settings widget of its category.
 _add_marker({
     kind = "enemy_daemonhost",
     prefix = "enemy_boss_marker",
@@ -829,6 +881,10 @@ _add_marker({
     default = _color(255, 150, 190, 60),
     supports_highlight = true,
 })
+--- Converts a setting value into a colour channel, rounded and clamped to 0 to 255.
+-- param: value setting value
+-- ?number: fallback channel used when the value is not a number, 255 when nil
+-- treturn: int
 local function _clamp_channel(value, fallback)
     value = tonumber(value)
 
@@ -845,6 +901,10 @@ local function _clamp_channel(value, fallback)
     return math_floor(value + 0.5)
 end
 
+--- Returns the setting id of one channel of a colour prefix.
+-- string: prefix colour prefix
+-- string: suffix `opacity`, `red`, `green` or `blue`
+-- treturn: string
 local function _setting_id(prefix, suffix)
     if suffix == "opacity" then
         return opacity_setting_by_prefix[prefix] or (prefix .. "_opacity")
@@ -853,6 +913,12 @@ local function _setting_id(prefix, suffix)
     return prefix .. "_" .. suffix
 end
 
+--- Installs the colour runtime on the mod object, once per mod lifetime.
+-- Adds the colour getters and the settings migration as `mod` methods and chains
+-- `mod.on_setting_changed` to invalidate the colour cache. Colours are cached per prefix
+-- and refreshed lazily when the cache generation changes, so reading a colour every frame
+-- costs a table lookup; the returned colour tables are shared and must not be modified.
+-- tab: mod Radar mod object
 function ColorSettings.install_runtime(mod)
     if not mod or mod._radar_color_settings_installed == true then
         return
@@ -866,6 +932,9 @@ function ColorSettings.install_runtime(mod)
 
     local previous_on_setting_changed = mod.on_setting_changed
 
+    --- DMF callback, chained after any previously installed handler; any setting change invalidates the colour cache.
+    -- string: setting_id changed setting
+    -- param: ... further DMF arguments, forwarded to the previous handler
     mod.on_setting_changed = function(setting_id, ...)
         if previous_on_setting_changed then
             previous_on_setting_changed(setting_id, ...)
@@ -874,10 +943,17 @@ function ColorSettings.install_runtime(mod)
         mod._radar_color_cache_generation = (mod._radar_color_cache_generation or 0) + 1
     end
 
+    --- Forces every cached colour to be read from the settings again.
     function mod:invalidate_radar_color_cache()
         self._radar_color_cache_generation = (self._radar_color_cache_generation or 0) + 1
     end
 
+    --- Returns the configured ARGB colour of a colour prefix.
+    -- Missing settings fall back to the registered default, then to `fallback`, then to white;
+    -- the background opacity also honours its pre-migration setting.
+    -- ?string: prefix colour prefix; `fallback` is returned when nil
+    -- ?tab: fallback colour used for an unregistered prefix
+    -- treturn: ?tab cached ARGB colour array, shared between callers
     function mod:get_configurable_color(prefix, fallback)
         if not prefix then
             return fallback
@@ -923,43 +999,70 @@ function ColorSettings.install_runtime(mod)
         return entry.color
     end
 
+    --- Returns the configured radar marker colour of a marker kind.
+    -- ?string: kind marker kind, or a colour kind from `get_marker_color_kind`
+    -- ?tab: fallback colour for a kind without a registered colour
+    -- treturn: ?tab ARGB colour array
     function mod:get_marker_color(kind, fallback)
         local prefix = kind and marker_prefix_by_kind[kind] or nil
         return self:get_configurable_color(prefix, fallback)
     end
 
-    -- Puzzle devices keep their category's icon, dropdown and scale group and
-    -- change only which colour they are looked up under, so the marker says
-    -- whether the puzzle still needs somebody or already has one.
+    --- Colour kinds for the two live states of a puzzle device.
+    -- Puzzle devices keep their category's icon, dropdown and scale group and change only which
+    -- colour they are looked up under, so the marker says whether the puzzle still needs a
+    -- player (`waiting`) or already has one (`active`). The colour kinds are registered for
+    -- colours only; no marker is ever tracked under them.
     local MINIGAME_COLOR_KIND_BY_STATE = {
         waiting = "mission_objective_minigame_waiting",
         active = "mission_objective_minigame_active",
     }
 
+    --- Returns the kind a target's marker colour is looked up under.
+    -- A puzzle device in a live minigame state is coloured by its state; every other target,
+    -- including a device without a puzzle or in an unknown state, keeps its own kind.
+    -- ?string: kind marker kind
+    -- ?tab: meta target meta; its `minigame_state` selects the state colour
+    -- treturn: ?string colour kind
     function mod:get_marker_color_kind(kind, meta)
         local state = meta and meta.minigame_state or nil
 
         return (state and MINIGAME_COLOR_KIND_BY_STATE[state]) or kind
     end
 
+    --- Returns the colour of the frame shared by every mission objective marker.
+    -- The frame carries the family's identity, so it has one colour of its own while each icon
+    -- keeps its marker and state colours.
+    -- treturn: tab ARGB colour array
     function mod:get_mission_objective_frame_color()
         return self:get_configurable_color("mission_objective_frame_marker")
     end
 
+    --- Returns the colour of the backplate drawn behind mission objective frames.
+    -- treturn: tab ARGB colour array
     function mod:get_mission_objective_background_color()
         return self:get_configurable_color("mission_objective_background_marker")
     end
 
+    --- Returns the configured background colour of a marker kind, or `fallback` when it has none.
+    -- treturn: ?tab ARGB colour array
     function mod:get_marker_background_color(kind, fallback)
         local prefix = kind and marker_background_prefix_by_kind[kind] or nil
         return self:get_configurable_color(prefix, fallback)
     end
 
+    --- Returns the configured icon colour of an enemy marker kind, or `fallback` when it has none.
+    -- treturn: ?tab ARGB colour array
     function mod:get_enemy_radar_icon_color(kind, fallback)
         local prefix = kind and enemy_icon_prefix_by_kind[kind] or nil
         return self:get_configurable_color(prefix, fallback)
     end
 
+    --- Returns the configured enemy background colour, shared by all enemy kinds.
+    -- Enemy definitions without a background pass no fallback and keep having none.
+    -- param: _kind unused, kept for a uniform getter signature
+    -- ?tab: fallback the definition's own background colour
+    -- treturn: ?tab ARGB colour array, nil when `fallback` is nil
     function mod:get_enemy_radar_background_color(_kind, fallback)
         if fallback == nil then
             return nil
@@ -968,6 +1071,10 @@ function ColorSettings.install_runtime(mod)
         return self:get_configurable_color("enemy_background_marker", fallback)
     end
 
+    --- Returns the nearby highlight colour of a marker kind.
+    -- A kind without a highlight colour of its own is highlighted in its marker colour.
+    -- ?string: kind marker kind
+    -- treturn: tab ARGB colour array
     function mod:get_highlight_color(kind)
         local prefix = kind and marker_highlight_prefix_by_kind[kind] or nil
 
@@ -978,6 +1085,11 @@ function ColorSettings.install_runtime(mod)
         return self:get_marker_color(kind, WHITE)
     end
 
+    --- Returns a kind's highlight colour with its RGB channels scaled, for highlights behind geometry.
+    -- Cached per kind and multiplier and refreshed with the colour cache.
+    -- ?string: kind marker kind
+    -- ?number: multiplier RGB multiplier, 1 when not a number
+    -- treturn: ?tab ARGB colour array
     function mod:get_occluded_highlight_color(kind, multiplier)
         local source = self:get_highlight_color(kind)
 
@@ -1019,10 +1131,19 @@ function ColorSettings.install_runtime(mod)
         return entry.color
     end
 
+    --- Returns a configured colour by prefix; the entry point for the renderers.
+    -- string: prefix colour prefix
+    -- ?tab: fallback colour for an unregistered prefix
+    -- treturn: ?tab ARGB colour array
     function mod:get_radar_color(prefix, fallback)
         return self:get_configurable_color(prefix, fallback)
     end
 
+    --- Migrates colour settings saved by versions before configurable colours.
+    -- Runs on every start from `mod.on_all_mods_loaded`. Copies the old background opacity into
+    -- the radar background colour when that is unset, and the old global nearby highlight
+    -- opacity and custom colour into every highlight colour still at its default. Afterwards
+    -- the old highlight opacity is set to 255 and the custom colour switch turned off.
     function mod:migrate_radar_color_settings()
         local mod_get = self.get
         local mod_set = self.set
@@ -1107,20 +1228,28 @@ function ColorSettings.install_runtime(mod)
     end
 end
 
--- Default colours for code that reads them outside the runtime, such as the
--- settings menu and the fallback tables. Each call returns a copy.
+--- Returns a copy of a prefix's default colour, for code outside the runtime.
+-- Used by the settings menu and the fallback tables.
+-- ?string: prefix colour prefix
+-- treturn: ?tab ARGB colour array, nil for an unknown prefix
 function ColorSettings.default_color(prefix)
     local color = prefix and default_by_prefix[prefix] or nil
 
     return color and _copy_color(color) or nil
 end
 
+--- Returns a copy of a marker kind's default marker colour.
+-- ?string: kind marker kind
+-- treturn: ?tab ARGB colour array
 function ColorSettings.default_marker_color(kind)
     return ColorSettings.default_color(kind and marker_prefix_by_kind[kind] or nil)
 end
 
--- Mirrors `get_highlight_color`: a kind without a highlight colour of its own
--- falls back to its marker colour.
+--- Returns a copy of a marker kind's default highlight colour.
+-- Mirrors `mod:get_highlight_color`; a kind without a highlight colour of its own falls
+-- back to its marker colour.
+-- ?string: kind marker kind
+-- treturn: ?tab ARGB colour array
 function ColorSettings.default_highlight_color(kind)
     local prefix = kind and marker_highlight_prefix_by_kind[kind] or nil
 
@@ -1131,6 +1260,7 @@ function ColorSettings.default_highlight_color(kind)
     return ColorSettings.default_marker_color(kind)
 end
 
+-- The registry and shared defaults, read by the settings menu, the HUD element and the specs.
 ColorSettings.default_by_prefix = default_by_prefix
 ColorSettings.opacity_setting_by_prefix = opacity_setting_by_prefix
 ColorSettings.anchored_color_settings = anchored_color_settings

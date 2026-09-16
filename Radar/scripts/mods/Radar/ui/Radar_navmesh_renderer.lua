@@ -1,8 +1,21 @@
+--- Draws the live navmesh geometry as the radar's map layer, shaded in height bands.
+-- Selects the cached navmesh triangles around the player from the spatial buckets built by
+-- `Radar_navmesh.lua`, projects them onto the same camera-aligned basis as the radar
+-- markers and submits them through `Radar_triangle_clipper.lua`. Triangles are binned into
+-- below, current and above floor bands, drawn in that order with their own configurable
+-- colours, so lower floors sit under the current floor and the floor above veils it.
+--
+-- Explicit module loaded by `ui/Radar_hud_element.lua` through `mod:io_dofile`; the chunk
+-- returns `RadarNavmesh`. The geometry itself comes from `mod:ensure_navmesh_geometry`
+-- and `mod:get_navmesh_nearby_buckets`. The visible set is cached and only rebuilt when
+-- the player moves, the range or style changes or the geometry is rebuilt, and a failing
+-- draw pauses the layer for a few seconds instead of interrupting the marker draw.
+-- module: Radar_navmesh_renderer
+-- alias: RadarNavmesh
+-- author: dreams
+-- author: LucLeto
 local mod = get_mod("Radar")
 local _clip_and_emit = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_triangle_clipper")
-
--- Live map-geometry (navmesh) renderer
--- Author: dreams
 
 local Color = Color
 local Quaternion = Quaternion
@@ -21,18 +34,28 @@ local Quaternion_forward = Quaternion and Quaternion.forward
 -- Constants
 -- ----------------------------------------------------------------------------
 
+--- Band colours used until the colour runtime is available, and the default floor ranges in metres.
+-- Overview mode shows every floor within `NAVMESH_OVERVIEW_RANGE` instead of the configured ranges.
 local NAVMESH_CURRENT_FALLBACK_COLOR = { 80, 101, 133, 96 }
 local NAVMESH_BELOW_FALLBACK_COLOR = { 55, 120, 98, 76 }
 local NAVMESH_ABOVE_FALLBACK_COLOR = { 32, 120, 150, 185 }
 local NAVMESH_DEFAULT_RANGE_ABOVE = 3
 local NAVMESH_DEFAULT_RANGE_BELOW = 7
 local NAVMESH_OVERVIEW_RANGE = 30
+--- Half height in metres of the current floor band around the player.
 local NAVMESH_CURRENT_FLOOR_HALF_DZ = 2.5
+--- Visible set refresh rules.
+-- A movement beyond `SELECTION_MOVE_THRESHOLD_SQ` is checked at most every
+-- `SELECTION_MIN_INTERVAL` seconds and a range change of more than 2% at most every
+-- `SELECTION_RANGE_REFRESH_INTERVAL` seconds. The selection radius gets `SELECTION_RANGE_SLACK`
+-- metres of slack and, for square radars, `SQUARE_RANGE_MULT` (the square's diagonal) so the
+-- corners stay filled between refreshes.
 local SELECTION_MIN_INTERVAL = 0.25
 local SELECTION_RANGE_REFRESH_INTERVAL = 0.1
 local SELECTION_MOVE_THRESHOLD_SQ = 1.5 * 1.5
 local SELECTION_RANGE_SLACK = 4
 local SQUARE_RANGE_MULT = 1.4143
+--- Seconds the layer stays paused after a draw error, and between debug metric log lines.
 local DRAW_FAILURE_COOLDOWN = 5
 local METRICS_LOG_INTERVAL = 5
 
@@ -40,6 +63,7 @@ local METRICS_LOG_INTERVAL = 5
 -- Mutable state
 -- ----------------------------------------------------------------------------
 
+--- Cached visible set (triangle indices into the geometry buffers) and the inputs it was selected for.
 local _visible = {}
 local _visible_count = 0
 local _sel_revision = -1
@@ -51,11 +75,14 @@ local _sel_style = nil
 local _sel_range_above = -1
 local _sel_range_below = -1
 local _sel_t = -math_huge
+--- Scratch buffers reused every frame for the bucket query and the per-band triangle indices.
 local _scratch_buckets = {}
 local _below_idx, _current_idx, _above_idx = {}, {}, {}
+--- Draw timing and failure state; a gameplay time lower than the last draw means a new session.
 local _last_draw_t = -math_huge
 local _failed_until_t = -math_huge
 local _last_failure_message = nil
+--- Debug metrics of the last selection and draw, logged periodically in debug mode.
 local _metric_candidates = 0
 local _metric_selected = 0
 local _metric_selection_ms = 0
@@ -65,6 +92,7 @@ local _metric_band_below = 0
 local _metric_band_current = 0
 local _metric_band_above = 0
 local _next_metrics_log_t = 0
+--- Whether the layer was active on the previous `RadarNavmesh.is_active` call.
 local _was_active = false
 
 -- ----------------------------------------------------------------------------
@@ -75,6 +103,10 @@ local function _is_finite(v)
     return type(v) == "number" and v == v and v ~= math_huge and v ~= -math_huge
 end
 
+--- Returns the normalised horizontal forward direction of a rotation.
+-- ?Quaternion: rotation camera rotation
+-- treturn: ?number forward x, or nil when the rotation is missing, invalid or vertical
+-- treturn: ?number forward y
 local function _forward_xy(rotation)
     if not rotation or not Quaternion_forward then
         return nil, nil
@@ -101,6 +133,9 @@ local function _forward_xy(rotation)
     return fx / length, fy / length
 end
 
+--- Returns the effective radar style, `square`, `circle` or `auspex`.
+-- Auspex radars are clipped like square ones.
+-- treturn: string
 local function _current_radar_style()
     local value = mod:get("radar_style")
 
@@ -117,12 +152,18 @@ local function _current_radar_style()
     return value
 end
 
+--- Returns the configured ARGB colour of a floor band, or the fallback before the colour runtime exists.
+-- string: prefix band colour setting prefix
+-- tab: fallback widget colour array
+-- treturn: tab widget colour array
 local function _band_widget_color(prefix, fallback)
     local get_radar_color = mod.get_radar_color
 
     return get_radar_color and get_radar_color(mod, prefix, fallback) or fallback
 end
 
+--- Returns whether at least one floor band has a non-zero alpha, so there is anything to draw.
+-- treturn: bool
 local function _any_band_visible()
     local current = _band_widget_color("radar_navmesh", NAVMESH_CURRENT_FALLBACK_COLOR)
     local below = _band_widget_color("radar_navmesh_below", NAVMESH_BELOW_FALLBACK_COLOR)
@@ -131,6 +172,10 @@ local function _any_band_visible()
     return (current[1] or 0) > 0 or (below[1] or 0) > 0 or (above[1] or 0) > 0
 end
 
+--- Clamps a configured floor range to 0.5 to 100 metres.
+-- param: value setting value
+-- number: fallback value used when the setting is not a number
+-- treturn: number
 local function _clamp_range(value, fallback)
     value = tonumber(value) or fallback
 
@@ -143,6 +188,9 @@ local function _clamp_range(value, fallback)
     return value
 end
 
+--- Returns how far above and below the player floors are drawn.
+-- treturn: number range above in metres
+-- treturn: number range below in metres
 local function _configured_ranges()
     if mod:is_overview_mode_active() then
         return NAVMESH_OVERVIEW_RANGE, NAVMESH_OVERVIEW_RANGE
@@ -152,6 +200,17 @@ local function _configured_ranges()
         _clamp_range(mod:get("navmesh_range_below"), NAVMESH_DEFAULT_RANGE_BELOW)
 end
 
+--- Fills the visible set from the queried buckets.
+-- A triangle is kept when its centre lies within the floor range and its bounding circle
+-- reaches into the selection radius.
+-- tab: geometry navmesh geometry buffers
+-- int: bucket_count number of buckets in `_scratch_buckets`
+-- number: origin_x player x
+-- number: origin_y player y
+-- number: origin_z player z
+-- number: select_range horizontal selection radius in metres
+-- number: range_above floor range above the player
+-- number: range_below floor range below the player
 local function _select_triangles(geometry, bucket_count, origin_x, origin_y, origin_z, select_range, range_above,
                                  range_below)
     local visible = _visible
@@ -184,6 +243,9 @@ local function _select_triangles(geometry, bucket_count, origin_x, origin_y, ori
     _metric_selected = n
 end
 
+--- Rebuilds the visible set around the player.
+-- Queries the buckets within the selection radius widened by the largest triangle radius, so
+-- a large triangle centred just outside the radius is still found.
 local function _refresh_selection(geometry, origin_x, origin_y, origin_z, select_range, range_above, range_below)
     local query_range = select_range + geometry.max_radius
     local bucket_count = mod:get_navmesh_nearby_buckets(origin_x, origin_y, query_range, _scratch_buckets)
@@ -198,6 +260,9 @@ local function _refresh_selection(geometry, origin_x, origin_y, origin_z, select
     _select_triangles(geometry, bucket_count, origin_x, origin_y, origin_z, select_range, range_above, range_below)
 end
 
+--- Returns whether the cached visible set can still be used for this frame.
+-- treturn: bool false when the geometry, style or floor ranges changed, time went
+--   backwards, or a refresh interval elapsed with the range or player position changed enough
 local function _selection_current(geometry, t, origin_x, origin_y, origin_z, range, style, range_above, range_below)
     if geometry.revision ~= _sel_revision then
         return false
@@ -238,6 +303,7 @@ local function _selection_current(geometry, t, origin_x, origin_y, origin_z, ran
     return true
 end
 
+--- Logs the selection and draw metrics at most every `METRICS_LOG_INTERVAL` seconds in debug mode.
 local function _log_metrics(geometry, t)
     if mod:get("debug_mode") ~= true then
         return
@@ -264,11 +330,25 @@ local function _log_metrics(geometry, t)
     ))
 end
 
+--- Drops the cached visible set so the next draw selects again.
 local function _invalidate_selection()
     _visible_count = 0
     _sel_revision = -1
 end
 
+--- Selects, bins and draws the navmesh triangles for one frame.
+-- Runs inside `pcall` from `RadarNavmesh.draw`. Triangle vertices are projected onto the
+-- camera's right and forward axes, scaled by `projection_radius / range` and clipped to
+-- the radar shape; bands with a zero alpha colour are skipped.
+-- tab: ui_renderer active UI renderer
+-- number: t gameplay time
+-- !Vector3: player_pos player position
+-- !Quaternion: rotation camera rotation the radar is aligned to
+-- number: center_x radar centre x in unscaled UI pixels
+-- number: center_y radar centre y in unscaled UI pixels
+-- number: projection_radius radar radius in unscaled UI pixels
+-- number: range radar range in metres
+-- ?number: z layer offset above the pass start layer
 local function _draw_geometry(ui_renderer, t, player_pos, rotation, center_x, center_y, projection_radius, range, z)
     if not player_pos or not rotation then
         return
@@ -447,8 +527,15 @@ end
 -- Interface
 -- ----------------------------------------------------------------------------
 
+--- Module interface consumed by `ui/Radar_hud_element.lua`.
 local RadarNavmesh = {}
 
+--- Returns whether the navmesh layer should draw this frame.
+-- The layer is active for the `live` geometry source, or for `auto` while Strikemap is not
+-- drawing, and only while `Gui.triangle` exists and a band is visible. When the layer turns
+-- inactive the cached navmesh geometry is released and the selection dropped.
+-- bool: suppressed true while the Strikemap layer owns the geometry slot
+-- treturn: bool
 function RadarNavmesh.is_active(suppressed)
     local source = mod.get_map_geometry_source and mod:get_map_geometry_source() or "off"
     local selected = source == "live" or (source == "auto" and not suppressed)
@@ -467,6 +554,19 @@ function RadarNavmesh.is_active(suppressed)
     return active
 end
 
+--- Draws the navmesh layer, isolating failures from the rest of the radar.
+-- A gameplay time lower than the previous draw is treated as a new session and resets the
+-- failure pause, metrics and selection. A draw error pauses the layer for
+-- `DRAW_FAILURE_COOLDOWN` seconds and is logged once per distinct message in debug mode.
+-- tab: ui_renderer active UI renderer
+-- ?number: t gameplay time
+-- !Vector3: player_pos player position
+-- !Quaternion: rotation camera rotation
+-- number: center_x radar centre x in unscaled UI pixels
+-- number: center_y radar centre y in unscaled UI pixels
+-- number: projection_radius radar radius in unscaled UI pixels
+-- number: range radar range in metres
+-- ?number: z layer offset above the pass start layer
 function RadarNavmesh.draw(ui_renderer, t, player_pos, rotation, center_x, center_y, projection_radius, range, z)
     if not Gui_triangle or not ui_renderer then
         return

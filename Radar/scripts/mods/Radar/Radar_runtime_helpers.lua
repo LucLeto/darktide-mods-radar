@@ -1,3 +1,23 @@
+--- Generic runtime infrastructure shared by every Radar module.
+-- Provides defensive access to engine and game state (units, extensions, managers, the
+-- player and camera), the rules that decide whether the radar may run at all, the radar
+-- position maths, the game's world marker list, the world-to-screen projection and
+-- occlusion test used by the HUD element, and the collection of nearby highlight targets.
+-- Engine and extension calls are existence-checked and run through `pcall`, so a game
+-- patch that changes an API degrades a feature instead of raising in the update loop.
+--
+-- Installer module, installed second into Radar's shared runtime environment (see
+-- `Radar.lua`). Contributes the `_safe_*` accessors, player, mission, runtime state, colour
+-- and world marker helpers, the radar position constants (`DEFAULT_RADAR_*`,
+-- `RADAR_ANCHORS`) and `SCREEN_HIGHLIGHT_Z_OFFSET_BY_KIND`, plus the HUD projection `mod`
+-- methods. It holds no feature-specific marker logic.
+--
+-- Relies on the registries from `Radar_enemy_definitions.lua`, on the colour runtime, and
+-- at call time on tracking state and methods (`mod._last_state_gameplay`,
+-- `mod._logged_units`, the radar target lists and the nearby highlight settings getters)
+-- from `Radar_tracking.lua`.
+-- module: Radar_runtime_helpers
+-- author: LucLeto
 return function(env)
     setfenv(1, env)
 
@@ -30,6 +50,9 @@ return function(env)
     -- Constants
     -- ----------------------------------------------------------------------------
 
+    --- Raycast setup for the HUD occlusion test.
+    -- Each filter is tried in turn until one reports a hit; a hit closer than the target by
+    -- more than `HUD_OCCLUSION_EPSILON` metres counts as occluded.
     local HUD_OCCLUSION_RAYCAST_FILTERS = {
         "filter_player_character_shooting",
         "filter_ray_projectile",
@@ -40,6 +63,7 @@ return function(env)
     local HUD_OCCLUSION_RAYCAST_MODE = "closest"
     local HUD_OCCLUSION_COLLISION_FILTER = "collision_filter"
     local HUD_OCCLUSION_RAYCAST_FILTER_COUNT = #HUD_OCCLUSION_RAYCAST_FILTERS
+    --- Default radar placement, nudge step and the corners the radar position can be anchored to.
     DEFAULT_RADAR_POS_X = 40
     DEFAULT_RADAR_POS_Y = 220
     DEFAULT_RADAR_MOVE_STEP = 10
@@ -50,6 +74,7 @@ return function(env)
         bottom_left = true,
         bottom_right = true,
     }
+    --- Height in metres added to a kind's highlight anchor, so the bracket frames the item rather than its base.
     SCREEN_HIGHLIGHT_Z_OFFSET_BY_KIND = {
         material_diamantine = 0.1,
         material_plasteel = 0.1,
@@ -116,28 +141,25 @@ return function(env)
     -- Mutable runtime state
     -- ----------------------------------------------------------------------------
 
+    --- Per-collection cache of whether each kind's nearby highlight is enabled.
     local _scratch_highlight_enabled_by_kind = {}
 
-    -- Reused instead of a per-call closure; the event manager invokes the
-    -- callback synchronously, so a single slot is enough.
+    --- Result slot for the world marker list request.
+    -- Used instead of a per-call closure; the event manager invokes the callback
+    -- synchronously, so a single slot is enough.
     local _world_markers_list_result = nil
 
-    -- Every unit the game currently holds a world marker for, whatever the
-    -- marker's type. Presence only, deliberately not `draw` or `widget.visible`:
-    -- a marker the player is too far away to see is still a live objective, and
-    -- filtering on visibility would make markers blink with distance. Returns
-    -- false when the list cannot be read, so callers can fall back rather than
-    -- treat an unavailable list as "nothing exists".
-    -- The units among them the game is marking as an objective, as opposed to
-    -- the prompt a player gets standing next to something. Refilled with them.
+    --- Units the game currently marks as an objective, as opposed to the prompt a player gets next to something.
+    -- Refilled by `_refresh_world_marker_units`.
     local _objective_marker_units = {}
 
-    -- The units at least one of whose markers the game is drawing rather than
-    -- holding out of reach. Presence above is unaffected; this answers only
-    -- whether the game's marker is on screen, for what it lets past the
-    -- radar's range.
+    --- Units with at least one world marker the game is drawing rather than holding out of reach.
+    -- Presence in the marker list is unaffected; this only answers whether the game's marker is
+    -- on screen, which decides what may bypass the radar's range. Refilled by
+    -- `_refresh_world_marker_units`.
     local _marker_in_reach_units = {}
 
+    --- Runtime state computed by `_get_runtime_state`, cached for the gameplay time it was computed at.
     local _runtime_state_cached_t = nil
     local _runtime_state_allowed = false
     local _runtime_state_reason = nil
@@ -151,6 +173,8 @@ return function(env)
     -- Generic helpers
     -- ----------------------------------------------------------------------------
 
+    --- Returns the current gameplay time, or nil before the gameplay timer exists.
+    -- treturn: ?number
     function _safe_gameplay_time()
         local time_manager = Managers and Managers.time
         if not time_manager then
@@ -165,10 +189,17 @@ return function(env)
         return time_manager:time("gameplay")
     end
 
+    --- Returns whether a unit handle still refers to a live engine unit, according to the game's `ALIVE` table.
+    -- param: unit unit handle, may be nil
+    -- treturn: ?bool
     function _safe_unit_alive(unit)
         return unit and ALIVE and ALIVE[unit]
     end
 
+    --- Returns a readable unit name for debug output.
+    -- Falls back to the handle's string form, and to `<dead>` for a unit that is gone.
+    -- param: unit unit handle
+    -- treturn: string
     function _safe_unit_name(unit)
         if not _safe_unit_alive(unit) then
             return "<dead>"
@@ -189,11 +220,12 @@ return function(env)
         return tostring(unit)
     end
 
-    -- The resource a unit was spawned from, the same for every unit of one
-    -- prefab: hashed in a shipping build (`#ID[ab4fec216e4f3c1c]`) but still
-    -- comparable. nil when the engine cannot say, never a stand-in like the one
-    -- `_safe_unit_name` returns -- callers compare these, and a per-unit
-    -- stand-in would make every unit its own prefab.
+    --- Returns the resource a unit was spawned from, identical for every unit of one prefab.
+    -- Hashed in a shipping build (`#ID[ab4fec216e4f3c1c]`) but still comparable. Callers
+    -- compare these values, so there is deliberately no per-unit stand-in like the one
+    -- `_safe_unit_name` returns; that would make every unit its own prefab.
+    -- param: unit unit handle
+    -- treturn: ?string prefab name, or nil when the engine cannot say
     function _safe_unit_prefab_name(unit)
         local unit_api = Unit
         local debug_name = unit_api and unit_api.debug_name
@@ -211,10 +243,17 @@ return function(env)
         return nil
     end
 
+    --- Returns whether a value is a number that is neither NaN nor infinite.
+    -- treturn: bool
     function _is_finite_number(v)
         return type(v) == "number" and v == v and v ~= math_huge and v ~= -math_huge
     end
 
+    --- Returns the components of an engine `Vector3` or of an `x`/`y`/`z` table.
+    -- param: vec vector, may be nil
+    -- treturn: ?number x
+    -- treturn: ?number y
+    -- treturn: ?number z
     function _vector3_components(vec)
         if not vec then
             return nil, nil, nil
@@ -246,6 +285,10 @@ return function(env)
         return nil, nil, nil
     end
 
+    --- Copies a vector into a plain `{ x, y, z }` table, so it can be kept beyond the current frame.
+    -- Engine vectors are temporary; a table copy is safe to store.
+    -- param: vec engine vector or table
+    -- treturn: ?tab copy, or nil when a component is missing or not finite
     function _copy_vector3(vec)
         local x, y, z = _vector3_components(vec)
 
@@ -256,6 +299,8 @@ return function(env)
         return { x = x, y = y, z = z }
     end
 
+    --- Returns the lower-case string form of a value, or nil for nil.
+    -- treturn: ?string
     function _safe_lower_string(value)
         if value == nil then
             return nil
@@ -264,6 +309,8 @@ return function(env)
         return string_lower(tostring(value))
     end
 
+    --- Returns whether a string starts with a prefix; false when either is nil.
+    -- treturn: bool
     function _string_starts_with(value, prefix)
         if value == nil or prefix == nil then
             return false
@@ -272,6 +319,10 @@ return function(env)
         return string_sub(value, 1, string_len(prefix)) == prefix
     end
 
+    --- Reads a data field authored on a unit, as a lower-case string.
+    -- !Unit: unit unit to read
+    -- string: field_name unit data field
+    -- treturn: ?string value, or nil when the field is absent
     local function _safe_unit_data_string(unit, field_name)
         local unit_api = Unit
         local has_data = unit_api and unit_api.has_data
@@ -294,26 +345,38 @@ return function(env)
         return nil
     end
 
+    --- Returns a unit's `pickup_type` data, the pickup name used to classify items.
+    -- treturn: ?string
     function _safe_unit_pickup_name(unit)
         return _safe_unit_data_string(unit, "pickup_type")
     end
 
+    --- Returns a unit's `deployable_type` data.
+    -- treturn: ?string
     function _safe_unit_deployable_type(unit)
         return _safe_unit_data_string(unit, "deployable_type")
     end
 
+    --- Returns a unit's `smart_tag_target_type` data.
+    -- treturn: ?string
     function _safe_unit_smart_tag_target_type(unit)
         return _safe_unit_data_string(unit, "smart_tag_target_type")
     end
 
+    --- Returns a unit's `collectible_type` data.
+    -- treturn: ?string
     function _safe_unit_collectible_type(unit)
         return _safe_unit_data_string(unit, "collectible_type")
     end
 
+    --- Returns a unit's `armor_data_name` data.
+    -- treturn: ?string
     function _safe_unit_prop_data_name(unit)
         return _safe_unit_data_string(unit, "armor_data_name")
     end
 
+    --- Returns the breed name reported by a unit's unit data extension, in lower case.
+    -- treturn: ?string
     function _safe_unit_data_breed_name(unit)
         local script_unit = ScriptUnit
         local has_extension = script_unit and script_unit.has_extension
@@ -338,6 +401,9 @@ return function(env)
         return nil
     end
 
+    --- Returns the collectible data of a destructible extension, read raw from its private field.
+    -- ?tab: extension destructible extension
+    -- treturn: ?tab
     function _safe_destructible_collectible_data(extension)
         if not extension then
             return nil
@@ -351,6 +417,9 @@ return function(env)
         return nil
     end
 
+    --- Returns a destructible extension's visibility flag, read raw from its private field.
+    -- ?tab: extension destructible extension
+    -- treturn: ?bool nil when the extension keeps no visibility info
     function _safe_destructible_visible(extension)
         if not extension then
             return nil
@@ -364,6 +433,8 @@ return function(env)
         return nil
     end
 
+    --- Returns whether a unit's main mesh group is visible, trying the grouped and plain engine call.
+    -- treturn: ?bool nil when visibility cannot be read
     function _safe_unit_main_visible(unit)
         local unit_api = Unit
 
@@ -387,6 +458,8 @@ return function(env)
         return nil
     end
 
+    --- Counts the entries of any table.
+    -- treturn: int
     function _table_size(t)
         local n = 0
         for _, _ in pairs(t) do
@@ -395,6 +468,11 @@ return function(env)
         return n
     end
 
+    --- Clamps a number to a range.
+    -- number: value value
+    -- number: min_value lower bound
+    -- number: max_value upper bound
+    -- treturn: number
     function _clamp(value, min_value, max_value)
         if value < min_value then
             return min_value
@@ -407,6 +485,9 @@ return function(env)
         return value
     end
 
+    --- Returns the size of the UI coordinate space, 1920 by 1080 scaled by the resolution's inverse UI scale.
+    -- treturn: number width
+    -- treturn: number height
     function _get_ui_space_size()
         local width = 1920
         local height = 1080
@@ -422,6 +503,10 @@ return function(env)
         return width, height
     end
 
+    --- Writes a debug log line once per key, and only while debug mode is enabled.
+    -- Keys are remembered in `mod._logged_units`, which the mission reset clears.
+    -- string: key de-duplication key
+    -- string: text log message
     function _log_once(key, text)
         if mod:get("debug_mode") ~= true then
             return
@@ -439,6 +524,8 @@ return function(env)
     -- Radar position helpers
     -- ----------------------------------------------------------------------------
 
+    --- Returns a valid radar anchor, the default for anything unknown.
+    -- treturn: string
     function _normalize_radar_anchor(value)
         if RADAR_ANCHORS[value] then
             return value
@@ -447,6 +534,9 @@ return function(env)
         return DEFAULT_RADAR_ANCHOR
     end
 
+    --- Returns the largest top-left position that keeps a radar of the given size on screen.
+    -- treturn: number max x
+    -- treturn: number max y
     function _get_radar_position_bounds(size)
         local radar_size = tonumber(size) or 0
         local ui_width, ui_height = _get_ui_space_size()
@@ -460,6 +550,13 @@ return function(env)
         return math_floor((tonumber(value) or default_value or 0) + 0.5)
     end
 
+    --- Rounds a radar position value and clamps it to the screen unless positioning is unrestricted.
+    -- param: value setting value
+    -- number: default_value value used when the setting is not a number
+    -- number: min_value lower bound
+    -- number: max_value upper bound
+    -- ?bool: unrestricted skip clamping when true
+    -- treturn: int
     function _resolve_radar_position_value(value, default_value, min_value, max_value, unrestricted)
         local rounded_value = _round_radar_position_value(value, default_value)
 
@@ -470,6 +567,11 @@ return function(env)
         return math_floor(_clamp(rounded_value, min_value, max_value) + 0.5)
     end
 
+    --- Converts offsets from an anchor corner into a top-left radar position.
+    -- treturn: number x
+    -- treturn: number y
+    -- treturn: number max x
+    -- treturn: number max y
     function _get_radar_origin_from_offsets(anchor, offset_x, offset_y, size)
         local max_x, max_y = _get_radar_position_bounds(size)
         local x = offset_x
@@ -486,6 +588,11 @@ return function(env)
         return x, y, max_x, max_y
     end
 
+    --- Converts a top-left radar position into offsets from an anchor corner.
+    -- treturn: number offset x
+    -- treturn: number offset y
+    -- treturn: number max x
+    -- treturn: number max y
     function _get_radar_offsets_from_origin(anchor, x, y, size)
         local max_x, max_y = _get_radar_position_bounds(size)
         local offset_x = x
@@ -506,6 +613,7 @@ return function(env)
     -- Unit and extension helpers
     -- ----------------------------------------------------------------------------
 
+    --- Returns a copy of a unit's position from the game's `POSITION_LOOKUP`, the cheapest source.
     local function _position_lookup(unit)
         local position_lookup = POSITION_LOOKUP
 
@@ -516,6 +624,10 @@ return function(env)
         return _copy_vector3(position_lookup[unit])
     end
 
+    --- Returns a live unit's world position as a plain table.
+    -- Uses the game's position lookup and falls back to the root node's world position.
+    -- param: unit unit handle
+    -- treturn: ?tab `{ x, y, z }`
     function _safe_unit_position(unit)
         if not _safe_unit_alive(unit) then
             return nil
@@ -541,6 +653,10 @@ return function(env)
         return nil
     end
 
+    --- Returns the world position of a named node of a live unit.
+    -- param: unit unit handle
+    -- ?string: node_name node name, such as `ui_interaction_marker`
+    -- treturn: ?tab `{ x, y, z }`, or nil when the unit has no such node
     function _safe_unit_node_position(unit, node_name)
         if not _safe_unit_alive(unit) or node_name == nil then
             return nil
@@ -576,10 +692,14 @@ return function(env)
         return nil
     end
 
+    --- Returns whether a marker kind is an enemy kind (`enemy_` prefix).
+    -- treturn: bool
     function _is_enemy_kind(kind)
         return kind ~= nil and _string_starts_with(kind, "enemy_")
     end
 
+    --- Returns what a unit's health extension says about it being alive.
+    -- treturn: ?bool nil when the unit has no health extension
     function _safe_health_alive(unit)
         local script_unit = ScriptUnit
         local has_extension = script_unit and script_unit.has_extension
@@ -602,6 +722,8 @@ return function(env)
         return nil
     end
 
+    --- Returns whether a unit's buff extension reports a keyword.
+    -- treturn: bool
     function _safe_unit_has_keyword(unit, keyword)
         local script_unit = ScriptUnit
         local has_extension = script_unit and script_unit.has_extension
@@ -620,6 +742,8 @@ return function(env)
         return ok_has_keyword and has_keyword or false
     end
 
+    --- Returns whether a unit has a buff using the given buff template.
+    -- treturn: bool
     function _safe_unit_has_buff_template(unit, buff_template_name)
         local script_unit = ScriptUnit
         local has_extension = script_unit and script_unit.has_extension
@@ -642,6 +766,11 @@ return function(env)
         return ok_has_buff and has_buff or false
     end
 
+    --- Returns the name of the ability a unit has equipped in a slot.
+    -- For the combat ability the extension's current ability name is also tried.
+    -- param: unit unit handle
+    -- ?string: ability_type ability slot, such as `combat_ability`
+    -- treturn: ?string ability name, nil when none is equipped
     function _safe_unit_ability_name(unit, ability_type)
         local script_unit = ScriptUnit
         local has_extension = script_unit and script_unit.has_extension
@@ -679,6 +808,7 @@ return function(env)
         return nil
     end
 
+    --- Returns whether the death manager has taken over a unit, which means it is dying.
     local function _is_owned_by_death_manager(unit)
         local script_unit = ScriptUnit
         local has_extension = script_unit and script_unit.has_extension
@@ -697,6 +827,13 @@ return function(env)
         return ok_owned and owned or false
     end
 
+    --- Returns whether a unit should still be tracked as alive for its marker kind.
+    -- Enemies stop counting once the death manager owns them or their health says dead;
+    -- Heretic Idols and Dark Rites totems once their health says dead. Other kinds only need
+    -- a live unit.
+    -- param: unit unit handle
+    -- ?string: kind marker kind
+    -- treturn: bool
     function _is_trackable_unit_alive(unit, kind)
         if not _safe_unit_alive(unit) then
             return false
@@ -723,6 +860,7 @@ return function(env)
         return true
     end
 
+    --- Returns the world rotation of a live unit's node, the root node by default.
     local function _safe_world_rotation(unit, node)
         if not _safe_unit_alive(unit) then
             return nil
@@ -743,6 +881,11 @@ return function(env)
         return nil
     end
 
+    --- Returns a rotation's direction vector projected onto the horizontal plane and normalised.
+    -- func: vector_getter `Quaternion` direction getter, such as `Quaternion.forward`
+    -- param: rotation rotation
+    -- treturn: ?number x
+    -- treturn: ?number y
     local function _safe_flat_direction_xy(vector_getter, rotation)
         if not rotation or not vector_getter then
             return nil, nil
@@ -766,6 +909,9 @@ return function(env)
         return x / length, y / length
     end
 
+    --- Returns a rotation's horizontal forward direction, normalised.
+    -- treturn: ?number x
+    -- treturn: ?number y
     function _safe_forward_xy(rotation)
         local quaternion = Quaternion
         local forward = quaternion and quaternion.forward
@@ -773,6 +919,9 @@ return function(env)
         return _safe_flat_direction_xy(forward, rotation)
     end
 
+    --- Returns an extension system by name from the state extension manager.
+    -- string: system_name system name, such as `interactee_system`
+    -- treturn: ?tab
     function _safe_extension_system(system_name)
         local extension_manager = Managers and Managers.state and Managers.state.extension
         local system_getter = extension_manager and extension_manager.system
@@ -790,6 +939,9 @@ return function(env)
         return nil
     end
 
+    --- Returns the unit-to-extension map of an extension system, the entry point for every unit scan.
+    -- string: system_name system name
+    -- treturn: ?tab map from unit to extension
     function _safe_unit_to_extension_map(system_name)
         local system = _safe_extension_system(system_name)
         local unit_to_extension_map = system and system.unit_to_extension_map
@@ -807,6 +959,8 @@ return function(env)
         return nil
     end
 
+    --- Returns the outline system's per-unit outline data, read raw from its private field.
+    -- treturn: ?tab
     function _safe_outline_extension_data_map()
         local outline_system = _safe_extension_system("outline_system")
         local unit_extension_data = outline_system and rawget(outline_system, "_unit_extension_data")
@@ -818,6 +972,10 @@ return function(env)
         return nil
     end
 
+    --- Returns a unit's outline data.
+    -- param: unit unit handle
+    -- ?tab: outline_extension_map map from `_safe_outline_extension_data_map`, fetched when nil
+    -- treturn: ?tab
     function _safe_unit_outline_extension(unit, outline_extension_map)
         if not unit then
             return nil
@@ -842,6 +1000,8 @@ return function(env)
         return Managers and Managers.state and Managers.state.game_mode or nil
     end
 
+    --- Returns the active game mode object.
+    -- treturn: ?tab
     function _safe_game_mode()
         local game_mode_manager = _safe_game_mode_manager()
         if not game_mode_manager or not game_mode_manager.game_mode then
@@ -857,6 +1017,8 @@ return function(env)
         return nil
     end
 
+    --- Returns the active game mode name, such as `coop_complete_objective`, `survival` or `expedition`.
+    -- treturn: ?string
     function _safe_game_mode_name()
         local game_mode_manager = _safe_game_mode_manager()
         if not game_mode_manager or not game_mode_manager.game_mode_name then
@@ -876,6 +1038,10 @@ return function(env)
     -- Mission and mechanism helpers
     -- ----------------------------------------------------------------------------
 
+    --- Returns the current mission name from the first source that has one.
+    -- Tries the last gameplay state's shared state, the game mode manager, the gameplay state
+    -- manager, the package synchronizer and the mechanism in turn.
+    -- treturn: ?string mission name, such as `hub_ship` or `cm_habs`
     function _safe_mission_name()
         local state_gameplay = mod._last_state_gameplay
         if state_gameplay then
@@ -919,6 +1085,8 @@ return function(env)
         return nil
     end
 
+    --- Returns the presence activity (such as `hub`, `loading` or `main_menu`) from the first source that has one.
+    -- treturn: ?string
     function _safe_presence_activity()
         local presence_manager = Managers and Managers.presence
         if not presence_manager then
@@ -957,6 +1125,8 @@ return function(env)
         return nil
     end
 
+    --- Returns the current mechanism name (such as `adventure`, `hub`, `onboarding` or `expedition`).
+    -- treturn: ?string
     function _safe_mechanism_name()
         local mechanism_manager = Managers and Managers.mechanism
         if not mechanism_manager then
@@ -997,6 +1167,12 @@ return function(env)
         return nil
     end
 
+    --- Returns whether the game is in the hub, main menu or title screen.
+    -- Values that are not passed in are read.
+    -- ?string: mission_name mission name
+    -- ?string: activity presence activity
+    -- ?string: mechanism_name mechanism name
+    -- treturn: bool
     function _is_hub_runtime(mission_name, activity, mechanism_name)
         mission_name = mission_name or _safe_mission_name()
         activity = activity or _safe_presence_activity()
@@ -1013,10 +1189,14 @@ return function(env)
     -- Player helpers
     -- ----------------------------------------------------------------------------
 
+    --- Returns the player manager.
+    -- treturn: ?tab
     function _player_manager()
         return Managers and Managers.player
     end
 
+    --- Returns the first local player, or nil while no players exist.
+    -- treturn: ?tab
     function _local_player()
         local player_manager = _player_manager()
         if not player_manager then
@@ -1042,11 +1222,14 @@ return function(env)
         return nil
     end
 
+    --- Returns the local player's unit, which can be a teammate's while spectating.
+    -- return: unit handle, or nil
     function _player_unit()
         local local_player = _local_player()
         return local_player and local_player.player_unit
     end
 
+    --- Returns the `character_state` component of a player unit.
     local function _safe_player_character_state_component(player_unit)
         local script_unit = ScriptUnit
         local has_extension = script_unit and script_unit.has_extension
@@ -1074,11 +1257,14 @@ return function(env)
         return nil
     end
 
+    --- Returns the character state name of a player unit, such as `hogtied` or `knocked_down`.
+    -- treturn: ?string
     function _safe_player_character_state_name(player_unit)
         local character_state_component = _safe_player_character_state_component(player_unit)
         return character_state_component and character_state_component.state_name or nil
     end
 
+    --- Returns the player that owns a player unit.
     local function _player_for_unit(player_unit)
         if not player_unit then
             return nil
@@ -1106,6 +1292,8 @@ return function(env)
         return nil
     end
 
+    --- Returns whether the local player's unit belongs to another player, as while spectating a teammate.
+    -- treturn: bool
     function _is_local_player_using_foreign_unit(player_unit)
         local local_player = _local_player()
 
@@ -1118,10 +1306,14 @@ return function(env)
         return owning_player ~= nil and owning_player ~= local_player
     end
 
+    --- Returns whether a player unit is still a live unit.
+    -- treturn: ?bool
     function _is_player_unit_alive(player_unit)
         return _safe_unit_alive(player_unit)
     end
 
+    --- Returns whether a player unit is captured (hogtied).
+    -- treturn: bool
     function _is_player_unit_captured(player_unit)
         if not _safe_unit_alive(player_unit) or not PlayerUnitStatus then
             return false
@@ -1149,6 +1341,8 @@ return function(env)
         return ok and captured == true or false
     end
 
+    --- Returns whether the local player is alive in their own unit.
+    -- treturn: bool
     function _is_local_player_alive()
         local player_unit = _player_unit()
 
@@ -1159,6 +1353,8 @@ return function(env)
         return _is_player_unit_alive(player_unit)
     end
 
+    --- Returns whether the local player is captured in their own unit.
+    -- treturn: bool
     function _is_local_player_captured()
         local player_unit = _player_unit()
 
@@ -1169,6 +1365,7 @@ return function(env)
         return _is_player_unit_captured(player_unit)
     end
 
+    --- Returns the rotation of the local player's camera, or nil without a visible camera.
     local function _safe_camera_rotation()
         local local_player = _local_player()
         if not local_player then
@@ -1209,6 +1406,10 @@ return function(env)
         return nil
     end
 
+    --- Returns the rotation the radar is aligned to.
+    -- Prefers the camera, then the player's first person rotation, and finally the unit's root rotation.
+    -- param: player_unit local player unit
+    -- return: rotation, or nil
     function _safe_player_rotation(player_unit)
         local camera_rotation = _safe_camera_rotation()
         if camera_rotation then
@@ -1248,6 +1449,7 @@ return function(env)
     -- Game mode and runtime state
     -- ----------------------------------------------------------------------------
 
+    --- Returns whether the current mission runs under Havoc, by havoc data or the game mode's havoc extension.
     local function _safe_havoc_runtime_active()
         local state_gameplay = mod._last_state_gameplay
         local shared_state = state_gameplay and state_gameplay._shared_state
@@ -1278,6 +1480,11 @@ return function(env)
         return false
     end
 
+    --- Maps the current game mode to one of Radar's per-mode enable settings.
+    -- ?string: mission_name mission name
+    -- ?string: mechanism_name mechanism name
+    -- treturn: ?string `expeditions`, `mortis_trials`, `havoc` or `regular_missions`; nil when unsupported
+    -- treturn: ?string game mode name
     local function _classify_radar_game_mode(mission_name, mechanism_name)
         local game_mode_name = _safe_game_mode_name()
 
@@ -1304,6 +1511,9 @@ return function(env)
         return nil, game_mode_name
     end
 
+    --- Returns whether the radar is enabled for a game mode id; unset settings count as enabled.
+    -- string: game_mode_id id from `RADAR_GAME_MODE_SETTING_BY_ID`
+    -- treturn: bool
     function mod:is_radar_enabled_for_game_mode(game_mode_id)
         local setting_id = RADAR_GAME_MODE_SETTING_BY_ID[game_mode_id]
 
@@ -1314,6 +1524,7 @@ return function(env)
         return self:get(setting_id) ~= false
     end
 
+    --- Returns whether the radar is enabled for the game mode currently running.
     local function _is_radar_enabled_for_current_mode(mission_name, mechanism_name)
         local game_mode_id = _classify_radar_game_mode(mission_name, mechanism_name)
 
@@ -1324,6 +1535,10 @@ return function(env)
         return mod:is_radar_enabled_for_game_mode(game_mode_id)
     end
 
+    --- Returns whether the current game state is a mission the radar may run in.
+    -- Loading screens, the hub, the main menu and onboarding other than the Psykhanium are
+    -- excluded, and so is any game mode whose enable setting is off.
+    -- treturn: bool
     function mod:is_radar_runtime_game_mode_allowed()
         local mission_name = _safe_mission_name()
         local activity = _safe_presence_activity()
@@ -1352,10 +1567,12 @@ return function(env)
         return _is_radar_enabled_for_current_mode(mission_name, mechanism_name)
     end
 
+    --- Forces the next `_get_runtime_state` call to evaluate the runtime state again.
     function _invalidate_runtime_state_cache()
         _runtime_state_cached_t = nil
     end
 
+    --- Caches a runtime state evaluation and returns it unchanged.
     local function _store_runtime_state(allowed, reason, gameplay_t, mission_name, activity, mechanism_name,
                                         player_unit, player_pos)
         _runtime_state_cached_t = gameplay_t
@@ -1370,6 +1587,16 @@ return function(env)
         return allowed, reason, gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
     end
 
+    --- Evaluates whether the radar may run right now, cached per gameplay time.
+    -- treturn: bool allowed
+    -- treturn: string reason, `ok` when allowed; otherwise such as `loading`, `hub_runtime`,
+    --   `game_mode_disabled`, `spectating_teammate`, `player_not_alive` or `player_captured`
+    -- treturn: ?number gameplay time
+    -- treturn: ?string mission name
+    -- treturn: ?string presence activity
+    -- treturn: ?string mechanism name
+    -- return: local player unit, or nil
+    -- treturn: ?tab local player position
     function _get_runtime_state()
         local gameplay_t = _safe_gameplay_time()
 
@@ -1444,6 +1671,8 @@ return function(env)
             player_pos)
     end
 
+    --- Returns whether the radar may run right now.
+    -- treturn: bool
     function _is_allowed_runtime()
         local allowed = _get_runtime_state()
         return allowed
@@ -1453,6 +1682,9 @@ return function(env)
     -- Colour helpers
     -- ----------------------------------------------------------------------------
 
+    --- Returns a copy of an ARGB colour array with missing channels set to 255.
+    -- ?tab: color colour array
+    -- treturn: ?tab
     function _copy_color_array(color)
         if not color then
             return nil
@@ -1466,6 +1698,7 @@ return function(env)
         }
     end
 
+    --- Returns a new colour array with its RGB channels scaled, for occluded highlights.
     local function _darkened_color_array(color, multiplier)
         local src = color or DEFAULT_COLOR_ARRAY_WHITE
         local mul = multiplier or 1
@@ -1478,6 +1711,7 @@ return function(env)
         }
     end
 
+    --- Returns the configured nearby highlight colour of a kind, or its default before the settings getter exists.
     local function _screen_highlight_color_for_kind(kind)
         if mod.get_nearby_highlight_color then
             return mod:get_nearby_highlight_color(kind)
@@ -1490,6 +1724,7 @@ return function(env)
     -- World marker helpers
     -- ----------------------------------------------------------------------------
 
+    --- Returns the emptied per-unit cache of interaction world markers, stored on `mod`.
     local function _interaction_world_marker_cache()
         local cache = mod._interaction_world_markers_by_unit
 
@@ -1503,13 +1738,14 @@ return function(env)
         return cache
     end
 
+    --- Receives the world marker list requested from the HUD.
     local function _world_markers_list_response(response)
         _world_markers_list_result = response
     end
 
-    -- Shared by every world-marker consumer so the request is issued the same
-    -- way each time. Returns the live list owned by the HUD element; callers
-    -- must only read it.
+    --- Requests the game's world marker list from the HUD through the event manager.
+    -- Shared by every world marker consumer so the request is issued the same way each time.
+    -- treturn: ?tab the live list owned by the HUD element, which callers must only read
     function _safe_world_markers_list()
         local managers = Managers
         local event_manager = managers and managers.event or nil
@@ -1532,9 +1768,12 @@ return function(env)
         return markers
     end
 
-    -- The game's own test: the camera distance it keeps on the marker against
-    -- its template's `max_distance`, unless the marker lifts the limit. One it
-    -- has not measured yet counts as drawn, as every marker did before.
+    --- Returns whether the game is drawing a world marker rather than holding it out of reach.
+    -- Mirrors the game's own test, the camera distance it keeps on the marker against its
+    -- template's `max_distance`, unless the marker lifts the limit. A marker not measured yet
+    -- counts as drawn.
+    -- tab: marker world marker
+    -- treturn: bool
     local function _world_marker_in_reach(marker)
         if marker.block_max_distance then
             return true
@@ -1547,6 +1786,15 @@ return function(env)
         return type(max_distance) ~= "number" or type(distance) ~= "number" or distance <= max_distance
     end
 
+    --- Rebuilds the sets of units the game currently holds world markers for.
+    -- Fills `out` with every unit that has a world marker of any type, and refills the objective
+    -- and in-reach sets read by `_game_marks_as_objective` and `_game_draws_marker_on`. This is
+    -- presence only, deliberately not the marker's `draw` flag or widget visibility; a marker the
+    -- player is too far away to see is still a live objective, and filtering on visibility would
+    -- make markers blink with distance.
+    -- tab: out set to fill with units, cleared first
+    -- treturn: bool false when the list cannot be read, so callers can fall back rather than
+    --   treat an unavailable list as "nothing exists"
     function _refresh_world_marker_units(out)
         table_clear(out)
         table_clear(_objective_marker_units)
@@ -1578,16 +1826,20 @@ return function(env)
         return true
     end
 
+    --- Returns whether the game marks a unit as an objective, as of the last world marker refresh.
+    -- treturn: bool
     function _game_marks_as_objective(unit)
         return _objective_marker_units[unit] == true
     end
 
+    --- Returns whether the game is drawing a world marker on a unit, as of the last world marker refresh.
+    -- treturn: bool
     function _game_draws_marker_on(unit)
         return _marker_in_reach_units[unit] == true
     end
 
-    -- For the mission reset: each of these holds units, and is otherwise only
-    -- emptied by the next refresh.
+    --- Empties the world marker sets and the interaction marker cache on mission reset.
+    -- Each of them holds units and is otherwise only emptied by the next refresh.
     function _clear_world_marker_units()
         table_clear(_objective_marker_units)
         table_clear(_marker_in_reach_units)
@@ -1603,6 +1855,9 @@ return function(env)
     -- HUD projection interface
     -- ----------------------------------------------------------------------------
 
+    --- Returns the interaction world markers the game is currently drawing, keyed by unit.
+    -- Only markers whose widget is visible are included. The returned table is reused.
+    -- treturn: tab map from unit to marker
     function mod:get_interaction_world_markers_by_unit()
         local cache = _interaction_world_marker_cache()
         local markers = _safe_world_markers_list()
@@ -1625,6 +1880,11 @@ return function(env)
         return cache
     end
 
+    --- Returns where and how large the game draws its interaction marker for a unit.
+    -- ?Unit: unit unit to look up
+    -- treturn: ?number marker centre x in UI space
+    -- treturn: ?number marker centre y in UI space
+    -- treturn: ?number icon size, or the ring size, or 0
     function mod:get_interaction_world_marker_draw_data(unit)
         if not unit then
             return nil, nil, nil
@@ -1671,6 +1931,9 @@ return function(env)
         return center_x, center_y, draw_size
     end
 
+    --- Returns the player camera of the HUD that owns a HUD element.
+    -- tab: hud_element HUD element
+    -- return: camera, or nil
     function mod:get_hud_player_camera(hud_element)
         local parent = hud_element and hud_element._parent
 
@@ -1687,6 +1950,8 @@ return function(env)
         return nil
     end
 
+    --- Returns the HUD player camera position.
+    -- treturn: ?tab `{ x, y, z }`
     function mod:get_hud_player_camera_position(hud_element)
         local camera = self:get_hud_player_camera(hud_element)
 
@@ -1703,6 +1968,8 @@ return function(env)
         return nil
     end
 
+    --- Returns the HUD player camera rotation.
+    -- return: rotation, or nil
     function mod:get_hud_player_camera_rotation(hud_element)
         local camera = self:get_hud_player_camera(hud_element)
 
@@ -1719,6 +1986,8 @@ return function(env)
         return nil
     end
 
+    --- Returns the local player's vertical field of view in radians.
+    -- treturn: ?number
     function mod:get_hud_player_vertical_fov()
         local local_player = _local_player()
 
@@ -1752,6 +2021,8 @@ return function(env)
         return nil
     end
 
+    --- Returns a rotation's forward, right and up axes as plain tables.
+    -- treturn: ?tab `{ forward, right, up }`, nil when an axis is not finite
     local function _hud_rotation_basis(rotation)
         if not rotation then
             return nil
@@ -1793,6 +2064,7 @@ return function(env)
         }
     end
 
+    --- Returns the level's physics world from the physics manager or the level world.
     local function _safe_hud_physics_world()
         local physics_manager = Managers and Managers.state and Managers.state.physics
 
@@ -1837,6 +2109,7 @@ return function(env)
         return nil
     end
 
+    --- Extracts a hit distance from one raycast return value (a number, a hit table or a list of hits).
     local function _extract_hud_raycast_distance_from_value(value)
         if type(value) == "number" and _is_finite_number(value) then
             return value
@@ -1860,6 +2133,7 @@ return function(env)
         return nil
     end
 
+    --- Returns the first hit distance found among the raycast return values, whose layout varies by call.
     local function _extract_hud_raycast_distance(a, b, c, d)
         return _extract_hud_raycast_distance_from_value(a)
             or _extract_hud_raycast_distance_from_value(b)
@@ -1867,6 +2141,12 @@ return function(env)
             or _extract_hud_raycast_distance_from_value(d)
     end
 
+    --- Returns whether level geometry blocks the line of sight from the camera to a world position.
+    -- Casts one ray per occlusion filter until a filter reports a hit; any failure counts as
+    -- visible.
+    -- tab: camera_position camera position
+    -- tab: world_position target position
+    -- treturn: bool
     function mod:is_hud_world_position_occluded(camera_position, world_position)
         local physics_world = _safe_hud_physics_world()
         local immediate_raycast = PhysicsWorld and PhysicsWorld.immediate_raycast
@@ -1912,6 +2192,13 @@ return function(env)
         return false
     end
 
+    --- Builds the camera data needed to project world positions onto the HUD for one frame.
+    -- Uses the HUD player camera, or the fallbacks when it is unavailable, and a 65 degree
+    -- vertical field of view when none can be read.
+    -- tab: hud_element HUD element
+    -- ?tab: fallback_camera_position camera position used without a HUD camera
+    -- param: fallback_rotation rotation used without a HUD camera
+    -- treturn: ?tab projection context, nil without a camera position or basis
     function mod:get_hud_projection_context(hud_element, fallback_camera_position, fallback_rotation)
         local camera_position = self:get_hud_player_camera_position(hud_element) or fallback_camera_position
         local camera_rotation = self:get_hud_player_camera_rotation(hud_element) or fallback_rotation
@@ -1941,6 +2228,13 @@ return function(env)
         }
     end
 
+    --- Projects a world position into UI space with a projection context.
+    -- Positions behind the camera or outside the view are rejected.
+    -- ?tab: world_position world position
+    -- ?tab: projection_context context from `get_hud_projection_context`
+    -- treturn: ?number screen x
+    -- treturn: ?number screen y
+    -- treturn: ?tab camera position used
     function mod:project_hud_world_to_screen_with_context(world_position, projection_context)
         if not world_position or not projection_context then
             return nil, nil, nil
@@ -1986,6 +2280,10 @@ return function(env)
         return screen_x, screen_y, camera_position
     end
 
+    --- Projects a world position into UI space, building the projection context first.
+    -- treturn: ?number screen x
+    -- treturn: ?number screen y
+    -- treturn: ?tab camera position used
     function mod:project_hud_world_to_screen(hud_element, world_position, fallback_camera_position, fallback_rotation)
         if not world_position then
             return nil, nil, nil
@@ -2001,6 +2299,9 @@ return function(env)
         return self:project_hud_world_to_screen_with_context(world_position, projection_context)
     end
 
+    --- Returns the on-screen highlight bracket size for a distance, shrinking from 24 px at 5 m to 18 px at 20 m.
+    -- ?number: distance_sq squared distance to the target
+    -- treturn: number
     function mod:get_screen_highlight_bracket_size(distance_sq)
         local distance = math_sqrt(math_max(distance_sq or 0, 0))
         local min_distance = 5
@@ -2024,6 +2325,7 @@ return function(env)
     -- Screen highlights
     -- ----------------------------------------------------------------------------
 
+    --- Returns the emptied highlight output list stored on `mod`, creating it on first use.
     local function _reuse_screen_highlight_output()
         local highlights = mod._screen_highlight_targets
 
@@ -2038,6 +2340,7 @@ return function(env)
         return highlights
     end
 
+    --- Returns the UI interaction type of a unit's interactee extension, in lower case.
     local function _safe_interactee_ui_interaction_type(unit, interactee_extension_map)
         if not unit then
             return nil
@@ -2067,6 +2370,12 @@ return function(env)
         return nil
     end
 
+    --- Returns the world position a highlight bracket is anchored to for the occlusion test.
+    -- Uses the unit's `ui_interaction_marker` node, then its origin, then the target's stored
+    -- position, raised by the kind's offset and a further 0.8 m for pickups.
+    -- tab: target radar target
+    -- ?tab: interactee_extension_map interactee extensions by unit
+    -- treturn: ?tab `{ x, y, z }`
     local function _screen_highlight_anchor_position(target, interactee_extension_map)
         local unit = target and target.unit or nil
         local position = target and target.position
@@ -2103,17 +2412,15 @@ return function(env)
         }
     end
 
-    -- The centre of the unit's oriented bounding box. A prefab's root is wherever
-    -- its author put the pivot, which on a wall-mounted terminal is the mounting
-    -- point rather than the panel, and a highlight bracket wants the middle of
-    -- what it frames. `Unit.box` returns the box's pose and half extents and the
-    -- pose's translation is its centre -- the same call, and the same reason,
-    -- the Strikemap mod uses to centre its door bars on the leaf instead of the
-    -- hinge.
-    --
-    -- Engine functions the mod has not relied on before, so each is checked for
-    -- existence and called through pcall, and any failure is simply "no box":
-    -- the caller keeps the origin it would have used anyway.
+    --- Returns the centre of a unit's oriented bounding box.
+    -- A prefab's root is wherever its author put the pivot, which on a wall-mounted terminal is
+    -- the mounting point rather than the panel, and a highlight bracket wants the middle of what
+    -- it frames. `Unit.box` returns the box's pose and half extents, and the pose's translation
+    -- is its centre; the Strikemap mod uses the same call to centre its door bars on the leaf
+    -- instead of the hinge. These engine functions are checked for existence and called through
+    -- `pcall`, and any failure simply means no box, so the caller keeps the origin.
+    -- param: unit unit handle
+    -- treturn: ?tab `{ x, y, z }`
     function _safe_unit_box_center(unit)
         if not _safe_unit_alive(unit) then
             return nil
@@ -2143,10 +2450,11 @@ return function(env)
         return _copy_vector3(center)
     end
 
-    -- Where the bracket is actually placed whenever the game is not drawing its
-    -- own interaction marker for the unit -- which for a scan target is always.
-    -- The anchor above only feeds the occlusion test on the path where that
-    -- marker exists; it never positions the bracket.
+    --- Returns where a highlight bracket is placed when the game draws no interaction marker for the unit.
+    -- For a scan target that is always the case. The anchor position only feeds the occlusion
+    -- test on the path where the game's marker exists; it never positions the bracket.
+    -- tab: target radar target
+    -- treturn: ?tab `{ x, y, z }`
     function _screen_highlight_projection_fallback_position(target)
         local unit = target and target.unit or nil
         local kind = target and target.kind or nil
@@ -2184,6 +2492,10 @@ return function(env)
         }
     end
 
+    --- Copies a target list into a reused destination list.
+    -- ?tab: targets source list
+    -- ?tab: destination list to overwrite, created when nil
+    -- treturn: tab
     function _copy_target_list(targets, destination)
         local copy = destination or {}
         table_clear(copy)
@@ -2199,6 +2511,8 @@ return function(env)
         return copy
     end
 
+    --- Returns the squared 3D distance between two positions, `math.huge` when either is missing or invalid.
+    -- treturn: number
     function _distance_squared(a, b)
         if not a or not b then
             return math_huge
@@ -2222,6 +2536,13 @@ return function(env)
         return dx * dx + dy * dy + dz * dz
     end
 
+    --- Collects the radar targets that get a nearby highlight bracket this frame.
+    -- Considers the highlight source targets kept by tracking (falling back to the unclustered
+    -- and then the drawn radar targets) that lie within the highlight range, belong to a settings
+    -- group with highlights enabled and are not of an excluded kind. Each entry carries the anchor and
+    -- fallback positions, the highlight colour (following the marker's puzzle state colour) and
+    -- the colour used while occluded. The output list is reused between frames.
+    -- treturn: tab highlight entries
     function _collect_screen_highlight_targets()
         local highlights = _reuse_screen_highlight_output()
 
@@ -2278,11 +2599,10 @@ return function(env)
 
                     enabled = setting_id ~= nil and get_setting(mod, setting_id) == true or false
 
-                    -- The radar-side highlight honours the per-kind exclusion
-                    -- list through `is_nearby_highlight_enabled_for_kind`, but
-                    -- this screen-space bracket is a separate gate and used to
-                    -- ignore it, so an excluded kind still got a bracket drawn
-                    -- around it in the world.
+                    -- This screen-space bracket is gated separately from the radar-side
+                    -- highlight (`is_nearby_highlight_enabled_for_kind`), so it applies the
+                    -- per-kind exclusion list itself; without this an excluded kind still
+                    -- gets a bracket drawn around it in the world.
                     if enabled and NEARBY_HIGHLIGHT_EXCLUDED_KINDS[kind] then
                         enabled = false
                     end

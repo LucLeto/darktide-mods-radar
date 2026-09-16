@@ -1,3 +1,19 @@
+--- Pickups, interactables, chests, Heretic Idols, hazard barrels and deployables.
+-- Classifies every interactee into a marker kind by asking, in a fixed order, the generic
+-- pickup rules, then the mission objective, Expedition and live event item names, the live
+-- event and Martyr's Skull riddle interactables, and finally the mission objective
+-- interactables. It also scans chests, hazard barrels, destructible collectibles (Heretic
+-- Idols and Dark Rites totems) and tagged medical crates, and retires destroyed idols as
+-- soon as the game reports them.
+--
+-- Installer module, installed after `Radar_players.lua` into Radar's shared runtime
+-- environment (see `Radar.lua`). Contributes `_classify_interactee` (used by the tracking
+-- interactee scan), the scans `_scan_chests`, `_scan_hazard_props`, `_scan_destructibles`
+-- and `_scan_smart_tag_targets`, and the idol state helpers with their reset. Relies at call
+-- time on the classifiers of `Radar_mission_objectives.lua`, `Radar_expeditions.lua` and
+-- `Radar_events.lua`, on tracking and on the runtime helpers.
+-- module: Radar_pickups
+-- author: LucLeto
 return function(env)
     setfenv(1, env)
 
@@ -21,6 +37,7 @@ return function(env)
     -- Constants
     -- ----------------------------------------------------------------------------
 
+    --- Marker kind of the common pickups, keyed by pickup name.
     local PICKUP_KIND_BY_NAME = {
         small_clip = "pickup_ammo_small",
         large_clip = "pickup_ammo_big",
@@ -43,8 +60,12 @@ return function(env)
     -- Mutable runtime state
     -- ----------------------------------------------------------------------------
 
+    --- Destroyed Heretic Idols and totems by collectible key and by unit, with the gameplay time they were destroyed.
+    -- Kept for 60 seconds so a scan in the meantime cannot bring back an idol whose destruction
+    -- was already reported.
     mod._idol_destroyed_collectible_keys = {}
     mod._idol_destroyed_units = {}
+    --- Scratch sets of the units seen by each scan, reused to drop units that left their system.
     local _scratch_seen_chests = {}
     local _scratch_seen_destructibles = {}
     local _scratch_seen_hazard_props = {}
@@ -53,6 +74,8 @@ return function(env)
     -- Generic helpers
     -- ----------------------------------------------------------------------------
 
+    --- Builds the meta table of a classified interactee.
+    -- treturn: tab
     local function _pickup_meta(pickup_name, interaction_type, ui_interaction_type, interaction_icon, description,
                                 marked_by_player_slot)
         return {
@@ -69,6 +92,23 @@ return function(env)
     -- Interactee classification
     -- ----------------------------------------------------------------------------
 
+    --- Resolves the marker kind of an interactee from its interaction data.
+    -- The order is significant; chests, Expedition loot converters, medicae stations and
+    -- luggable sockets first, then exact pickup names, live event interactables, Martyr's Skull
+    -- riddle interactables and last mission objective interactables. Anything still unknown is
+    -- logged once in debug mode, and objective-looking items become `pickup_unknown`.
+    -- ?string: interaction_type lower-case interaction type
+    -- ?string: ui_interaction_type lower-case UI interaction type
+    -- ?string: icon lower-case interaction icon
+    -- ?string: description lower-case interaction description
+    -- ?string: unit_name lower-case unit name
+    -- ?string: pickup_name pickup name
+    -- ?tab: pickup_data pickup settings entry
+    -- ?int: marked_by_player_slot slot of the player who tagged the unit
+    -- param: unit unit handle
+    -- ?bool: suppress_debug skip the debug logs, for speculative classification
+    -- treturn: ?string marker kind
+    -- treturn: tab meta
     local function _classify_pickup_like(interaction_type, ui_interaction_type, icon, description, unit_name, pickup_name,
                                          pickup_data, marked_by_player_slot, unit, suppress_debug)
         local pickup_group = pickup_data and pickup_data.group or nil
@@ -192,6 +232,15 @@ return function(env)
         return nil, meta
     end
 
+    --- Classifies an interactee unit into a marker kind.
+    -- Reads the extension's interaction type, UI type, icon and description and the unit's
+    -- pickup name, then adds the Expedition loot value to the meta.
+    -- ?tab: extension interactee extension
+    -- param: unit unit handle
+    -- ?bool: suppress_debug skip the debug logs
+    -- ?bool: skip_marked_by_player_slot skip the tag attribution lookup
+    -- treturn: ?string marker kind
+    -- treturn: ?tab meta
     function _classify_interactee(extension, unit, suppress_debug, skip_marked_by_player_slot)
         if not extension then
             return nil, nil
@@ -244,6 +293,8 @@ return function(env)
     -- Heretic Idols
     -- ----------------------------------------------------------------------------
 
+    --- Returns the key of a collectible, `section_id:id`.
+    -- treturn: ?string nil when either part is missing
     function _idol_collectible_key(section_id, id)
         if section_id == nil or id == nil then
             return nil
@@ -252,6 +303,7 @@ return function(env)
         return tostring(section_id) .. ":" .. tostring(id)
     end
 
+    --- Records a destroyed collectible by key.
     local function _remember_destroyed_idol_collectible(section_id, id)
         local collectible_key = _idol_collectible_key(section_id, id)
 
@@ -260,12 +312,16 @@ return function(env)
         end
     end
 
+    --- Records a destroyed idol unit.
     local function _remember_destroyed_idol_unit(unit)
         if unit ~= nil then
             mod._idol_destroyed_units[unit] = _safe_gameplay_time() or 0
         end
     end
 
+    --- Retires a destroyed collectible and removes its idol or totem marker at once.
+    -- param: section_id collectible section id
+    -- param: id collectible id
     function _clear_tracked_idol_by_collectible(section_id, id)
         local collectible_key = _idol_collectible_key(section_id, id)
 
@@ -292,6 +348,9 @@ return function(env)
         end
     end
 
+    --- Retires a destructible that was destroyed, if it is a Heretic Idol or a Dark Rites totem.
+    -- param: unit destructible unit
+    -- ?tab: extension destructible extension
     function _mark_idol_unit_destroyed(unit, extension)
         if unit == nil then
             return
@@ -320,6 +379,7 @@ return function(env)
         _clear_tracked_unit_from_source(unit, "destructible_system")
     end
 
+    --- Forgets destroyed idols after 60 seconds, and destroyed units that no longer exist.
     function _prune_destroyed_idol_state()
         local now = _safe_gameplay_time() or 0
         local destroyed_collectible_keys = mod._idol_destroyed_collectible_keys
@@ -342,6 +402,7 @@ return function(env)
     -- Unit scans
     -- ----------------------------------------------------------------------------
 
+    --- Tracks closed chests as `crate_unknown` and drops open or removed ones.
     function _scan_chests()
         local chest_map = _safe_unit_to_extension_map("chest_system")
         if not chest_map then
@@ -390,6 +451,7 @@ return function(env)
         end
     end
 
+    --- Returns the hazard prop system's extensions by unit, through its accessor or its private map.
     local function _safe_hazard_prop_extension_map()
         local hazard_prop_system = _safe_extension_system("hazard_prop_system")
         if not hazard_prop_system then
@@ -417,6 +479,7 @@ return function(env)
         return nil
     end
 
+    --- Returns what a hazard prop contains (explosion or fire).
     local function _safe_hazard_prop_content(extension)
         local content_fn = extension and extension.content
 
@@ -429,6 +492,7 @@ return function(env)
         return ok_content and content or nil
     end
 
+    --- Returns a hazard prop's current state.
     local function _safe_hazard_prop_state(extension)
         local current_state_fn = extension and extension.current_state
 
@@ -441,6 +505,7 @@ return function(env)
         return ok_state and state or nil
     end
 
+    --- Returns a hazard prop's broadphase position.
     local function _safe_hazard_prop_broadphase_position(extension)
         local broadphase_position_fn = extension and extension.broadphase_position
 
@@ -453,12 +518,14 @@ return function(env)
         return ok_position and _copy_vector3(position) or nil
     end
 
+    --- Returns where a hazard barrel is drawn; its explosion node, then its broadphase position, then its origin.
     local function _hazard_prop_position(unit, extension)
         return _safe_unit_node_position(unit, "c_explosion")
             or _safe_hazard_prop_broadphase_position(extension)
             or _safe_unit_position(unit)
     end
 
+    --- Returns whether a hazard prop has already gone off, by the game's state enum or its name.
     local function _hazard_prop_state_is_broken(state)
         local hazard_state = rawget(_G, "hazard_state")
 
@@ -469,6 +536,8 @@ return function(env)
         return _safe_lower_string(state) == "broken"
     end
 
+    --- Returns the barrel marker kind of a hazard content, by the game's content enum or its name.
+    -- treturn: ?string `hazard_explosive_barrel` or `hazard_fire_barrel`
     local function _hazard_prop_kind_from_content(content)
         local hazard_content = rawget(_G, "hazard_content")
 
@@ -493,6 +562,7 @@ return function(env)
         return nil
     end
 
+    --- Tracks explosive and fire barrels that have not gone off yet.
     function _scan_hazard_props()
         local hazard_prop_map = _safe_hazard_prop_extension_map()
         if not hazard_prop_map then
@@ -540,6 +610,9 @@ return function(env)
         end
     end
 
+    --- Tracks Heretic Idols and, while the skulls event is allowed, Dark Rites totems.
+    -- An idol needs an active collectible, a destructible that reports itself visible, health
+    -- that is not dead and a visible mesh, and must not be recorded as destroyed.
     function _scan_destructibles()
         local destructible_map = _safe_unit_to_extension_map("destructible_system")
         if not destructible_map then
@@ -612,6 +685,7 @@ return function(env)
         _prune_destroyed_idol_state()
     end
 
+    --- Tracks deployed medical crates, found among the smart tag system's units by their tag target type.
     function _scan_smart_tag_targets()
         local smart_tag_map = _safe_unit_to_extension_map("smart_tag_system")
         if not smart_tag_map then
@@ -637,6 +711,7 @@ return function(env)
     -- Mission lifecycle
     -- ----------------------------------------------------------------------------
 
+    --- Forgets every destroyed idol on mission reset.
     function _reset_destroyed_idol_state()
         mod._idol_destroyed_collectible_keys = {}
         mod._idol_destroyed_units = {}
@@ -646,6 +721,9 @@ return function(env)
     -- Hooks
     -- ----------------------------------------------------------------------------
 
+    -- Destroyed collectibles are reported through the collectibles manager's RPC and its own
+    -- notification, and destructible extensions report their final destruction; each of these
+    -- retires the idol marker immediately instead of waiting for the next static scan.
     mod:hook_safe("CollectiblesManager", "rpc_player_destroyed_destructible_collectible",
         function(self, channel_id, peer_id, local_player_id, section_id, id)
             _clear_tracked_idol_by_collectible(section_id, id)
@@ -661,6 +739,7 @@ return function(env)
         _mark_idol_unit_destroyed(self and self._unit or nil, self)
     end)
 
+    -- A destructible synced to stage 0 is treated as destroyed.
     mod:hook_safe("DestructibleExtension", "rpc_sync_destructible",
         function(self, current_stage, visible, from_hot_join_sync)
             if current_stage == 0 then

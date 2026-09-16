@@ -1,3 +1,18 @@
+--- Draws Strikemap's pre-baked floor plan as the radar's map layer.
+-- Draws the walkable triangles of the Strikemap map context in the same below, current and
+-- above floor bands as the live navmesh layer, and optionally the vector details on top
+-- (floor contours, stair ticks, slope marks and hatching of other floors). Geometry is
+-- projected with the radar's own basis, range and centre so it stays aligned with the
+-- markers, and is culled through spatial grids so only nearby cells are visited per frame.
+--
+-- Explicit module loaded by `ui/Radar_hud_element.lua` through `mod:io_dofile`; the chunk
+-- returns `RadarStrikemapGeometry`. Contexts come from `compatibility/Radar_strikemap.lua`,
+-- which validates them first. The parsed grids are cached per context and revision, and
+-- `mod._strikemap_geometry_renderer_reset` lets the compatibility module drop them. Draw
+-- errors are reported back to the compatibility module instead of being raised.
+-- module: Radar_strikemap_geometry
+-- alias: RadarStrikemapGeometry
+-- author: LucLeto
 local mod = get_mod("Radar")
 local StrikemapCompatibility = mod:io_dofile("Radar/scripts/mods/Radar/compatibility/Radar_strikemap")
 local _clip_and_emit = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_triangle_clipper")
@@ -27,6 +42,8 @@ local Vector3_y = Vector3 and Vector3.y
 -- Constants
 -- ----------------------------------------------------------------------------
 
+--- Map triangle record layout, floor bands and fallback band colours.
+-- A triangle record is `x1, y1, x2, y2, x3, y3, z`, with `z` the height used for its band.
 local TRIANGLE_STRIDE = 7
 local CURRENT_FLOOR_HALF_HEIGHT = 2.5
 local BAND_CURRENT_FALLBACK_COLOR = { 80, 101, 133, 96 }
@@ -35,9 +52,14 @@ local BAND_BELOW_FALLBACK_COLOR = { 55, 120, 98, 76 }
 local DEFAULT_RANGE_ABOVE = 3
 local DEFAULT_RANGE_BELOW = 7
 local OVERVIEW_RANGE = 30
+--- Integer key packing for grid cells, `(cx + OFFSET) * STRIDE + cy + OFFSET`.
+-- `CULL_RANGE_FACTOR` widens the cull square to the radar's diagonal.
 local GRID_CELL_HASH_OFFSET = 4096
 local GRID_CELL_HASH_STRIDE = 8192
 local CULL_RANGE_FACTOR = 1.4143
+--- Vector record strides and the vector grid cell size in metres.
+-- Every vector record starts with `x1, y1, x2, y2`; only the height fields differ by layer
+-- (one trailing `z` for contours, hatches and slopes, `z1, z2` for stairs).
 local CONTOUR_STRIDE = 5
 local STAIR_STRIDE = 6
 local HATCH_STRIDE = 5
@@ -45,12 +67,17 @@ local SLOPE_STRIDE = 5
 local TRANSITION_STRIDE = 4
 local VECTOR_GRID_CELL = 16
 local VECTOR_INVERSE_GRID_CELL = 1 / VECTOR_GRID_CELL
+--- Line drawing tuning in screen pixels; dashed lines draw `DASH_ON_PX` of every `DASH_PERIOD_PX`.
 local MIN_SEGMENT_SCREEN_LENGTH_SQ = 1e-12
 local DASH_ON_PX = 4
 local DASH_PERIOD_PX = 7
+--- Stair tick filtering.
+-- A tick is kept only within 10 m of a transition anchor whose chain is steep, and within
+-- `CHAIN_Z_SLACK` metres of that chain's height range.
 local STAIR_ASSOC_RADIUS_SQ = 10 * 10
 local CHAIN_Z_SLACK = 2
 local STEEP_CHAIN_MIN_STEEPNESS = 0.5
+--- Vector layer draw modes and their line half widths, alpha multipliers and brightening towards white.
 local MODE_CONTOURS = 1
 local MODE_STAIRS = 2
 local MODE_HATCHES = 3
@@ -77,6 +104,11 @@ local SLOPE_BRIGHTEN = 0.2
 -- Mutable state
 -- ----------------------------------------------------------------------------
 
+--- Parsed triangle grid for the current map context and revision.
+-- `packed` holds each cell's comma separated triangle list as Strikemap delivered it;
+-- `cells` caches parsed cells on first visit (`false` for a cell without valid triangles);
+-- `stamp` records the frame a triangle was last drawn in, so a triangle listed in several
+-- cells is drawn once per frame.
 local _grid = {
     context = nil,
     revision = nil,
@@ -93,6 +125,7 @@ local _grid = {
     max_cy = -1,
     cell_count = 0,
 }
+--- Segment indices for the vector layers of the current vector context and revision.
 local _vectors = {
     context = nil,
     revision = nil,
@@ -103,18 +136,23 @@ local _vectors = {
     hatches = nil,
     slopes = nil,
 }
+--- Per-frame projection and style state shared with the vector line helpers, reused to avoid allocations.
 local _view = {}
 local _style = {}
+--- Context and revision last reported by the debug diagnostics.
 local _diag_context = nil
 local _diag_revision = nil
+--- Scratch polygon buffers for square clipping; the result is left in `_poly_ax`/`_poly_ay`.
 local _poly_ax, _poly_ay = {}, {}
 local _poly_bx, _poly_by = {}, {}
+--- Whether `Gui.triangle` works in this game build; nil until probed on the first draw.
 local _triangle_supported = nil
 
 -- ----------------------------------------------------------------------------
 -- Helpers
 -- ----------------------------------------------------------------------------
 
+--- Drops the parsed triangle grid so the next draw parses the context again.
 local function _reset_grid()
     _grid.context = nil
     _grid.revision = nil
@@ -132,6 +170,7 @@ local function _reset_grid()
     _grid.cell_count = 0
 end
 
+--- Drops the vector segment indices so the next vector draw rebuilds them.
 local function _reset_vectors()
     _vectors.context = nil
     _vectors.revision = nil
@@ -143,6 +182,10 @@ local function _reset_vectors()
     _vectors.slopes = nil
 end
 
+--- Returns the normalised horizontal forward direction of a rotation.
+-- ?Quaternion: rotation camera rotation
+-- treturn: ?number forward x, or nil when it cannot be derived
+-- treturn: ?number forward y
 local function _forward_xy(rotation)
     if not rotation or not Quaternion_forward or not Vector3_x or not Vector3_y then
         return nil, nil
@@ -173,6 +216,12 @@ local function _forward_xy(rotation)
     return x / length, y / length
 end
 
+--- Parses a map context's spatial index into the triangle grid.
+-- Only the cell keys (`"cx:cy"`) are parsed here; each cell's triangle list stays packed
+-- until the cell is first visited. Raises an error for unusable data, which the caller's
+-- `pcall` turns into the integration's `error` status.
+-- tab: context validated Strikemap map context
+-- param: revision geometry revision of the context
 local function _build_grid(context, revision)
     local triangles = context.triangles
     local spatial_index = context.spatial_index
@@ -255,12 +304,16 @@ local function _build_grid(context, revision)
     end
 end
 
+--- Rebuilds the triangle grid when the context or its revision changed.
 local function _ensure_grid(context, revision)
     if _grid.context ~= context or _grid.revision ~= revision then
         _build_grid(context, revision)
     end
 end
 
+--- Parses and caches the triangle indices of one grid cell, dropping out-of-range entries.
+-- int: cell_key packed cell key
+-- treturn: tab|bool list of triangle indices, or false when the cell has none
 local function _parse_cell(cell_key)
     local packed = _grid.packed[cell_key]
     local bucket = false
@@ -288,6 +341,15 @@ local function _parse_cell(cell_key)
     return bucket
 end
 
+--- Clips a polygon against one side of the radar square (Sutherland-Hodgman step).
+-- tab: src_x input x coordinates
+-- tab: src_y input y coordinates
+-- int: src_count number of input vertices
+-- tab: dst_x receives the clipped x coordinates
+-- tab: dst_y receives the clipped y coordinates
+-- int: edge 1 right, 2 left, 3 bottom, 4 top
+-- number: limit square half size
+-- treturn: int number of output vertices
 local function _clip_edge(src_x, src_y, src_count, dst_x, dst_y, edge, limit)
     local count = 0
     local prev_x = src_x[src_count]
@@ -351,6 +413,8 @@ local function _clip_edge(src_x, src_y, src_count, dst_x, dst_y, edge, limit)
     return count
 end
 
+--- Clips a radar-local triangle to the radar square; the polygon is left in `_poly_ax`/`_poly_ay`.
+-- treturn: int number of polygon vertices, 0 when less than a triangle remains
 local function _clip_triangle_to_square(px1, py1, px2, py2, px3, py3, limit)
     local ax, ay = _poly_ax, _poly_ay
     local bx, by = _poly_bx, _poly_by
@@ -384,6 +448,9 @@ local function _clip_triangle_to_square(px1, py1, px2, py2, px3, py3, limit)
     return count
 end
 
+--- Checks once whether `Gui.triangle` can be called, with a transparent triangle off screen.
+-- param: gui GUI to probe
+-- treturn: bool
 local function _probe_triangle(gui)
     if not Gui_triangle or not Vector3 then
         return false
@@ -395,6 +462,7 @@ local function _probe_triangle(gui)
     return ok == true
 end
 
+--- Submits one screen-space triangle; `Gui.triangle` takes points as `Vector3(x, 0, y)`.
 local function _submit_triangle(gui, sx1, sy1, sx2, sy2, sx3, sy3, layer, color)
     Gui_triangle(
         gui,
@@ -406,12 +474,18 @@ local function _submit_triangle(gui, sx1, sy1, sx2, sy2, sx3, sy3, layer, color)
     )
 end
 
+--- Returns the configured ARGB colour of a floor band, or the fallback before the colour runtime exists.
+-- string: prefix band colour setting prefix, shared with the live navmesh layer
+-- tab: fallback widget colour array
+-- treturn: tab widget colour array
 local function _band_raw_color(prefix, fallback)
     local get_radar_color = mod.get_radar_color
 
     return get_radar_color and get_radar_color(mod, prefix, fallback) or fallback
 end
 
+--- Returns a floor band's engine colour, or nil when the band is fully transparent and should be skipped.
+-- treturn: ?Color
 local function _band_color(prefix, fallback)
     local color = _band_raw_color(prefix, fallback)
     local alpha = tonumber(color[1]) or 0
@@ -423,6 +497,11 @@ local function _band_color(prefix, fallback)
     return Color(alpha, color[2] or 255, color[3] or 255, color[4] or 255)
 end
 
+--- Derives a vector line colour from a band colour, so details stay readable over the band fill.
+-- tab: raw band widget colour array
+-- number: alpha_mult alpha multiplier, capped at 255
+-- number: brighten fraction to move each channel towards white
+-- treturn: ?Color nil when the band is fully transparent
 local function _line_color(raw, alpha_mult, brighten)
     local alpha = tonumber(raw[1]) or 0
 
@@ -449,6 +528,7 @@ local function _line_color(raw, alpha_mult, brighten)
     return Color(alpha, r, g, b)
 end
 
+--- Clamps a configured floor range to 1 to 30 metres.
 local function _clamp_band_range(value, default_value)
     value = tonumber(value) or default_value
 
@@ -461,6 +541,9 @@ local function _clamp_band_range(value, default_value)
     return value
 end
 
+--- Returns how far above and below the player floors are drawn; overview mode uses `OVERVIEW_RANGE`.
+-- treturn: number range above in metres
+-- treturn: number range below in metres
 local function _configured_ranges()
     if mod:is_overview_mode_active() then
         return OVERVIEW_RANGE, OVERVIEW_RANGE
@@ -470,6 +553,21 @@ local function _configured_ranges()
         _clamp_band_range(mod:get("navmesh_range_below"), DEFAULT_RANGE_BELOW)
 end
 
+--- Draws the map triangles within radar range in their floor band colours.
+-- Visits the grid cells inside the cull square, projects each triangle once per frame,
+-- rejects triangles outside the radar square and floor range, and clips the rest to the
+-- radar shape. Runs inside `pcall` from `RadarStrikemapGeometry.draw`.
+-- tab: ui_renderer active UI renderer
+-- tab: context validated map context
+-- param: revision geometry revision
+-- !Vector3: player_pos player position
+-- ?Quaternion: rotation camera rotation; the map stays north-up without one
+-- number: center_x radar centre x in unscaled UI pixels
+-- number: center_y radar centre y in unscaled UI pixels
+-- number: z layer offset above the pass start layer
+-- number: projection_radius radar radius in unscaled UI pixels
+-- number: range radar range in metres
+-- string: radar_style radar style
 local function _draw_geometry(ui_renderer, context, revision, player_pos, rotation, center_x, center_y, z,
                               projection_radius, range, radar_style)
     local current_color = _band_color("radar_navmesh", BAND_CURRENT_FALLBACK_COLOR)
@@ -629,6 +727,13 @@ local function _draw_geometry(ui_renderer, context, revision, player_pos, rotati
     end
 end
 
+--- Builds the grid index of one vector layer, registering each segment in every cell its bounds touch.
+-- ?tab: segments flat vector records
+-- ?int: count number of records
+-- int: stride record length
+-- bool: z_last whether the height is the record's last field (otherwise two heights follow the points)
+-- treturn: tab layer index
+-- treturn: int number of cells used
 local function _build_segment_index(segments, count, stride, z_last)
     local layer = {
         segments = segments,
@@ -662,7 +767,6 @@ local function _build_segment_index(segments, count, stride, z_last)
         stamp[i] = 0
 
         local base = (i - 1) * stride
-        -- Every vector record starts with x1, y1, x2, y2. Only the height fields differ by layer.
         local x1 = segments[base + 1]
         local y1 = segments[base + 2]
         local x2 = segments[base + 3]
@@ -729,6 +833,11 @@ local function _build_segment_index(segments, count, stride, z_last)
     return layer, cell_count
 end
 
+--- Returns whether a transition chain is steep enough to carry stair ticks.
+-- Uses the explicit `steep` flag, then a `stairs`/`steep` classification, then the numeric
+-- steepness; a chain that says nothing counts as steep.
+-- tab: chain Strikemap transition chain
+-- treturn: bool
 local function _chain_is_steep(chain)
     local steep = chain.steep
 
@@ -753,6 +862,10 @@ local function _chain_is_steep(chain)
     return true
 end
 
+--- Returns whether a stair tick at the given height belongs to a transition chain.
+-- ?tab: chain transition chain, or nil when the anchor has none (always allowed)
+-- number: tick_z tick height
+-- treturn: bool
 local function _chain_allows_tick(chain, tick_z)
     if type(chain) ~= "table" then
         return true
@@ -772,6 +885,12 @@ local function _chain_allows_tick(chain, tick_z)
     return true
 end
 
+--- Marks which stair ticks to draw, keeping only those near a steep transition at a matching height.
+-- Stores the result as `stair_layer.keep`; without transitions the filter is left unset
+-- and every tick is drawn.
+-- tab: vector_context validated vector context
+-- tab: counts record count per layer
+-- tab: stair_layer stair layer index
 local function _build_stair_filter(vector_context, counts, stair_layer)
     local stair_count = stair_layer.count
     local transition_count = counts.transitions or 0
@@ -861,6 +980,7 @@ local function _build_stair_filter(vector_context, counts, stair_layer)
     stair_layer.keep = keep
 end
 
+--- Rebuilds all vector layer indices and the stair filter for a vector context.
 local function _build_vectors(vector_context, counts, revision)
     _reset_vectors()
 
@@ -890,12 +1010,14 @@ local function _build_vectors(vector_context, counts, revision)
     _vectors.cell_count = total_cells
 end
 
+--- Rebuilds the vector layer indices when the vector context or its revision changed.
 local function _ensure_vectors(vector_context, counts, revision)
     if _vectors.context ~= vector_context or _vectors.revision ~= revision then
         _build_vectors(vector_context, counts, revision)
     end
 end
 
+--- Draws a screen-space line segment as a quad of two triangles, offset by the normal `(nx, ny)`.
 local function _submit_quad(gui, ax, ay, bx, by, nx, ny, layer, color)
     Gui_triangle(
         gui,
@@ -915,6 +1037,15 @@ local function _submit_quad(gui, ax, ay, bx, by, nx, ny, layer, color)
     )
 end
 
+--- Projects a world-space segment with `_view`, clips it to the radar shape and draws it as a thick line.
+-- number: wx1 start x in world space
+-- number: wy1 start y in world space
+-- number: wx2 end x in world space
+-- number: wy2 end y in world space
+-- int: layer GUI layer
+-- param: color engine `Color`
+-- number: half_w half line width in unscaled pixels
+-- ?bool: dashed draw as dashes instead of a solid line
 local function _emit_line(wx1, wy1, wx2, wy2, layer, color, half_w, dashed)
     local view = _view
     local radar_scale = view.radar_scale
@@ -1097,6 +1228,13 @@ local function _emit_line(wx1, wy1, wx2, wy2, layer, color, half_w, dashed)
     end
 end
 
+--- Draws one vector layer's segments within the cull square.
+-- Contours use the band of their height (dashed below the current floor), stairs and slopes
+-- the current band colour within the floor range, and hatches mark other floors only (above
+-- only when enabled). Each segment is drawn at most once per frame.
+-- tab: layer_data layer index
+-- int: mode `MODE_CONTOURS`, `MODE_STAIRS`, `MODE_HATCHES` or `MODE_SLOPES`
+-- int: layer GUI layer
 local function _draw_layer(layer_data, mode, layer)
     local count = layer_data.count
 
@@ -1212,6 +1350,9 @@ local function _draw_layer(layer_data, mode, layer)
     end
 end
 
+--- Draws the vector details above the map triangles.
+-- Derives the line colours from the band colours, fills `_view` for the line helpers and
+-- draws contours and stairs one layer above the slope and hatch marks. Runs inside `pcall`.
 local function _draw_vectors(ui_renderer, vector_context, counts, revision, player_pos, rotation, center_x, center_y,
                              z, projection_radius, range, radar_style)
     _ensure_vectors(vector_context, counts, revision)
@@ -1308,6 +1449,7 @@ local function _draw_vectors(ui_renderer, vector_context, counts, revision, play
     end
 end
 
+--- Logs the geometry and vector counts once per map context and revision, in debug mode.
 local function _log_revision_diagnostics(context, vector_context, counts, revision)
     if _diag_context == context and _diag_revision == revision then
         return
@@ -1336,8 +1478,14 @@ end
 -- Interface
 -- ----------------------------------------------------------------------------
 
+--- Module interface consumed by `ui/Radar_hud_element.lua`.
 local RadarStrikemapGeometry = {}
 
+--- Returns whether the Strikemap layer has a map to draw this frame.
+-- False when triangle rendering is unsupported, or in overview mode when the layer is
+-- disabled there. Otherwise asks the compatibility module, which also refreshes the context.
+-- ?number: t gameplay time
+-- treturn: bool
 RadarStrikemapGeometry.is_active = function(t)
     if _triangle_supported == false then
         return false
@@ -1350,6 +1498,20 @@ RadarStrikemapGeometry.is_active = function(t)
     return StrikemapCompatibility:get_map_context(t) ~= nil
 end
 
+--- Draws the Strikemap map layer for one frame.
+-- Probes triangle support on first use and marks the integration unsupported when it is
+-- missing. Triangle errors put the integration into its `error` status; vector errors only
+-- disable vectors for the current revision.
+-- tab: ui_renderer active UI renderer
+-- tab: snapshot radar snapshot providing `player_position`
+-- number: center_x radar centre x in unscaled UI pixels
+-- number: center_y radar centre y in unscaled UI pixels
+-- number: z layer offset above the pass start layer
+-- number: projection_radius radar radius in unscaled UI pixels
+-- number: range radar range in metres
+-- ?Quaternion: rotation camera rotation
+-- string: radar_style radar style
+-- ?number: t gameplay time
 RadarStrikemapGeometry.draw = function(ui_renderer, snapshot, center_x, center_y, z, projection_radius, range,
                                        rotation, radar_style, t)
     local player_pos = snapshot and snapshot.player_position or nil
@@ -1421,6 +1583,7 @@ RadarStrikemapGeometry.draw = function(ui_renderer, snapshot, center_x, center_y
     end
 end
 
+--- Drops every cached grid and diagnostic state; called by `StrikemapCompatibility:reset`.
 mod._strikemap_geometry_renderer_reset = function()
     _reset_grid()
     _reset_vectors()

@@ -1,3 +1,28 @@
+--- Mission objective markers and Martyr's Skull riddle markers.
+-- Finds the interactables, scan targets, puzzle devices, targets to destroy and daemonic
+-- growth tentacles the current mission step asks for, and keeps them on the radar exactly
+-- while they are live. Objective units come from the game's own objective extension
+-- systems, filtered by which objectives are active, by per-unit completion signals and by
+-- the markers the game itself draws. The module also owns the luggable container and
+-- socket rules, puzzle device state colours, the rule that lets marked objectives past the
+-- radar's range, and the per-mission Martyr's Skull riddle data with its coordinate
+-- fallbacks and solve detection.
+--
+-- Most rules here were derived from logged runs of specific missions; the evidence (mission,
+-- counts, distances) is recorded next to the rule it justifies. Objective extensions are
+-- only ever read field by field, never called, because their methods drive live mission
+-- state.
+--
+-- Installer module, installed after `Radar_pickups.lua` into Radar's shared runtime
+-- environment (see `Radar.lua`). Contributes the objective scan
+-- `_scan_mission_objective_targets` and its per-scan preparation
+-- `_refresh_mission_objective_markers`, the lifecycle, kind and classification functions used
+-- by the tracking and pickup scans, `_objective_ignores_radar_range`, the luggable rules
+-- (`_luggable_hidden_in_container`, `_luggable_socket_display_kind`, `_luggable_unmoved`),
+-- the Martyr's Skull riddle functions, `MARTYR_SKULL_RIDDLE_SIGNATURES_BY_MISSION` and the
+-- resets. Relies on the world marker helpers of `Radar_runtime_helpers.lua` and on tracking.
+-- module: Radar_mission_objectives
+-- author: LucLeto
 return function(env)
     setfenv(1, env)
 
@@ -24,33 +49,32 @@ return function(env)
     -- Constants
     -- ----------------------------------------------------------------------------
 
-    -- Mission objective interactables come from the game's own objective
-    -- extension systems, not from the HUD world marker list. The marker list was
-    -- tried first and rejected: it only contains what the HUD is drawing right
-    -- now, so objectives appeared late or not at all.
-    --
-    -- MissionObjectiveTargetExtension carries `_objective_name`, which ties each
-    -- unit to a named objective, and MissionObjectiveSystem reports which
-    -- objectives are active. That pairing is what keeps the ~105 objective units
-    -- in a level down to the handful that currently matter.
+    --- Objective extension systems the objective units are read from.
+    -- Mission objective interactables come from the game's own objective extension systems, not
+    -- from the HUD world marker list. The marker list was tried first and rejected; it only
+    -- contains what the HUD is drawing right now, so objectives appeared late or not at all.
+    -- `MissionObjectiveTargetExtension` carries `_objective_name`, which ties each unit to a named
+    -- objective, and `MissionObjectiveSystem` reports which objectives are active. That pairing is
+    -- what narrows the roughly 105 objective units of a level down to the handful that matter.
     local MISSION_OBJECTIVE_TARGET_SYSTEM = "mission_objective_target_system"
     local MISSION_OBJECTIVE_ZONE_SYSTEM = "mission_objective_zone_system"
 
-    -- Per-target scanned state lives here: each scannable unit carries _is_active,
-    -- which the zone clears as the target is scanned. This is the only per-target
-    -- completion signal that exists; the interactee reports active=true for the
-    -- whole mission and the zone selection array carries no flags.
+    --- System holding each scan target's own scanned state, and the objective system itself.
+    -- Each scannable unit carries `_is_active`, which the zone clears as the target is scanned.
+    -- This is the only per-target completion signal that exists; the interactee reports active
+    -- for the whole mission and the zone selection array carries no flags.
     local MISSION_OBJECTIVE_SCANNABLE_SYSTEM = "mission_objective_zone_scannable_system"
     local MISSION_OBJECTIVE_SOURCE = "mission_objective_system"
 
-    -- Systems whose every unit is objective-specific by definition, so they need
-    -- no active-objective confirmation. Counts are small (3 decoders, 16 zones in
-    -- a Hab Dreyko run), which is why they can be shown wholesale.
+    --- Systems whose every unit is objective-specific by definition, so they need no active-objective confirmation.
+    -- Their counts are small (3 decoders and 16 zones in a Hab Dreyko run), which is why they
+    -- can be shown wholesale.
     local MISSION_OBJECTIVE_DEDICATED_SOURCES = {
         { system = "decoder_device_system", kind = "mission_objective_hacking" },
         { system = "scanning_event_system", kind = "mission_objective_scanner" },
     }
     local MISSION_OBJECTIVE_DEDICATED_SOURCE_COUNT = #MISSION_OBJECTIVE_DEDICATED_SOURCES
+    --- The marker kinds of the mission objective family.
     local MISSION_OBJECTIVE_MARKER_KINDS = {
         mission_objective_scanner = true,
         mission_objective_growth = true,
@@ -60,35 +84,42 @@ return function(env)
         mission_objective_other = true,
     }
 
-    -- Interaction types that name the device directly. `scanning` and
-    -- `servo_skull_activator` are both confirmed from live mission logs.
+    --- Interaction types that name the device directly; `scanning` and `servo_skull_activator` are confirmed from live mission logs.
     local MISSION_OBJECTIVE_KIND_BY_INTERACTION_TYPE = {
         servo_skull_activator = "mission_objective_servo_skull",
         servo_skull = "mission_objective_servo_skull",
         decoder_device = "mission_objective_hacking",
         decoding = "mission_objective_hacking",
     }
+    --- Puzzle device system, the puzzle states read from it, and the two live states a device marker shows.
     local MISSION_OBJECTIVE_MINIGAME_SYSTEM = "minigame_system"
     local MISSION_OBJECTIVE_MINIGAME_COMPLETE_STATE = "complete"
     local MISSION_OBJECTIVE_MINIGAME_GAMEPLAY_STATE = "gameplay"
     local MISSION_OBJECTIVE_MINIGAME_WAITING = "waiting"
     local MISSION_OBJECTIVE_MINIGAME_ACTIVE = "active"
 
-    -- Interaction types owned exclusively by a more specific pass. A scan target
-    -- is only ever a scanner marker while its zone selects it; once scanned it
-    -- must disappear rather than fall through to the generic category. Luggable
-    -- sockets have had their own marker kind since long before this scan, and a
-    -- second marker on the same socket is pure duplication.
+    --- Interaction types owned exclusively by a more specific pass.
+    -- A scan target is only ever a scanner marker while its zone selects it; once scanned it
+    -- must disappear rather than fall through to the generic category. Luggable sockets have
+    -- their own marker kind, and a second marker on the same socket is pure duplication.
     local MISSION_OBJECTIVE_EXCLUSIVE_INTERACTION_TYPES = {
         scanning = true,
         luggable_socket = true,
     }
+    --- Seconds after an objective goes live during which the game may not have assigned its markers yet.
     local OBJECTIVE_MARKER_SETTLE_SECONDS = 2
 
+    --- Squared distances matching a unit to a recorded riddle position, a door to a solve door, and a live interactable to a coordinate fallback.
     local MARTYR_SKULL_RIDDLE_POSITION_MATCH_DISTANCE_SQ = 0.01
     local MARTYR_SKULL_RIDDLE_SOLVE_DOOR_POSITION_MATCH_DISTANCE_SQ = 0.25
     local MARTYR_SKULL_RIDDLE_COORDINATE_FALLBACK_LIVE_UNIT_DISTANCE_SQ = 0.25
 
+    --- The Martyr's Skull riddle interactables of each mission.
+    -- Keyed by mission name, then by the signature `interaction_type|ui_interaction_type|description`,
+    -- optionally followed by `|unit_name` where one description is shared by other interactables.
+    -- Each entry lists the positions the riddle's units stand at; `fallback = true` also draws
+    -- those positions as coordinate points while no live unit is found there, and
+    -- `tentacles = true` marks the entry that growth tentacles block. Recorded from missions.
     MARTYR_SKULL_RIDDLE_SIGNATURES_BY_MISSION = {
         cm_habs = {
             ["default|default|loc_interactable_button_01"] = {
@@ -268,6 +299,7 @@ return function(env)
         },
     }
 
+    --- The positions of every `fallback` riddle entry, per mission, derived from the signatures.
     local MARTYR_SKULL_RIDDLE_FALLBACK_POSITIONS_BY_MISSION = {}
 
     for mission_name, mission_signatures in pairs(MARTYR_SKULL_RIDDLE_SIGNATURES_BY_MISSION) do
@@ -288,6 +320,7 @@ return function(env)
         end
     end
 
+    --- Doors that open when a mission's riddle is solved; with `require_all` every listed door must be open.
     local MARTYR_SKULL_RIDDLE_SOLVE_DOORS_BY_MISSION = {
         cm_habs = {
             require_all = true,
@@ -307,6 +340,7 @@ return function(env)
         },
     }
 
+    --- Reference points the debug door candidate log measures distances to.
     local MARTYR_SKULL_RIDDLE_DOOR_DEBUG_POINTS_BY_MISSION = {
         dm_forge = {
             { x = 60.767, y = -5.137, z = -11.409, label = "riddle_button" },
@@ -316,6 +350,7 @@ return function(env)
         },
     }
 
+    --- Marker kinds of mission objective items (luggables, relics, grimoires, scriptures, Martyr's Skulls), by pickup name.
     local OBJECTIVE_ITEM_KIND_BY_PICKUP_NAME = {
         battery_01_luggable = "luggable_power_cell_teal",
         control_rod_01_luggable = "luggable_cryonic_rod",
@@ -330,6 +365,7 @@ return function(env)
         battery_02_luggable = "luggable_power_cell_orange",
     }
 
+    --- Pickup names of the coordinates paper.
     local PAPER_PICKUP_NAMES = {
         paper_pickup = true,
         paper_pickup_02 = true,
@@ -341,145 +377,130 @@ return function(env)
     -- Mutable runtime state
     -- ----------------------------------------------------------------------------
 
-    -- Read once per scan from the debug setting; every debug line in this
-    -- module keys off it.
+    --- Debug mode, read once per scan; every debug line in this module keys off it.
     local _objective_debug_logging = false
 
-    -- Objective units that already classify as something else keep that kind, so
-    -- the objective scan never relabels a luggable or its socket.
+    --- Kind this scan assigned to each objective unit, and scratch sets reused by every scan.
+    -- Objective units that already classify as something else keep that kind, so the objective
+    -- scan never relabels a luggable or its socket.
     local _mission_objective_kind_by_unit = {}
     local _scratch_mission_objective_kind_enabled = {}
     local _scratch_active_objective_names = {}
     local _scratch_seen_mission_objective_units = {}
     local _scratch_mission_objective_zone_units = {}
 
-    -- Scan targets and similar objective steps never report themselves used;
-    -- they simply stop being active once completed. Mirrors the Martyr's Skull
-    -- fallback lifecycle: a unit observed active and later inactive is finished,
-    -- while one that was never seen active is treated as still upcoming.
+    --- Lifecycle of each objective unit (`seen_active`, `retired`, `objective_marked`).
+    -- Scan targets and similar objective steps never report themselves used; they simply stop
+    -- being active once completed. Mirroring the Martyr's Skull fallback lifecycle, a unit
+    -- observed active and later inactive is finished, while one never seen active is treated as
+    -- still upcoming.
     local _mission_objective_lifecycle_by_unit = {}
 
-    -- A hacking device keeps its interactee active and unused for the whole
-    -- mission, so the puzzle's own state is the only thing that says it is done.
-    -- `_active` is not that signal: it only means a player currently has the
-    -- puzzle open, so hiding on it made markers disappear while idle and appear
-    -- while somebody was already solving them.
-    -- Objectives whose steps are daemonic growth. The objective name differs on
-    -- every mission that runs the event -- `..._corruptor_event` on Silo
-    -- Cluster, `..._demolition_first/a/b/final` on Propaganda,
-    -- `..._demo_floor_one/two` on Rise -- so a name list only ever covered the
-    -- missions written into it. What does identify one is the objective's own
-    -- type: all nine growths logged, on four missions, are `demolition`
-    -- objectives, and across 23 logs nothing else is. The targets'
-    -- `_ui_target_type=demolition` is not the same thing: that is only the
-    -- game's marker style for "destroy this", and core_research's ice, cm_raid's
-    -- filtration tanks, km_heresy's Stimm tanks and op_train's cogitators carry
-    -- it too, under `goal` and `collect` objectives.
-    --
-    -- Remembered per objective for the rest of the mission once seen. Only the
-    -- icon, the tentacle search and the helper-target exception depend on this:
-    -- the marker is claimed, coloured and retired exactly as any other step.
+    --- Objectives whose steps are daemonic growth, remembered by name for the rest of the mission once seen.
+    -- The objective name differs on every mission that runs the event (`..._corruptor_event` on
+    -- Silo Cluster, `..._demolition_first/a/b/final` on Propaganda, `..._demo_floor_one/two` on
+    -- Rise), so a name list only ever covered the missions written into it. What identifies one
+    -- is the objective's own type; all nine growths logged, on four missions, are `demolition`
+    -- objectives, and across 23 logs nothing else is. The targets' `_ui_target_type` of
+    -- `demolition` is not the same thing; it is only the game's marker style for "destroy this",
+    -- which core_research's ice, cm_raid's filtration tanks, km_heresy's Stimm tanks and
+    -- op_train's cogitators carry too, under `goal` and `collect` objectives. Only the icon, the
+    -- tentacle search and the helper-target exception depend on this; the marker is claimed,
+    -- coloured and retired exactly as any other step.
     local _growth_objective_by_name = {}
 
-    -- Which of the two live states a running puzzle is in, so the marker can say
-    -- whether it still needs somebody or already has one. A device that has not
-    -- been started gets no state at all and keeps its category's colour, which
-    -- is what the game itself shows before the puzzle is placed.
+    --- Which live state each running puzzle device is in, `waiting` or `active`.
+    -- The marker says whether the device still needs a player or already has one. A hacking
+    -- device keeps its interactee active and unused for the whole mission, so the puzzle's own
+    -- state is the only thing that says it is done. A device whose puzzle has not been started
+    -- gets no state and keeps its category's colour, which is what the game itself shows before
+    -- the puzzle is placed.
     local _minigame_state_by_unit = {}
 
-    -- One meta table per unit, reused across scans: the state changes, the table
-    -- does not, so a device being solved does not allocate on every pass.
+    --- One meta table per puzzle unit, reused across scans, so a device being solved does not allocate on every pass.
     local _minigame_meta_by_unit = {}
 
-    -- Declared with the other per-scan marker state rather than beside the
-    -- objective maps that fill it: the meta builder above needs it, and a local
-    -- is invisible before its declaration.
+    --- Units of the live growth objectives, refilled every scan.
+    -- Declared with the other per-scan marker state rather than beside the objective maps that
+    -- fill it, because the meta builder above needs it and a local is invisible before its
+    -- declaration.
     local _scratch_growth_objective_units = {}
 
-    -- Targets any other objective marks for destruction: ice on machinery,
-    -- tanks, cogitators. Their own kind, so they read neither as a growth nor as
-    -- a switch to press.
+    --- Targets any other objective marks for destruction (ice on machinery, tanks, cogitators), refilled every scan.
+    -- They are their own kind, so they read neither as a growth nor as a switch to press.
     local _scratch_destroy_objective_units = {}
 
-    -- Bare objective steps -- the train controls destroyed to stop the train --
-    -- carry no completion state anywhere: not an interactee, no health, in no
-    -- system at all, and their own target extension never changes a field. The
-    -- game's own world marker is the only thing that goes away when one is
-    -- finished, so it stands in for the signal the unit does not have.
-    --
-    -- Declared here with the rest of the per-scan marker state rather than
-    -- beside the pass that fills it: the puzzle state below is read from it and
-    -- runs earlier in the frame, and a local is invisible before its
-    -- declaration.
+    --- Units the game holds a world marker for this scan, and whether the marker list could be read.
+    -- Bare objective steps (the train controls destroyed to stop the train) carry no completion
+    -- state anywhere; not an interactee, no health, in no system at all, and their own target
+    -- extension never changes a field. The game's world marker is the only thing that goes away
+    -- when one is finished, so it stands in for the signal the unit does not have. Declared here
+    -- with the rest of the per-scan marker state because the puzzle state is read from it and
+    -- runs earlier in the frame, and a local is invisible before its declaration.
     local _scratch_world_marker_units = {}
     local _world_marker_units_available = false
 
-    -- Units the game is currently pointing at through something other than its
-    -- own world marker list. Every objective system answers "is the HUD showing
-    -- this right now" in its own way -- a scan zone by its selection, a growth by
-    -- its corruptor's marker -- so each pass writes what it knows here and the
-    -- range decision reads one set. Declared early: the passes that fill it run
-    -- well before the accessor that reads it.
+    --- Units the game is pointing at through something other than its world marker list, rebuilt every scan.
+    -- Every objective system answers "is the HUD showing this right now" in its own way (a scan
+    -- zone by its selection, a growth by its corruptor's marker), so each pass writes what it
+    -- knows here and the range decision reads one set. Declared early because the passes that
+    -- fill it run well before the accessor that reads it.
     local _scratch_objective_range_exempt = {}
 
-    -- Whether an objective is one that mixes real steps with position hints.
-    -- A luggable objective holds the cells and their sockets, which you can act
-    -- on, alongside spawn points and waypoints, which you cannot -- so its bare
-    -- units are hints. An objective made of nothing but bare units is different:
-    -- there the bare units are the step, as with the train controls you destroy
-    -- to stop the train, and filtering them would leave the objective unmarked.
-    --
-    -- Decided per objective rather than per pass, because missions run more than
-    -- one at a time -- the train runs "stop the train" and "defuse the bombs"
-    -- together.
+    --- Whether an objective mixes real steps with position hints, and which of its units are actionable.
+    -- A luggable objective holds the cells and their sockets, which the player can act on,
+    -- alongside spawn points and waypoints, which they cannot, so its bare units are hints. An
+    -- objective made of nothing but bare units is different; there the bare units are the step,
+    -- as with the train controls destroyed to stop the train, and filtering them would leave the
+    -- objective unmarked. Decided per objective rather than per pass, because missions run more
+    -- than one at a time (the train runs "stop the train" and "defuse the bombs" together).
     local _scratch_objective_has_actionable = {}
     local _scratch_objective_actionable_by_unit = {}
 
-    -- `_add_marker_on_objective_start` is the level's own statement that it will
-    -- mark this unit when the objective begins. Chasm Logistratum files nine
-    -- possible cargo containers and the one that actually holds the cargo under
-    -- one objective, identical in every other field, and only the real one has
-    -- it set. Read per objective: when none of an objective's units claims a
-    -- start marker the flag says nothing, and nothing is hidden.
+    --- Objectives with a unit claiming `_add_marker_on_objective_start`, and those units.
+    -- The flag is the level's own statement that it will mark the unit when the objective
+    -- begins. Chasm Logistratum files nine possible cargo containers and the one that actually
+    -- holds the cargo under one objective, identical in every other field, and only the real one
+    -- has it set. Read per objective; when none of an objective's units claims a start marker the
+    -- flag says nothing, and nothing is hidden.
     local _scratch_objective_has_start_marker = {}
     local _scratch_start_marker_by_unit = {}
 
-    -- Objective-bound units whose objective is not live. The system pass already
-    -- skips them, but the interactee pass reaches the same units by interaction
-    -- type alone and used to mark them whatever the objective was doing, which
-    -- left an unused hacking device drawn for the rest of the mission once its
-    -- event had finished.
+    --- Objective-bound units whose objective is not live.
+    -- The system pass already skips them, but the interactee pass reaches the same units by
+    -- interaction type alone, and without this set it marked them whatever the objective was
+    -- doing, which left an unused hacking device drawn for the rest of the mission once its event
+    -- had finished.
     local _scratch_inactive_objective_units = {}
 
-    -- Latched for the mission rather than rebuilt each scan. "No unit of this
-    -- objective has a marker" is ambiguous: it means either that the list does
-    -- not describe this objective, or that every one of its units is finished.
-    -- Rebuilt per scan it read the second case as the first, so the last unit's
-    -- marker going away switched the filter off instead of retiring the marker.
-    -- Once an objective has been seen in the list it stays trusted.
+    --- Objectives the game's marker list has been seen to cover, latched for the mission rather than rebuilt each scan.
+    -- "No unit of this objective has a marker" is ambiguous; it means either that the list does
+    -- not describe this objective, or that every one of its units is finished. Rebuilt per scan
+    -- it read the second case as the first, so the last unit's marker going away switched the
+    -- filter off instead of retiring the marker. Once an objective has been seen in the list it
+    -- stays trusted.
     local _objective_world_marker_seen = {}
 
-    -- When an objective first went live. The game does not assign its markers in
-    -- the same frame, so for a moment no unit of a new objective has one, which
-    -- is indistinguishable from an objective the marker list never describes.
-    -- Waiting this long before falling back to "show everything" keeps every
-    -- candidate of a just-started event from flashing up at once, while still
+    --- When each objective first went live.
+    -- The game does not assign its markers in the same frame, so for a moment no unit of a new
+    -- objective has one, which is indistinguishable from an objective the marker list never
+    -- describes. Waiting `OBJECTIVE_MARKER_SETTLE_SECONDS` before falling back to showing every
+    -- candidate keeps a just-started event from flashing them all up at once, while still
     -- showing the steps of an objective the list genuinely says nothing about.
     local _objective_first_active_t = {}
 
-    -- Containers hiding a luggable objective's items. lm_rails' cargo and
-    -- lm_scavenge's samples are filed under their objective together with a
-    -- whole bank of identical lockers -- sixty-one on lm_scavenge -- and nothing
-    -- on a locker says which of them hold anything: one prefab, the same
-    -- fields, and the game marks none of them. The luggable says so itself. It
-    -- exists inside its closed locker from the moment the objective starts,
-    -- tracked like any other, 0.43 m to the side of the locker's origin and
+    --- State of the containers hiding a luggable objective's items.
+    -- lm_rails' cargo and lm_scavenge's samples are filed under their objective together with a
+    -- whole bank of identical lockers (sixty-one on lm_scavenge), and nothing on a locker says
+    -- which of them hold anything; one prefab, the same fields, and the game marks none of them.
+    -- The luggable says so itself. It exists inside its closed locker from the moment the
+    -- objective starts, tracked like any other, 0.43 m to the side of the locker's origin and
     -- 1.3 m above it, while the nearest other locker stands 2 m or more away.
     --
-    -- Only containers of a prefab found holding a luggable are ever dropped, so
-    -- the objective's other steps -- lm_rails files two valves under the same
-    -- objective -- and every objective where nothing turns up inside anything
-    -- are left exactly as they were.
+    -- Only containers of a prefab found holding a luggable are ever dropped, so the objective's
+    -- other steps (lm_rails files two valves under the same objective) and every objective
+    -- where nothing turns up inside anything are left exactly as they were. The fields below
+    -- note their own tuning and lifetime.
     local LUGGABLE_HOLDER = {
         -- Sideways, squared: a metre, halfway to the nearest other locker.
         reach_squared = 1,
@@ -525,20 +546,20 @@ return function(env)
         },
     }
 
-    -- A growth tentacle carries three small destructible eyes, and they are the
-    -- only part of the event a player can act on: the corruptor the objective
-    -- marks is protected until its tentacles are cleared. Nothing names them.
-    -- They belong to no objective system, their unit names are hashed, and the
-    -- game draws its three yellow markers on them through a HUD element that
-    -- never reaches `request_world_markers_list`, so none of the routes every
-    -- other objective step uses can find them.
+    --- Tuning and state of the daemonic growth tentacle search.
+    -- A growth tentacle carries three small destructible eyes, and they are the only part of the
+    -- event a player can act on; the corruptor the objective marks is protected until its
+    -- tentacles are cleared. Nothing names them. They belong to no objective system, their unit
+    -- names are hashed, and the game draws its three yellow markers on them through a HUD
+    -- element that never reaches `request_world_markers_list`, so none of the routes every other
+    -- objective step uses can find them.
     --
-    -- What they do have is a shape. The three eyes of a tentacle are one prefab:
-    -- across eight tentacles of a single run their pairwise distances measured
-    -- 0.328, 0.347 and 0.407 metres every time, to the millimetre, while the
-    -- level's own breakables around the event each stood alone with no other
-    -- destructible within 20 metres. A destructible with two more inside half a
-    -- metre is a tentacle, and in the data nothing else in the level is.
+    -- What they do have is a shape. The three eyes of a tentacle are one prefab; across eight
+    -- tentacles of a single run their pairwise distances measured 0.328, 0.347 and 0.407 metres
+    -- every time, to the millimetre, while the level's own breakables around the event each
+    -- stood alone with no other destructible within 20 metres. A destructible with two more
+    -- inside half a metre is a tentacle, and in the data nothing else in the level is. The
+    -- fields below note their own tuning and lifetime.
     local GROWTH_EYE = {
         -- Only a bound on the work. The level's own breakables sit well inside
         -- it -- the nearest was closer than any tentacle -- and are rejected by
@@ -593,6 +614,7 @@ return function(env)
         riddle_kind = { martyr_skull_riddle_interactable = true },
     }
 
+    --- Martyr's Skull riddle state; which missions' riddles are solved, and the lifecycle of each coordinate fallback position.
     mod._martyr_skull_riddle_solved_by_mission = {}
     mod._martyr_skull_riddle_fallback_state_by_position = {}
 
@@ -600,6 +622,13 @@ return function(env)
     -- Objective lifecycle and kind predicates
     -- ----------------------------------------------------------------------------
 
+    --- Feeds an objective unit's interactee state into its lifecycle.
+    -- A unit reported used is retired at once; one seen active and later inactive is retired
+    -- too, while one never seen active stays upcoming. Called before classification, so a step
+    -- that has just gone inactive is already retired when it is classified.
+    -- param: unit unit handle
+    -- ?bool: active_state interactee `active`, nil when unknown
+    -- ?bool: used_state interactee `used`, nil when unknown
     function _update_mission_objective_lifecycle(unit, active_state, used_state)
         local state = _mission_objective_lifecycle_by_unit[unit]
 
@@ -627,24 +656,33 @@ return function(env)
         end
     end
 
+    --- Returns whether an objective unit's step is finished.
+    -- treturn: bool
     function _is_mission_objective_unit_retired(unit)
         local state = _mission_objective_lifecycle_by_unit[unit]
 
         return state ~= nil and state.retired == true
     end
 
+    --- Forgets every objective unit's lifecycle.
     local function _reset_mission_objective_lifecycle()
         table_clear(_mission_objective_lifecycle_by_unit)
     end
 
+    --- Returns whether a kind belongs to the mission objective family.
+    -- treturn: bool
     function _is_mission_objective_marker_kind(kind)
         return MISSION_OBJECTIVE_MARKER_KINDS[kind] == true
     end
 
+    --- Returns the objective marker kind named directly by an interaction type.
+    -- treturn: ?string
     function _mission_objective_kind_for_interaction_type(interaction_type)
         return MISSION_OBJECTIVE_KIND_BY_INTERACTION_TYPE[interaction_type]
     end
 
+    --- Returns whether a unit belongs to an objective that is not live, as of the last objective scan.
+    -- treturn: bool
     function _is_unit_of_inactive_objective(unit)
         return _scratch_inactive_objective_units[unit] == true
     end
@@ -653,12 +691,16 @@ return function(env)
     -- Luggable holders
     -- ----------------------------------------------------------------------------
 
-    -- Whether a luggable is still where the radar first saw it. One inside a
-    -- closed container has not moved since the objective started; one a player
-    -- has carried, dropped or put in a socket has, and is inside nothing. On
-    -- lm_rails a canister carried past a valve made the valve a "container",
-    -- and every valve holding nothing was then dropped as an empty one while
-    -- the game was marking it.
+    --- Returns whether a luggable is still where the radar first saw it, recording that position on first sight.
+    -- One inside a closed container has not moved since the objective started; one a player has
+    -- carried, dropped or put in a socket has, and is inside nothing. On lm_rails a canister
+    -- carried past a valve made the valve a "container", and every valve holding nothing was
+    -- then dropped as an empty one while the game was marking it.
+    -- param: unit luggable unit
+    -- number: x current x
+    -- number: y current y
+    -- number: z current z
+    -- treturn: bool
     function _luggable_unmoved(unit, x, y, z)
         local origin = LUGGABLE_HOLDER.origin[unit]
 
@@ -675,9 +717,9 @@ return function(env)
         return dx * dx + dy * dy + dz * dz <= LUGGABLE_HOLDER.still_squared
     end
 
-    -- The luggables the radar is tracking, whatever their own display setting:
-    -- tracking is not gated on it, drawing is. A socket is a `luggable_` kind
-    -- too, and holds nothing.
+    --- Collects the unmoved luggables the radar is tracking into the holder's arrays.
+    -- Whatever their own display setting, since tracking is not gated on it, drawing is. A
+    -- socket is a `luggable_` kind too, and holds nothing.
     local function _collect_objective_luggables()
         local holder = LUGGABLE_HOLDER
         local luggable_kind = holder.luggable_kind
@@ -712,7 +754,8 @@ return function(env)
         holder.count = count
     end
 
-    -- The luggable inside `unit`, if one is.
+    --- Returns the luggable inside a container unit, if one is.
+    -- return: luggable unit, or nil
     local function _luggable_inside(unit)
         local x, y, z = _vector3_components(_safe_unit_position(unit))
 
@@ -740,9 +783,12 @@ return function(env)
         return nil
     end
 
-    -- The prefab a unit was spawned from, read once into `cache` and kept for the
-    -- mission: a unit never changes what it was spawned from. `false` in the
-    -- cache records that the engine could not say, and comes back as nil.
+    --- Returns the prefab a unit was spawned from, read once into a cache kept for the mission.
+    -- A unit never changes what it was spawned from. `false` in the cache records that the
+    -- engine could not say, and comes back as nil.
+    -- tab: cache per-unit prefab cache
+    -- param: unit unit handle
+    -- treturn: ?string
     local function _cached_unit_prefab(cache, unit)
         local known = cache[unit]
 
@@ -754,21 +800,25 @@ return function(env)
         return known or nil
     end
 
+    --- Returns the cached prefab of a potential luggable container.
     local function _luggable_holder_prefab(unit)
         return _cached_unit_prefab(LUGGABLE_HOLDER.prefab_of, unit)
     end
 
-    -- A luggable in a container the radar is drawing: the container's marker
-    -- already stands where it is, and the luggable's own would only sit under
-    -- it. Only while the container is drawn, so the place is never left
-    -- unmarked -- and an opened container is retired and never drawn again, so
-    -- the luggable comes back the moment it is opened.
+    --- Returns whether a luggable sits in a container the radar is drawing, and so is hidden under it.
+    -- The container's marker already stands where it is, and the luggable's own would only sit
+    -- under it. Only while the container is drawn, so the place is never left unmarked; an
+    -- opened container is retired and never drawn again, so the luggable comes back the moment
+    -- it is opened.
+    -- param: unit luggable unit
+    -- treturn: bool
     function _luggable_hidden_in_container(unit)
         local container = LUGGABLE_HOLDER.inside[unit]
 
         return container ~= nil and mod._tracked_units[container] ~= nil
     end
 
+    --- Records that a container holds a luggable, and its prefab as a container prefab of the objective.
     local function _note_luggable_holder(unit, objective_name, luggable)
         LUGGABLE_HOLDER.holds[unit] = true
         LUGGABLE_HOLDER.inside[luggable] = unit
@@ -797,9 +847,11 @@ return function(env)
         end
     end
 
-    -- A luggable objective files both its luggables and its sockets under its
-    -- name, and the game only lets a luggable into a socket of its own
-    -- objective, so the objective says what each socket takes.
+    --- Records which luggable kind a luggable objective is about, and which objective each socket belongs to.
+    -- A luggable objective files both its luggables and its sockets under its name, and the game
+    -- only lets a luggable into a socket of its own objective, so the objective says what each
+    -- socket takes. Both are kept for the mission; the last luggable put in a socket leaves
+    -- nothing to read, and the sockets must not change category then.
     local function _note_luggable_cargo(unit, objective_name)
         local tracked = mod._tracked_units[unit]
         local kind = tracked and tracked.kind or nil
@@ -823,10 +875,12 @@ return function(env)
         end
     end
 
-    -- What a socket is drawn as. A power cell's socket stays a power socket; one
-    -- for mission cargo -- capsules, canisters, rods, samples, the Prismata
-    -- case -- is a step of the mission's machinery, which the game marks as an
-    -- objective. Until its cargo is known, a socket is drawn as it always was.
+    --- Returns the kind a luggable socket is drawn as.
+    -- A power cell's socket stays a power socket; one for mission cargo (capsules, canisters,
+    -- rods, samples, the Prismata case) is a step of the mission's machinery, which the game
+    -- marks as an objective. Until its cargo is known, a socket is drawn as a socket.
+    -- param: unit socket unit
+    -- treturn: string `mission_objective_other` or `luggable_socket`
     function _luggable_socket_display_kind(unit)
         local holder = LUGGABLE_HOLDER
         local objective_name = holder.socket_objective[unit]
@@ -843,6 +897,8 @@ return function(env)
     -- Active objectives and growth objectives
     -- ----------------------------------------------------------------------------
 
+    --- Refreshes which objective kinds are enabled and returns whether any is.
+    -- treturn: bool
     local function _any_mission_objective_kind_enabled()
         local enabled_by_kind = _scratch_mission_objective_kind_enabled
         local any_enabled = false
@@ -856,9 +912,10 @@ return function(env)
         return any_enabled
     end
 
-    -- MissionObjective exposes no accessor for its units, so the objective name
-    -- is read straight off the instance and matched against the name each
-    -- target unit stores.
+    --- Reads the names of the active objectives, noting growth and luggable objectives on the way.
+    -- `MissionObjective` exposes no accessor for its units, so the objective name is read straight
+    -- off the instance and matched against the name each target unit stores.
+    -- treturn: ?tab set of active objective names, nil when none can be read
     local function _refresh_active_objective_names()
         local names = _scratch_active_objective_names
         table_clear(names)
@@ -902,6 +959,8 @@ return function(env)
         return found and names or nil
     end
 
+    --- Returns the objective name stored on an objective target extension.
+    -- treturn: ?string
     local function _safe_objective_target_name(extension)
         if type(extension) ~= "table" then
             return nil
@@ -912,7 +971,7 @@ return function(env)
         return type(name) == "string" and name or nil
     end
 
-    -- Field reads only, for the same reason as the zone extension below.
+    --- Reads a field of an objective target extension; field reads only, for the same reason as `_safe_zone_field`.
     local function _safe_objective_target_field(extension, field_name)
         if type(extension) ~= "table" then
             return nil
@@ -921,11 +980,11 @@ return function(env)
         return rawget(extension, field_name)
     end
 
-    -- Read-only by design. MissionObjectiveZoneExtension owns
-    -- _equip_auspex_to_players, _unequip_auspex_from_players, _deactivate_zone
-    -- and _inform_skull_of_completion, and names like zone_finished are
-    -- completion routines rather than queries. Calling into this class from a
-    -- client mod changes live objective state, so only fields are ever read.
+    --- Reads a field of an objective zone extension, and only ever reads.
+    -- `MissionObjectiveZoneExtension` owns `_equip_auspex_to_players`,
+    -- `_unequip_auspex_from_players`, `_deactivate_zone` and `_inform_skull_of_completion`, and names
+    -- like `zone_finished` are completion routines rather than queries. Calling into this class
+    -- from a client mod changes live objective state.
     local function _safe_zone_field(extension, field_name)
         if type(extension) ~= "table" then
             return nil
@@ -934,8 +993,7 @@ return function(env)
         return rawget(extension, field_name)
     end
 
-    -- Zone collections are sometimes arrays and sometimes unit-keyed sets, so
-    -- both shapes are read the same way.
+    --- Returns the unit of a zone collection entry; zone collections are sometimes arrays and sometimes unit-keyed sets.
     local function _collection_unit(key, value)
         if value ~= nil and type(value) ~= "boolean" then
             return value
@@ -944,12 +1002,17 @@ return function(env)
         return key
     end
 
+    --- Returns whether an objective name has been recognised as a daemonic growth this mission.
+    -- treturn: bool
     function _is_growth_objective_name(objective_name)
         return objective_name ~= nil and _growth_objective_by_name[objective_name] == true
     end
 
-    -- Read off the live objective as the active objectives are listed, before
-    -- any target is looked at. A field, never a call.
+    --- Remembers an active objective as a growth when its own type is `demolition`.
+    -- Read off the live objective as the active objectives are listed, before any target is
+    -- looked at; a field, never a call.
+    -- string: objective_name objective name
+    -- tab: objective live objective instance
     function _note_growth_objective(objective_name, objective)
         if _growth_objective_by_name[objective_name] == true
             or rawget(objective, "_objective_type") ~= "demolition" then
@@ -963,15 +1026,16 @@ return function(env)
     -- Minigame devices
     -- ----------------------------------------------------------------------------
 
-    -- Steps used more than once. lm_rails' cargo valves stay active, unused and
-    -- offering their prompt for the whole objective; what says a valve is the
-    -- step right now is the game's objective marker on it, which comes and goes
-    -- as the capsules go into the sockets beside it. So an interactable the game
-    -- has marked as an objective this mission follows that marker from then on.
-    -- One the game never marks is shown as before, and with no readable marker
-    -- list nothing is hidden. The prompt a player gets standing next to
-    -- something is not a mark. Remembered in the unit's lifecycle state, which
-    -- the mission reset clears.
+    --- Returns whether a generic objective interactable the game once marked has lost that marker.
+    -- For steps used more than once. lm_rails' cargo valves stay active, unused and offering
+    -- their prompt for the whole objective; what says a valve is the step right now is the
+    -- game's objective marker on it, which comes and goes as the capsules go into the sockets
+    -- beside it. So an interactable the game has marked as an objective this mission follows
+    -- that marker from then on. One the game never marks is shown as before, and with no
+    -- readable marker list nothing is hidden. The prompt a player gets next to something is not a
+    -- mark. Remembered in the unit's lifecycle state, which the mission reset clears.
+    -- param: unit interactable unit
+    -- treturn: bool
     local function _objective_marker_lapsed(unit)
         if not _world_marker_units_available or _game_marks_as_objective == nil then
             return false
@@ -993,9 +1057,10 @@ return function(env)
         return state ~= nil and state.objective_marked == true
     end
 
-    -- Walks the whole minigame map rather than looking units up one at a time:
-    -- a mission carries a handful of these (2 in Core Research, 5 on the train),
-    -- so one pass per scan is cheaper than a lookup per objective unit.
+    --- Rebuilds the state of every puzzle device from the minigame system.
+    -- Walks the whole minigame map rather than looking units up one at a time; a mission carries
+    -- a handful of these (2 in Core Research, 5 on the train), so one pass per scan is cheaper
+    -- than a lookup per objective unit.
     local function _refresh_minigame_states()
         table_clear(_minigame_state_by_unit)
 
@@ -1043,11 +1108,14 @@ return function(env)
         end
     end
 
-    -- Only units that actually carry a puzzle get a state, so every other
-    -- objective marker keeps the shared objective tint. A solved puzzle keeps
-    -- its marker too and falls back to that same tint: the devices stay part of
-    -- the objective until it ends, and one blinking out and returning in red
-    -- when it re-arms reads as something having gone wrong.
+    --- Adds a puzzle device's live state to its marker meta.
+    -- Only units that actually carry a puzzle get a state, so every other objective marker keeps
+    -- the shared objective tint. A solved puzzle keeps its marker too and falls back to that
+    -- tint; the devices stay part of the objective until it ends, and one blinking out and
+    -- returning in red when it re-arms reads as something having gone wrong.
+    -- param: unit objective unit
+    -- ?tab: meta meta to extend; the unit's reused meta table is used when nil
+    -- treturn: ?tab meta
     function _minigame_marker_meta(unit, meta)
         local state = _minigame_state_by_unit[unit]
 
@@ -1088,6 +1156,10 @@ return function(env)
     -- Objective kind resolution
     -- ----------------------------------------------------------------------------
 
+    --- Prepares the objective state for this scan, before the interactee scan runs.
+    -- Refreshes the enabled kinds and, when any is enabled, the game's world marker units and
+    -- the puzzle states.
+    -- treturn: bool whether any objective kind is enabled, so hidden interactees need checking
     function _refresh_mission_objective_markers()
         table_clear(_mission_objective_kind_by_unit)
 
@@ -1113,12 +1185,17 @@ return function(env)
         return enabled
     end
 
+    --- Returns the kind the last objective scan assigned to a unit.
+    -- treturn: ?string
     function _mission_objective_kind_for_unit(unit)
         return _mission_objective_kind_by_unit[unit]
     end
 
-    -- Cheap test for the hidden-interactee path: a single extension call, so
-    -- scanning every hidden interactee each tick stays affordable.
+    --- Cheap test for the hidden-interactee path; a table lookup plus at most one extension call.
+    -- Keeps scanning every hidden interactee each tick affordable.
+    -- ?tab: extension interactee extension
+    -- param: unit unit handle
+    -- treturn: ?string objective kind the unit would get
     function _hidden_mission_objective_kind(extension, unit)
         local kind = _mission_objective_kind_by_unit[unit]
 
@@ -1141,6 +1218,14 @@ return function(env)
         return MISSION_OBJECTIVE_KIND_BY_INTERACTION_TYPE[_safe_lower_string(value)]
     end
 
+    --- Resolves the objective kind of a unit from an objective system.
+    -- An interactee that is used or not active is rejected before its kind is resolved, since
+    -- missions place several copies of a device with only one armed at a time. Exclusive
+    -- interaction types never fall through to the generic category.
+    -- param: unit unit handle
+    -- ?tab: interactee_map interactee extensions by unit
+    -- ?string: default_kind kind of a dedicated system
+    -- treturn: ?string
     local function _mission_objective_unit_kind(unit, interactee_map, default_kind)
         local interactee_extension = interactee_map and interactee_map[unit] or nil
         local interaction_type = nil
@@ -1212,11 +1297,8 @@ return function(env)
     -- Debug logging
     -- ----------------------------------------------------------------------------
 
-    -- Debug mode only: `_objective_debug_logging` is read once per scan, so none
-    -- of these lines costs anything outside it.
-    --
-    -- One line per objective marker the radar draws, once per unit, kind and
-    -- state of the game's own marker on it: enough to trace a report of a marker
+    --- Logs an objective marker the radar draws, once per unit, kind and state of the game's own marker on it.
+    -- Debug mode only, gated by `_objective_debug_logging`. Enough to trace a report of a marker
     -- drawn or missing to what the radar saw.
     local function _debug_log_objective_marker(unit, kind)
         local game_marker = "unreadable"
@@ -1244,10 +1326,9 @@ return function(env)
         ))
     end
 
-    -- A unit the game marks as an objective that the radar draws nothing for:
-    -- the first thing to look at after a game patch or on a new mission. Once
-    -- per unit, and not while a just-started objective's markers are still held
-    -- back.
+    --- Logs units the game marks as an objective that the radar draws nothing for.
+    -- The first thing to look at after a game patch or on a new mission. Once per unit, and not
+    -- while a just-started objective's markers are still held back.
     local function _debug_log_untracked_objective_markers()
         if not _world_marker_units_available or _game_marks_as_objective == nil then
             return
@@ -1283,11 +1364,17 @@ return function(env)
     -- Marker claims
     -- ----------------------------------------------------------------------------
 
-    -- `objective_confirmed` says the caller has already established that this
-    -- unit belongs to a live objective. The scan zone pass has: it checks its
-    -- zone's own objective before selecting any target. Its targets must not
-    -- then be re-judged by the objective the target system files them under,
-    -- which is not always the one whose zone selected them.
+    --- Tracks a unit as an objective marker, through the checks every objective source shares.
+    -- The single choke point for retirement, objective liveness, ownership by another scan,
+    -- unit liveness and health, so a completed step cannot be re-claimed by any source.
+    -- param: unit unit handle
+    -- ?string: kind objective kind
+    -- tab: enabled_by_kind enabled objective kinds
+    -- tab: seen_units units claimed this scan
+    -- ?bool: objective_confirmed the caller already established that the unit belongs to a live
+    --   objective; the scan zone pass checks its zone's objective before selecting any target,
+    --   and its targets must not then be re-judged by the objective the target system files them
+    --   under, which is not always the one whose zone selected them
     local function _claim_mission_objective_unit(unit, kind, enabled_by_kind, seen_units, objective_confirmed)
         if not kind or not enabled_by_kind[kind] or seen_units[unit] then
             return
@@ -1339,20 +1426,15 @@ return function(env)
     -- Scan zones and scannable targets
     -- ----------------------------------------------------------------------------
 
-    -- The zone selection table is the only place a per-target scanned flag can
-    -- live, so its exact shape is logged: key type, value type and value for
-    -- each entry, alongside the zone's own progression counters. Keyed by the
-    -- whole shape, so each distinct state during a scan is reported once and the
-    -- table can be watched changing as targets are scanned.
-    -- Scan targets carry no completion signal of their own: every scanning
-    -- interactee reports active=true, used=false for the whole mission. The only
-    -- per-target signal is inside the zone's own selection table, so it is read
-    -- here rather than inferred from interactee state.
-    --
-    -- The table is trusted to mark scanned targets only when its own numbers
-    -- agree with the zone's progression counter. If the shapes disagree the
-    -- interpretation is dropped and every selected target stays visible, which
-    -- is the previous behaviour rather than a guess that could hide live targets.
+    --- Returns whether a zone's selection table can be trusted to mark scanned targets.
+    -- Scan targets carry no completion signal of their own; every scanning interactee reports
+    -- active and unused for the whole mission. The only per-target signal is inside the zone's
+    -- selection table. It is trusted only when its flags are booleans whose count agrees with
+    -- the zone's progression counter; otherwise every selected target stays visible, which is
+    -- the safe behaviour rather than a guess that could hide live targets.
+    -- tab: scannables the zone's selected scannables
+    -- ?number: progression the zone's progression counter
+    -- treturn: ?bool true when `true` values mark scanned targets
     local function _scanned_units_from_selection(scannables, progression)
         if progression == nil then
             return nil
@@ -1380,9 +1462,11 @@ return function(env)
         return true
     end
 
-    -- Missing data never hides a target: an absent extension or field means the
-    -- scannable stays visible, so a changed engine layout degrades to the old
-    -- behaviour instead of blanking live objectives.
+    --- Returns whether a scan target is still waiting to be scanned.
+    -- Missing data never hides a target; an absent extension or field means the scannable stays
+    -- visible, so a changed engine layout degrades to showing it instead of blanking live
+    -- objectives.
+    -- treturn: bool
     local function _is_scannable_still_active(scannable_map, unit)
         local extension = scannable_map and scannable_map[unit] or nil
 
@@ -1399,15 +1483,17 @@ return function(env)
         return is_active == true
     end
 
-    -- Clients never receive the zone's selection: _select_scannable_units_for_event
-    -- runs on the server, so a joining player sees _num_scannables_in_zone but an
-    -- empty _selected_scannable_units. The scannable extensions themselves are
-    -- replicated, so the selection is recovered from their _is_active flags.
-    --
-    -- Self-validating: the recovered set is only used when its size matches the
-    -- zone's own outstanding count. A mismatch marks nothing and says so in the
-    -- log, which keeps a misread flag from putting every scannable in the level
-    -- on the radar.
+    --- Recovers the selected scan targets from the scannables' own flags when the zone selection is empty.
+    -- Clients never receive the zone's selection; `_select_scannable_units_for_event` runs on the
+    -- server, so a joining player sees `_num_scannables_in_zone` but an empty
+    -- `_selected_scannable_units`. The scannable extensions themselves are replicated, so the
+    -- selection is recovered from their `_is_active` flags. Self-validating; when more scannables
+    -- report active than the zones have outstanding, the flag is not understood and nothing is
+    -- marked, which keeps a misread flag from putting every scannable in the level on the radar.
+    -- ?tab: scannable_map scannable extensions by unit
+    -- ?number: expected targets the live zones still have outstanding
+    -- tab: enabled_by_kind enabled objective kinds
+    -- tab: seen_units units claimed this scan
     local function _track_active_scannables(scannable_map, expected, enabled_by_kind, seen_units)
         if type(scannable_map) ~= "table" or expected == nil or expected <= 0 then
             return
@@ -1440,6 +1526,9 @@ return function(env)
         end
     end
 
+    --- Claims the outstanding scan targets of every activated, unfinished zone of a live objective.
+    -- Also collects every zone unit, so the target system pass can skip the invisible trigger
+    -- volumes. Targets selected by a live zone are exempt from the radar's range.
     local function _track_mission_objective_scan_zones(enabled_by_kind, active_names, seen_units, zone_units)
         local extension_map = _safe_unit_to_extension_map(MISSION_OBJECTIVE_ZONE_SYSTEM)
 
@@ -1514,13 +1603,13 @@ return function(env)
     -- Actionable objective targets
     -- ----------------------------------------------------------------------------
 
-    -- The objective target system also holds pure position hints: luggable spawn
-    -- points, socket placements and waypoints the game never makes reachable.
-    -- They carry no state of their own and there is nothing to do at them, which
-    -- is exactly what tells them apart -- a real step is either an interactee (a
-    -- device, a console, a luggable) or a destructible with health (ice, a
-    -- barricade). Applied only to the broad target system; the dedicated systems
-    -- hold nothing but real devices.
+    --- Returns whether an objective target is a real step rather than a pure position hint.
+    -- The target system also holds luggable spawn points, socket placements and waypoints the
+    -- game never makes reachable. They carry no state of their own and there is nothing to do at
+    -- them, which is exactly what tells them apart; a real step is either an interactee (a
+    -- device, a console, a luggable) or a destructible with health (ice, a barricade). Applied
+    -- only to the broad target system; the dedicated systems hold nothing but real devices.
+    -- treturn: bool
     local function _is_actionable_objective_target(unit, interactee_map)
         if interactee_map ~= nil and interactee_map[unit] ~= nil then
             return true
@@ -1531,9 +1620,11 @@ return function(env)
         return _safe_health_alive(unit) ~= nil
     end
 
-    -- Actionability is evaluated once per unit here and read back below, so the
-    -- health-extension lookup runs once per active objective unit per scan
-    -- rather than twice.
+    --- Rebuilds the per-scan objective sets from the target system before the passes run.
+    -- For every unit of a live objective this records actionability, marker list coverage,
+    -- growth and destroy targets, luggable cargo, containers and start marker claims, and
+    -- notes the units of inactive objectives. Actionability is evaluated once per unit here and
+    -- read back by the passes, so the health lookup runs once per active objective unit per scan.
     local function _refresh_objective_actionable_targets(extension_map, interactee_map, active_names)
         local has_actionable = _scratch_objective_has_actionable
         local actionable_by_unit = _scratch_objective_actionable_by_unit
@@ -1611,18 +1702,19 @@ return function(env)
     -- Growth tentacles
     -- ----------------------------------------------------------------------------
 
-    -- The prefab a tentacle candidate was spawned from, read once per unit: a
-    -- unit never changes what it was spawned from, and decoration near a growth
-    -- is re-tested every scan. nil when the engine cannot say -- then for every
-    -- candidate alike, which leaves the shape to decide on its own as it did
-    -- before prefabs were read.
+    --- Returns the prefab a tentacle candidate was spawned from, read once per unit.
+    -- A unit never changes what it was spawned from, and decoration near a growth is re-tested
+    -- every scan. nil when the engine cannot say; then for every candidate alike, which leaves
+    -- the shape to decide on its own.
+    -- treturn: ?string
     function _growth_eye_prefab(unit)
         return _cached_unit_prefab(GROWTH_EYE.prefab_of, unit)
     end
 
-    -- Where this mission's Martyr's Skull riddle is blocked by growth
-    -- tentacles: the riddle entries flagged `tentacles`. A mission lists a
-    -- handful of entries, so this is read every scan.
+    --- Collects where this mission's Martyr's Skull riddle is blocked by growth tentacles.
+    -- These are the riddle entries flagged `tentacles`. A mission lists a handful of entries,
+    -- so this is read every scan.
+    -- treturn: int number of riddle anchors
     local function _collect_riddle_tentacle_anchors()
         local mission_name = _safe_mission_name()
         local signatures = mission_name ~= nil and MARTYR_SKULL_RIDDLE_SIGNATURES_BY_MISSION[mission_name] or nil
@@ -1648,12 +1740,13 @@ return function(env)
         return count
     end
 
-    -- The marker a standing tentacle carries. One beside a Martyr's Skull
-    -- riddle is the riddle's and never a growth's, whatever event runs around
-    -- it: dm_forge's riddle door stands 26 metres from a growth. Any other is
-    -- the growth's only while it stands inside the live event. Tentacles are
-    -- remembered for the mission, and the riddle's, left standing, came back
-    -- 200 metres away when dm_forge's final event started.
+    --- Returns the marker kind a standing tentacle carries.
+    -- One beside a Martyr's Skull riddle is the riddle's and never a growth's, whatever event
+    -- runs around it; dm_forge's riddle door stands 26 metres from a growth. Any other is the
+    -- growth's only while it stands inside the live event. Tentacles are remembered for the
+    -- mission, and the riddle's, left standing, came back 200 metres away when dm_forge's final
+    -- event started.
+    -- treturn: ?string `martyr_skull_riddle_interactable`, `mission_objective_growth` or nil
     local function _growth_tentacle_kind(unit, growth_anchor_count, riddle_count, riddle_live)
         local x, y, z = _vector3_components(_safe_unit_position(unit))
 
@@ -1690,12 +1783,14 @@ return function(env)
         return nil
     end
 
-    -- One marker per tentacle rather than three: at radar scale three markers
-    -- 40 cm apart are a single blob. It is carried by the tentacle's
-    -- lowest-sorting living eye, so it survives the first two being destroyed
-    -- and the shared health gate in `_claim_mission_objective_unit` retires it
-    -- when the last one goes. The event ending empties the anchor set, and the
-    -- scan's own prune then drops whatever is left.
+    --- Finds the growth tentacles near a live growth or a blocked riddle and draws one marker per tentacle.
+    -- At radar scale three markers 40 cm apart are a single blob. The marker is carried by the
+    -- first of the tentacle's eyes still standing in registration order, so it survives the
+    -- first two being destroyed, and the shared health gate in `_claim_mission_objective_unit`
+    -- retires it when the last one goes. The event ending empties the anchor set, and the scan's
+    -- own prune then drops whatever is left.
+    -- tab: enabled_by_kind enabled objective kinds
+    -- tab: seen_units units claimed this scan
     local function _track_growth_tentacle_units(enabled_by_kind, seen_units)
         local growth_enabled = enabled_by_kind["mission_objective_growth"] == true
         local riddle_count = _collect_riddle_tentacle_anchors()
@@ -1949,23 +2044,19 @@ return function(env)
     -- Radar range exemption
     -- ----------------------------------------------------------------------------
 
-    -- Whether the game is currently pointing the player at this unit, which is
-    -- what lets a mission objective past the radar's configured scan range. One
-    -- decision; the systems that answer it differently feed it from two places.
-    --
-    -- Most objectives carry their own entry in `request_world_markers_list`, the
-    -- list the vanilla HUD draws from, so they are answered by a direct lookup
-    -- and nothing has to be maintained for them. That list does not separate an
-    -- objective marker from an interaction prompt and does not need to: a prompt
-    -- only appears within a few metres, where the range filter was never going
-    -- to hide anything.
-    --
-    -- The rest never reach that list at all, and each objective system exposes
-    -- the same fact its own way: a scan zone by which of its targets it has
-    -- selected and not yet had scanned, a growth tentacle by the marker on the
-    -- corruptor it belongs to. Those passes write what they know into one set as
-    -- they run, and it is rebuilt from scratch every scan, so an exemption lasts
-    -- exactly as long as the state behind it.
+    --- Returns whether the game is currently pointing the player at an objective unit.
+    -- This is what lets a mission objective past the radar's configured range; one decision,
+    -- fed from two places. Most objectives carry their own entry in `request_world_markers_list`,
+    -- the list the vanilla HUD draws from, so they are answered by a direct lookup and nothing
+    -- has to be maintained for them. That list does not separate an objective marker from an
+    -- interaction prompt and does not need to, since a prompt only appears within a few metres,
+    -- where the range filter was never going to hide anything. The rest never reach that list,
+    -- and each objective system exposes the same fact its own way (a scan zone by which of its
+    -- targets it has selected and not yet had scanned, a growth tentacle by the marker on the
+    -- corruptor it belongs to). Those passes write what they know into one set as they run, and
+    -- it is rebuilt every scan, so an exemption lasts exactly as long as the state behind it.
+    -- param: unit objective unit
+    -- treturn: bool
     function _objective_ignores_radar_range(unit)
         -- Only while the game is drawing its marker. Its objective markers stop
         -- at 300 metres, and Mortis Trials marks the start of all three arenas,
@@ -1989,6 +2080,20 @@ return function(env)
     -- Objective system passes
     -- ----------------------------------------------------------------------------
 
+    --- Claims the units of one objective system that the current step asks for.
+    -- For the target system each unit must belong to a live objective and pass the filters
+    -- explained inline; the start marker filter, the position hint filter, the world marker
+    -- filter for non-interactees, and the empty container filter. The game's own objective
+    -- marker overrides the first two. Generic interactables that lost the game's objective
+    -- marker are dropped.
+    -- string: system_name objective extension system
+    -- ?tab: interactee_map interactee extensions by unit
+    -- tab: enabled_by_kind enabled objective kinds
+    -- ?tab: active_names active objective names
+    -- bool: require_active_objective apply the live objective filters (target system only)
+    -- tab: seen_units units claimed this scan
+    -- ?string: default_kind kind of a dedicated system's units
+    -- ?tab: skip_units units to skip, the zone trigger volumes
     local function _track_mission_objective_units(system_name, interactee_map, enabled_by_kind, active_names,
                                                   require_active_objective, seen_units, default_kind, skip_units)
         local extension_map = _safe_unit_to_extension_map(system_name)
@@ -2126,6 +2231,8 @@ return function(env)
     -- Martyr's Skull riddle
     -- ----------------------------------------------------------------------------
 
+    --- Returns the current mission name when it has riddle coordinate fallbacks.
+    -- treturn: ?string
     function _martyr_skull_riddle_fallback_mission_name()
         local mission_name = _safe_mission_name()
 
@@ -2136,17 +2243,23 @@ return function(env)
         return nil
     end
 
+    --- Builds the riddle signature `interaction_type|ui_interaction_type|description`.
+    -- treturn: string
     function _martyr_skull_riddle_signature(interaction_type, ui_interaction_type, description)
         return tostring(interaction_type or "") .. "|"
             .. tostring(ui_interaction_type or "") .. "|"
             .. tostring(description or "")
     end
 
+    --- Builds the riddle signature extended with the unit name.
+    -- treturn: string
     function _martyr_skull_riddle_unit_signature(interaction_type, ui_interaction_type, description, unit_name)
         return _martyr_skull_riddle_signature(interaction_type, ui_interaction_type, description) .. "|"
             .. tostring(unit_name or "")
     end
 
+    --- Returns whether a unit stands at one of a riddle entry's recorded positions.
+    -- treturn: bool
     local function _matches_martyr_skull_riddle_entry(entry, unit)
         if entry == true then
             return true
@@ -2171,6 +2284,8 @@ return function(env)
         return false
     end
 
+    --- Returns whether an interactable matches the current mission's riddle data, by signature and position.
+    -- treturn: bool
     local function _has_mission_martyr_skull_riddle_signature(interaction_type, ui_interaction_type, description,
                                                               unit_name, unit)
         if not description then
@@ -2193,6 +2308,8 @@ return function(env)
             interaction_type, ui_interaction_type, description, unit_name)], unit)
     end
 
+    --- Returns whether the current mission's riddle has been solved.
+    -- treturn: bool
     function _is_current_mission_martyr_skull_riddle_solved()
         local solved_by_mission = mod._martyr_skull_riddle_solved_by_mission
         local mission_name = solved_by_mission and _safe_mission_name() or nil
@@ -2200,6 +2317,9 @@ return function(env)
         return mission_name ~= nil and solved_by_mission[mission_name] == true
     end
 
+    --- Returns whether riddle interactables should be looked for before the game shows their prompt.
+    -- True while the current mission has riddle data and its riddle is unsolved.
+    -- treturn: bool
     function _should_scan_hidden_martyr_skull_riddle_interactables()
         if _is_current_mission_martyr_skull_riddle_solved() then
             return false
@@ -2210,6 +2330,7 @@ return function(env)
         return mission_name ~= nil and MARTYR_SKULL_RIDDLE_SIGNATURES_BY_MISSION[mission_name] ~= nil
     end
 
+    --- Records a mission's riddle as solved, logging why once in debug mode.
     local function _mark_martyr_skull_riddle_solved(mission_name, reason, unit)
         if not mission_name then
             return
@@ -2247,10 +2368,12 @@ return function(env)
         end
     end
 
+    --- Returns whether a door state is one of the open states.
     local function _is_martyr_skull_riddle_solve_door_open_state(state)
         return state == "open" or state == "open_fwd" or state == "open_bwd"
     end
 
+    --- Returns whether a door is the given solve door and is open (or, when so configured, can open).
     local function _is_matching_open_martyr_skull_riddle_solve_door(unit, extension, solve_door)
         if not _safe_unit_alive(unit) or not extension then
             return false
@@ -2280,6 +2403,8 @@ return function(env)
         return false
     end
 
+    --- Marks the current mission's riddle solved once its solve doors are open.
+    -- With `require_all` every listed door must be open; otherwise any one suffices.
     function _sync_martyr_skull_riddle_solve_state()
         local mission_name = _safe_mission_name()
         local solve_doors = mission_name and MARTYR_SKULL_RIDDLE_SOLVE_DOORS_BY_MISSION[mission_name] or nil
@@ -2328,6 +2453,7 @@ return function(env)
         end
     end
 
+    --- Returns whether an interactable is an unsolved riddle's interactable.
     local function _is_martyr_skull_riddle_interactable(interaction_type, ui_interaction_type, description, unit_name,
                                                         unit)
         if _is_current_mission_martyr_skull_riddle_solved() then
@@ -2338,6 +2464,7 @@ return function(env)
             unit)
     end
 
+    --- Logs a classified riddle interactable with its signatures and position, once each, in debug mode.
     local function _debug_log_classified_martyr_skull_riddle_interactable(interaction_type, ui_interaction_type, icon,
                                                                           description, unit_name, pickup_name,
                                                                           pickup_group, unit)
@@ -2374,6 +2501,7 @@ return function(env)
         ))
     end
 
+    --- Calls an extension method for debug output, returning nil on any failure.
     local function _debug_extension_call(extension, method_name)
         local method = extension and extension[method_name]
 
@@ -2398,6 +2526,7 @@ return function(env)
         return tostring(value)
     end
 
+    --- Returns the debug reference point nearest a position and its squared distance.
     local function _nearest_martyr_skull_riddle_door_debug_point(mission_name, position)
         local points = MARTYR_SKULL_RIDDLE_DOOR_DEBUG_POINTS_BY_MISSION[mission_name]
 
@@ -2421,6 +2550,8 @@ return function(env)
         return best_label, best_distance_sq
     end
 
+    --- Logs every door of a riddle mission with its state, once per door and state, in debug mode.
+    -- Used to find the doors a riddle's solve detection should watch.
     function _debug_log_martyr_skull_door_candidates()
         if mod:get("debug_mode") ~= true then
             return
@@ -2494,6 +2625,9 @@ return function(env)
         end
     end
 
+    --- Returns the fallback position a unit belongs to.
+    -- treturn: ?tab fallback position
+    -- treturn: bool whether the unit is already associated with that position
     local function _martyr_skull_riddle_fallback_position_for_unit(mission_name, unit)
         local fallback_positions = MARTYR_SKULL_RIDDLE_FALLBACK_POSITIONS_BY_MISSION[mission_name]
 
@@ -2531,6 +2665,17 @@ return function(env)
         return nil, false
     end
 
+    --- Feeds an interactee's state into the lifecycle of the coordinate fallback it stands at.
+    -- A riddle interactable found at a fallback position is associated with it; the position is
+    -- retired once the interactable is used, or seen active and later inactive, so its
+    -- fallback point stops being drawn.
+    -- tab: extension interactee extension
+    -- param: unit interactee unit
+    -- ?bool: active_state interactee `active`
+    -- ?bool: used_state interactee `used`
+    -- ?bool: show_marker_state interactee `show_marker`
+    -- bool: is_verified_riddle the unit was already classified as a riddle interactable
+    -- string: mission_name current mission name
     function _update_martyr_skull_riddle_fallback_state(extension, unit, active_state, used_state, show_marker_state,
                                                          is_verified_riddle, mission_name)
         local position = nil
@@ -2628,6 +2773,7 @@ return function(env)
         return state and state.retired == true or false
     end
 
+    --- Returns whether a live riddle interactable is tracked at a fallback position, which then needs no fallback point.
     local function _has_live_martyr_skull_riddle_interactable_near_position(position)
         local tracked_units = mod._tracked_units
 
@@ -2651,12 +2797,16 @@ return function(env)
         return false
     end
 
+    --- Splits a riddle signature into interaction type, UI interaction type and description.
     local function _martyr_skull_riddle_signature_parts(signature)
         local interaction_type, ui_interaction_type, description = string_match(signature, "^([^|]*)|([^|]*)|([^|]*)")
 
         return interaction_type, ui_interaction_type, description
     end
 
+    --- Tracks each unretired fallback position of an unsolved riddle as a radar point.
+    -- Covers riddle interactables the interactee scan cannot see, and is skipped where a live
+    -- interactable already stands.
     function _scan_martyr_skull_riddle_coordinate_fallbacks()
         if not _kind_enabled("martyr_skull_riddle_interactable")
             or _is_current_mission_martyr_skull_riddle_solved() then
@@ -2704,6 +2854,8 @@ return function(env)
     -- Interactable classification
     -- ----------------------------------------------------------------------------
 
+    --- Classifies an interactable as a Martyr's Skull riddle interactable when it matches the mission's unsolved riddle.
+    -- treturn: ?string `martyr_skull_riddle_interactable`
     function _classify_martyr_skull_riddle_interactable(interaction_type, ui_interaction_type, icon, description,
                                                         unit_name, pickup_name, pickup_group, unit)
         if not _is_martyr_skull_riddle_interactable(interaction_type, ui_interaction_type, description, unit_name,
@@ -2717,8 +2869,15 @@ return function(env)
         return "martyr_skull_riddle_interactable"
     end
 
-    -- The interaction type is checked first because it names the device
-    -- directly, while the unit map only says which objective system owns it.
+    --- Classifies an otherwise unclassified interactable as a mission objective marker.
+    -- The interaction type is checked first because it names the device directly, while the
+    -- unit map only says which objective system owns it. Retired units and units of inactive
+    -- objectives are not classified.
+    -- ?string: interaction_type lower-case interaction type
+    -- param: unit unit handle
+    -- ?tab: meta classification meta
+    -- treturn: ?string objective kind
+    -- treturn: ?tab meta with the puzzle state
     function _classify_mission_objective_interactable(interaction_type, unit, meta)
         local mission_objective_kind = _mission_objective_kind_for_interaction_type(interaction_type)
             or _mission_objective_kind_for_unit(unit)
@@ -2732,6 +2891,9 @@ return function(env)
         return nil
     end
 
+    --- Returns the marker kind of a mission objective item.
+    -- ?string: pickup_name pickup name
+    -- treturn: ?string
     function _objective_item_kind_for_pickup_name(pickup_name)
         local kind = OBJECTIVE_ITEM_KIND_BY_PICKUP_NAME[pickup_name]
 
@@ -2750,9 +2912,11 @@ return function(env)
     -- Objective scan and reset
     -- ----------------------------------------------------------------------------
 
-    -- Objective zones and targets are frequently not interactees at all, so they
-    -- can never be reached through the interactee scan. This walks the objective
-    -- systems directly and is the only path that can surface them.
+    --- Scans the objective systems directly and tracks the objective markers of the current step.
+    -- Objective zones and targets are frequently not interactees at all, so this is the only path
+    -- that can surface them. Runs the passes in order (scan zones, dedicated systems, the target
+    -- system, growth tentacles) and drops the objective markers no pass claimed.
+    -- ?tab: interactee_map interactee extensions by unit
     function _scan_mission_objective_targets(interactee_map)
         _objective_debug_logging = mod:get("debug_mode") == true
 
@@ -2803,7 +2967,7 @@ return function(env)
         end
     end
 
-    -- Dropping the unit map keeps stale unit references out of the next mission.
+    --- Resets all objective state on mission reset, dropping every unit reference so none reach the next mission.
     function _reset_mission_objective_marker_state()
         _reset_mission_objective_lifecycle()
         table_clear(_minigame_state_by_unit)
@@ -2829,7 +2993,7 @@ return function(env)
         -- Keyed by objective name, which the next mission may reuse for an
         -- objective that is not a growth.
         table_clear(_growth_objective_by_name)
-        -- The only one of the tentacle arrays that holds unit references.
+        -- The tentacle tables that hold unit references.
         table_clear(GROWTH_EYE.units)
         table_clear(GROWTH_EYE.group_of)
         table_clear(GROWTH_EYE.member_units)
@@ -2852,6 +3016,7 @@ return function(env)
         end
     end
 
+    --- Forgets the solved riddles and fallback lifecycles on mission reset.
     function _reset_martyr_skull_riddle_state()
         mod._martyr_skull_riddle_solved_by_mission = {}
         mod._martyr_skull_riddle_fallback_state_by_position = {}
