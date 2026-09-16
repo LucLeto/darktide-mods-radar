@@ -26,9 +26,14 @@ setmetatable(shared_env, { __index = _G })
 
 _install("Radar/scripts/mods/Radar/Radar_enemy_definitions", shared_env)
 _install("Radar/scripts/mods/Radar/Radar_runtime_helpers", shared_env)
-_install("Radar/scripts/mods/Radar/Radar_expeditions", shared_env)
-_install("Radar/scripts/mods/Radar/Radar_mission_objectives", shared_env)
 _install("Radar/scripts/mods/Radar/Radar_tracking", shared_env)
+
+_install("Radar/scripts/mods/Radar/Radar_players", shared_env)
+_install("Radar/scripts/mods/Radar/Radar_pickups", shared_env)
+_install("Radar/scripts/mods/Radar/Radar_mission_objectives", shared_env)
+_install("Radar/scripts/mods/Radar/Radar_expeditions", shared_env)
+_install("Radar/scripts/mods/Radar/Radar_events", shared_env)
+
 _install("Radar/scripts/mods/Radar/Radar_navmesh", shared_env)
 
 mod:io_dofile("Radar/scripts/mods/Radar/compatibility/Radar_strikemap")

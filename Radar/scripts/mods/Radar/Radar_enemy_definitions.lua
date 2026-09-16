@@ -8,9 +8,17 @@ return function(env)
     local tonumber = tonumber
     local tostring = tostring
     local rawget = rawget
+    local string_find = string.find
     local string_format = string.format
+    local string_lower = string.lower
     local string_sub = string.sub
     local RadarColorSettings = mod:io_dofile("Radar/scripts/mods/Radar/Radar_color_settings")
+
+    local table_clear = table.clear or function(t)
+        for k in pairs(t) do
+            t[k] = nil
+        end
+    end
 
     RadarColorSettings.install_runtime(mod)
 
@@ -18,67 +26,77 @@ return function(env)
 
     NEARBY_OUTLINE_OCCLUDED_MULTIPLIER = 0.6
 
-    NEARBY_OUTLINE_COLOR_BY_KIND = {
-        material_diamantine = { 255, 70, 130, 220 },
-        material_plasteel = { 255, 130, 135, 140 },
-        crate_unknown = { 255, 225, 200, 136 },
-        pickup_ammo = { 255, 240, 210, 80 },
-        pickup_ammo_small = { 255, 240, 210, 80 },
-        pickup_ammo_big = { 255, 240, 210, 80 },
-        pickup_grenade = { 255, 205, 156, 77 },
-        pocketable_ammo_crate = { 255, 240, 210, 80 },
-        pocketable_medical_crate = { 255, 38, 205, 26 },
-        pocketable_syringe_ability = { 255, 230, 192, 13 },
-        pocketable_syringe_corruption = { 255, 38, 205, 26 },
-        pocketable_syringe_power = { 255, 205, 51, 26 },
-        pocketable_syringe_speed = { 255, 0, 127, 218 },
-        luggable_power_cell_teal = { 255, 0, 200, 200 },
-        luggable_cryonic_rod = { 255, 180, 220, 255 },
-        luggable_moebian_pox_zetaphyte_13_sample = { 255, 150, 190, 60 },
-        luggable_vacuum_capsule = { 255, 80, 85, 90 },
-        luggable_special_issue_ammo = { 255, 95, 125, 70 },
-        luggable_prismata_crystal_repository = { 255, 255, 70, 90 },
-        pickup_mortis_relic = { 255, 110, 95, 125 },
-        pickup_coordinates_paper = DEFAULT_COLOR_ARRAY_WHITE,
-        pocketable_grimoire = { 255, 150, 190, 60 },
-        pocketable_scripture = { 255, 192, 160, 0 },
-        material_expeditions_currency = { 255, 120, 160, 140 },
-        material_expeditions_loot = { 255, 192, 160, 0 },
-        material_expeditions_loot_player_drop = { 220, 255, 0, 0 },
-        luggable_data_reliquary = { 255, 192, 160, 0 },
-        pickup_large_ammunition_crate = { 255, 240, 210, 80 },
-        luggable_promethium_barrel = { 255, 255, 110, 0 },
-        hazard_explosive_barrel = { 255, 205, 156, 77 },
-        hazard_fire_barrel = { 255, 255, 110, 0 },
-        pocketable_anti_rad_stimm = DEFAULT_COLOR_ARRAY_WHITE,
-        pocketable_airstrike = { 255, 95, 125, 70 },
-        pocketable_artillery_strike = { 255, 95, 125, 70 },
-        pocketable_big_grenade = { 255, 205, 156, 77 },
-        pocketable_landmine_explosive = { 255, 205, 156, 77 },
-        pocketable_landmine_fire = { 255, 255, 110, 0 },
-        pocketable_landmine_shock = { 255, 80, 160, 255 },
-        pocketable_valkyrie_hover = { 255, 95, 125, 70 },
-        pocketable_void_shield = { 255, 181, 166, 66 },
-        pickup_martyr_skull = { 255, 255, 215, 0 },
-        martyr_skull_riddle_interactable = { 255, 255, 215, 0 },
-        mission_objective_scanner = RadarColorSettings.vanilla_objective_color,
-        mission_objective_hacking = RadarColorSettings.vanilla_objective_color,
-        mission_objective_servo_skull = RadarColorSettings.vanilla_objective_color,
-        mission_objective_other = RadarColorSettings.vanilla_objective_color,
-        mission_objective_growth = RadarColorSettings.mission_objective_growth_color,
-        mission_objective_destroy = RadarColorSettings.vanilla_objective_color,
-        luggable_power_cell_orange = { 255, 255, 140, 0 },
-        medicae_station = { 255, 38, 205, 26 },
-        luggable_socket = { 255, 255, 245, 80 },
-        pickup_heretic_idol = { 255, 150, 190, 60 },
-        pickup_tainted_skull = { 255, 150, 190, 60 },
-        dark_rites_totem = { 255, 150, 190, 60 },
-        dark_rites_servo_skull = { 255, 150, 190, 60 },
-        pocketable_corrupted_auspex_scanner = { 255, 255, 120, 0 },
-        pickup_saints = { 255, 192, 160, 0 },
-        pickup_leftover = { 255, 150, 190, 60 },
-        pickup_stolen_rations = { 255, 150, 190, 60 },
+    local NEARBY_OUTLINE_KINDS = {
+        "material_diamantine",
+        "material_plasteel",
+        "crate_unknown",
+        "pickup_ammo",
+        "pickup_ammo_small",
+        "pickup_ammo_big",
+        "pickup_grenade",
+        "pocketable_ammo_crate",
+        "pocketable_medical_crate",
+        "pocketable_syringe_ability",
+        "pocketable_syringe_corruption",
+        "pocketable_syringe_power",
+        "pocketable_syringe_speed",
+        "luggable_power_cell_teal",
+        "luggable_cryonic_rod",
+        "luggable_moebian_pox_zetaphyte_13_sample",
+        "luggable_vacuum_capsule",
+        "luggable_special_issue_ammo",
+        "luggable_prismata_crystal_repository",
+        "pickup_mortis_relic",
+        "pickup_coordinates_paper",
+        "pocketable_grimoire",
+        "pocketable_scripture",
+        "material_expeditions_currency",
+        "material_expeditions_loot",
+        "material_expeditions_loot_player_drop",
+        "luggable_data_reliquary",
+        "pickup_large_ammunition_crate",
+        "luggable_promethium_barrel",
+        "hazard_explosive_barrel",
+        "hazard_fire_barrel",
+        "pocketable_anti_rad_stimm",
+        "pocketable_airstrike",
+        "pocketable_artillery_strike",
+        "pocketable_big_grenade",
+        "pocketable_landmine_explosive",
+        "pocketable_landmine_fire",
+        "pocketable_landmine_shock",
+        "pocketable_valkyrie_hover",
+        "pocketable_void_shield",
+        "pickup_martyr_skull",
+        "martyr_skull_riddle_interactable",
+        "mission_objective_scanner",
+        "mission_objective_hacking",
+        "mission_objective_servo_skull",
+        "mission_objective_other",
+        "mission_objective_growth",
+        "mission_objective_destroy",
+        "luggable_power_cell_orange",
+        "medicae_station",
+        "luggable_socket",
+        "pickup_heretic_idol",
+        "pickup_tainted_skull",
+        "dark_rites_totem",
+        "dark_rites_servo_skull",
+        "pocketable_corrupted_auspex_scanner",
+        "pickup_saints",
+        "pickup_leftover",
+        "pickup_stolen_rations",
     }
+
+    -- Each kind's default highlight colour, read from the colour settings so
+    -- the default is written down in one place only.
+    NEARBY_OUTLINE_COLOR_BY_KIND = {}
+
+    for i = 1, #NEARBY_OUTLINE_KINDS do
+        local kind = NEARBY_OUTLINE_KINDS[i]
+
+        NEARBY_OUTLINE_COLOR_BY_KIND[kind] = RadarColorSettings.default_highlight_color(kind)
+    end
 
     MONSTROSITY_BREEDS = {
         chaos_daemonhost = true,
@@ -353,11 +371,15 @@ return function(env)
         enemy_karnak_twin = "enemy_boss_icon_scale",
     }
 
-    local ENEMY_RADAR_DEFAULT_COLOR = { 220, 255, 0, 0 }
-    local ENEMY_RADAR_DEFAULT_DREG_COLOR = { 255, 255, 255, 0 }
-    local ENEMY_RADAR_DEFAULT_SCAB_COLOR = DEFAULT_COLOR_ARRAY_WHITE
-    local ENEMY_RADAR_DEFAULT_TOX_COLOR = { 255, 0, 255, 0 }
-    local ENEMY_RADAR_DEFAULT_MUTATOR_COLOR = { 255, 150, 190, 60 }
+    local ENEMY_RADAR_DEFAULT_COLOR = RadarColorSettings.default_color("enemy_background_marker")
+    local ENEMY_RADAR_DEFAULT_HORDE_COLOR = RadarColorSettings.default_color("enemy_horde_marker")
+    local ENEMY_RADAR_DEFAULT_DREG_COLOR = RadarColorSettings.default_color("enemy_dreg_marker")
+    local ENEMY_RADAR_DEFAULT_SCAB_COLOR = RadarColorSettings.default_color("enemy_scab_marker")
+    local ENEMY_RADAR_DEFAULT_TOX_COLOR = RadarColorSettings.default_color("enemy_tox_marker")
+    local ENEMY_RADAR_DEFAULT_MUTATOR_COLOR = RadarColorSettings.default_color("enemy_mutator_marker")
+    local ENEMY_RADAR_DEFAULT_ARMORED_HOUND_COLOR = RadarColorSettings.default_color("enemy_armored_hound_marker")
+    local ENEMY_RADAR_DEFAULT_RENEGADE_FLAMER_COLOR =
+        RadarColorSettings.default_color("enemy_renegade_flamer_marker")
 
     local ENEMY_RADAR_BACKGROUND_ICON = "content/ui/materials/hud/interactions/icons/default"
 
@@ -588,7 +610,7 @@ return function(env)
         chaos_armored_hound = _enemy_radar_def(
             "special",
             "content/ui/materials/icons/circumstances/hunting_grounds_01",
-            { 255, 150, 150, 150 },
+            ENEMY_RADAR_DEFAULT_ARMORED_HOUND_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_chaos_armored_hound",
             {
@@ -756,7 +778,7 @@ return function(env)
         renegade_flamer = _enemy_radar_def(
             "special",
             "content/ui/materials/icons/presets/preset_20",
-            { 255, 255, 102, 0 },
+            ENEMY_RADAR_DEFAULT_RENEGADE_FLAMER_COLOR,
             ENEMY_RADAR_DEFAULT_COLOR,
             "show_enemy_renegade_flamer",
             {
@@ -852,7 +874,7 @@ return function(env)
         chaos_lesser_mutated_poxwalker = _enemy_radar_def(
             "horde",
             "content/ui/materials/hud/interactions/icons/default",
-            ENEMY_RADAR_DEFAULT_COLOR,
+            ENEMY_RADAR_DEFAULT_HORDE_COLOR,
             nil,
             "show_enemy_horde",
             {
@@ -862,7 +884,7 @@ return function(env)
         chaos_mutated_poxwalker = _enemy_radar_def(
             "horde",
             "content/ui/materials/hud/interactions/icons/default",
-            ENEMY_RADAR_DEFAULT_COLOR,
+            ENEMY_RADAR_DEFAULT_HORDE_COLOR,
             nil,
             "show_enemy_horde",
             {
@@ -898,7 +920,7 @@ return function(env)
         chaos_newly_infected = _enemy_radar_def(
             "horde",
             "content/ui/materials/hud/interactions/icons/default",
-            ENEMY_RADAR_DEFAULT_COLOR,
+            ENEMY_RADAR_DEFAULT_HORDE_COLOR,
             nil,
             "show_enemy_horde",
             {
@@ -908,7 +930,7 @@ return function(env)
         chaos_poxwalker = _enemy_radar_def(
             "horde",
             "content/ui/materials/hud/interactions/icons/default",
-            ENEMY_RADAR_DEFAULT_COLOR,
+            ENEMY_RADAR_DEFAULT_HORDE_COLOR,
             nil,
             "show_enemy_horde",
             {
@@ -966,7 +988,7 @@ return function(env)
         chaos_armored_infected = _enemy_radar_def(
             "horde",
             "content/ui/materials/hud/interactions/icons/default",
-            ENEMY_RADAR_DEFAULT_COLOR,
+            ENEMY_RADAR_DEFAULT_HORDE_COLOR,
             nil,
             "show_enemy_horde",
             {
@@ -1026,12 +1048,6 @@ return function(env)
         "show_expedition_loot_converter",
     }
 
-    EXPEDITION_LOOT_VALUE_BY_PICKUP_NAME = {
-        expedition_loot_small_tier_1 = 10,
-        expedition_loot_small_tier_2 = 25,
-        expedition_loot_small_tier_3 = 50,
-    }
-
 
     -- Kinds the game already marks on screen. A radar marker is still useful,
     -- but a second highlight bracket around the same object is not.
@@ -1066,70 +1082,127 @@ return function(env)
 
     DEFAULT_COLOR_ARRAY_WHITE = { 255, 255, 255, 255 }
 
-    EXACT_PICKUP_KIND_BY_NAME = {
-        small_clip = "pickup_ammo_small",
-        large_clip = "pickup_ammo_big",
-        small_grenade = "pickup_grenade",
-        small_metal = "material_plasteel",
-        large_metal = "material_plasteel",
-        small_platinum = "material_diamantine",
-        large_platinum = "material_diamantine",
-        ammo_cache_pocketable = "pocketable_ammo_crate",
-        medical_crate_pocketable = "pocketable_medical_crate",
-        syringe_ability_boost_pocketable = "pocketable_syringe_ability",
-        syringe_corruption_pocketable = "pocketable_syringe_corruption",
-        syringe_power_boost_pocketable = "pocketable_syringe_power",
-        syringe_speed_boost_pocketable = "pocketable_syringe_speed",
-        battery_01_luggable = "luggable_power_cell_teal",
-        control_rod_01_luggable = "luggable_cryonic_rod",
-        container_01_luggable = "luggable_moebian_pox_zetaphyte_13_sample",
-        container_02_luggable = "luggable_vacuum_capsule",
-        container_03_luggable = "luggable_special_issue_ammo",
-        prismata_case_01_luggable = "luggable_prismata_crystal_repository",
-        hordes_mcguffin = "pickup_mortis_relic",
-        grimoire = "pocketable_grimoire",
-        tome = "pocketable_scripture",
-        expedition_loot_player_drop = "material_expeditions_loot_player_drop",
-        large_ammunition_crate = "pickup_large_ammunition_crate",
-        expedition_deployable_force_field_pocketable = "pocketable_void_shield",
-        expedition_grenade_airstrike_pocketable = "pocketable_airstrike",
-        expedition_grenade_artillery_strike_pocketable = "pocketable_artillery_strike",
-        expedition_grenade_big_pocketable = "pocketable_big_grenade",
-        expedition_grenade_valkyrie_hover_pocketable = "pocketable_valkyrie_hover",
-        motion_detection_mine_explosive_pocketable = "pocketable_landmine_explosive",
-        motion_detection_mine_fire_pocketable = "pocketable_landmine_fire",
-        motion_detection_mine_shock_pocketable = "pocketable_landmine_shock",
-        expedition_loot_heavy_tier_1 = "luggable_data_reliquary",
-        expedition_loot_heavy_tier_2 = "luggable_data_reliquary",
-        expedition_loot_heavy_tier_3 = "luggable_data_reliquary",
-        expedition_explosive_luggable_01 = "luggable_promethium_barrel",
-        expedition_time_syringe_timed = "pocketable_anti_rad_stimm",
-        collectible_01_pickup = "pickup_martyr_skull",
-        battery_02_luggable = "luggable_power_cell_orange",
-        ammo_cache_deployable = "pickup_ammo_cache_deployable",
-        medical_crate_deployable = "medical_crate_deployable",
-        skulls_01_pickup = "pickup_tainted_skull",
-        communications_hack_device = "pocketable_corrupted_auspex_scanner",
-        live_event_leftover_01_pickup_small = "pickup_leftover",
-        live_event_leftover_01_pickup_medium = "pickup_leftover",
-        live_event_leftover_01_pickup_large = "pickup_leftover",
-        stolen_rations_01_pickup_small = "pickup_stolen_rations",
-        stolen_rations_01_pickup_medium = "pickup_stolen_rations",
+    -- Enemy classification and scan: what a live unit is drawn as, from its
+    -- breed and the definitions above.
+    local ROTTEN_ARMOR_BREED_ALIAS_BY_BASE_BREED = {
+        chaos_ogryn_executor = "chaos_ogryn_executor_gibbing_rotten_armor",
+        renegade_executor = "renegade_executor_gibbing_rotten_armor",
+        renegade_berzerker = "renegade_berzerker_gibbing_rotten_armor",
     }
+    local _enemy_kind_by_breed_cache = {}
+    local _scratch_minion_kind_enabled_cache = {}
 
-    PAPER_PICKUP_NAMES = {
-        paper_pickup = true,
-        paper_pickup_02 = true,
-        paper_pickup_03 = true,
-        paper_pickup_04 = true,
-    }
+    local function _resolve_enemy_breed_name(unit, breed_name)
+        local rotten_armor_breed_name = ROTTEN_ARMOR_BREED_ALIAS_BY_BASE_BREED[breed_name]
 
-    SAINTS_PICKUP_NAMES = {
-        live_event_saints_01_pickup_small = true,
-        live_event_saints_01_pickup_medium = true,
-        live_event_saints_01_pickup_large = true,
-        consumable = true,
-    }
+        if rotten_armor_breed_name
+            and (_safe_unit_has_keyword(unit, "rotten_armor")
+                or _safe_unit_has_buff_template(unit, "mutator_rotten_armor")) then
+            return rotten_armor_breed_name
+        end
+
+        return breed_name
+    end
+
+    function _classify_enemy_from_breed(breed_name)
+        local cache_key = breed_name or ""
+        local cached = _enemy_kind_by_breed_cache[cache_key]
+
+        if cached ~= nil then
+            return cached or nil
+        end
+
+        local key = string_lower(cache_key)
+        local kind = nil
+
+        if key == "chaos_daemonhost" or key == "chaos_mutator_daemonhost" or string_find(key, "daemonhost", 1, true) then
+            kind = "enemy_daemonhost"
+        elseif TWIN_BREEDS[key] or string_find(key, "twin_captain", 1, true) then
+            kind = "enemy_karnak_twin"
+        elseif CAPTAIN_BREEDS[key] or string_find(key, "captain", 1, true) then
+            kind = "enemy_captain"
+        elseif MONSTROSITY_BREEDS[key]
+            or string_find(key, "beast_of_nurgle", 1, true)
+            or string_find(key, "plague_ogryn", 1, true)
+            or string_find(key, "chaos_spawn", 1, true)
+            or string_find(key, "houndmaster", 1, true) then
+            kind = "enemy_monstrosity"
+        else
+            local definition = ENEMY_RADAR_DEFINITIONS_BY_BREED[key]
+
+            if definition then
+                kind = definition.kind
+            end
+        end
+
+        _enemy_kind_by_breed_cache[cache_key] = kind or false
+
+        return kind
+    end
+
+    function _scan_minions()
+        local unit_data_map = _safe_unit_to_extension_map("unit_data_system")
+        if not unit_data_map then
+            return
+        end
+
+        local track_enemy_tags = mod:get_show_only_tagged_enemies()
+        local show_ability_marked_enemies = mod:get_show_ability_marked_enemies()
+        local outline_extension_map = show_ability_marked_enemies and _safe_outline_extension_data_map() or nil
+        local local_player_unit = show_ability_marked_enemies and _player_unit() or nil
+        local local_combat_ability_name = show_ability_marked_enemies
+            and _safe_unit_ability_name(local_player_unit, "combat_ability")
+            or nil
+        local kind_enabled_cache = _scratch_minion_kind_enabled_cache
+        table_clear(kind_enabled_cache)
+
+        for unit, extension in pairs(unit_data_map) do
+            if _safe_unit_alive(unit) and extension then
+                local breed_name_fn = extension.breed_name
+
+                if breed_name_fn then
+                    local ok_breed, breed_name = pcall(breed_name_fn, extension)
+
+                    if ok_breed and breed_name then
+                        local resolved_breed_name = _resolve_enemy_breed_name(unit, breed_name)
+                        local kind = _classify_enemy_from_breed(resolved_breed_name)
+                        if kind and _is_trackable_unit_alive(unit, kind) then
+                            local kind_enabled = kind_enabled_cache[kind]
+
+                            if kind_enabled == nil then
+                                kind_enabled = _kind_enabled(kind)
+                                kind_enabled_cache[kind] = kind_enabled
+                            end
+
+                            local ability_marker_names = nil
+                            local ability_marker_bracket_color = nil
+
+                            if show_ability_marked_enemies then
+                                ability_marker_names,
+                                ability_marker_bracket_color = _supported_ability_marker_state_for_unit(
+                                        unit,
+                                        outline_extension_map,
+                                        local_player_unit,
+                                        local_combat_ability_name
+                                    )
+                            end
+
+                            if kind_enabled or ability_marker_names ~= nil then
+                                _track_unit(unit, kind, "unit_data_system", {
+                                    breed_name = breed_name,
+                                    marked_by_player_slot = track_enemy_tags and _marked_by_player_slot_for_unit(unit) or nil,
+                                    ability_marked = ability_marker_names ~= nil,
+                                    ability_outline_bracket_color = ability_marker_bracket_color,
+                                })
+                            else
+                                _clear_tracked_unit_from_source(unit, "unit_data_system")
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
 
     local function _normalize_marker_display_mode(value, default_value)
         if value == nil then

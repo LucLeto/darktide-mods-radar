@@ -30,11 +30,6 @@ return function(env)
     -- Constants
     -- ----------------------------------------------------------------------------
 
-    local DARK_RITES_CIRCUMSTANCE_PREFIX = "skulls_guns"
-    local LEGACY_SKULLS_CIRCUMSTANCE_PREFIX = "skulls_event_01"
-    local DARK_RITES_CIRCUMSTANCE_VARIANT_PREFIX = DARK_RITES_CIRCUMSTANCE_PREFIX .. "_"
-    local LEGACY_SKULLS_CIRCUMSTANCE_VARIANT_PREFIX = LEGACY_SKULLS_CIRCUMSTANCE_PREFIX .. "_"
-    local PSYKHANIUM_MISSION_NAME = "tg_shooting_range"
     local HUD_OCCLUSION_RAYCAST_FILTERS = {
         "filter_player_character_shooting",
         "filter_ray_projectile",
@@ -142,6 +137,15 @@ return function(env)
     -- whether the game's marker is on screen, for what it lets past the
     -- radar's range.
     local _marker_in_reach_units = {}
+
+    local _runtime_state_cached_t = nil
+    local _runtime_state_allowed = false
+    local _runtime_state_reason = nil
+    local _runtime_state_mission_name = nil
+    local _runtime_state_activity = nil
+    local _runtime_state_mechanism_name = nil
+    local _runtime_state_player_unit = nil
+    local _runtime_state_player_pos = nil
 
     -- ----------------------------------------------------------------------------
     -- Generic helpers
@@ -869,7 +873,7 @@ return function(env)
     end
 
     -- ----------------------------------------------------------------------------
-    -- Mission, circumstance and mechanism helpers
+    -- Mission and mechanism helpers
     -- ----------------------------------------------------------------------------
 
     function _safe_mission_name()
@@ -913,111 +917,6 @@ return function(env)
         end
 
         return nil
-    end
-
-    local function _safe_circumstance_value(value)
-        if value ~= nil and value ~= "" then
-            return _safe_lower_string(value)
-        end
-
-        return nil
-    end
-
-    local function _safe_circumstance_name()
-        local state_gameplay = mod._last_state_gameplay
-        if state_gameplay then
-            local shared_state = state_gameplay._shared_state
-            local circumstance_name = _safe_circumstance_value(shared_state and shared_state.circumstance_name)
-
-            if circumstance_name ~= nil then
-                return circumstance_name
-            end
-        end
-
-        local state_manager = Managers and Managers.state
-        local game_mode_manager = state_manager and state_manager.game_mode
-        if game_mode_manager and game_mode_manager.circumstance_name then
-            local ok, circumstance_name = pcall(game_mode_manager.circumstance_name, game_mode_manager)
-            circumstance_name = ok and _safe_circumstance_value(circumstance_name) or nil
-
-            if circumstance_name ~= nil then
-                return circumstance_name
-            end
-        end
-
-        local gameplay = state_manager and state_manager.gameplay
-        local shared_state = gameplay and gameplay._shared_state
-        local circumstance_name = _safe_circumstance_value(shared_state and shared_state.circumstance_name)
-        if circumstance_name ~= nil then
-            return circumstance_name
-        end
-
-        local package_synchronizer_client = Managers and Managers.package_synchronizer_client
-        circumstance_name = _safe_circumstance_value(package_synchronizer_client and package_synchronizer_client._circumstance_name)
-        if circumstance_name ~= nil then
-            return circumstance_name
-        end
-
-        local mechanism_manager = Managers and Managers.mechanism
-        if mechanism_manager and mechanism_manager.mechanism_data then
-            local ok, mechanism_data = pcall(mechanism_manager.mechanism_data, mechanism_manager)
-            circumstance_name = ok and _safe_circumstance_value(mechanism_data and mechanism_data.circumstance_name) or nil
-
-            if circumstance_name ~= nil then
-                return circumstance_name
-            end
-        end
-
-        local mechanism = mechanism_manager and mechanism_manager._mechanism
-        local mechanism_data = mechanism and mechanism._mechanism_data
-        circumstance_name = _safe_circumstance_value(mechanism_data and mechanism_data.circumstance_name)
-            or _safe_circumstance_value(mechanism and mechanism._circumstance_name)
-
-        if circumstance_name ~= nil then
-            return circumstance_name
-        end
-
-        return nil
-    end
-
-    local function _is_skulls_live_event_circumstance(circumstance_name)
-        return circumstance_name == DARK_RITES_CIRCUMSTANCE_PREFIX
-            or circumstance_name == LEGACY_SKULLS_CIRCUMSTANCE_PREFIX
-            or _string_starts_with(circumstance_name, DARK_RITES_CIRCUMSTANCE_VARIANT_PREFIX)
-            or _string_starts_with(circumstance_name, LEGACY_SKULLS_CIRCUMSTANCE_VARIANT_PREFIX)
-    end
-
-    local function _is_psykhanium_mission(mission_name)
-        return mission_name == PSYKHANIUM_MISSION_NAME
-    end
-
-    function _reset_dark_rites_marker_scan_cache()
-        mod._dark_rites_marker_scan_cache_valid = false
-        mod._dark_rites_marker_scan_allowed = true
-        mod._dark_rites_marker_cached_circumstance_name = nil
-        mod._dark_rites_marker_cached_mission_name = nil
-    end
-
-    function _is_dark_rites_marker_scan_allowed()
-        local circumstance_name = _safe_circumstance_name()
-        local mission_name = _safe_lower_string(_safe_mission_name())
-
-        if mod._dark_rites_marker_scan_cache_valid == true
-            and mod._dark_rites_marker_cached_circumstance_name == circumstance_name
-            and mod._dark_rites_marker_cached_mission_name == mission_name then
-            return mod._dark_rites_marker_scan_allowed == true
-        end
-
-        local scan_allowed = circumstance_name == nil
-            or _is_skulls_live_event_circumstance(circumstance_name)
-            or _is_psykhanium_mission(mission_name)
-
-        mod._dark_rites_marker_scan_cache_valid = true
-        mod._dark_rites_marker_scan_allowed = scan_allowed
-        mod._dark_rites_marker_cached_circumstance_name = circumstance_name
-        mod._dark_rites_marker_cached_mission_name = mission_name
-
-        return scan_allowed
     end
 
     function _safe_presence_activity()
@@ -1343,6 +1242,211 @@ return function(env)
         end
 
         return _safe_world_rotation(player_unit, 1)
+    end
+
+    -- ----------------------------------------------------------------------------
+    -- Game mode and runtime state
+    -- ----------------------------------------------------------------------------
+
+    local function _safe_havoc_runtime_active()
+        local state_gameplay = mod._last_state_gameplay
+        local shared_state = state_gameplay and state_gameplay._shared_state
+        local havoc_data = shared_state and shared_state.havoc_data
+
+        if havoc_data ~= nil and havoc_data ~= "" then
+            return true
+        end
+
+        local difficulty_manager = Managers and Managers.state and Managers.state.difficulty
+        if difficulty_manager and difficulty_manager.get_parsed_havoc_data then
+            local ok_parsed, parsed_havoc_data = pcall(difficulty_manager.get_parsed_havoc_data, difficulty_manager)
+
+            if ok_parsed and parsed_havoc_data then
+                return true
+            end
+        end
+
+        local game_mode = _safe_game_mode()
+        if game_mode and game_mode.extension then
+            local ok_extension, havoc_extension = pcall(game_mode.extension, game_mode, "havoc")
+
+            if ok_extension and havoc_extension then
+                return true
+            end
+        end
+
+        return false
+    end
+
+    local function _classify_radar_game_mode(mission_name, mechanism_name)
+        local game_mode_name = _safe_game_mode_name()
+
+        if game_mode_name == "expedition" or mechanism_name == "expedition" then
+            return "expeditions", game_mode_name
+        end
+
+        if game_mode_name == "survival" then
+            return "mortis_trials", game_mode_name
+        end
+
+        if _safe_havoc_runtime_active() then
+            return "havoc", game_mode_name
+        end
+
+        if game_mode_name == "coop_complete_objective"
+            or game_mode_name == "training_grounds"
+            or game_mode_name == "shooting_range"
+            or mechanism_name == "adventure"
+            or mission_name == "tg_shooting_range" then
+            return "regular_missions", game_mode_name
+        end
+
+        return nil, game_mode_name
+    end
+
+    function mod:is_radar_enabled_for_game_mode(game_mode_id)
+        local setting_id = RADAR_GAME_MODE_SETTING_BY_ID[game_mode_id]
+
+        if not setting_id then
+            return false
+        end
+
+        return self:get(setting_id) ~= false
+    end
+
+    local function _is_radar_enabled_for_current_mode(mission_name, mechanism_name)
+        local game_mode_id = _classify_radar_game_mode(mission_name, mechanism_name)
+
+        if not game_mode_id then
+            return false
+        end
+
+        return mod:is_radar_enabled_for_game_mode(game_mode_id)
+    end
+
+    function mod:is_radar_runtime_game_mode_allowed()
+        local mission_name = _safe_mission_name()
+        local activity = _safe_presence_activity()
+        local mechanism_name = _safe_mechanism_name()
+
+        if activity == "loading" then
+            return false
+        end
+
+        if mechanism_name == "left_session" or mechanism_name == "hub" then
+            return false
+        end
+
+        if not mission_name or mission_name == "hub_ship" then
+            return false
+        end
+
+        if mechanism_name == "onboarding" and mission_name ~= "tg_shooting_range" then
+            return false
+        end
+
+        if _is_hub_runtime(mission_name, activity, mechanism_name) then
+            return false
+        end
+
+        return _is_radar_enabled_for_current_mode(mission_name, mechanism_name)
+    end
+
+    function _invalidate_runtime_state_cache()
+        _runtime_state_cached_t = nil
+    end
+
+    local function _store_runtime_state(allowed, reason, gameplay_t, mission_name, activity, mechanism_name,
+                                        player_unit, player_pos)
+        _runtime_state_cached_t = gameplay_t
+        _runtime_state_allowed = allowed
+        _runtime_state_reason = reason
+        _runtime_state_mission_name = mission_name
+        _runtime_state_activity = activity
+        _runtime_state_mechanism_name = mechanism_name
+        _runtime_state_player_unit = player_unit
+        _runtime_state_player_pos = player_pos
+
+        return allowed, reason, gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos
+    end
+
+    function _get_runtime_state()
+        local gameplay_t = _safe_gameplay_time()
+
+        if gameplay_t ~= nil and gameplay_t == _runtime_state_cached_t then
+            return _runtime_state_allowed, _runtime_state_reason, gameplay_t, _runtime_state_mission_name,
+                _runtime_state_activity, _runtime_state_mechanism_name, _runtime_state_player_unit,
+                _runtime_state_player_pos
+        end
+
+        local mission_name = _safe_mission_name()
+        local activity = _safe_presence_activity()
+        local mechanism_name = _safe_mechanism_name()
+        local player_unit = _player_unit()
+        local player_pos = _safe_unit_position(player_unit)
+
+        if activity == "loading" then
+            return _store_runtime_state(false, "loading", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
+        end
+
+        if mechanism_name == "left_session" or mechanism_name == "hub" then
+            return _store_runtime_state(false, "hub_mechanism", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
+        end
+
+        if not mission_name then
+            return _store_runtime_state(false, "no_mission", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
+        end
+
+        if mission_name == "hub_ship" then
+            return _store_runtime_state(false, "hub_mission", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
+        end
+
+        if mechanism_name == "onboarding" and mission_name ~= "tg_shooting_range" then
+            return _store_runtime_state(false, "onboarding_non_psykhanium", gameplay_t, mission_name, activity,
+                mechanism_name, player_unit, player_pos)
+        end
+
+        if _is_hub_runtime(mission_name, activity, mechanism_name) then
+            return _store_runtime_state(false, "hub_runtime", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
+        end
+
+        if not mod:is_radar_runtime_game_mode_allowed() then
+            return _store_runtime_state(false, "game_mode_disabled", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
+        end
+
+        if _is_local_player_using_foreign_unit(player_unit) then
+            return _store_runtime_state(false, "spectating_teammate", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
+        end
+
+        if not _is_player_unit_alive(player_unit) then
+            return _store_runtime_state(false, "player_not_alive", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
+        end
+
+        if _is_player_unit_captured(player_unit) then
+            return _store_runtime_state(false, "player_captured", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
+        end
+
+        if not player_pos then
+            return _store_runtime_state(false, "no_player_position", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
+        end
+
+        return _store_runtime_state(true, "ok", gameplay_t, mission_name, activity, mechanism_name, player_unit,
+            player_pos)
+    end
+
+    function _is_allowed_runtime()
+        local allowed = _get_runtime_state()
+        return allowed
     end
 
     -- ----------------------------------------------------------------------------

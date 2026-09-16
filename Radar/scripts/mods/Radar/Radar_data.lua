@@ -2,9 +2,9 @@ local mod = get_mod("Radar")
 local RadarColorSettings = mod:io_dofile("Radar/scripts/mods/Radar/Radar_color_settings")
 
 local DROPDOWN_ICON_COLOUR_WHITE = { 255, 255, 255, 255 }
-local DROPDOWN_ICON_COLOUR_RED = { 255, 255, 64, 64 }
-local DROPDOWN_ICON_COLOUR_DREG = { 255, 255, 255, 0 }
-local DROPDOWN_ICON_COLOUR_TOX = { 255, 0, 255, 0 }
+local DROPDOWN_ICON_COLOUR_RED = RadarColorSettings.default_color("enemy_boss_marker")
+local DROPDOWN_ICON_COLOUR_DREG = RadarColorSettings.default_color("enemy_dreg_marker")
+local DROPDOWN_ICON_COLOUR_TOX = RadarColorSettings.default_color("enemy_tox_marker")
 local DROPDOWN_ICON_DEFAULT = "content/ui/materials/hud/interactions/icons/default"
 local DROPDOWN_ICON_ENEMY = "content/ui/materials/hud/interactions/icons/enemy"
 local DROPDOWN_ICON_PLAYER = "content/ui/materials/icons/classes/veteran"
@@ -52,103 +52,103 @@ local ARTWORK_DROPDOWN_PRESENTATIONS = {
         artwork_icon = "content/ui/materials/icons/engrams/engram_rarity_04",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/icons/generic/loot",
-        icon_colour = { 255, 225, 200, 136 },
+        icon_colour = RadarColorSettings.default_marker_color("crate_unknown"),
     },
     show_diamantine = {
         artwork_icon = "content/ui/materials/icons/currencies/diamantine_big",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/environment_generic",
-        icon_colour = { 255, 70, 130, 220 },
+        icon_colour = RadarColorSettings.default_marker_color("material_diamantine"),
     },
     show_plasteel = {
         artwork_icon = "content/ui/materials/icons/currencies/plasteel_big",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/environment_generic",
-        icon_colour = { 255, 130, 135, 140 },
+        icon_colour = RadarColorSettings.default_marker_color("material_plasteel"),
     },
     show_expeditions_currency = {
         artwork_icon = "content/ui/materials/icons/currencies/salvage_big",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/expeditions_salvage",
-        icon_colour = { 255, 120, 160, 140 },
+        icon_colour = RadarColorSettings.default_marker_color("material_expeditions_currency"),
     },
     show_expeditions_loot = {
         artwork_icon = DROPDOWN_ICON_TECH_REMNANT,
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/expeditions_loot",
-        icon_colour = { 255, 192, 160, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("material_expeditions_loot"),
     },
     show_expeditions_dropped_loot = {
         artwork_icon = "content/ui/materials/icons/notifications/tech_dropped",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/expeditions_loot",
-        icon_colour = { 220, 255, 0, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("material_expeditions_loot_player_drop"),
     },
     show_pocketable_airstrike = {
         artwork_icon = "content/ui/materials/icons/throwables/hud/valkyrie_payload",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/valkyrie_payload",
-        icon_colour = { 255, 95, 125, 70 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_airstrike"),
     },
     show_pocketable_artillery_strike = {
         artwork_icon = "content/ui/materials/icons/throwables/hud/artillery_strike",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/artillery_strike",
-        icon_colour = { 255, 95, 125, 70 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_artillery_strike"),
     },
     show_pocketable_big_grenade = {
         artwork_icon = "content/ui/materials/icons/throwables/hud/big_fn_grenade",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/big_fn_grenade",
-        icon_colour = { 255, 205, 156, 77 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_big_grenade"),
     },
     show_pocketable_valkyrie_hover = {
         artwork_icon = "content/ui/materials/icons/throwables/hud/valkyrie_hover",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/valkyrie_hover",
-        icon_colour = { 255, 95, 125, 70 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_valkyrie_hover"),
     },
     show_pocketable_landmine_explosive = {
         artwork_icon = "content/ui/materials/icons/pocketables/hud/landmine_explosive",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/landmine_explosive",
-        icon_colour = { 255, 205, 156, 77 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_landmine_explosive"),
     },
     show_pocketable_landmine_fire = {
         artwork_icon = "content/ui/materials/icons/pocketables/hud/landmine_fire",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/landmine_fire",
-        icon_colour = { 255, 255, 110, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_landmine_fire"),
     },
     show_pocketable_landmine_shock = {
         artwork_icon = "content/ui/materials/icons/pocketables/hud/landmine_shock",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/landmine_shock",
-        icon_colour = { 255, 80, 160, 255 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_landmine_shock"),
     },
     show_pocketable_void_shield = {
         artwork_icon = "content/ui/materials/icons/pocketables/hud/void_shield",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/void_shield",
-        icon_colour = { 255, 181, 166, 66 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_void_shield"),
     },
     show_tainted_skull = {
         artwork_icon = "content/ui/materials/icons/currencies/live_events/skulls_live_event_small",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/enemy",
-        icon_colour = { 255, 150, 190, 60 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_tainted_skull"),
     },
     show_saints = {
         artwork_icon = "content/ui/materials/icons/currencies/live_events/saints_live_event_small",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/icons/circumstances/live_event_01",
-        icon_colour = { 255, 192, 160, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_saints"),
     },
     show_leftover = {
         artwork_icon = "content/ui/materials/icons/currencies/live_events/leftover_live_event_small",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/icons/circumstances/live_event_01",
-        icon_colour = { 255, 150, 190, 60 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_leftover"),
     },
 }
 
@@ -235,7 +235,7 @@ local ENEMY_DROPDOWN_PRESENTATIONS = {
     },
     show_enemy_renegade_flamer = {
         icon = "content/ui/materials/icons/presets/preset_20",
-        icon_colour = { 255, 255, 102, 0 },
+        icon_colour = RadarColorSettings.default_color("enemy_renegade_flamer_marker"),
     },
     show_enemy_cultist_flamer = {
         icon = "content/ui/materials/icons/presets/preset_20",
@@ -251,7 +251,7 @@ local ENEMY_DROPDOWN_PRESENTATIONS = {
     },
     show_enemy_chaos_armored_hound = {
         icon = "content/ui/materials/icons/circumstances/hunting_grounds_01",
-        icon_colour = { 255, 150, 150, 150 },
+        icon_colour = RadarColorSettings.default_color("enemy_armored_hound_marker"),
     },
     show_enemy_chaos_hound = {
         icon = "content/ui/materials/icons/circumstances/hunting_grounds_01",
@@ -301,67 +301,67 @@ local EXPEDITION_DROPDOWN_PRESENTATIONS = {
 local MARKER_DROPDOWN_PRESENTATIONS = {
     show_ammo_small = {
         icon = "content/ui/materials/hud/interactions/icons/ammunition",
-        icon_colour = { 255, 240, 210, 80 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_ammo_small"),
     },
     show_ammo_big = {
         icon = "content/ui/materials/icons/presets/preset_16",
-        icon_colour = { 255, 240, 210, 80 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_ammo_big"),
     },
     show_grenades = {
         icon = "content/ui/materials/hud/interactions/icons/grenade",
-        icon_colour = { 255, 205, 156, 77 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_grenade"),
     },
     show_pocketable_ammo_crate = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_ammo_crate",
-        icon_colour = { 255, 240, 210, 80 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_ammo_crate"),
     },
     show_pocketable_medical_crate = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_medic_crate",
-        icon_colour = { 255, 38, 205, 26 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_medical_crate"),
     },
     show_pocketable_syringe_ability = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_syringe_ability",
-        icon_colour = { 255, 230, 192, 13 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_syringe_ability"),
     },
     show_pocketable_syringe_corruption = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_syringe_corruption",
-        icon_colour = { 255, 38, 205, 26 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_syringe_corruption"),
     },
     show_pocketable_syringe_power = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_syringe_power",
-        icon_colour = { 255, 205, 51, 26 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_syringe_power"),
     },
     show_pocketable_syringe_speed = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_syringe_speed",
-        icon_colour = { 255, 0, 127, 218 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_syringe_speed"),
     },
     show_power_cell_teal = {
         icon = "content/ui/materials/icons/player_states/lugged",
-        icon_colour = { 255, 0, 200, 200 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_power_cell_teal"),
     },
     show_cryonic_rod = {
         icon = "content/ui/materials/icons/player_states/lugged",
-        icon_colour = { 255, 180, 220, 255 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_cryonic_rod"),
     },
     show_moebian_pox_zetaphyte_13_sample = {
         icon = "content/ui/materials/icons/player_states/lugged",
-        icon_colour = { 255, 150, 190, 60 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_moebian_pox_zetaphyte_13_sample"),
     },
     show_vacuum_capsule = {
         icon = "content/ui/materials/icons/player_states/lugged",
-        icon_colour = { 255, 80, 85, 90 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_vacuum_capsule"),
     },
     show_special_issue_ammo = {
         icon = "content/ui/materials/icons/player_states/lugged",
-        icon_colour = { 255, 95, 125, 70 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_special_issue_ammo"),
     },
     show_prismata_crystal_repository = {
         icon = "content/ui/materials/icons/player_states/lugged",
-        icon_colour = { 255, 255, 70, 90 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_prismata_crystal_repository"),
     },
     show_mortis_relic = {
         icon = "content/ui/materials/icons/item_types/devices",
-        icon_colour = { 255, 110, 95, 125 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_mortis_relic"),
     },
     show_coordinates_paper = {
         icon = "content/ui/materials/icons/system/escape/credits",
@@ -369,31 +369,31 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
     },
     show_pocketable_grimoire = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_grimoire",
-        icon_colour = { 255, 150, 190, 60 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_grimoire"),
     },
     show_pocketable_scripture = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_scripture",
-        icon_colour = { 255, 192, 160, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_scripture"),
     },
     show_data_reliquaries = {
         icon = "content/ui/materials/icons/player_states/lugged",
-        icon_colour = { 255, 192, 160, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_data_reliquary"),
     },
     show_promethium_barrel = {
         icon = "content/ui/materials/hud/interactions/icons/barrel_explosive",
-        icon_colour = { 255, 255, 110, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_promethium_barrel"),
     },
     show_explosive_barrels = {
         icon = "content/ui/materials/hud/interactions/icons/barrel_explosive",
-        icon_colour = { 255, 205, 156, 77 },
+        icon_colour = RadarColorSettings.default_marker_color("hazard_explosive_barrel"),
     },
     show_fire_barrels = {
         icon = "content/ui/materials/hud/interactions/icons/barrel_explosive",
-        icon_colour = { 255, 255, 110, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("hazard_fire_barrel"),
     },
     show_large_ammunition_crate = {
         icon = "content/ui/materials/hud/interactions/icons/pocketable_ammo",
-        icon_colour = { 255, 240, 210, 80 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_large_ammunition_crate"),
     },
     show_anti_rad_stimm = {
         icon = "content/ui/materials/hud/interactions/icons/time_syringe",
@@ -425,31 +425,31 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
     },
     show_martyr_skull = {
         icon = "content/ui/materials/hud/interactions/icons/enemy",
-        icon_colour = { 255, 255, 215, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_martyr_skull"),
     },
     show_power_cell_orange = {
         icon = "content/ui/materials/icons/player_states/lugged",
-        icon_colour = { 255, 255, 140, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_power_cell_orange"),
     },
     show_medicae_station = {
         icon = "content/ui/materials/hud/interactions/icons/respawn",
-        icon_colour = { 255, 38, 205, 26 },
+        icon_colour = RadarColorSettings.default_marker_color("medicae_station"),
     },
     show_luggable_socket = {
         icon = "content/ui/materials/icons/presets/preset_11",
-        icon_colour = { 255, 255, 245, 80 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_socket"),
     },
     show_heretic_idol = {
         icon = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_rampaging_enemies",
-        icon_colour = { 255, 150, 190, 60 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_heretic_idol"),
     },
     show_ammo_crate_deployable = {
         icon = "content/ui/materials/hud/interactions/icons/pocketable_ammo",
-        icon_colour = { 255, 240, 210, 80 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_ammo_cache_deployable"),
     },
     show_medical_crate_deployable = {
         icon = "content/ui/materials/hud/interactions/icons/pocketable_medkit",
-        icon_colour = { 255, 38, 205, 26 },
+        icon_colour = RadarColorSettings.default_marker_color("medical_crate_deployable"),
     },
     show_monstrosities = {
         icon = "content/ui/materials/icons/presets/preset_05",
@@ -477,19 +477,19 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
     },
     show_dark_rites_totem = {
         icon = "content/ui/materials/icons/achievements/categories/category_heretics",
-        icon_colour = { 255, 150, 190, 60 },
+        icon_colour = RadarColorSettings.default_marker_color("dark_rites_totem"),
     },
     show_dark_rites_servo_skull = {
         icon = "content/ui/materials/icons/abilities/default",
-        icon_colour = { 255, 150, 190, 60 },
+        icon_colour = RadarColorSettings.default_marker_color("dark_rites_servo_skull"),
     },
     show_pocketable_corrupted_auspex_scanner = {
         icon = "content/ui/materials/icons/pocketables/hud/auspex_scanner",
-        icon_colour = { 255, 255, 120, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_corrupted_auspex_scanner"),
     },
     show_stolen_rations = {
         icon = "content/ui/materials/icons/pickups/default",
-        icon_colour = { 255, 150, 190, 60 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_stolen_rations"),
     },
     show_unknown_pickups = {
         icon = "content/ui/materials/icons/traits/empty",

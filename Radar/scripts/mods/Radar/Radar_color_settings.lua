@@ -1107,6 +1107,30 @@ function ColorSettings.install_runtime(mod)
     end
 end
 
+-- Default colours for code that reads them outside the runtime, such as the
+-- settings menu and the fallback tables. Each call returns a copy.
+function ColorSettings.default_color(prefix)
+    local color = prefix and default_by_prefix[prefix] or nil
+
+    return color and _copy_color(color) or nil
+end
+
+function ColorSettings.default_marker_color(kind)
+    return ColorSettings.default_color(kind and marker_prefix_by_kind[kind] or nil)
+end
+
+-- Mirrors `get_highlight_color`: a kind without a highlight colour of its own
+-- falls back to its marker colour.
+function ColorSettings.default_highlight_color(kind)
+    local prefix = kind and marker_highlight_prefix_by_kind[kind] or nil
+
+    if prefix ~= nil then
+        return ColorSettings.default_color(prefix)
+    end
+
+    return ColorSettings.default_marker_color(kind)
+end
+
 ColorSettings.default_by_prefix = default_by_prefix
 ColorSettings.opacity_setting_by_prefix = opacity_setting_by_prefix
 ColorSettings.anchored_color_settings = anchored_color_settings

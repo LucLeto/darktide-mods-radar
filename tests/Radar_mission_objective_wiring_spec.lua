@@ -80,6 +80,10 @@ local localization_source = assert(io.open("Radar/scripts/mods/Radar/Radar_local
 local tracking_source = assert(io.open("Radar/scripts/mods/Radar/Radar_tracking.lua")):read("*a")
 local expeditions_source = assert(io.open("Radar/scripts/mods/Radar/Radar_expeditions.lua")):read("*a")
 local objectives_source = assert(io.open("Radar/scripts/mods/Radar/Radar_mission_objectives.lua")):read("*a")
+local players_source = assert(io.open("Radar/scripts/mods/Radar/Radar_players.lua")):read("*a")
+local pickups_source = assert(io.open("Radar/scripts/mods/Radar/Radar_pickups.lua")):read("*a")
+local events_source = assert(io.open("Radar/scripts/mods/Radar/Radar_events.lua")):read("*a")
+local definitions_source = assert(io.open("Radar/scripts/mods/Radar/Radar_enemy_definitions.lua")):read("*a")
 
 local problems = {}
 
@@ -526,6 +530,21 @@ end
 
 check(objectives_locals < 200,
     "Radar_mission_objectives.lua declares " .. objectives_locals .. " top level locals; LuaJIT allows 200")
+
+-- The feature modules split out of those two share the same ceiling.
+for label, source in pairs({
+    ["Radar_players.lua"] = players_source,
+    ["Radar_pickups.lua"] = pickups_source,
+    ["Radar_events.lua"] = events_source,
+}) do
+    local count = 0
+
+    for _ in source:gmatch(LF .. "    local [_%a]") do
+        count = count + 1
+    end
+
+    check(count < 200, label .. " declares " .. count .. " top level locals; LuaJIT allows 200")
+end
 
 -- The same ceiling applies to a file's main chunk, and the HUD element declares
 -- its constants there. It has less room left than the line count suggests.
@@ -1059,7 +1078,7 @@ check(objectives_source:find("local game_marks_unit = _world_marker_units_availa
 -- A probe key must identify a thing, not a moment: a timestamp for a door that
 -- cycles mints a new key forever, and one door wrote 609 of a run's 1629 door
 -- lines. Checked at the source: a spec cannot easily reach the door probe.
-local door_key = expeditions_source:match(
+local door_key = objectives_source:match(
     'local key = string_format%("martyr_skull_door_debug:(.-)' .. LF .. "                %)")
 
 check(door_key ~= nil, "the door probe key is missing")
@@ -1107,6 +1126,10 @@ check_declared_aliases(helpers_source, "Radar_runtime_helpers.lua")
 check_declared_aliases(expeditions_source, "Radar_expeditions.lua")
 check_declared_aliases(objectives_source, "Radar_mission_objectives.lua")
 check_declared_aliases(tracking_source, "Radar_tracking.lua")
+check_declared_aliases(players_source, "Radar_players.lua")
+check_declared_aliases(pickups_source, "Radar_pickups.lua")
+check_declared_aliases(events_source, "Radar_events.lua")
+check_declared_aliases(definitions_source, "Radar_enemy_definitions.lua")
 
 -- With no interaction marker from the game -- always the case for a scan target
 -- -- the bracket is placed on the fallback position, not the anchor. Objectives
@@ -1178,7 +1201,7 @@ check(objectives_source:find(
 check(helpers_source:find('if marker.type == "objective" then', 1, true) ~= nil,
     "the prompt a player gets next to something counts as the game marking an objective")
 -- One reading of "carrying a luggable", for the teammates' state and the player.
-check(tracking_source:find("if _unit_carries_luggable(unit, has_extension) then", 1, true) ~= nil,
+check(players_source:find("if _unit_carries_luggable(unit, has_extension) then", 1, true) ~= nil,
     "the teammates' luggable state reads the wielded slot its own way")
 -- A socket is drawn as what goes into it, decided before its setting is read,
 -- and is still a socket to the range rule while a luggable is carried.
@@ -1195,6 +1218,9 @@ check(objectives_source:find("        table_clear(LUGGABLE_HOLDER.socket_objecti
 check_local_use_before_declaration(expeditions_source, "Radar_expeditions.lua")
 check_local_use_before_declaration(objectives_source, "Radar_mission_objectives.lua")
 check_local_use_before_declaration(tracking_source, "Radar_tracking.lua")
+check_local_use_before_declaration(players_source, "Radar_players.lua")
+check_local_use_before_declaration(pickups_source, "Radar_pickups.lua")
+check_local_use_before_declaration(events_source, "Radar_events.lua")
 
 if #problems > 0 then
     for i = 1, #problems do

@@ -2,8 +2,6 @@ return function(env)
     setfenv(1, env)
 
     local mod = mod
-    local GameSession = GameSession
-    local PlayerUnitVisualLoadout = PlayerUnitVisualLoadout
     local pcall = pcall
     local pairs = pairs
     local rawget = rawget
@@ -74,51 +72,7 @@ return function(env)
             wield_scroll_down = true,
         },
     }
-    local SERVO_SKULL_OWNER_HIDE_DISTANCE_SQ = 2.5 * 2.5
-    local COMPANION_TARGET_OVERLAP_DISTANCE_SQ = 2 * 2
     local COMPANION_ACTION_RENDER_LAYER = 6
-    local SERVO_SKULL_STATES = CompanionServoSkullSettings.STATES
-    local ROTTEN_ARMOR_BREED_ALIAS_BY_BASE_BREED = {
-        chaos_ogryn_executor = "chaos_ogryn_executor_gibbing_rotten_armor",
-        renegade_executor = "renegade_executor_gibbing_rotten_armor",
-        renegade_berzerker = "renegade_berzerker_gibbing_rotten_armor",
-    }
-    local ABILITY_OUTLINE_BRACKET_ALPHA = 220
-    local SUPPORTED_ABILITY_OUTLINE_CONFIG_BY_NAME = {
-        psyker_marked_target = {
-            default_color = { 255, 80, 160, 255 },
-            default_priority = 1,
-        },
-        veteran_smart_tag = {
-            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 255, 204, 102 },
-            default_priority = 1,
-        },
-        adamant_mark_target = {
-            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 128, 102, 255 },
-            default_priority = 2,
-        },
-        adamant_smart_tag = {
-            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 255, 64, 64 },
-            default_priority = 2,
-        },
-        broker_proximity_target = {
-            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 122, 204, 245 },
-            default_priority = 2,
-        },
-        special_target = {
-            default_priority = 3,
-        },
-    }
-    local VETERAN_SPECIAL_TARGET_BRACKET_COLOR = { 255, 220, 120, 26 }
-    local OGRYN_TAUNT_SHOUT_ABILITY_NAME = "ogryn_taunt_shout"
-    local PLAYER_CAPTURE_DISABLING_TYPES = {
-        grabbed = true,
-        consumed = true,
-        mutant_charged = true,
-        netted = true,
-        pounced = true,
-    }
-    local SLOT_LUGGABLE = "slot_luggable"
 
     -- Sources whose units move on their own every frame (enemies, teammates,
     -- companions). Units from any other source only get their stored position
@@ -136,7 +90,7 @@ return function(env)
     local MOVING_TRACK_KINDS = {
         mission_objective_servo_skull = true,
     }
-    local ITEM_VERTICAL_ARROW_Z_DEADZONE = 2
+    ITEM_VERTICAL_ARROW_Z_DEADZONE = 2
 
     -- The flying servo skull hovers well above head height and bobs as it moves,
     -- so the shared 2 m deadzone reads it as being on another floor. A larger
@@ -170,21 +124,9 @@ return function(env)
     mod._last_update_t = nil
     mod._last_scan_signature = nil
     mod._last_block_signature = nil
-    mod._dark_rites_marker_scan_cache_valid = false
-    mod._dark_rites_marker_scan_allowed = true
-    mod._dark_rites_marker_cached_circumstance_name = nil
-    mod._dark_rites_marker_cached_mission_name = nil
     mod._screen_highlight_targets = {}
     mod._unclustered_radar_targets = {}
     mod._highlight_source_radar_targets = {}
-    mod._idol_destroyed_collectible_keys = {}
-    mod._idol_destroyed_units = {}
-    mod._martyr_skull_riddle_solved_by_mission = {}
-    mod._martyr_skull_riddle_fallback_state_by_position = {}
-    mod._last_safe_zone_section_index = nil
-    mod._last_expedition_in_safe_zone = nil
-    mod._player_smart_tag_generation = 0
-    mod._player_smart_tag_state_by_id = {}
 
     local _scratch_kind_enabled_cache = {}
     local _scratch_ignore_range_cache = {}
@@ -194,13 +136,6 @@ return function(env)
     local _scratch_selection_priority_cache = {}
     local _scratch_priority_target_cache = {}
     local _scratch_seen_interactees = {}
-    local _scratch_seen_chests = {}
-    local _scratch_seen_destructibles = {}
-    local _scratch_seen_hazard_props = {}
-    local _scratch_seen_radar_players = {}
-    local _scratch_mastiff_disabled_enemy_units = {}
-    local _scratch_minion_kind_enabled_cache = {}
-    local CACHED_ABILITY_OUTLINE_BRACKET_COLORS = {}
 
     -- ----------------------------------------------------------------------------
     -- Generic helpers
@@ -251,7 +186,7 @@ return function(env)
         return pool
     end
 
-    local function _distance_squared_horizontal(a, b)
+    function _distance_squared_horizontal(a, b)
         if not a or not b then
             return math_huge
         end
@@ -273,7 +208,7 @@ return function(env)
         return dx * dx + dy * dy
     end
 
-    local function _vertical_delta(a, b)
+    function _vertical_delta(a, b)
         if not a or not b then
             return nil
         end
@@ -286,6 +221,182 @@ return function(env)
         end
 
         return bz - az
+    end
+
+    function _debug_position_text(position)
+        local x, y, z = _vector3_components(position)
+
+        if not _is_finite_number(x) or not _is_finite_number(y) or not _is_finite_number(z) then
+            return "nil"
+        end
+
+        return string_format("%.3f,%.3f,%.3f", x, y, z)
+    end
+
+    function _debug_unit_position_text(unit)
+        return _debug_position_text(_safe_unit_position(unit))
+    end
+
+    -- ----------------------------------------------------------------------------
+    -- Unit and point tracking
+    -- ----------------------------------------------------------------------------
+
+    function _track_unit(unit, kind, source, meta)
+        if not kind or not _is_trackable_unit_alive(unit, kind) then
+            return
+        end
+
+        local tracked_units = mod._tracked_units
+
+        if not _is_valid_expedition_item_for_current_section(kind, unit) then
+            tracked_units[unit] = nil
+            return
+        end
+
+        local existing = tracked_units[unit]
+        local now = _safe_gameplay_time() or 0
+        local position = meta and _copy_vector3(meta.position) or nil
+
+        position = position or _safe_unit_position(unit)
+
+        if existing then
+            existing.kind = kind
+            existing.source = source or existing.source
+            existing.last_seen_t = now
+            existing.position = position or existing.position
+
+            if meta ~= nil then
+                existing.meta = meta
+            end
+        else
+            tracked_units[unit] = {
+                kind = kind,
+                source = source,
+                last_seen_t = now,
+                position = position,
+                meta = meta,
+            }
+        end
+    end
+
+    function _clear_tracked_unit_from_source(unit, source)
+        local tracked_units = mod._tracked_units
+        local tracked = tracked_units and tracked_units[unit]
+
+        if tracked and tracked.source == source then
+            tracked_units[unit] = nil
+        end
+    end
+
+    function _track_point(id, kind, position, source, meta)
+        if not id or not kind or not position then
+            return
+        end
+
+        mod._tracked_points[id] = {
+            kind = kind,
+            source = source,
+            position = position,
+            meta = meta,
+        }
+    end
+
+    -- ----------------------------------------------------------------------------
+    -- Marker kind enablement and range
+    -- ----------------------------------------------------------------------------
+
+    function _is_boss_marker_kind(kind)
+        return kind == "enemy_monstrosity"
+            or kind == "enemy_captain"
+            or kind == "enemy_karnak_twin"
+    end
+
+    function _has_infinite_radar_range_for_kind(kind)
+        if kind == "material_expeditions_loot_player_drop" then
+            return true
+        end
+
+        if kind == "player_teammate" and mod:get_player_marker_range_mode() == "infinite" then
+            return true
+        end
+
+        if _is_boss_marker_kind(kind) and mod:get_boss_marker_range_mode() == "infinite" then
+            return true
+        end
+
+        return false
+    end
+
+    function _ignore_radar_range_for_kind(kind)
+        if kind == "expedition_loot_converter" then
+            return false
+        end
+
+        if _is_player_smart_tag_kind(kind) then
+            return true
+        end
+
+        if _has_infinite_radar_range_for_kind(kind) then
+            return true
+        end
+
+        return _is_expedition_marker_kind(kind) and mod:get("ignore_radar_range_for_expedition_markers") == true
+    end
+
+    function _kind_enabled(kind)
+        local get_enemy_marker_mode = mod.get_enemy_marker_mode
+        local get_icon_distance_marker_display_mode = mod.get_icon_distance_marker_display_mode
+        local get_expedition_marker_display_mode = mod.get_expedition_marker_display_mode
+        local get_marker_display_mode = mod.get_marker_display_mode
+        local get_setting = mod.get
+        local enemy_display_mode = get_enemy_marker_mode(mod, kind)
+
+        if kind == "player_teammate" then
+            if mod.get_show_players then
+                return mod:get_show_players()
+            end
+
+            local show_players = get_setting(mod, "show_players")
+
+            return show_players ~= false and show_players ~= "off"
+        end
+
+        if kind == "player_companion_dog" or kind == "player_companion_servo_skull" then
+            local companion_setting_id = KIND_TO_SETTING[kind]
+            local companion_setting = companion_setting_id and get_setting(mod, companion_setting_id)
+
+            return companion_setting ~= false and companion_setting ~= "off"
+        end
+
+        if enemy_display_mode ~= nil then
+            return enemy_display_mode ~= "off"
+        end
+
+        local icon_distance_display_mode = get_icon_distance_marker_display_mode and
+            get_icon_distance_marker_display_mode(mod, kind) or nil
+        if icon_distance_display_mode ~= nil then
+            return icon_distance_display_mode ~= "off"
+        end
+
+        local expedition_display_mode = get_expedition_marker_display_mode and
+            get_expedition_marker_display_mode(mod, kind) or nil
+        if expedition_display_mode ~= nil then
+            return expedition_display_mode ~= "off"
+        end
+
+        local display_mode = get_marker_display_mode(mod, kind)
+        if display_mode ~= nil then
+            return display_mode ~= "off"
+        end
+
+        local setting_id = KIND_TO_SETTING[kind]
+        if not setting_id then
+            return true
+        end
+
+        local value = get_setting(mod, setting_id)
+
+        return value ~= false and value ~= "off"
     end
 
     -- ----------------------------------------------------------------------------
@@ -672,632 +783,8 @@ return function(env)
     end
 
     -- ----------------------------------------------------------------------------
-    -- Enemy and ability outline helpers
-    -- ----------------------------------------------------------------------------
-
-    local function _resolve_enemy_breed_name(unit, breed_name)
-        local rotten_armor_breed_name = ROTTEN_ARMOR_BREED_ALIAS_BY_BASE_BREED[breed_name]
-
-        if rotten_armor_breed_name
-            and (_safe_unit_has_keyword(unit, "rotten_armor")
-                or _safe_unit_has_buff_template(unit, "mutator_rotten_armor")) then
-            return rotten_armor_breed_name
-        end
-
-        return breed_name
-    end
-
-    local function _supported_ability_outline_config(outline_name)
-        if outline_name == nil then
-            return nil
-        end
-
-        return SUPPORTED_ABILITY_OUTLINE_CONFIG_BY_NAME[tostring(outline_name)]
-    end
-
-    local function _special_target_local_context(player_unit)
-        if not _safe_unit_alive(player_unit) then
-            return nil
-        end
-
-        if _safe_unit_has_keyword(player_unit, "veteran_combat_ability_stance") then
-            return "veteran_executioners_stance"
-        end
-
-        return nil
-    end
-
-    local function _special_target_fallback_bracket_color()
-        local player_unit = _player_unit()
-        local local_context = _special_target_local_context(player_unit)
-
-        if local_context == "veteran_executioners_stance" then
-            return VETERAN_SPECIAL_TARGET_BRACKET_COLOR
-        end
-
-        return nil
-    end
-
-    local function _default_ability_outline_bracket_color(outline_name)
-        local config = _supported_ability_outline_config(outline_name)
-
-        if not config then
-            return nil
-        end
-
-        if outline_name == "special_target" then
-            return _special_target_fallback_bracket_color()
-        end
-
-        return config.default_color
-    end
-
-    local function _cached_ability_outline_bracket_color(outline_name, color)
-        if type(color) ~= "table" then
-            return _default_ability_outline_bracket_color(outline_name)
-        end
-
-        local alpha = tonumber(color.a)
-        local red = tonumber(color.r)
-        local green = tonumber(color.g)
-        local blue = tonumber(color.b)
-
-        if red == nil and green == nil and blue == nil then
-            local fourth = tonumber(color[4])
-
-            if fourth ~= nil then
-                alpha = tonumber(color[1])
-                red = tonumber(color[2])
-                green = tonumber(color[3])
-                blue = fourth
-            else
-                red = tonumber(color[1])
-                green = tonumber(color[2])
-                blue = tonumber(color[3])
-            end
-        end
-
-        if not red or not green or not blue then
-            return _default_ability_outline_bracket_color(outline_name)
-        end
-
-        if red <= 1 and green <= 1 and blue <= 1 then
-            red = red * 255
-            green = green * 255
-            blue = blue * 255
-        end
-
-        if alpha == nil then
-            alpha = ABILITY_OUTLINE_BRACKET_ALPHA
-        elseif alpha <= 1 then
-            alpha = alpha * 255
-        end
-
-        alpha = _clamp(math_floor(alpha + 0.5), 0, 255)
-        red = _clamp(math_floor(red + 0.5), 0, 255)
-        green = _clamp(math_floor(green + 0.5), 0, 255)
-        blue = _clamp(math_floor(blue + 0.5), 0, 255)
-
-        local cache_key = tostring(outline_name) .. ":" .. tostring(alpha) .. ":" .. tostring(red) .. ":" ..
-            tostring(green) .. ":" .. tostring(blue)
-        local cached_color = CACHED_ABILITY_OUTLINE_BRACKET_COLORS[cache_key]
-
-        if cached_color == nil then
-            cached_color = {
-                alpha,
-                red,
-                green,
-                blue,
-            }
-            CACHED_ABILITY_OUTLINE_BRACKET_COLORS[cache_key] = cached_color
-        end
-
-        return cached_color
-    end
-
-    local function _outline_setting_bracket_color(outline_extension, outline_name)
-        if type(outline_extension) ~= "table" or outline_name == nil then
-            return nil
-        end
-
-        local settings = rawget(outline_extension, "settings")
-        local outline_settings = type(settings) == "table" and settings[outline_name] or nil
-        local color = type(outline_settings) == "table" and rawget(outline_settings, "color") or nil
-
-        return _cached_ability_outline_bracket_color(outline_name, color)
-    end
-
-    local function _outline_setting_priority(outline_extension, outline_name)
-        if outline_name == nil then
-            return 0
-        end
-
-        local priority = nil
-
-        if type(outline_extension) == "table" then
-            local settings = rawget(outline_extension, "settings")
-            local outline_settings = type(settings) == "table" and settings[outline_name] or nil
-            priority = type(outline_settings) == "table" and tonumber(rawget(outline_settings, "priority")) or nil
-        end
-
-        if priority == nil then
-            local config = _supported_ability_outline_config(outline_name)
-            priority = config and config.default_priority or 0
-        end
-
-        return priority or 0
-    end
-
-    local function _supported_ability_outline_state_for_unit(unit, outline_extension_map, local_player_unit)
-        local outline_extension = _safe_unit_outline_extension(unit, outline_extension_map)
-
-        if type(outline_extension) ~= "table" then
-            return nil, nil
-        end
-
-        local outlines = rawget(outline_extension, "outlines")
-
-        if type(outlines) ~= "table" or #outlines == 0 then
-            return nil, nil
-        end
-
-        local outline_names = nil
-        local seen_outline_names = nil
-        local bracket_color = nil
-        local primary_outline_name = nil
-        local primary_outline_priority = -math_huge
-        local bracket_outline_priority = -math_huge
-        local special_target_allowed = _special_target_local_context(local_player_unit) ~= nil
-
-        for i = 1, #outlines do
-            local outline = outlines[i]
-            local outline_name = outline and outline.name and tostring(outline.name) or nil
-
-            if outline_name ~= nil
-                and _supported_ability_outline_config(outline_name) ~= nil
-                and (outline_name ~= "special_target" or special_target_allowed) then
-                if seen_outline_names == nil or not seen_outline_names[outline_name] then
-                    seen_outline_names = seen_outline_names or {}
-                    seen_outline_names[outline_name] = true
-                    outline_names = outline_names or {}
-                    outline_names[#outline_names + 1] = outline_name
-                end
-
-                local outline_priority = _outline_setting_priority(outline_extension, outline_name)
-
-                if outline_priority > primary_outline_priority then
-                    primary_outline_name = outline_name
-                    primary_outline_priority = outline_priority
-                end
-
-                local outline_bracket_color = _outline_setting_bracket_color(outline_extension, outline_name)
-
-                if outline_bracket_color ~= nil and outline_priority > bracket_outline_priority then
-                    bracket_color = outline_bracket_color
-                    bracket_outline_priority = outline_priority
-                end
-            end
-        end
-
-        return outline_names, bracket_color, primary_outline_name, primary_outline_priority
-    end
-
-    local function _unit_has_supported_ogryn_taunt_marker(unit)
-        return _safe_unit_has_keyword(unit, "taunted")
-            or _safe_unit_has_buff_template(unit, "taunted")
-            or _safe_unit_has_buff_template(unit, "taunted_short")
-    end
-
-    local function _supported_ability_marker_state_for_unit(unit, outline_extension_map, local_player_unit, local_combat_ability_name)
-        local marker_names, bracket_color, primary_marker_name, primary_marker_priority = _supported_ability_outline_state_for_unit(unit, outline_extension_map, local_player_unit)
-
-        if marker_names ~= nil then
-            return marker_names, bracket_color, primary_marker_name, primary_marker_priority
-        end
-
-        if local_combat_ability_name == OGRYN_TAUNT_SHOUT_ABILITY_NAME
-            and _unit_has_supported_ogryn_taunt_marker(unit) then
-            return { OGRYN_TAUNT_SHOUT_ABILITY_NAME }, nil, OGRYN_TAUNT_SHOUT_ABILITY_NAME, 0
-        end
-
-        return nil, nil, nil, nil
-    end
-
-    -- ----------------------------------------------------------------------------
-    -- Companion and player state helpers
-    -- ----------------------------------------------------------------------------
-
-    local function _player_companion_kind(unit, has_extension)
-        if not unit or not has_extension or not _safe_unit_alive(unit) then
-            return nil
-        end
-
-        local unit_data_extension = has_extension(unit, "unit_data_system")
-        local breed_fn = unit_data_extension and unit_data_extension.breed
-
-        if not breed_fn then
-            return nil
-        end
-
-        local ok_breed, breed = pcall(breed_fn, unit_data_extension)
-        local tags = ok_breed and breed and breed.tags or nil
-
-        if not tags or tags.companion ~= true then
-            return nil
-        end
-
-        local breed_name = breed.name
-
-        if breed_name == "companion_dog" then
-            return "player_companion_dog"
-        elseif breed_name == "companion_servo_skull" then
-            return "player_companion_servo_skull"
-        end
-
-        return nil
-    end
-
-    local function _companion_dog_target_uses_disable_action(unit, has_extension)
-        local unit_data_extension = has_extension and has_extension(unit, "unit_data_system")
-        local breed_fn = unit_data_extension and unit_data_extension.breed
-
-        if not breed_fn then
-            return false
-        end
-
-        local ok_breed, breed = pcall(breed_fn, unit_data_extension)
-        local pounce_setting = ok_breed and breed and breed.companion_pounce_setting or nil
-
-        return pounce_setting and pounce_setting.companion_pounce_action == "human" or false
-    end
-
-    local function _safe_spawned_companion_unit(companion_spawner_extension, special_rule)
-        local lookup_fn = companion_spawner_extension and companion_spawner_extension.spawned_unit_lookup
-
-        if not lookup_fn then
-            return nil
-        end
-
-        local ok_lookup, unit = pcall(lookup_fn, companion_spawner_extension, special_rule)
-
-        return ok_lookup and unit or nil
-    end
-
-    local function _safe_unit_game_object_field(unit, field_name)
-        local state = Managers and Managers.state
-        local game_session_manager = state and state.game_session
-        local unit_spawner_manager = state and state.unit_spawner
-        local game_session_fn = game_session_manager and game_session_manager.game_session
-        local game_object_id_fn = unit_spawner_manager and unit_spawner_manager.game_object_id
-        local game_object_field = GameSession and GameSession.game_object_field
-        local game_object_exists = GameSession and GameSession.game_object_exists
-
-        if not game_session_fn or not game_object_id_fn or not game_object_field then
-            return nil
-        end
-
-        local ok_session, game_session = pcall(game_session_fn, game_session_manager)
-        local ok_id, game_object_id = pcall(game_object_id_fn, unit_spawner_manager, unit)
-
-        if not ok_session or not game_session or not ok_id or game_object_id == nil then
-            return nil
-        end
-
-        if game_object_exists then
-            local ok_exists, exists = pcall(game_object_exists, game_session, game_object_id)
-
-            if not ok_exists or not exists then
-                return nil
-            end
-        end
-
-        local ok_field, value = pcall(game_object_field, game_session, game_object_id, field_name)
-
-        return ok_field and value or nil
-    end
-
-    local function _safe_unit_from_game_object_id(game_object_id)
-        if game_object_id == nil then
-            return nil
-        end
-
-        local state = Managers and Managers.state
-        local unit_spawner_manager = state and state.unit_spawner
-        local unit_fn = unit_spawner_manager and unit_spawner_manager.unit
-
-        if not unit_fn then
-            return nil
-        end
-
-        local ok_unit, unit = pcall(unit_fn, unit_spawner_manager, game_object_id)
-
-        return ok_unit and _safe_unit_alive(unit) and unit or nil
-    end
-
-    local function _safe_companion_dog_target(unit)
-        local blackboard = BLACKBOARDS and BLACKBOARDS[unit]
-        local pounce_component = blackboard and blackboard.pounce
-        local pounce_target = pounce_component and pounce_component.pounce_target or nil
-
-        if pounce_target
-            and (pounce_component.has_pounce_target or pounce_component.has_pounce_started)
-            and _safe_unit_alive(pounce_target) then
-            return pounce_target, true
-        end
-
-        local target_unit_id = _safe_unit_game_object_field(unit, "target_unit_id")
-        local target_unit = _safe_unit_from_game_object_id(target_unit_id)
-
-        if pounce_component then
-            return target_unit, false
-        end
-
-        return target_unit, nil
-    end
-
-    local function _servo_skull_state_is(state, state_name)
-        return state == state_name or state == SERVO_SKULL_STATES[state_name]
-    end
-
-    local function _safe_player_component(unit_data_extension, component_name)
-        if not unit_data_extension or not unit_data_extension.read_component then
-            return nil
-        end
-
-        local ok, component = pcall(unit_data_extension.read_component, unit_data_extension, component_name)
-
-        return ok and component or nil
-    end
-
-    -- Whether a player is carrying a luggable: wielding the luggable slot with
-    -- something equipped in it.
-    function _unit_carries_luggable(unit, has_extension)
-        local unit_data_extension = has_extension and has_extension(unit, "unit_data_system") or nil
-        local inventory_component = _safe_player_component(unit_data_extension, "inventory")
-
-        if not inventory_component or inventory_component.wielded_slot ~= SLOT_LUGGABLE then
-            return false
-        end
-
-        local visual_loadout_extension = has_extension(unit, "visual_loadout_system")
-        local slot_equipped = PlayerUnitVisualLoadout and PlayerUnitVisualLoadout.slot_equipped
-
-        if not visual_loadout_extension or not slot_equipped then
-            return false
-        end
-
-        local ok, equipped = pcall(slot_equipped, inventory_component, visual_loadout_extension, SLOT_LUGGABLE)
-
-        return ok and equipped and true or false
-    end
-
-    local function _player_radar_state(unit, has_extension)
-        local unit_data_extension = has_extension and has_extension(unit, "unit_data_system") or nil
-        local character_state_component = _safe_player_component(unit_data_extension, "character_state")
-        local state_name = character_state_component and character_state_component.state_name or nil
-
-        if state_name == "hogtied" then
-            return "rescue"
-        end
-
-        if state_name == "dead" or _safe_health_alive(unit) == false then
-            return "dead"
-        end
-
-        if state_name == "knocked_down" or state_name == "ledge_hanging" then
-            return "rescue"
-        end
-
-        local disabled_state_component = _safe_player_component(unit_data_extension, "disabled_character_state")
-        local disabling_type = disabled_state_component
-            and disabled_state_component.is_disabled
-            and disabled_state_component.disabling_type or nil
-
-        if PLAYER_CAPTURE_DISABLING_TYPES[disabling_type] then
-            return "captured"
-        end
-
-        if _unit_carries_luggable(unit, has_extension) then
-            return "luggable"
-        end
-
-        return nil
-    end
-
-    -- ----------------------------------------------------------------------------
     -- Unit scans
     -- ----------------------------------------------------------------------------
-
-    local function _refresh_player_units()
-        local mastiff_disabled_enemy_units = _scratch_mastiff_disabled_enemy_units
-        table_clear(mastiff_disabled_enemy_units)
-
-        local player_manager = _player_manager()
-        if not player_manager or not player_manager.players then
-            return
-        end
-
-        local local_player = _local_player()
-        local players = player_manager:players()
-        local script_unit = ScriptUnit
-        local has_extension = script_unit and script_unit.has_extension
-        local radar_player_unit_by_player = mod._radar_player_unit_by_player or {}
-        local seen_radar_players = _scratch_seen_radar_players
-        local scan_player_states = mod:get("show_player_state_icons") ~= false
-            and mod:get_show_players()
-        local show_cyber_mastiff = mod:get("show_cyber_mastiff") ~= false
-        local scan_player_companions = show_cyber_mastiff
-            or mod:get("show_servo_skulls") ~= false
-
-        mod._radar_player_unit_by_player = radar_player_unit_by_player
-        table_clear(seen_radar_players)
-
-        for _, player in pairs(players) do
-            local unit = player.player_unit
-            local unit_alive = unit and _safe_unit_alive(unit)
-            local player_radar_state = unit_alive
-                and player ~= local_player
-                and scan_player_states
-                and _player_radar_state(unit, has_extension) or nil
-
-            if player ~= local_player then
-                seen_radar_players[player] = true
-
-                if unit_alive then
-                    local previous_unit = radar_player_unit_by_player[player]
-
-                    if previous_unit and previous_unit ~= unit then
-                        _clear_tracked_unit_from_source(previous_unit, "player_manager")
-                    end
-
-                    radar_player_unit_by_player[player] = unit
-                end
-            end
-
-            if scan_player_companions and unit_alive then
-                local player_slot = _safe_player_slot(player)
-                local owner_marker_visible
-
-                if player == local_player then
-                    owner_marker_visible = mod:get_show_player_center_dot()
-                else
-                    owner_marker_visible = mod:get_show_players()
-                end
-
-                local companion_spawner_extension = has_extension and
-                    has_extension(unit, "companion_spawner_system") or nil
-                local owned_units = player.owned_units
-                local hack_skull = nil
-                local medicae_skull = nil
-                local flamer_skull = nil
-                local servo_skull_roles_resolved = false
-
-                if type(owned_units) == "table" then
-                    for owned_unit, _ in pairs(owned_units) do
-                        local companion_kind = _player_companion_kind(owned_unit, has_extension)
-
-                        if companion_kind then
-                            local servo_skull_role = nil
-                            local servo_skull_following_owner = false
-                            local companion_action = nil
-                            local companion_action_target = nil
-                            local companion_pounce_active = nil
-
-                            if companion_kind == "player_companion_servo_skull" then
-                                if not servo_skull_roles_resolved then
-                                    hack_skull = _safe_spawned_companion_unit(
-                                        companion_spawner_extension,
-                                        "cryptic_servo_skull_hack"
-                                    )
-                                    medicae_skull = _safe_spawned_companion_unit(
-                                        companion_spawner_extension,
-                                        "cryptic_servo_skull_inject_ally"
-                                    )
-                                    flamer_skull = _safe_spawned_companion_unit(
-                                        companion_spawner_extension,
-                                        "cryptic_servo_skull_flamethrower"
-                                    )
-                                    servo_skull_roles_resolved = true
-                                end
-
-                                if owned_unit == medicae_skull then
-                                    servo_skull_role = "medicae"
-                                elseif owned_unit == flamer_skull then
-                                    servo_skull_role = "flamer"
-                                elseif owned_unit == hack_skull then
-                                    servo_skull_role = "default"
-                                end
-
-                                local servo_skull_state = _safe_unit_game_object_field(owned_unit, "state")
-
-                                if _servo_skull_state_is(servo_skull_state, "hacking") then
-                                    companion_action = "hacking"
-                                elseif _servo_skull_state_is(servo_skull_state, "inject_ally") then
-                                    companion_action = "inject_ally"
-                                elseif _servo_skull_state_is(servo_skull_state, "flamethrower")
-                                    or _servo_skull_state_is(servo_skull_state, "flamethrower_shooting") then
-                                    companion_action = "flamethrower"
-                                elseif _servo_skull_state_is(servo_skull_state, "following")
-                                    or _servo_skull_state_is(servo_skull_state, "following_shooting")
-                                    or _servo_skull_state_is(servo_skull_state, "following_shooting_ability") then
-                                    servo_skull_following_owner = true
-                                end
-                            elseif companion_kind == "player_companion_dog" then
-                                companion_action_target, companion_pounce_active =
-                                    _safe_companion_dog_target(owned_unit)
-
-                                if show_cyber_mastiff
-                                    and companion_action_target
-                                    and companion_pounce_active ~= false
-                                    and _companion_dog_target_uses_disable_action(
-                                        companion_action_target,
-                                        has_extension
-                                    ) then
-                                    local companion_position = _safe_unit_position(owned_unit)
-                                    local target_position = _safe_unit_position(companion_action_target)
-
-                                    if companion_position
-                                        and target_position
-                                        and _distance_squared_horizontal(companion_position, target_position) <=
-                                        COMPANION_TARGET_OVERLAP_DISTANCE_SQ then
-                                        mastiff_disabled_enemy_units[companion_action_target] = true
-                                    end
-                                end
-                            end
-
-                            _track_unit(owned_unit, companion_kind, "player_companion", {
-                                player_slot = player_slot,
-                                owner_unit = unit,
-                                owner_marker_visible = owner_marker_visible,
-                                servo_skull_following_owner = servo_skull_following_owner,
-                                servo_skull_role = servo_skull_role,
-                                companion_action = companion_action,
-                                companion_action_target = companion_action_target,
-                            })
-                        end
-                    end
-                end
-            end
-
-            if unit_alive and player ~= local_player then
-                local archetype_name = nil
-                local player_name = nil
-                local player_slot = _safe_player_slot(player)
-
-                local ok_player_name, resolved_player_name = pcall(player.name, player)
-                if ok_player_name then
-                    player_name = resolved_player_name
-                end
-
-                local ok_profile, profile = pcall(player.profile, player)
-                if ok_profile and profile and profile.archetype and profile.archetype.name then
-                    archetype_name = profile.archetype.name
-                end
-
-                local unit_data_extension = has_extension and has_extension(unit, "unit_data_system")
-                if unit_data_extension and unit_data_extension.archetype_name then
-                    local ok_archetype, value = pcall(unit_data_extension.archetype_name, unit_data_extension)
-                    if ok_archetype and value ~= nil then
-                        archetype_name = value
-                    end
-                end
-
-                _track_unit(unit, "player_teammate", "player_manager", {
-                    player = player_name,
-                    player_slot = player_slot,
-                    archetype_name = archetype_name,
-                    player_radar_state = player_radar_state,
-                })
-            end
-        end
-
-        for player, unit in pairs(radar_player_unit_by_player) do
-            if not seen_radar_players[player] then
-                _clear_tracked_unit_from_source(unit, "player_manager")
-                radar_player_unit_by_player[player] = nil
-            end
-        end
-    end
 
     local function _scan_interactees()
         local interactee_map = _safe_unit_to_extension_map("interactee_system")
@@ -1445,361 +932,6 @@ return function(env)
         _scan_mission_objective_targets(interactee_map)
     end
 
-    local function _scan_chests()
-        local chest_map = _safe_unit_to_extension_map("chest_system")
-        if not chest_map then
-            return
-        end
-
-        local tracked_units = mod._tracked_units
-        local seen_chests = _scratch_seen_chests
-        local track_item_tags = mod:get_show_only_tagged_items()
-        table_clear(seen_chests)
-
-        for unit, extension in pairs(chest_map) do
-            if _safe_unit_alive(unit) and extension then
-                seen_chests[unit] = true
-
-                local is_open_fn = extension.is_open
-
-                if is_open_fn then
-                    local ok_open, is_open = pcall(is_open_fn, extension)
-
-                    if ok_open and not is_open then
-                        local meta = nil
-
-                        if track_item_tags then
-                            meta = {
-                                marked_by_player_slot = _marked_by_player_slot_for_unit(unit),
-                            }
-                        end
-
-                        _track_unit(unit, "crate_unknown", "chest_system", meta)
-                    else
-                        _clear_tracked_unit_from_source(unit, "chest_system")
-                    end
-                else
-                    _clear_tracked_unit_from_source(unit, "chest_system")
-                end
-            else
-                _clear_tracked_unit_from_source(unit, "chest_system")
-            end
-        end
-
-        for unit, data in pairs(tracked_units) do
-            if data and data.source == "chest_system" and not seen_chests[unit] then
-                tracked_units[unit] = nil
-            end
-        end
-    end
-
-    local function _safe_hazard_prop_extension_map()
-        local hazard_prop_system = _safe_extension_system("hazard_prop_system")
-        if not hazard_prop_system then
-            return nil
-        end
-
-        local unit_to_extension_map = hazard_prop_system.unit_to_extension_map
-
-        if type(unit_to_extension_map) == "function" then
-            local ok_map, map = pcall(unit_to_extension_map, hazard_prop_system)
-
-            if ok_map and type(map) == "table" then
-                return map
-            end
-        end
-
-        if type(hazard_prop_system) == "table" then
-            local map = rawget(hazard_prop_system, "_unit_to_extension_map")
-
-            if type(map) == "table" then
-                return map
-            end
-        end
-
-        return nil
-    end
-
-    local function _safe_hazard_prop_content(extension)
-        local content_fn = extension and extension.content
-
-        if type(content_fn) ~= "function" then
-            return nil
-        end
-
-        local ok_content, content = pcall(content_fn, extension)
-
-        return ok_content and content or nil
-    end
-
-    local function _safe_hazard_prop_state(extension)
-        local current_state_fn = extension and extension.current_state
-
-        if type(current_state_fn) ~= "function" then
-            return nil
-        end
-
-        local ok_state, state = pcall(current_state_fn, extension)
-
-        return ok_state and state or nil
-    end
-
-    local function _safe_hazard_prop_broadphase_position(extension)
-        local broadphase_position_fn = extension and extension.broadphase_position
-
-        if type(broadphase_position_fn) ~= "function" then
-            return nil
-        end
-
-        local ok_position, position = pcall(broadphase_position_fn, extension)
-
-        return ok_position and _copy_vector3(position) or nil
-    end
-
-    local function _hazard_prop_position(unit, extension)
-        return _safe_unit_node_position(unit, "c_explosion")
-            or _safe_hazard_prop_broadphase_position(extension)
-            or _safe_unit_position(unit)
-    end
-
-    local function _hazard_prop_state_is_broken(state)
-        local hazard_state = rawget(_G, "hazard_state")
-
-        if type(hazard_state) == "table" and hazard_state.broken ~= nil and state == hazard_state.broken then
-            return true
-        end
-
-        return _safe_lower_string(state) == "broken"
-    end
-
-    local function _hazard_prop_kind_from_content(content)
-        local hazard_content = rawget(_G, "hazard_content")
-
-        if type(hazard_content) == "table" then
-            if hazard_content.explosion ~= nil and content == hazard_content.explosion then
-                return "hazard_explosive_barrel"
-            end
-
-            if hazard_content.fire ~= nil and content == hazard_content.fire then
-                return "hazard_fire_barrel"
-            end
-        end
-
-        local content_key = _safe_lower_string(content)
-
-        if content_key == "explosion" then
-            return "hazard_explosive_barrel"
-        elseif content_key == "fire" then
-            return "hazard_fire_barrel"
-        end
-
-        return nil
-    end
-
-    local function _scan_hazard_props()
-        local hazard_prop_map = _safe_hazard_prop_extension_map()
-        if not hazard_prop_map then
-            return
-        end
-
-        local tracked_units = mod._tracked_units
-        local seen_hazard_props = _scratch_seen_hazard_props
-        local track_item_tags = mod:get_show_only_tagged_items()
-        table_clear(seen_hazard_props)
-
-        for unit, extension in pairs(hazard_prop_map) do
-            if _safe_unit_alive(unit) and extension then
-                seen_hazard_props[unit] = true
-
-                local state = _safe_hazard_prop_state(extension)
-
-                if not _hazard_prop_state_is_broken(state) then
-                    local content = _safe_hazard_prop_content(extension)
-                    local kind = _hazard_prop_kind_from_content(content)
-                    local position = kind and _hazard_prop_position(unit, extension) or nil
-
-                    if position then
-                        _track_unit(unit, kind, "hazard_prop_system", {
-                            content = content,
-                            state = state,
-                            position = position,
-                            marked_by_player_slot = track_item_tags and _marked_by_player_slot_for_unit(unit) or nil,
-                        })
-                    else
-                        _clear_tracked_unit_from_source(unit, "hazard_prop_system")
-                    end
-                else
-                    _clear_tracked_unit_from_source(unit, "hazard_prop_system")
-                end
-            else
-                _clear_tracked_unit_from_source(unit, "hazard_prop_system")
-            end
-        end
-
-        for unit, data in pairs(tracked_units) do
-            if data and data.source == "hazard_prop_system" and not seen_hazard_props[unit] then
-                tracked_units[unit] = nil
-            end
-        end
-    end
-
-    local function _scan_minions()
-        local unit_data_map = _safe_unit_to_extension_map("unit_data_system")
-        if not unit_data_map then
-            return
-        end
-
-        local track_enemy_tags = mod:get_show_only_tagged_enemies()
-        local show_ability_marked_enemies = mod:get_show_ability_marked_enemies()
-        local outline_extension_map = show_ability_marked_enemies and _safe_outline_extension_data_map() or nil
-        local local_player_unit = show_ability_marked_enemies and _player_unit() or nil
-        local local_combat_ability_name = show_ability_marked_enemies
-            and _safe_unit_ability_name(local_player_unit, "combat_ability")
-            or nil
-        local kind_enabled_cache = _scratch_minion_kind_enabled_cache
-        table_clear(kind_enabled_cache)
-
-        for unit, extension in pairs(unit_data_map) do
-            if _safe_unit_alive(unit) and extension then
-                local breed_name_fn = extension.breed_name
-
-                if breed_name_fn then
-                    local ok_breed, breed_name = pcall(breed_name_fn, extension)
-
-                    if ok_breed and breed_name then
-                        local resolved_breed_name = _resolve_enemy_breed_name(unit, breed_name)
-                        local kind = _classify_enemy_from_breed(resolved_breed_name)
-                        if kind and _is_trackable_unit_alive(unit, kind) then
-                            local kind_enabled = kind_enabled_cache[kind]
-
-                            if kind_enabled == nil then
-                                kind_enabled = _kind_enabled(kind)
-                                kind_enabled_cache[kind] = kind_enabled
-                            end
-
-                            local ability_marker_names = nil
-                            local ability_marker_bracket_color = nil
-
-                            if show_ability_marked_enemies then
-                                ability_marker_names,
-                                ability_marker_bracket_color = _supported_ability_marker_state_for_unit(
-                                        unit,
-                                        outline_extension_map,
-                                        local_player_unit,
-                                        local_combat_ability_name
-                                    )
-                            end
-
-                            if kind_enabled or ability_marker_names ~= nil then
-                                _track_unit(unit, kind, "unit_data_system", {
-                                    breed_name = breed_name,
-                                    marked_by_player_slot = track_enemy_tags and _marked_by_player_slot_for_unit(unit) or nil,
-                                    ability_marked = ability_marker_names ~= nil,
-                                    ability_outline_bracket_color = ability_marker_bracket_color,
-                                })
-                            else
-                                _clear_tracked_unit_from_source(unit, "unit_data_system")
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    local function _scan_destructibles()
-        local destructible_map = _safe_unit_to_extension_map("destructible_system")
-        if not destructible_map then
-            return
-        end
-
-        local tracked_units = mod._tracked_units
-        local seen_destructibles = _scratch_seen_destructibles
-        local track_item_tags = mod:get_show_only_tagged_items()
-        local dark_rites_scan_allowed = _is_dark_rites_marker_scan_allowed()
-        table_clear(seen_destructibles)
-
-        for unit, extension in pairs(destructible_map) do
-            if _safe_unit_alive(unit) and extension then
-                seen_destructibles[unit] = true
-
-                local collectible_type = _safe_unit_collectible_type(unit)
-                local collectible_data = _safe_destructible_collectible_data(extension)
-                local collectible_id = collectible_data and collectible_data.id or nil
-                local collectible_section_id = collectible_data and collectible_data.section_id or nil
-                local collectible_key = _idol_collectible_key(collectible_section_id, collectible_id)
-                local prop_data_name = nil
-                local unit_data_breed_name = nil
-                local is_live_event_skulls_totem = false
-                local extension_visible = _safe_destructible_visible(extension)
-                local unit_visible = _safe_unit_main_visible(unit)
-                local health_alive = _safe_health_alive(unit)
-                local has_active_collectible = collectible_id ~= nil and collectible_section_id ~= nil
-                local destroyed_by_event = mod._idol_destroyed_units[unit] ~= nil
-                    or (collectible_key ~= nil and mod._idol_destroyed_collectible_keys[collectible_key] ~= nil)
-
-                if dark_rites_scan_allowed then
-                    if collectible_type == "nurgle_totem" then
-                        is_live_event_skulls_totem = true
-                    elseif collectible_type ~= "heretic_idol" or not has_active_collectible then
-                        prop_data_name = _safe_unit_prop_data_name(unit)
-                        unit_data_breed_name = _safe_unit_data_breed_name(unit)
-                        is_live_event_skulls_totem = _is_live_event_skulls_totem_unit(collectible_type, unit_data_breed_name,
-                            prop_data_name)
-                    end
-                end
-
-                if not destroyed_by_event
-                    and (has_active_collectible or is_live_event_skulls_totem)
-                    and extension_visible == true
-                    and health_alive ~= false
-                    and unit_visible ~= false then
-                    local kind = is_live_event_skulls_totem and "dark_rites_totem" or "pickup_heretic_idol"
-
-                    _track_unit(unit, kind, "destructible_system", {
-                        collectible_type = collectible_type,
-                        collectible_id = collectible_id,
-                        collectible_section_id = collectible_section_id,
-                        marked_by_player_slot = track_item_tags and _marked_by_player_slot_for_unit(unit) or nil,
-                    })
-                else
-                    _clear_tracked_unit_from_source(unit, "destructible_system")
-                end
-            else
-                _clear_tracked_unit_from_source(unit, "destructible_system")
-            end
-        end
-
-        for unit, data in pairs(tracked_units) do
-            if data and data.source == "destructible_system" and not seen_destructibles[unit] then
-                tracked_units[unit] = nil
-            end
-        end
-
-        _prune_destroyed_idol_state()
-    end
-
-    local function _scan_smart_tag_targets()
-        local smart_tag_map = _safe_unit_to_extension_map("smart_tag_system")
-        if not smart_tag_map then
-            return
-        end
-
-        for unit, extension in pairs(smart_tag_map) do
-            if _safe_unit_alive(unit) and extension then
-                local smart_tag_target_type = _safe_unit_smart_tag_target_type(unit)
-
-                if smart_tag_target_type == "medical_crate_deployable" then
-                    _track_unit(unit, "medical_crate_deployable", "smart_tag_system", {
-                        smart_tag_target_type = smart_tag_target_type,
-                        deployable_type = _safe_unit_deployable_type(unit),
-                        unit_name = _safe_lower_string(_safe_unit_name(unit)),
-                    })
-                end
-            end
-        end
-    end
-
     local function _prune_units(refresh_item_positions)
         local now = _safe_gameplay_time() or 0
         local tracked_units = mod._tracked_units
@@ -1830,17 +962,11 @@ return function(env)
     end
 
     -- ----------------------------------------------------------------------------
-    -- Target filtering and expedition loot clustering
+    -- Target filtering
     -- ----------------------------------------------------------------------------
 
     local function _is_vertical_hide_exempt(kind)
         return VERTICAL_HIDE_EXEMPT_KINDS[kind] == true or _is_mission_objective_marker_kind(kind)
-    end
-
-    local function _is_player_smart_tag_kind(kind)
-        return kind == "location_attention"
-            or kind == "location_ping"
-            or kind == "location_threat"
     end
 
     local function _is_item_kind(kind)
@@ -1907,217 +1033,6 @@ return function(env)
         return show_enemy_vertical_arrows ~= nil and show_enemy_vertical_arrows(mod, kind) == true
     end
 
-    local function _expedition_loot_target_value(target)
-        local meta = target and target.meta or nil
-        local value = meta and tonumber(meta.remnant_value or meta.remnant_cluster_value) or nil
-
-        if value and value > 0 then
-            return value
-        end
-
-        local pickup_name = meta and meta.pickup_name or nil
-
-        return _expedition_loot_value_for_pickup_name(pickup_name) or 0
-    end
-
-    local function _should_cluster_expedition_loot_target(target)
-        return target ~= nil and target.kind == "material_expeditions_loot" and target.position ~= nil
-    end
-
-    local function _expedition_loot_cluster_center(cluster_members)
-        local total_weight = 0
-        local sum_x = 0
-        local sum_y = 0
-        local sum_z = 0
-        local fallback_position = cluster_members[1] and cluster_members[1].position or nil
-
-        for i = 1, #cluster_members do
-            local member = cluster_members[i]
-            local position = member and member.position
-
-            if position then
-                local weight = _expedition_loot_target_value(member)
-
-                if weight <= 0 then
-                    weight = 1
-                end
-
-                total_weight = total_weight + weight
-                sum_x = sum_x + position.x * weight
-                sum_y = sum_y + position.y * weight
-                sum_z = sum_z + (position.z or 0) * weight
-            end
-        end
-
-        if total_weight <= 0 or not fallback_position then
-            return fallback_position
-        end
-
-        return {
-            x = sum_x / total_weight,
-            y = sum_y / total_weight,
-            z = sum_z / total_weight,
-        }
-    end
-
-    local function _expedition_loot_vertical_state(player_pos, position, item_vertical_arrow_threshold_sq,
-                                                   item_vertical_hide_threshold)
-        local vertical_delta = _vertical_delta(player_pos, position)
-        local vertical_state = nil
-
-        if vertical_delta ~= nil then
-            local abs_vertical_delta = math_abs(vertical_delta)
-            local distance_sq_horizontal = _distance_squared_horizontal(player_pos, position)
-
-            if abs_vertical_delta >= item_vertical_hide_threshold then
-                return nil, nil, true
-            end
-
-            if abs_vertical_delta >= ITEM_VERTICAL_ARROW_Z_DEADZONE
-                and distance_sq_horizontal <= item_vertical_arrow_threshold_sq then
-                if vertical_delta > 0 then
-                    vertical_state = "up"
-                elseif vertical_delta < 0 then
-                    vertical_state = "down"
-                end
-            end
-        end
-
-        return vertical_delta, vertical_state, false
-    end
-
-    local function _create_expedition_loot_cluster_target(cluster_members, player_pos, item_vertical_arrow_threshold_sq,
-                                                          item_vertical_hide_threshold)
-        local position = _expedition_loot_cluster_center(cluster_members)
-
-        if not position then
-            return nil
-        end
-
-        local total_value = 0
-        local marked_by_player_slot = nil
-
-        for i = 1, #cluster_members do
-            local member = cluster_members[i]
-            local meta = member and member.meta or nil
-
-            total_value = total_value + _expedition_loot_target_value(member)
-
-            if meta and meta.marked_by_player_slot ~= nil and marked_by_player_slot == nil then
-                marked_by_player_slot = meta.marked_by_player_slot
-            end
-        end
-
-        local vertical_delta, vertical_state, should_hide = _expedition_loot_vertical_state(player_pos, position,
-            item_vertical_arrow_threshold_sq, item_vertical_hide_threshold)
-
-        if should_hide then
-            return nil
-        end
-
-        return {
-            unit = nil,
-            kind = "material_expeditions_loot",
-            position = position,
-            source = "expedition_loot_cluster",
-            meta = {
-                is_tech_remnant_cluster = true,
-                remnant_cluster_value = total_value,
-                remnant_value = total_value,
-                marked_by_player_slot = marked_by_player_slot,
-            },
-            distance_sq = _distance_squared_horizontal(player_pos, position),
-            distance_sq_3d = _distance_squared(player_pos, position),
-            vertical_delta = vertical_delta,
-            vertical_state = vertical_state,
-            ignore_radar_range = false,
-        }
-    end
-
-    local function _cluster_expedition_loot_targets(targets, player_pos, item_vertical_arrow_threshold_sq,
-                                                    item_vertical_hide_threshold)
-        if mod:get_expedition_loot_marker_mode() ~= "clustered" then
-            return targets
-        end
-
-        local pass_through_targets = {}
-        local cluster_candidates = {}
-        local pass_count = 0
-        local cluster_candidate_count = 0
-
-        for i = 1, #targets do
-            local target = targets[i]
-
-            if _should_cluster_expedition_loot_target(target) then
-                cluster_candidate_count = cluster_candidate_count + 1
-                cluster_candidates[cluster_candidate_count] = target
-            else
-                pass_count = pass_count + 1
-                pass_through_targets[pass_count] = target
-            end
-        end
-
-        local horizontal_radius = mod:get_expedition_loot_cluster_horizontal_radius()
-        local vertical_threshold = mod:get_expedition_loot_cluster_vertical_radius()
-        local radius_sq = horizontal_radius * horizontal_radius
-        local consumed = {}
-
-        for i = 1, cluster_candidate_count do
-            if not consumed[i] then
-                local seed = cluster_candidates[i]
-                local cluster_members = { seed }
-                local cluster_member_count = 1
-
-                consumed[i] = true
-
-                local changed = true
-
-                while changed do
-                    changed = false
-
-                    local center = _expedition_loot_cluster_center(cluster_members)
-
-                    for j = i + 1, cluster_candidate_count do
-                        if not consumed[j] then
-                            local candidate = cluster_candidates[j]
-                            local distance_sq_horizontal = _distance_squared_horizontal(center, candidate.position)
-                            local vertical_delta = _vertical_delta(center, candidate.position)
-                            local abs_vertical_delta = vertical_delta and math_abs(vertical_delta) or 0
-
-                            if distance_sq_horizontal <= radius_sq
-                                and abs_vertical_delta <= vertical_threshold then
-                                consumed[j] = true
-                                cluster_member_count = cluster_member_count + 1
-                                cluster_members[cluster_member_count] = candidate
-                                changed = true
-                            end
-                        end
-                    end
-                end
-
-                if cluster_member_count > 1 then
-                    local clustered_target = _create_expedition_loot_cluster_target(cluster_members, player_pos,
-                        item_vertical_arrow_threshold_sq, item_vertical_hide_threshold)
-
-                    if clustered_target then
-                        pass_count = pass_count + 1
-                        pass_through_targets[pass_count] = clustered_target
-                    else
-                        for j = 1, cluster_member_count do
-                            pass_count = pass_count + 1
-                            pass_through_targets[pass_count] = cluster_members[j]
-                        end
-                    end
-                else
-                    pass_count = pass_count + 1
-                    pass_through_targets[pass_count] = seed
-                end
-            end
-        end
-
-        return pass_through_targets
-    end
-
     -- ----------------------------------------------------------------------------
     -- Radar target collection and update
     -- ----------------------------------------------------------------------------
@@ -2181,6 +1096,9 @@ return function(env)
         local get_target_render_layer = mod.get_target_render_layer
         local get_target_selection_priority = mod.get_target_selection_priority
         local is_event_marker_kind = mod.is_event_marker_kind
+        local distance_squared_horizontal = _distance_squared_horizontal
+        local get_vertical_delta = _vertical_delta
+        local mastiff_disabled_enemy_units = _mastiff_disabled_enemy_units()
 
         local function _cached_kind_enabled(kind)
             local enabled = kind_enabled_cache[kind]
@@ -2277,18 +1195,7 @@ return function(env)
             local ability_marked_enemy = show_ability_marked_enemies
                 and _is_enemy_kind(kind)
                 and _target_has_ability_outline_mark(meta)
-            local companion_action = meta and meta.companion_action or nil
-            local companion_action_target = meta and meta.companion_action_target or nil
-            local companion_target_position = companion_action_target and
-                _safe_unit_position(companion_action_target) or nil
-            local companion_overlapping_target = kind == "player_companion_dog"
-                and companion_target_position ~= nil
-                and _distance_squared_horizontal(position, companion_target_position) <=
-                COMPANION_TARGET_OVERLAP_DISTANCE_SQ
-            local companion_action_active = companion_action == "hacking"
-                or companion_action == "inject_ally"
-                or companion_action == "flamethrower"
-                or companion_overlapping_target
+            local companion_action_active = _player_companion_action_active(kind, position, meta)
             -- A socket is drawn as what goes into it: one fed mission cargo
             -- rather than a power cell is an objective step, shown, coloured and
             -- switched with the other steps. It is still a socket to the range
@@ -2303,17 +1210,8 @@ return function(env)
                 return
             end
 
-            if kind == "player_companion_servo_skull"
-                and meta
-                and meta.owner_marker_visible
-                and meta.servo_skull_following_owner then
-                local owner_position = _safe_unit_position(meta.owner_unit)
-
-                if owner_position
-                    and _distance_squared_horizontal(owner_position, position) <=
-                    SERVO_SKULL_OWNER_HIDE_DISTANCE_SQ then
-                    return
-                end
+            if kind == "player_companion_servo_skull" and _is_servo_skull_hidden_by_owner(position, meta) then
+                return
             end
 
             if not _passes_tag_visibility_filter(kind, source, meta, only_tagged_enemies, only_tagged_items) then
@@ -2336,7 +1234,7 @@ return function(env)
                 end
             end
 
-            local distance_sq_horizontal = _distance_squared_horizontal(player_pos, position)
+            local distance_sq_horizontal = distance_squared_horizontal(player_pos, position)
             local infinite_range = _cached_infinite_radar_range(kind)
             local ignore_range = infinite_range or _cached_ignore_radar_range(kind)
 
@@ -2393,7 +1291,7 @@ return function(env)
             local vertical_state = nil
 
             if _cached_supports_vertical_marker(kind) then
-                vertical_delta = _vertical_delta(player_pos, position)
+                vertical_delta = get_vertical_delta(player_pos, position)
 
                 if vertical_delta ~= nil then
                     local abs_vertical_delta = math_abs(vertical_delta)
@@ -2443,7 +1341,7 @@ return function(env)
             target.ignore_radar_range = ignore_range
             target.render_layer = render_layer
             target.selection_priority = selection_priority
-            target.disabled_by_mastiff = _scratch_mastiff_disabled_enemy_units[unit] == true
+            target.disabled_by_mastiff = mastiff_disabled_enemy_units[unit] == true
                 and _is_enemy_kind(kind)
 
             targets[target_count] = target
@@ -2729,6 +1627,7 @@ return function(env)
         _refresh_player_units()
 
         if droppable_scan_due then
+            mod._tracked_points = {}
             _scan_expedition_objectives()
             _scan_martyr_skull_riddle_coordinate_fallbacks()
             _scan_player_tag_points()
@@ -2772,15 +1671,10 @@ return function(env)
         mod._last_block_signature = nil
         mod._last_state_gameplay = nil
         _reset_dark_rites_marker_scan_cache()
-        mod._idol_destroyed_collectible_keys = {}
-        mod._idol_destroyed_units = {}
-        mod._martyr_skull_riddle_solved_by_mission = {}
-        mod._martyr_skull_riddle_fallback_state_by_position = {}
+        _reset_destroyed_idol_state()
+        _reset_martyr_skull_riddle_state()
         _reset_mission_objective_marker_state()
-        mod._last_safe_zone_section_index = nil
-        mod._last_expedition_in_safe_zone = nil
-        mod._player_smart_tag_generation = 0
-        mod._player_smart_tag_state_by_id = {}
+        _reset_expedition_runtime_state()
         mod._overview_mode_active = false
         mod._overview_zoom_range = _normalize_overview_zoom_range(mod:get("overview_zoom_range"))
         mod._overview_capture_actions = mod._overview_capture_actions or {}
@@ -3038,54 +1932,6 @@ return function(env)
         return _is_radar_keybind_runtime_allowed()
     end
 
-    function mod:get_player_display_style()
-        local value = self:get("show_players")
-
-        if value ~= "icon_only"
-            and value ~= "marked_icon"
-            and value ~= "dot_only"
-            and value ~= "marked_dot" then
-            value = self:get("player_display_style")
-        end
-
-        value = tostring(value or "marked_icon")
-
-        if value ~= "icon_only"
-            and value ~= "marked_icon"
-            and value ~= "dot_only"
-            and value ~= "marked_dot" then
-            value = "marked_icon"
-        end
-
-        return value
-    end
-
-    function mod:get_show_players()
-        local value = self:get("show_players")
-
-        if value == nil then
-            value = self:get("show_teammates")
-        end
-
-        return value ~= false and value ~= "off"
-    end
-
-    function mod:get_show_player_center_dot()
-        local value = self:get("show_player_center_dot")
-
-        return value ~= false and value ~= "off"
-    end
-
-    function mod:get_player_marker_range_mode()
-        local value = tostring(self:get("player_marker_range_mode") or "normal")
-
-        if value ~= "infinite" then
-            value = "normal"
-        end
-
-        return value
-    end
-
     function mod:get_radar_snapshot()
         return self._radar_snapshot
     end
@@ -3304,48 +2150,6 @@ return function(env)
 
         if value ~= "infinite" then
             value = "normal"
-        end
-
-        return value
-    end
-
-    function mod:get_expedition_loot_marker_mode()
-        local value = tostring(self:get("expedition_loot_marker_mode") or "default")
-
-        if value ~= "scaled" and value ~= "clustered" then
-            value = "default"
-        end
-
-        return value
-    end
-
-    function mod:get_show_expedition_loot_cluster_value()
-        return self:get("show_expedition_loot_cluster_value") == true
-    end
-
-    function mod:get_show_expedition_loot_value_text()
-        return self:get_show_expedition_loot_cluster_value()
-    end
-
-    function mod:get_expedition_loot_cluster_horizontal_radius()
-        local value = tonumber(self:get("expedition_loot_cluster_horizontal_radius")) or 5
-
-        if value < 1 then
-            value = 1
-        elseif value > 10 then
-            value = 10
-        end
-
-        return value
-    end
-
-    function mod:get_expedition_loot_cluster_vertical_radius()
-        local value = tonumber(self:get("expedition_loot_cluster_vertical_radius")) or 3
-
-        if value < 1 then
-            value = 1
-        elseif value > 5 then
-            value = 5
         end
 
         return value
@@ -3876,28 +2680,6 @@ return function(env)
         mod._last_state_gameplay = self
         _update_internal(t)
     end)
-
-    mod:hook_safe("CollectiblesManager", "rpc_player_destroyed_destructible_collectible",
-        function(self, channel_id, peer_id, local_player_id, section_id, id)
-            _clear_tracked_idol_by_collectible(section_id, id)
-        end)
-
-    mod:hook_safe("CollectiblesManager", "collectible_destroyed", function(self, data, attacking_unit)
-        if data then
-            _clear_tracked_idol_by_collectible(data.section_id, data.id)
-        end
-    end)
-
-    mod:hook_safe("DestructibleExtension", "rpc_destructible_last_destruction", function(self)
-        _mark_idol_unit_destroyed(self and self._unit or nil, self)
-    end)
-
-    mod:hook_safe("DestructibleExtension", "rpc_sync_destructible",
-        function(self, current_stage, visible, from_hot_join_sync)
-            if current_stage == 0 then
-                _mark_idol_unit_destroyed(self and self._unit or nil, self)
-            end
-        end)
 
     -- ----------------------------------------------------------------------------
     -- DMF callbacks and initialization

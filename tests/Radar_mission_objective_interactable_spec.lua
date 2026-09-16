@@ -1,6 +1,9 @@
-local EXPEDITIONS_PATH = "Radar/scripts/mods/Radar/Radar_expeditions.lua"
-local MISSION_OBJECTIVES_PATH = "Radar/scripts/mods/Radar/Radar_mission_objectives.lua"
 local TRACKING_PATH = "Radar/scripts/mods/Radar/Radar_tracking.lua"
+local PLAYERS_PATH = "Radar/scripts/mods/Radar/Radar_players.lua"
+local PICKUPS_PATH = "Radar/scripts/mods/Radar/Radar_pickups.lua"
+local MISSION_OBJECTIVES_PATH = "Radar/scripts/mods/Radar/Radar_mission_objectives.lua"
+local EXPEDITIONS_PATH = "Radar/scripts/mods/Radar/Radar_expeditions.lua"
+local EVENTS_PATH = "Radar/scripts/mods/Radar/Radar_events.lua"
 
 local MISSION_OBJECTIVE_SETTING_BY_KIND = {
     mission_objective_scanner = "show_mission_objective_scanner",
@@ -163,7 +166,7 @@ local function new_harness()
         CompanionServoSkullSettings = { STATES = {} },
         GameSession = {},
         CLASS = { InputService = {} },
-        -- Read once when tracking installs. Whatever the wielded slot holds is
+        -- Read once when the players module installs. Whatever the wielded slot holds is
         -- equipped.
         PlayerUnitVisualLoadout = {
             slot_equipped = function()
@@ -361,9 +364,12 @@ local function new_harness()
         return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
     end
 
-    install(EXPEDITIONS_PATH, env)
-    install(MISSION_OBJECTIVES_PATH, env)
     install(TRACKING_PATH, env)
+    install(PLAYERS_PATH, env)
+    install(PICKUPS_PATH, env)
+    install(MISSION_OBJECTIVES_PATH, env)
+    install(EXPEDITIONS_PATH, env)
+    install(EVENTS_PATH, env)
 
     local update_internal = named_upvalue(captured.state_gameplay_update, "_update_internal")
     local scan_interactees = named_upvalue(update_internal, "_scan_interactees")

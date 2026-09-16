@@ -1,6 +1,9 @@
-local EXPEDITIONS_PATH = "Radar/scripts/mods/Radar/Radar_expeditions.lua"
-local MISSION_OBJECTIVES_PATH = "Radar/scripts/mods/Radar/Radar_mission_objectives.lua"
 local TRACKING_PATH = "Radar/scripts/mods/Radar/Radar_tracking.lua"
+local PLAYERS_PATH = "Radar/scripts/mods/Radar/Radar_players.lua"
+local PICKUPS_PATH = "Radar/scripts/mods/Radar/Radar_pickups.lua"
+local MISSION_OBJECTIVES_PATH = "Radar/scripts/mods/Radar/Radar_mission_objectives.lua"
+local EXPEDITIONS_PATH = "Radar/scripts/mods/Radar/Radar_expeditions.lua"
+local EVENTS_PATH = "Radar/scripts/mods/Radar/Radar_events.lua"
 
 local BUTTONS = {
     {
@@ -258,9 +261,12 @@ local function new_harness()
     env._reset_screen_highlight_anchor_probe = function()
     end
 
-    install(EXPEDITIONS_PATH, env)
-    install(MISSION_OBJECTIVES_PATH, env)
     install(TRACKING_PATH, env)
+    install(PLAYERS_PATH, env)
+    install(PICKUPS_PATH, env)
+    install(MISSION_OBJECTIVES_PATH, env)
+    install(EXPEDITIONS_PATH, env)
+    install(EVENTS_PATH, env)
 
     local update_internal = named_upvalue(captured.state_gameplay_update, "_update_internal")
     local scan_interactees = named_upvalue(update_internal, "_scan_interactees")
@@ -356,6 +362,8 @@ local function new_harness()
     function harness:scan()
         gameplay_t = gameplay_t + 0.25
         scan_interactees()
+        -- As `_update_internal` does: tracked points are rebuilt every point scan.
+        mod._tracked_points = {}
         env._scan_expedition_objectives()
         env._scan_martyr_skull_riddle_coordinate_fallbacks()
     end
