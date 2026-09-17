@@ -1,14 +1,16 @@
 --- Single source of truth for every configurable Radar colour.
 -- Declares each colour's setting prefix and default ARGB value, which marker kinds,
 -- backgrounds, highlights and enemy icons resolve to which prefix, and under which settings
--- widget (the anchor) its colour sliders appear. A colour with prefix `p` is stored in the
--- settings `p_opacity`, `p_red`, `p_green` and `p_blue`, unless the opacity setting is renamed.
+-- widget (the anchor) its colour widget appears. A colour with prefix `p` is stored as one
+-- native DMF colour setting `p_color` holding `{ a, r, g, b }`. Older versions stored it in
+-- the four settings `p_opacity`, `p_red`, `p_green` and `p_blue`, which
+-- `ColorSettings.migrate_channel_settings` folds into the native setting.
 --
 -- Explicit module loaded through `mod:io_dofile`; the chunk returns `ColorSettings`. It is
--- loaded separately by `Radar_data.lua` (settings widgets and dropdown icon colours),
--- `Radar_enemy_definitions.lua` (runtime) and `ui/Radar_hud_element.lua` (fallback colours);
--- each load builds its own identical registry. `ColorSettings.install_runtime` adds the
--- cached colour getters to `mod` once, from the first caller (the enemy definitions).
+-- loaded separately by `Radar_data.lua` (settings widgets, dropdown icon colours and the
+-- channel migration), `Radar_enemy_definitions.lua` (runtime) and `ui/Radar_hud_element.lua`
+-- (fallback colours); each load builds its own identical registry. `ColorSettings.install_runtime`
+-- adds the cached colour getters to `mod` once, from the first caller (the enemy definitions).
 -- module: Radar_color_settings
 -- alias: ColorSettings
 -- author: LucLeto
@@ -49,15 +51,17 @@ local AUSPEX_GREEN = _color(255, 0, 255, 0)
 --- Colour registry filled by the registration calls below and exported on `ColorSettings`.
 -- `marker_prefix_by_kind`, `marker_background_prefix_by_kind`,
 -- `marker_highlight_prefix_by_kind` and `enemy_icon_prefix_by_kind` map a marker kind to a
--- colour prefix. `default_by_prefix` holds each prefix's default colour, `highlight_prefixes`
--- lists every highlight prefix, the opacity maps name opacity settings that do not follow
--- the `p_opacity` pattern (and their pre-migration names), and `anchored_color_settings`
--- lists the slider descriptors to insert under each settings widget id.
+-- colour prefix. `default_by_prefix` holds each prefix's default colour and
+-- `color_setting_id_by_prefix` its native colour setting id, `highlight_prefixes` lists every
+-- highlight prefix, the opacity maps name legacy opacity settings that did not follow the
+-- `p_opacity` pattern (and their pre-migration names), and `anchored_color_settings` lists the
+-- colour widget descriptors to insert under each settings widget id.
 local marker_prefix_by_kind = {}
 local marker_background_prefix_by_kind = {}
 local marker_highlight_prefix_by_kind = {}
 local enemy_icon_prefix_by_kind = {}
 local default_by_prefix = {}
+local color_setting_id_by_prefix = {}
 local highlight_prefixes = {}
 local opacity_setting_by_prefix = {
     radar_background = "radar_background_opacity",
@@ -79,16 +83,19 @@ local function _copy_color(color)
     }
 end
 
---- Registers a prefix's default colour; the first registration of a prefix wins.
+--- Registers a prefix's default colour and its native colour setting id; the first registration of a prefix wins.
 local function _add_default(prefix, color)
     if prefix and color and default_by_prefix[prefix] == nil then
         default_by_prefix[prefix] = _copy_color(color)
+        color_setting_id_by_prefix[prefix] = prefix .. "_color"
     end
 end
 
---- Adds a colour slider descriptor under a settings widget id.
--- ?string: anchor setting id the sliders are inserted after; nothing is added when nil
--- tab: descriptor slider group descriptor (`prefix`, `default`, `title_prefix`, `tooltip`, labels)
+--- Adds a colour widget descriptor under a settings widget id.
+-- A checkbox or dropdown anchor owns the colour widget as a sub widget, so it is hidden while
+-- the anchor is off; any other anchor, or a descriptor with `shared`, gets it as the next sibling.
+-- ?string: anchor setting id the colour widget belongs to; nothing is added when nil
+-- tab: descriptor colour widget descriptor (`prefix`, `default`, `title_prefix`, `tooltip`, labels, `shared`)
 local function _add_anchor(anchor, descriptor)
     if not anchor then
         return
@@ -109,7 +116,9 @@ end
 -- `icon_prefix` is given (an icon prefix takes `icon_default` as its default). Optionally
 -- registers a background colour (`background_prefix`) and a nearby highlight colour
 -- (`supports_highlight`, named `<kind>_highlight` by default). `aliases` resolve to the
--- same marker and highlight prefixes. Each registered colour gets its sliders under `anchor`.
+-- same marker and highlight prefixes. Each registered colour gets its colour widget under
+-- `anchor`; `shared` marks colours that other settings' markers use too, so they stay visible
+-- while the anchor is off.
 -- tab: descriptor marker colour descriptor
 local function _add_marker(descriptor)
     local kind = descriptor.kind
@@ -117,6 +126,7 @@ local function _add_marker(descriptor)
     local default = descriptor.icon_prefix and (descriptor.icon_default or descriptor.default or WHITE) or
         (descriptor.default or WHITE)
     local aliases = descriptor.aliases
+    local shared = descriptor.shared == true
 
     _add_default(prefix, default)
 
@@ -136,10 +146,10 @@ local function _add_marker(descriptor)
         title_prefix = descriptor.title_prefix or "marker_color",
         tooltip = descriptor.tooltip or (descriptor.icon_prefix and "icon_marker_color_slider_tooltip" or
             "marker_color_slider_tooltip"),
-        channels = descriptor.channels,
         label_role = descriptor.label_role or "icon",
         label_prefix = descriptor.label_prefix,
         label_suffix = descriptor.label_suffix,
+        shared = shared,
     })
 
     if descriptor.background_prefix then
@@ -153,6 +163,7 @@ local function _add_marker(descriptor)
             tooltip = "marker_background_color_slider_tooltip",
             label_role = "background",
             label_prefix = descriptor.label_prefix,
+            shared = shared,
         })
     end
 
@@ -177,25 +188,24 @@ local function _add_marker(descriptor)
             tooltip = "highlight_color_slider_tooltip",
             label_role = "highlight",
             label_prefix = descriptor.label_prefix,
+            shared = shared,
         })
     end
 end
 
 --- Registers a colour that belongs to no marker kind, such as the radar frame or map geometry bands.
--- string: anchor setting id the sliders are inserted after
+-- string: anchor setting id the colour widget belongs to
 -- string: prefix colour setting prefix
 -- tab: default default ARGB colour
--- string: title_prefix localization prefix of the slider group title
--- ?string: tooltip slider tooltip localization id
--- ?tab: channels channels to expose, all four when nil
-local function _add_radar_color(anchor, prefix, default, title_prefix, tooltip, channels)
+-- string: title_prefix localization id of the colour widget title
+-- ?string: tooltip colour widget tooltip localization id
+local function _add_radar_color(anchor, prefix, default, title_prefix, tooltip)
     _add_default(prefix, default)
     _add_anchor(anchor, {
         prefix = prefix,
         default = default,
         title_prefix = title_prefix,
         tooltip = tooltip or "radar_color_slider_tooltip",
-        channels = channels,
     })
 end
 
@@ -236,7 +246,8 @@ _add_radar_color("map_geometry_source", "radar_navmesh_below", _color(55, 120, 9
 -- Enemy icon, background and bracket colours, shared by many enemy kinds and anchored below.
 -- The boss background colour only tints the brackets of boss markers, which draw no background.
 -- Brackets of the other enemies used the background colour at a fixed opacity of 180 before they
--- got a colour of their own, so that is the bracket default.
+-- got a colour of their own, so that is the bracket default. The boss colours serve all three
+-- boss toggles, so they are `shared` and stay visible whichever boss is switched off.
 _add_default("enemy_boss_marker", _color(255, 255, 64, 64))
 _add_default("enemy_boss_background", _color(220, 255, 0, 0))
 _add_default("enemy_background_marker", _color(220, 255, 0, 0))
@@ -254,12 +265,14 @@ _add_anchor("show_enemy_boss_vertical_arrows", {
     default = default_by_prefix.enemy_boss_marker,
     title_prefix = "enemy_boss_marker_color",
     tooltip = "enemy_marker_color_slider_tooltip",
+    shared = true,
 })
 _add_anchor("show_enemy_boss_vertical_arrows", {
     prefix = "enemy_boss_background",
     default = default_by_prefix.enemy_boss_background,
     title_prefix = "enemy_boss_background_color",
     tooltip = "enemy_boss_bracket_color_slider_tooltip",
+    shared = true,
 })
 _add_anchor("enemies_icon_scale", {
     prefix = "enemy_background_marker",
@@ -309,7 +322,7 @@ _add_anchor("show_enemy_renegade_flamer", {
     title_prefix = "enemy_renegade_flamer_color",
     tooltip = "enemy_marker_color_slider_tooltip",
 })
-_add_anchor("show_enemy_horde_vertical_arrows", {
+_add_anchor("show_enemy_horde", {
     prefix = "enemy_horde_marker",
     default = default_by_prefix.enemy_horde_marker,
     title_prefix = "enemy_horde_color",
@@ -736,7 +749,8 @@ _add_marker({
 -- under these names, they are just the key `get_marker_color` is looked up by,
 -- so no icon, dropdown or scale group changes with the state. Both sit under the
 -- hacking terminal option because that is where every puzzle device is
--- configured, whichever objective category it belongs to.
+-- configured, whichever objective category it belongs to; that is also why they
+-- are `shared` and stay visible while the hacking terminal marker is off.
 _add_marker({
     kind = "mission_objective_minigame_waiting",
     anchor = "show_mission_objective_hacking",
@@ -745,6 +759,7 @@ _add_marker({
     label_suffix = "",
     label_role = "minigame_state",
     tooltip = "mission_objective_minigame_color_slider_tooltip",
+    shared = true,
 })
 _add_marker({
     kind = "mission_objective_minigame_active",
@@ -754,6 +769,7 @@ _add_marker({
     label_suffix = "",
     label_role = "minigame_state",
     tooltip = "mission_objective_minigame_color_slider_tooltip",
+    shared = true,
 })
 -- The plate behind the objective frame. One colour for the whole family, since
 -- they share the frame, anchored to the group's icon size slider so it appears
@@ -798,12 +814,15 @@ _add_marker({
     supports_highlight = true,
 })
 
+-- The riddle interactables have a toggle of their own but wear the skull's colours, so the
+-- colours are `shared` and stay visible while the skull marker itself is off.
 _add_marker({
     kind = "pickup_martyr_skull",
     aliases = { "martyr_skull_riddle_interactable" },
     anchor = "show_martyr_skull",
     default = _color(255, 255, 215, 0),
     supports_highlight = true,
+    shared = true,
 })
 _add_marker({
     kind = "luggable_power_cell_orange",
@@ -906,16 +925,43 @@ local function _clamp_channel(value, fallback)
     return math_floor(value + 0.5)
 end
 
---- Returns the setting id of one channel of a colour prefix.
+--- Returns the native colour setting id of a colour prefix.
+-- string: prefix colour prefix
+-- treturn: string `<prefix>_color`
+local function _color_setting_id(prefix)
+    return color_setting_id_by_prefix[prefix] or (prefix .. "_color")
+end
+
+--- Returns the legacy setting id of one channel of a colour prefix, from before native colour settings.
 -- string: prefix colour prefix
 -- string: suffix `opacity`, `red`, `green` or `blue`
 -- treturn: string
-local function _setting_id(prefix, suffix)
+local function _channel_setting_id(prefix, suffix)
     if suffix == "opacity" then
         return opacity_setting_by_prefix[prefix] or (prefix .. "_opacity")
     end
 
     return prefix .. "_" .. suffix
+end
+
+--- Reads a prefix's native colour setting as a new, clamped ARGB array; missing channels use the default.
+-- For settings migrations only, since `mod:get` copies table settings on every call.
+-- tab: mod Radar mod object
+-- string: prefix colour prefix
+-- treturn: tab `{ a, r, g, b }`, owned by the caller
+local function _read_color_setting(mod, prefix)
+    local defaults = default_by_prefix[prefix] or WHITE
+    local value = mod:get(_color_setting_id(prefix))
+
+    if type(value) ~= "table" then
+        return _copy_color(defaults)
+    end
+
+    for i = 1, 4 do
+        value[i] = _clamp_channel(value[i], defaults[i] or 255)
+    end
+
+    return value
 end
 
 --- Installs the colour runtime on the mod object, once per mod lifetime.
@@ -954,8 +1000,8 @@ function ColorSettings.install_runtime(mod)
     end
 
     --- Returns the configured ARGB colour of a colour prefix.
-    -- Missing settings fall back to the registered default, then to `fallback`, then to white;
-    -- the background opacity also honours its pre-migration setting.
+    -- Reads the prefix's native colour setting once per cache generation. A missing setting or
+    -- channel falls back to the registered default, then to `fallback`, then to white.
     -- ?string: prefix colour prefix; `fallback` is returned when nil
     -- ?tab: fallback colour used for an unregistered prefix
     -- treturn: ?tab cached ARGB colour array, shared between callers
@@ -986,18 +1032,16 @@ function ColorSettings.install_runtime(mod)
 
         if entry.generation ~= generation then
             local color = entry.color
+            local value = self:get(_color_setting_id(prefix))
 
-            local opacity = self:get(_setting_id(prefix, "opacity"))
-            local legacy_opacity_setting_id = opacity == nil and legacy_opacity_setting_by_prefix[prefix] or nil
-
-            if legacy_opacity_setting_id then
-                opacity = self:get(legacy_opacity_setting_id)
+            if type(value) ~= "table" then
+                value = defaults
             end
 
-            color[1] = _clamp_channel(opacity, defaults[1] or 255)
-            color[2] = _clamp_channel(self:get(_setting_id(prefix, "red")), defaults[2] or 255)
-            color[3] = _clamp_channel(self:get(_setting_id(prefix, "green")), defaults[3] or 255)
-            color[4] = _clamp_channel(self:get(_setting_id(prefix, "blue")), defaults[4] or 255)
+            color[1] = _clamp_channel(value[1], defaults[1] or 255)
+            color[2] = _clamp_channel(value[2], defaults[2] or 255)
+            color[3] = _clamp_channel(value[3], defaults[3] or 255)
+            color[4] = _clamp_channel(value[4], defaults[4] or 255)
             entry.generation = generation
         end
 
@@ -1145,40 +1189,33 @@ function ColorSettings.install_runtime(mod)
     end
 
     --- Migrates colour settings saved by versions before configurable colours.
-    -- Runs on every start from `mod.on_all_mods_loaded`. Copies the old background opacity into
-    -- the radar background colour when that is unset, and the old global nearby highlight
-    -- opacity and custom colour into every highlight colour still at its default. The old
-    -- opacity is only copied when it differs from its old default of 255. The old highlight
-    -- opacity and custom colour switch are then deleted, so later starts do not migrate again.
-    -- Once per profile, enemy brackets also take the RGB of a customised enemy background colour,
-    -- which they were drawn in before they had a colour of their own.
+    -- Runs on every start from `mod.on_all_mods_loaded`, after DMF saved the default of every
+    -- native colour setting. Copies the old global nearby highlight opacity and custom colour into
+    -- every highlight colour still at its default. The old opacity is only copied when it differs
+    -- from its old default of 255. The old highlight opacity and custom colour switch are then
+    -- deleted, so later starts do not migrate again. Once per profile, enemy brackets also take the
+    -- RGB of a customised enemy background colour, which they were drawn in before they had a
+    -- colour of their own. The old background opacity is folded in earlier, by
+    -- `ColorSettings.migrate_channel_settings`.
     function mod:migrate_radar_color_settings()
         local mod_get = self.get
         local mod_set = self.set
         local migrated = false
-        local legacy_background_opacity = mod_get(self, "background_opacity")
-        local background_opacity_setting_id = _setting_id("radar_background", "opacity")
-
-        if legacy_background_opacity ~= nil and mod_get(self, background_opacity_setting_id) == nil then
-            mod_set(self, background_opacity_setting_id,
-                _clamp_channel(legacy_background_opacity, default_by_prefix.radar_background[1] or 90))
-            migrated = true
-        end
 
         -- A saved flag rather than the bracket colour marks this as done, so brackets a player sets
         -- back to their default later are not recoloured on the next start.
         if mod_get(self, "enemy_bracket_color_migrated") ~= true then
             local background_defaults = default_by_prefix.enemy_background_marker
-            local red = _clamp_channel(mod_get(self, _setting_id("enemy_background_marker", "red")), background_defaults[2])
-            local green = _clamp_channel(mod_get(self, _setting_id("enemy_background_marker", "green")),
-                background_defaults[3])
-            local blue = _clamp_channel(mod_get(self, _setting_id("enemy_background_marker", "blue")),
-                background_defaults[4])
+            local background = _read_color_setting(self, "enemy_background_marker")
 
-            if red ~= background_defaults[2] or green ~= background_defaults[3] or blue ~= background_defaults[4] then
-                mod_set(self, _setting_id("enemy_bracket_marker", "red"), red)
-                mod_set(self, _setting_id("enemy_bracket_marker", "green"), green)
-                mod_set(self, _setting_id("enemy_bracket_marker", "blue"), blue)
+            if background[2] ~= background_defaults[2] or background[3] ~= background_defaults[3]
+                or background[4] ~= background_defaults[4] then
+                local bracket = _read_color_setting(self, "enemy_bracket_marker")
+
+                bracket[2] = background[2]
+                bracket[3] = background[3]
+                bracket[4] = background[4]
+                mod_set(self, _color_setting_id("enemy_bracket_marker"), bracket)
                 migrated = true
             end
 
@@ -1217,42 +1254,26 @@ function ColorSettings.install_runtime(mod)
         for i = 1, #highlight_prefixes do
             local prefix = highlight_prefixes[i]
             local defaults = default_by_prefix[prefix] or WHITE
+            local color = _read_color_setting(self, prefix)
+            local changed = false
 
-            if copy_legacy_opacity then
-                local opacity_setting_id = _setting_id(prefix, "opacity")
-                local default_opacity = defaults[1] or 255
-                local current_opacity = mod_get(self, opacity_setting_id)
-
-                if current_opacity == nil or
-                    _clamp_channel(current_opacity, default_opacity) == _clamp_channel(default_opacity, 255) then
-                    mod_set(self, opacity_setting_id, _clamp_channel(legacy_opacity, default_opacity))
-                    migrated = true
-                end
+            if copy_legacy_opacity and color[1] == _clamp_channel(defaults[1], 255) then
+                color[1] = _clamp_channel(legacy_opacity, defaults[1] or 255)
+                changed = true
             end
 
-            if legacy_custom_color then
-                local red_setting_id = _setting_id(prefix, "red")
-                local green_setting_id = _setting_id(prefix, "green")
-                local blue_setting_id = _setting_id(prefix, "blue")
-                local default_red = defaults[2] or 255
-                local default_green = defaults[3] or 255
-                local default_blue = defaults[4] or 255
-                local current_red = mod_get(self, red_setting_id)
-                local current_green = mod_get(self, green_setting_id)
-                local current_blue = mod_get(self, blue_setting_id)
-                local rgb_is_default =
-                    (current_red == nil or _clamp_channel(current_red, default_red) == _clamp_channel(default_red, 255))
-                    and (current_green == nil or
-                        _clamp_channel(current_green, default_green) == _clamp_channel(default_green, 255))
-                    and (current_blue == nil or
-                        _clamp_channel(current_blue, default_blue) == _clamp_channel(default_blue, 255))
+            if legacy_custom_color and color[2] == _clamp_channel(defaults[2], 255)
+                and color[3] == _clamp_channel(defaults[3], 255)
+                and color[4] == _clamp_channel(defaults[4], 255) then
+                color[2] = legacy_red
+                color[3] = legacy_green
+                color[4] = legacy_blue
+                changed = true
+            end
 
-                if rgb_is_default then
-                    mod_set(self, red_setting_id, legacy_red)
-                    mod_set(self, green_setting_id, legacy_green)
-                    mod_set(self, blue_setting_id, legacy_blue)
-                    migrated = true
-                end
+            if changed then
+                mod_set(self, _color_setting_id(prefix), color)
+                migrated = true
             end
         end
 
@@ -1294,9 +1315,75 @@ function ColorSettings.default_highlight_color(kind)
     return ColorSettings.default_marker_color(kind)
 end
 
+--- Returns the native colour setting id of a colour prefix, for the settings menu.
+-- ?string: prefix colour prefix
+-- treturn: ?string `<prefix>_color`, nil when `prefix` is nil
+function ColorSettings.setting_id(prefix)
+    return prefix and _color_setting_id(prefix) or nil
+end
+
+--- Folds colours saved as four channel settings into their native colour settings.
+-- Must run before DMF initialises the options, which saves the default of every native colour
+-- setting that is still unset, so `Radar_data.lua` calls it while it builds the settings menu.
+-- A prefix with any saved legacy channel gets its native setting built from those channels, the
+-- missing ones taken from the default, unless the native setting already exists; the legacy
+-- channels are deleted either way. The radar background takes its opacity from the
+-- `background_opacity` setting of versions before configurable colours when it has no opacity
+-- channel. Prefixes without legacy settings are left alone, so running it again changes nothing.
+-- tab: mod Radar mod object
+-- treturn: bool whether any setting changed
+function ColorSettings.migrate_channel_settings(mod)
+    local mod_get = mod.get
+    local mod_set = mod.set
+    local changed = false
+
+    for prefix, defaults in pairs(default_by_prefix) do
+        local opacity_setting_id = _channel_setting_id(prefix, "opacity")
+        local red_setting_id = _channel_setting_id(prefix, "red")
+        local green_setting_id = _channel_setting_id(prefix, "green")
+        local blue_setting_id = _channel_setting_id(prefix, "blue")
+        local legacy_opacity_setting_id = legacy_opacity_setting_by_prefix[prefix]
+        local opacity = mod_get(mod, opacity_setting_id)
+        local red = mod_get(mod, red_setting_id)
+        local green = mod_get(mod, green_setting_id)
+        local blue = mod_get(mod, blue_setting_id)
+        local legacy_opacity = legacy_opacity_setting_id and mod_get(mod, legacy_opacity_setting_id) or nil
+
+        if opacity ~= nil or red ~= nil or green ~= nil or blue ~= nil or legacy_opacity ~= nil then
+            local setting_id = _color_setting_id(prefix)
+
+            if mod_get(mod, setting_id) == nil then
+                if opacity == nil then
+                    opacity = legacy_opacity
+                end
+
+                mod_set(mod, setting_id, {
+                    _clamp_channel(opacity, defaults[1] or 255),
+                    _clamp_channel(red, defaults[2] or 255),
+                    _clamp_channel(green, defaults[3] or 255),
+                    _clamp_channel(blue, defaults[4] or 255),
+                })
+            end
+
+            -- Deleted only now that the native setting holds the colour, never before.
+            mod_set(mod, opacity_setting_id, nil)
+            mod_set(mod, red_setting_id, nil)
+            mod_set(mod, green_setting_id, nil)
+            mod_set(mod, blue_setting_id, nil)
+
+            if legacy_opacity_setting_id then
+                mod_set(mod, legacy_opacity_setting_id, nil)
+            end
+
+            changed = true
+        end
+    end
+
+    return changed
+end
+
 -- The registry and shared defaults, read by the settings menu, the HUD element and the specs.
 ColorSettings.default_by_prefix = default_by_prefix
-ColorSettings.opacity_setting_by_prefix = opacity_setting_by_prefix
 ColorSettings.anchored_color_settings = anchored_color_settings
 ColorSettings.highlight_prefixes = highlight_prefixes
 ColorSettings.marker_prefix_by_kind = marker_prefix_by_kind

@@ -3069,7 +3069,10 @@ return function(env)
 
     --- DMF callback, chained after any previously installed handler.
     -- Rebuilds the input capture when a zoom key changes and rescans when player state icons
-    -- are toggled.
+    -- are toggled. DMF saves a menu value as it is, so the radar position, anchor and size
+    -- settings are resolved here the way the menu used to; a new anchor keeps the radar where it
+    -- is on screen, offsets are clamped to the screen and a new size re-clamps them. A chosen
+    -- teammate marker style is also kept as the player marker style.
     -- string: setting_id changed setting
     -- param: ... further DMF arguments, forwarded to the previous handler
     mod.on_setting_changed = function(setting_id, ...)
@@ -3081,7 +3084,45 @@ return function(env)
             _refresh_overview_input_capture()
         elseif setting_id == "show_player_state_icons" then
             mod._next_scan_t = 0
+        elseif setting_id == "radar_anchor" then
+            local anchor = mod:get("radar_anchor")
+            local previous_anchor = mod._radar_settings_anchor
+
+            -- The new corner is already saved, and keeping the on-screen position needs the old one.
+            if previous_anchor ~= anchor then
+                mod:set("radar_anchor", previous_anchor)
+                mod:set_radar_anchor(anchor, true)
+            end
+
+            mod._radar_settings_anchor = mod:get("radar_anchor")
+        elseif setting_id == "radar_pos_x" then
+            mod:set_radar_position(mod:get("radar_pos_x"), nil)
+        elseif setting_id == "radar_pos_y" then
+            mod:set_radar_position(nil, mod:get("radar_pos_y"))
+        elseif setting_id == "radar_size" then
+            mod:set_radar_position(mod:get_radar_offset_x(), mod:get_radar_offset_y())
+        elseif setting_id == "show_players" then
+            mod:set("player_display_style", mod:get_player_display_style())
         end
+    end
+
+    -- The saved anchor as the radar last applied it, raw; `set_radar_anchor` normalises it.
+    mod._radar_settings_anchor = mod:get("radar_anchor")
+
+    local previous_on_settings_reset = mod.on_settings_reset
+
+    --- DMF callback run after the Radar settings were reset, chained after any previously installed handler.
+    -- The reset saves every default one by one in no fixed order, and an anchor reset keeps the
+    -- radar where it was on screen, so the default corner and offsets are applied once more.
+    -- param: ... DMF arguments, forwarded to the previous handler
+    mod.on_settings_reset = function(...)
+        if previous_on_settings_reset then
+            previous_on_settings_reset(...)
+        end
+
+        mod:set("radar_anchor", DEFAULT_RADAR_ANCHOR)
+        mod._radar_settings_anchor = DEFAULT_RADAR_ANCHOR
+        mod:set_radar_position(DEFAULT_RADAR_POS_X, DEFAULT_RADAR_POS_Y)
     end
 
     -- The radar HUD element, loaded by DMF from `ui/Radar_hud_element.lua` and scaled with the HUD.

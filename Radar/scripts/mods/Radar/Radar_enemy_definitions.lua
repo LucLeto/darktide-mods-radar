@@ -28,7 +28,6 @@ return function(env)
     local tostring = tostring
     local rawget = rawget
     local string_find = string.find
-    local string_format = string.format
     local string_lower = string.lower
     local string_sub = string.sub
     local RadarColorSettings = mod:io_dofile("Radar/scripts/mods/Radar/Radar_color_settings")
@@ -1682,9 +1681,8 @@ return function(env)
     end
 
     --- DMF callback run once all mods are loaded.
-    -- Migrates settings saved by older versions, then requests the UI packages that contain the
-    -- icon materials Radar draws, which the game otherwise only loads for its own views.
-    -- Packages already loaded are skipped, and failures are only logged in debug mode.
+    -- Migrates settings saved by older versions. The UI packages holding the icon materials Radar
+    -- draws are declared in `Radar.mod`, which DMF loads and releases itself.
     function mod.on_all_mods_loaded()
         if mod.migrate_marker_enabled_dropdown_settings then
             mod:migrate_marker_enabled_dropdown_settings()
@@ -1696,58 +1694,6 @@ return function(env)
         _migrate_player_visibility_settings()
         if mod.migrate_radar_color_settings then
             mod:migrate_radar_color_settings()
-        end
-
-        local debug_mode = mod:get("debug_mode") == true
-
-        local function load_package(package_name)
-            local ok, err = pcall(function()
-                local managers = Managers
-                local package_manager = managers and managers.package
-
-                if not package_manager then
-                    error("Managers.package unavailable")
-                end
-
-                if not package_manager:has_loaded(package_name) then
-                    package_manager:load(package_name, "Radar", nil, true)
-                    if debug_mode then
-                        mod:info(string_format("[Radar] package load requested | %s", tostring(package_name)))
-                    end
-                else
-                    if debug_mode then
-                        mod:info(string_format("[Radar] package already loaded | %s", tostring(package_name)))
-                    end
-                end
-            end)
-
-            if not ok and debug_mode then
-                mod:error(string_format("[Radar] package load failed | %s | %s", tostring(package_name), tostring(err)))
-            end
-        end
-
-        load_package("packages/ui/views/inventory_view/inventory_view")
-        load_package("packages/ui/views/inventory_weapons_view/inventory_weapons_view")
-        load_package("packages/ui/hud/player_weapon/player_weapon")
-        load_package("packages/ui/views/inventory_background_view/inventory_background_view")
-        load_package("packages/ui/views/inventory_weapon_details_view/inventory_weapon_details_view")
-        load_package("packages/ui/views/inventory_weapon_marks_view/inventory_weapon_marks_view")
-        load_package("packages/ui/views/main_menu_view/main_menu_view")
-        load_package("packages/ui/views/player_character_options_view/player_character_options_view")
-        load_package("packages/ui/views/talent_builder_view/talent_builder_view")
-        load_package("packages/ui/views/live_events_view/live_events_view")
-        load_package("packages/content/live_events/saints/live_event_saints_ui_assets")
-        load_package("packages/content/live_events/skulls/live_event_skulls_ui_assets")
-        load_package("packages/ui/views/group_finder_view/group_finder_view")
-        load_package("packages/ui/views/mission_board_view/mission_board_view")
-        load_package("packages/ui/views/scanner_display_view/scanner_display_view")
-        load_package("packages/ui/material_sets/circumstances")
-        load_package("packages/ui/views/crafting_view/crafting_view")
-        load_package("packages/ui/views/penance_overview_view/penance_overview_view")
-        load_package("packages/ui/views/expedition_view/expedition_view")
-
-        if debug_mode then
-            mod:info("Packages loaded")
         end
     end
 end

@@ -6,7 +6,7 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 
 - Added an optional **Map Geometry** layer that draws the mission's walkable floor plan behind all radar markers, in the normal radar and the centered overview alike.
 - The **Map geometry source** dropdown selects how the floor plan is produced: **Off** (default), a built-in **Live scan** of the mission's navigation mesh, the **Strikemap floor plan** from the [Strikemap](https://www.nexusmods.com/warhammer40kdarktide/mods/1022) mod, or **Auto**, which prefers Strikemap and falls back to the live scan.
-- Geometry is shaded in three height bands relative to your position, current floor, floors above, and floors below, each with its own ARGB color sliders. The normal radar uses the shared **Floors Above Range** and **Floors Below Range** windows; centered overview uses 30 m in both directions.
+- Geometry is shaded in three height bands relative to your position, current floor, floors above, and floors below, each with its own ARGB color picker. The normal radar uses the shared **Floors Above Range** and **Floors Below Range** windows; centered overview uses 30 m in both directions.
 - Radar keeps full ownership of all markers; only the floor plan comes from the selected geometry source, and exactly one source is drawn at a time.
 
 ## Feature Overview
@@ -28,11 +28,16 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 - Supports tech-remnant loot modes for **Default**, **Scale by value**, and **Merge nearby piles**, plus optional cluster value text and radius tuning.
 - Includes optional distance text for bosses, player tags, nearby marker highlights, and expedition POIs, per-enemy-category vertical arrow toggles, **Infinite** boss and teammate range modes, **debug logs**, and an **unknown pickups** toggle for discovery and troubleshooting.
 
-## Optional enhanced settings menu
+## Settings menu
 
-Radar supports optional menu enhancements from [Alf's Mod Settings Extensions](https://www.nexusmods.com/warhammer40kdarktide/mods/864).
+Radar's settings menu uses the native mod options of [DMF](https://www.nexusmods.com/warhammer40kdarktide/mods/8), so no other settings extension is needed:
 
-When installed, Radar's settings menu is organized into curated tabs with clearer sub-sections and improved widgets where supported. Radar does not require this extension and continues to work normally with plain [DMF](https://www.nexusmods.com/warhammer40kdarktide/mods/8).
+- The options are split into the **General**, **Layout**, **Pickups**, **Objectives**, **Expeditions**, **Enemies**, **Players**, and **Debug** tabs.
+- Every configurable color is a single ARGB color picker.
+- Settings that only affect one marker, such as its colors, are shown under that marker and hidden while it is **Off**. They reappear as soon as the marker is switched back on, without reopening the menu. In **Artwork** mode, a marker's icon color is hidden because artwork is never tinted.
+- Sliders accept typed values and keep their step sizes, and dropdown options show their marker icons in the configured colors.
+
+[Alf's Mod Settings Extensions](https://www.nexusmods.com/warhammer40kdarktide/mods/864) is not required. Radar works the same with or without it installed.
 
 ## In-Game Radar Examples
 
@@ -71,7 +76,7 @@ The keybind-based **centered overview mode** temporarily expands the radar into 
 
 ### Nearby highlight example
 
-Nearby highlights add small screen-space brackets for supported non-enemy markers when they are close enough to matter. You can tune their thickness, set per-marker highlight colors with ARGB sliders, and show item distance text on the screen highlight, the radar marker, or both.
+Nearby highlights add small screen-space brackets for supported non-enemy markers when they are close enough to matter. You can tune their thickness, set per-marker highlight colors with ARGB color pickers, and show item distance text on the screen highlight, the radar marker, or both.
 
 <p>
   <img src="doc/img/highlight_example.png" width="70%" alt="Nearby highlight example" />
@@ -132,7 +137,7 @@ The floor plan is shaded in three height bands relative to your current position
 - **Floors above** render as a faint cool-blue veil drawn on top, so upper walkways read as "over you" without hiding your own floor.
 - **Floors below** render dimmer in a warm umber beneath your floor.
 
-Each band has its own ARGB sliders under **Map Geometry**; the **A** slider is that band's opacity, and **0** hides the band entirely. On the normal radar, **Floors Above Range** and **Floors Below Range** (in meters) limit how far up and down geometry is shown. The defaults, **3 m** above and **7 m** below, are tuned for stacked interiors; on open terrain with large height differences, such as Expedition canyons, raise them (for example **15 m**) to keep ramps and upper areas visible. Centered overview mode ignores both sliders and always uses **30 m** above and below.
+Each band has its own ARGB color picker under **Map Geometry**, shown while a geometry source is selected; its **A** channel is that band's opacity, and **0** hides the band entirely. On the normal radar, **Floors Above Range** and **Floors Below Range** (in meters) limit how far up and down geometry is shown. The defaults, **3 m** above and **7 m** below, are tuned for stacked interiors; on open terrain with large height differences, such as Expedition canyons, raise them (for example **15 m**) to keep ramps and upper areas visible. Centered overview mode ignores both sliders and always uses **30 m** above and below.
 
 On the compact radar, the floor plan stays beneath the regular marker presentation, so pickups, tagged targets, teammates, and distance text render unchanged on top of the geometry:
 
@@ -496,7 +501,7 @@ A device keeps its marker for as long as its objective runs, whether or not its 
 nothing blinks out and returns in red when an objective arms the same device for another round. The
 marker goes when the objective itself ends.
 
-The two live colours have their own sliders under **Hacking terminals**, since that is where every
+The two live colours have their own color pickers under **Hacking terminals**, since that is where every
 puzzle device is configured whichever category it belongs to. The icon, display mode and icon size stay
 those of the device's own category; only the colour follows the puzzle, and the on-screen highlight
 bracket follows it too. Objective devices without a puzzle keep the shared objective tint throughout.
@@ -827,7 +832,7 @@ of interest. All five share one frame size and the vanilla objective marker tint
 the same family as the on-screen HUD marker. Each icon is sized as a proportion of the frame, so it
 keeps its fit at any icon scale, and each carries its own size, since the game's icons are not drawn to
 a common visual size. An icon whose own texture already carries the inset is linked to the frame size
-instead, exactly as the game links them, which also keeps it perfectly centered at every scale. Each has its own icon color sliders. The frame and its backplate have one shared color each, so the
+instead, exactly as the game links them, which also keeps it perfectly centered at every scale. Each has its own icon color picker. The frame and its backplate have one shared color each, so the
 frame stays the family's identity while each icon keeps its own color and its own state colors; they
 default to the vanilla objective tint and to the near-black the game uses behind its own objective
 markers.
@@ -920,18 +925,17 @@ These markers are driven by expedition navigation data rather than standard pick
 
 ## Display Modes and Color Rules
 
-The readme preview icons follow the default HUD presentations used by the mod. Most fixed marker and Radar UI colors are configurable in the mod options through four ARGB sliders:
+The readme preview icons follow the default HUD presentations used by the mod. Most fixed marker and Radar UI colors are configurable in the mod options through native DMF ARGB color pickers:
 
-- **Opacity** controls the alpha channel.
-- **Red**, **Green**, and **Blue** control the color channels.
-- Plain DMF shows each channel as a normal numeric slider.
-- With Alf's Mod Settings Extensions installed, compatible consecutive ARGB sliders may be shown as compact color picker widgets.
+- **A** controls the alpha channel (opacity).
+- **R**, **G**, and **B** control the color channels.
+- Colors customized with the four separate ARGB sliders of earlier Radar versions are carried over automatically.
 
-The ARGB values listed below are the default values used after a fresh install or reset to defaults. Changing the sliders changes the rendered Radar colors without editing the source.
+The ARGB values listed below are the default values used after a fresh install or reset to defaults. Changing a color picker changes the rendered Radar colors without editing the source.
 
 ### Configurable color groups
 
-Color sliders are placed near the setting they affect:
+Color pickers are placed with the setting they affect. A color that belongs to a single marker is shown under that marker and hidden while the marker is **Off**. Colors shared by several markers, such as the boss colors and the Martyr's Skull colors, stay visible:
 
 | Area | Examples |
 | --- | --- |
@@ -940,7 +944,7 @@ Color sliders are placed near the setting they affect:
 | Marker background colors | Marked enemy and boss background or bracket colors where applicable |
 | Nearby highlight colors | Per-marker highlight colors for marker groups that support nearby screen-space highlights |
 
-Artwork mode uses original item artwork and is not tinted by these sliders. Player teammate markers, player companions, and the local player center dot use runtime player/HUD colors instead of fixed configurable marker colors.
+Artwork mode uses original item artwork and is not tinted by these colors. Player teammate markers, player companions, and the local player center dot use runtime player/HUD colors instead of fixed configurable marker colors.
 
 ### Artwork mode
 
@@ -1036,7 +1040,7 @@ Not every radar marker uses a configurable fixed ARGB color:
 
 ## Requirements
 
-- **[Darktide Mod Framework](https://www.nexusmods.com/warhammer40kdarktide/mods/8)**
+- **[Darktide Mod Framework](https://www.nexusmods.com/warhammer40kdarktide/mods/8)**, a release with native mod options (tabs, color pickers, and `.mod` package loading; August 2026 or later)
 - **[Darktide Mod Loader](https://www.nexusmods.com/warhammer40kdarktide/mods/19)**
 
 ## Contributing
