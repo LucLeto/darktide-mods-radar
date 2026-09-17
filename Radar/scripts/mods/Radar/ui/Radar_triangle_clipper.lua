@@ -1,3 +1,17 @@
+--- Clips map geometry triangles to the radar shape and submits them to the GUI.
+-- Shared by both map geometry renderers (`Radar_navmesh_renderer.lua` and
+-- `Radar_strikemap_geometry.lua`), which project world triangles into radar-local screen
+-- offsets and hand them here one at a time.
+--
+-- Explicit module loaded through `mod:io_dofile`; the chunk returns the single function
+-- `_clip_and_emit`. It keeps no state between calls apart from reused scratch buffers, so
+-- it allocates nothing per triangle.
+--
+-- Triangles are submitted with `Gui.triangle`, whose screen points are `Vector3(x, 0, y)`
+-- with the draw layer passed separately (unlike `Gui.rect`).
+-- module: Radar_triangle_clipper
+-- author: dreams
+-- author: LucLeto
 local Vector3 = Vector3
 local math_abs = math.abs
 local math_atan2 = math.atan2
@@ -9,12 +23,27 @@ local math_sqrt = math.sqrt
 
 local Gui_triangle = Gui and Gui.triangle
 
+--- Circle tessellation settings; arcs are subdivided into steps of at most `CIRCLE_ARC_STEP` radians.
 local FULL_CIRCLE = math_pi * 2
 local CIRCLE_ARC_STEP = 0.26
 
+--- Scratch polygon buffers reused by every clip.
+-- The clippers ping-pong between the two pairs, and every clip leaves its final polygon in
+-- `_poly_ax`/`_poly_ay`, which `_clip_and_emit` reads back. Entries past the returned
+-- vertex count are stale and must be ignored.
 local _poly_ax, _poly_ay = {}, {}
 local _poly_bx, _poly_by = {}, {}
 
+--- Clips a convex polygon to the half-plane `a * x + b * y <= limit` (Sutherland-Hodgman step).
+-- tab: in_x input vertex x coordinates
+-- tab: in_y input vertex y coordinates
+-- int: in_count number of input vertices
+-- number: a x coefficient of the half-plane normal
+-- number: b y coefficient of the half-plane normal
+-- number: limit half-plane offset
+-- tab: out_x receives the clipped x coordinates
+-- tab: out_y receives the clipped y coordinates
+-- treturn: int number of vertices written to the output buffers, 0 when fully outside
 local function _clip_polygon_halfplane(in_x, in_y, in_count, a, b, limit, out_x, out_y)
     local out_count = 0
     local prev_x = in_x[in_count]
@@ -52,6 +81,16 @@ local function _clip_polygon_halfplane(in_x, in_y, in_count, a, b, limit, out_x,
     return out_count
 end
 
+--- Clips a triangle to the square `|x| <= limit` and `|y| <= limit` centred on the radar.
+-- The result is left in `_poly_ax`/`_poly_ay`.
+-- number: x1 first vertex x
+-- number: y1 first vertex y
+-- number: x2 second vertex x
+-- number: y2 second vertex y
+-- number: x3 third vertex x
+-- number: y3 third vertex y
+-- number: limit half side length of the square
+-- treturn: int number of polygon vertices, 0 when nothing remains
 local function _clip_triangle_square(x1, y1, x2, y2, x3, y3, limit)
     local ax, ay = _poly_ax, _poly_ay
     local bx, by = _poly_bx, _poly_by
@@ -81,6 +120,16 @@ local function _clip_triangle_square(x1, y1, x2, y2, x3, y3, limit)
     return _clip_polygon_halfplane(bx, by, n, 0, -1, limit, ax, ay)
 end
 
+--- Intersects the segment from p to q with the circle of the given squared radius around the origin.
+-- The returned parameters are positions along the segment (0 at p, 1 at q) and are not
+-- clamped, so either may lie outside the segment.
+-- number: px segment start x
+-- number: py segment start y
+-- number: qx segment end x
+-- number: qy segment end y
+-- number: radius_sq squared circle radius
+-- treturn: ?number entry parameter, or nil for a degenerate segment or no crossing
+-- treturn: ?number exit parameter
 local function _segment_circle_t(px, py, qx, qy, radius_sq)
     local dx = qx - px
     local dy = qy - py
@@ -103,6 +152,16 @@ local function _segment_circle_t(px, py, qx, qy, radius_sq)
     return (-b - root) / a, (-b + root) / a
 end
 
+--- Appends the interior points of a circle arc to a polygon, following the triangle's winding.
+-- The end points themselves are not added; the caller emits the boundary intersections.
+-- tab: out_x polygon x buffer
+-- tab: out_y polygon y buffer
+-- int: out_count current vertex count
+-- number: from_angle arc start angle in radians
+-- number: to_angle arc end angle in radians
+-- number: winding signed triangle area; the arc runs counter-clockwise when non-negative
+-- number: radius circle radius
+-- treturn: int new vertex count
 local function _append_arc(out_x, out_y, out_count, from_angle, to_angle, winding, radius)
     local delta = to_angle - from_angle
 
@@ -129,6 +188,8 @@ local function _append_arc(out_x, out_y, out_count, from_angle, to_angle, windin
     return out_count
 end
 
+--- Returns whether a point lies inside or on the edge of a triangle of either winding.
+-- treturn: bool
 local function _point_in_triangle(px, py, x1, y1, x2, y2, x3, y3)
     local d1 = (x2 - x1) * (py - y1) - (y2 - y1) * (px - x1)
     local d2 = (x3 - x2) * (py - y2) - (y3 - y2) * (px - x2)
@@ -139,6 +200,19 @@ local function _point_in_triangle(px, py, x1, y1, x2, y2, x3, y3)
     return not (has_neg and has_pos)
 end
 
+--- Clips a triangle to the circle of the given radius centred on the radar.
+-- Walks the three edges, keeping inside vertices and boundary crossings and filling the
+-- gaps between an exit and the next entry with arc points. A triangle that contains the
+-- whole circle without any edge crossing it becomes the full tessellated circle. The
+-- result is left in `_poly_ax`/`_poly_ay`.
+-- number: x1 first vertex x
+-- number: y1 first vertex y
+-- number: x2 second vertex x
+-- number: y2 second vertex y
+-- number: x3 third vertex x
+-- number: y3 third vertex y
+-- number: radius circle radius
+-- treturn: int number of polygon vertices, 0 when nothing remains
 local function _clip_triangle_circle(x1, y1, x2, y2, x3, y3, radius)
     local radius_sq = radius * radius
     local winding = (x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1)
@@ -261,6 +335,27 @@ local function _clip_triangle_circle(x1, y1, x2, y2, x3, y3, radius)
     return out_count
 end
 
+--- Clips one radar-local triangle to the radar shape and draws what remains.
+-- Triangles entirely inside are drawn as-is without clipping; triangles entirely outside
+-- the square are rejected cheaply. A clipped polygon is convex, so it is drawn as a fan
+-- from its first vertex. Coordinates are offsets from the radar centre in unscaled UI
+-- pixels and are scaled to screen space here.
+-- param: gui GUI to draw into
+-- int: layer GUI draw layer
+-- param: color engine `Color` for the triangles
+-- bool: is_circle clip to the radar circle rather than the square
+-- number: limit circle radius or square half size
+-- number: limit_sq `limit` squared
+-- number: ui_scale UI scale applied to the final screen positions
+-- number: center_x radar centre x in unscaled UI pixels
+-- number: center_y radar centre y in unscaled UI pixels
+-- number: sx1 first vertex x offset
+-- number: sy1 first vertex y offset
+-- number: sx2 second vertex x offset
+-- number: sy2 second vertex y offset
+-- number: sx3 third vertex x offset
+-- number: sy3 third vertex y offset
+-- treturn: int number of `Gui.triangle` calls made
 local function _clip_and_emit(gui, layer, color, is_circle, limit, limit_sq, ui_scale, center_x, center_y,
                               sx1, sy1, sx2, sy2, sx3, sy3)
     local clipped_count

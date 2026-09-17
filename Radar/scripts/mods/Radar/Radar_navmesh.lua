@@ -1,7 +1,22 @@
+--- Live map geometry source that extracts the mission's navigation mesh at runtime.
+-- Reads every triangle of the active `GwNavWorld` database into a reused structure of arrays
+-- (full 3D vertices, centre and horizontal bounding radius per triangle) and buckets the
+-- triangles in a fixed 16 m horizontal grid, so the navmesh renderer only visits nearby
+-- buckets each frame instead of the whole mesh.
+--
+-- Every `GwNavWorld` call is existence-checked and runs inside `pcall`, coordinates are
+-- validated, and the engine's temporary allocator is rewound after each triangle. The
+-- geometry is cleared and rebuilt whenever the nav world changes, so a previous mission's
+-- layout never persists, and a failed build is retried after a short cooldown.
+--
+-- Installer module, installed last into Radar's shared runtime environment (see
+-- `Radar.lua`). It shares nothing through `shared_env`; its interface is a set of `mod`
+-- methods, `ensure_navmesh_geometry`, `get_navmesh_nearby_buckets` and
+-- `clear_navmesh_geometry`, all used by `ui/Radar_navmesh_renderer.lua`.
+-- module: Radar_navmesh
+-- author: dreams
 local mod = get_mod("Radar")
 
--- Live map-geometry (navmesh) source
--- Author: dreams
 return function(env)
     setfenv(1, env)
 
@@ -15,6 +30,11 @@ return function(env)
     local string_format = string.format
     local os_clock = os and os.clock or nil
 
+    --- Build and bucketing parameters.
+    -- A failed or pending rebuild is retried at most every `NAVMESH_REGEN_COOLDOWN` seconds.
+    -- Bucket keys pack signed cell coordinates as `(cx + OFFSET) * STRIDE + (cy + OFFSET)`.
+    -- Vertices beyond `MAX_VALID_COORDINATE` are treated as corrupt, and bucket queries reach
+    -- at most `MAX_QUERY_CELL_REACH` rings of cells.
     local NAVMESH_REGEN_COOLDOWN = 0.5
     local NAVMESH_BUCKET_CELL_SIZE = 16
     local BUCKET_KEY_OFFSET = 32768
@@ -22,6 +42,12 @@ return function(env)
     local MAX_VALID_COORDINATE = 100000
     local MAX_QUERY_CELL_REACH = 64
 
+    --- Extracted navmesh geometry shared with the renderer.
+    -- Triangle `i` is stored across the parallel arrays `ax`..`cz` (vertices), `mid_x`..`mid_z`
+    -- (centre) and `radius` (horizontal distance from the centre to the farthest vertex).
+    -- `buckets` maps a packed cell key to a list of triangle indices plus the cell coordinates
+    -- and height range. Entries past `count` are stale. `revision` increases whenever the
+    -- content changes, so consumers can invalidate their caches.
     local geometry = {
         ax = {}, ay = {}, az = {},
         bx = {}, by = {}, bz = {},
@@ -37,15 +63,21 @@ return function(env)
         build_ms = nil,
     }
 
+    --- Rebuild state; `dirty` requests a rebuild, and the last nav world and failure message are remembered.
     local dirty = true
     local last_gen_t = nil
     local last_nav_world = nil
     local last_logged_failure = nil
 
+    --- Returns whether a vertex coordinate is a number within the plausible world bounds.
+    -- param: v coordinate
+    -- treturn: bool
     local function _is_valid_coordinate(v)
         return type(v) == "number" and v > -MAX_VALID_COORDINATE and v < MAX_VALID_COORDINATE
     end
 
+    --- Returns the active GwNav world from the nav mesh manager, or nil outside a mission.
+    -- return: GwNav world handle, or nil outside a mission
     local function _current_nav_world()
         local state_manager = Managers and Managers.state
         local nav_mesh = state_manager and state_manager.nav_mesh
@@ -53,6 +85,7 @@ return function(env)
         return nav_mesh and nav_mesh._nav_world or nil
     end
 
+    --- Empties the geometry and bumps its revision, unless it is already empty.
     local function _reset_geometry()
         if geometry.count == 0 and next(geometry.buckets) == nil then
             return
@@ -64,6 +97,15 @@ return function(env)
         geometry.revision = geometry.revision + 1
     end
 
+    --- Copies every valid navmesh triangle of a nav world into the geometry arrays.
+    -- Builds the database's visual representation first, which the triangle queries need. Each
+    -- triangle query allocates engine temporary vectors, so the temp byte count is restored
+    -- after every triangle when the engine exposes it. Triangles with an invalid vertex are
+    -- skipped. Raises an error for an invalid tile count; runs inside `pcall`.
+    -- param: nav_world GwNav world handle
+    -- treturn: int number of triangles stored
+    -- treturn: number largest triangle radius
+    -- treturn: int number of database tiles
     local function _extract(nav_world)
         GwNavWorld.build_database_visual_representation(nav_world)
 
@@ -157,6 +199,8 @@ return function(env)
         return count, max_radius, tile_count
     end
 
+    --- Logs why a navmesh build failed, once per distinct reason and only in debug mode.
+    -- param: reason failure reason or error value
     local function _log_build_failure(reason)
         if mod:get("debug_mode") ~= true then
             return
@@ -172,6 +216,11 @@ return function(env)
         mod:info(string_format("[Radar] navmesh build unavailable: %s", reason))
     end
 
+    --- Extracts the navmesh of a nav world and rebuilds the bucket grid.
+    -- The triangle count, buckets and revision are only replaced on success; on failure the
+    -- reason is logged and false returned.
+    -- param: nav_world GwNav world handle
+    -- treturn: bool true when new geometry was built
     local function _build(nav_world)
         local gw_nav_world = GwNavWorld
 
@@ -250,10 +299,8 @@ return function(env)
         return true
     end
 
-    function mod:mark_navmesh_dirty()
-        dirty = true
-    end
-
+    --- Releases the extracted geometry and forgets the nav world, so the next use rebuilds from scratch.
+    -- Called when the navmesh layer turns inactive, so the mesh is not kept in memory.
     function mod:clear_navmesh_geometry()
         _reset_geometry()
         last_nav_world = nil
@@ -261,6 +308,12 @@ return function(env)
         dirty = true
     end
 
+    --- Returns the navmesh geometry for the active nav world, building it when needed.
+    -- Clears the geometry outside a mission and whenever the nav world changes. A pending build
+    -- is attempted at most once per cooldown; a gameplay time lower than the last attempt
+    -- (a new session) allows an immediate retry.
+    -- ?number: t gameplay time
+    -- treturn: tab geometry, possibly empty
     function mod:ensure_navmesh_geometry(t)
         local nav_world = _current_nav_world()
 
@@ -299,6 +352,14 @@ return function(env)
         return geometry
     end
 
+    --- Collects the geometry buckets around a point into a caller-owned list.
+    -- Visits the centre cell and then square rings of cells outwards, up to the range (capped
+    -- at `MAX_QUERY_CELL_REACH` rings). Entries past the returned count are stale.
+    -- number: origin_x query centre x in world space
+    -- number: origin_y query centre y in world space
+    -- ?number: range query radius in metres
+    -- tab: out_buckets list that receives the buckets
+    -- treturn: int number of buckets written
     function mod:get_navmesh_nearby_buckets(origin_x, origin_y, range, out_buckets)
         local buckets = geometry.buckets
         local cell_size = geometry.cell_size
@@ -368,9 +429,5 @@ return function(env)
         end
 
         return n
-    end
-
-    function mod:get_navmesh_geometry()
-        return geometry
     end
 end

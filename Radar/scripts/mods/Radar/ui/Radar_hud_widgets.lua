@@ -1,13 +1,42 @@
+--- Widget definitions and widget pools for the radar HUD element.
+-- Defines the Auspex frame widget, the overview scale widget and the pooled marker widgets,
+-- and the helpers that create them lazily on the HUD element and reset them between uses.
+-- Every optional pass is gated by a visibility function on its content value, so a pass
+-- only draws while the HUD element has assigned it a material, icon or glyph.
+--
+-- Explicit module loaded by `ui/Radar_hud_element.lua` through `mod:io_dofile`; the chunk
+-- returns the pool size and the ensure and clear helpers. The widgets are stored on the
+-- HUD element instance passed in as `self`.
+-- module: Radar_hud_widgets
+-- author: LucLeto
 local mod = get_mod("Radar")
 local UIFontSettings = require("scripts/managers/ui/ui_font_settings")
 local UIWidget = require("scripts/managers/ui/ui_widget")
-
 local string_format = string.format
+
+-- ----------------------------------------------------------------------------
+-- Constants
+-- ----------------------------------------------------------------------------
+
 local WHITE_WIDGET_COLOR = { 255, 255, 255, 255 }
+--- Number of marker widgets in the pool; the HUD element reserves the last one for the player's centre dot.
+local MAX_RADAR_MARKERS = 301
+
+-- ----------------------------------------------------------------------------
+-- Mutable state
+-- ----------------------------------------------------------------------------
+
+--- Keys already logged by `_log_once`, per log category, for the lifetime of the module.
 local LogBuckets = {
     draws = {},
 }
 
+-- ----------------------------------------------------------------------------
+-- Helpers and widget definitions
+-- ----------------------------------------------------------------------------
+
+--- Returns a new white ARGB colour array, so no two widget styles share a colour table.
+-- treturn: tab
 local function _white_widget_color()
     return {
         WHITE_WIDGET_COLOR[1],
@@ -17,6 +46,10 @@ local function _white_widget_color()
     }
 end
 
+--- Writes a debug log line once per key, and only while debug mode is enabled.
+-- tab: bucket set of keys already logged
+-- string: key de-duplication key
+-- string: message log message
 local function _log_once(bucket, key, message)
     if mod:get("debug_mode") ~= true then
         return
@@ -30,6 +63,10 @@ local function _log_once(bucket, key, message)
     mod:info(message)
 end
 
+--- Visibility functions for the optional widget passes.
+-- A pass is drawn only while its content value is a non-empty string, so the HUD element
+-- turns layers on and off by assigning or clearing content fields instead of rebuilding
+-- widgets.
 local WidgetVisibility = {
     has_icon = function(content)
         return content.icon ~= nil and content.icon ~= ""
@@ -81,6 +118,10 @@ local WidgetVisibility = {
     end,
 }
 
+--- Builds the Auspex frame widget definition with four layers.
+-- The layers are the rotated scanner background, background noise, scan noise and the
+-- rotated sweep, each sized and placed per frame by the renderer.
+-- treturn: tab widget definition
 local function _frame_definition()
     return UIWidget.create_definition({
         {
@@ -145,6 +186,8 @@ local function _frame_definition()
     }, "screen")
 end
 
+--- Builds the widget definition for the overview mode scale indicators and the normal radar zoom icon.
+-- treturn: tab widget definition
 local function _overview_scale_definition()
     return UIWidget.create_definition({
         {
@@ -225,6 +268,12 @@ local function _overview_scale_definition()
     }, "screen")
 end
 
+--- Builds the widget definition shared by every pooled radar marker.
+-- Passes are listed bottom to top by layer offset; radius icon, marked ring, backplate,
+-- base icon or glyph, overlay icon, title icon and vertical arrow. The backplate sits below
+-- the base icon and only draws for markers that name one, so enemy markers, which build
+-- their own background into the base icon, are unaffected.
+-- treturn: tab widget definition
 local function _marker_definition()
     return UIWidget.create_definition({
         {
@@ -349,8 +398,6 @@ local function _marker_definition()
     }, "screen")
 end
 
-local MAX_RADAR_MARKERS = 301
-
 local function _create_frame_widget()
     return UIWidget.init("RadarFrame_Auspex", _frame_definition())
 end
@@ -363,6 +410,8 @@ local function _create_marker_widget(index)
     return UIWidget.init("RadarMarker_" .. index, _marker_definition())
 end
 
+--- Clears every material of the Auspex frame widget so none of its layers draw.
+-- tab: widget frame widget
 local function _clear_frame_widget(widget)
     widget.content.background_material = nil
     widget.content.noise_material = nil
@@ -370,6 +419,8 @@ local function _clear_frame_widget(widget)
     widget.content.sweep_material = nil
 end
 
+--- Clears every icon of the overview scale widget so none of its passes draw.
+-- tab: widget overview scale widget
 local function _clear_overview_scale_widget(widget)
     widget.content.overview_scale_x_left_icon = nil
     widget.content.overview_scale_x_right_icon = nil
@@ -378,6 +429,10 @@ local function _clear_overview_scale_widget(widget)
     widget.content.normal_zoom_icon = nil
 end
 
+--- Resets a pooled marker widget before it is reused for another target.
+-- Every optional layer must be cleared here; a layer left set would carry one marker's
+-- icon or backplate over to the next target drawn with this widget.
+-- tab: widget marker widget
 local function _clear_marker_widget(widget)
     widget.content.radius_icon = nil
     widget.content.radius_icon_size = nil
@@ -393,6 +448,8 @@ local function _clear_marker_widget(widget)
     widget.content.value_text = ""
 end
 
+--- Creates the Auspex frame widget on the HUD element on first use.
+-- tab: self HUD element
 local function _ensure_frame_widget(self)
     if self._frame_widget then
         return
@@ -402,6 +459,8 @@ local function _ensure_frame_widget(self)
     _clear_frame_widget(self._frame_widget)
 end
 
+--- Creates the overview scale widget on the HUD element on first use.
+-- tab: self HUD element
 local function _ensure_overview_scale_widget(self)
     if self._overview_scale_widget then
         return
@@ -411,6 +470,10 @@ local function _ensure_overview_scale_widget(self)
     _clear_overview_scale_widget(self._overview_scale_widget)
 end
 
+--- Fills the HUD element's marker widget pool up to `MAX_RADAR_MARKERS`.
+-- Creates `_marker_widgets` and resets `_last_active_marker_widget_index` on first use, and
+-- only adds the missing widgets afterwards, so it is cheap to call every frame.
+-- tab: self HUD element
 local function _ensure_marker_widgets(self)
     if not self._marker_widgets then
         self._marker_widgets = {}
@@ -433,6 +496,7 @@ local function _ensure_marker_widgets(self)
     end
 end
 
+--- Module interface consumed by `ui/Radar_hud_element.lua`.
 return {
     MAX_RADAR_MARKERS = MAX_RADAR_MARKERS,
     ensure_frame_widget = _ensure_frame_widget,

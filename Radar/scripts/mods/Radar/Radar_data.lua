@@ -1,15 +1,33 @@
+--- Radar's DMF mod data; the mod description and the whole settings menu.
+-- The returned table names the mod and declares every option widget, grouped into the
+-- General, Layout, Pickups, Objectives, Expeditions, Enemies, Players and Debug tabs through
+-- the widgets' `tab` fields. The widget tree is declared inline and then post-processed.
+-- Marker visibility checkboxes listed in `MARKER_DROPDOWN_PRESENTATIONS` become icon / off
+-- dropdowns (with their saved checkbox values migrated), the colour sliders registered in
+-- `Radar_color_settings.lua` are inserted after the widget they are anchored to, and every
+-- widget without a tooltip gets `<setting_id>_tooltip`.
+--
+-- Loaded by DMF as `mod_data`, as declared in `Radar.mod`; not part of the runtime's shared
+-- environment. Dropdown options carry icons tinted with the configured marker colours; those
+-- colours are refreshed from the settings on every setting change. Also defines
+-- `mod:migrate_marker_enabled_dropdown_settings`, run by `Radar_enemy_definitions.lua` once
+-- all mods are loaded.
+-- module: Radar_data
+-- author: LucLeto
 local mod = get_mod("Radar")
 local RadarColorSettings = mod:io_dofile("Radar/scripts/mods/Radar/Radar_color_settings")
 
+--- Shared dropdown icon colours and icons.
 local DROPDOWN_ICON_COLOUR_WHITE = { 255, 255, 255, 255 }
-local DROPDOWN_ICON_COLOUR_RED = { 255, 255, 64, 64 }
-local DROPDOWN_ICON_COLOUR_DREG = { 255, 255, 255, 0 }
-local DROPDOWN_ICON_COLOUR_TOX = { 255, 0, 255, 0 }
+local DROPDOWN_ICON_COLOUR_RED = RadarColorSettings.default_color("enemy_boss_marker")
+local DROPDOWN_ICON_COLOUR_DREG = RadarColorSettings.default_color("enemy_dreg_marker")
+local DROPDOWN_ICON_COLOUR_TOX = RadarColorSettings.default_color("enemy_tox_marker")
 local DROPDOWN_ICON_DEFAULT = "content/ui/materials/hud/interactions/icons/default"
 local DROPDOWN_ICON_ENEMY = "content/ui/materials/hud/interactions/icons/enemy"
 local DROPDOWN_ICON_PLAYER = "content/ui/materials/icons/classes/veteran"
 local DROPDOWN_ICON_TECH_REMNANT = "content/ui/materials/icons/currencies/tech_remnant_big"
 
+--- Icon of each player marker style option.
 local PLAYER_MARKER_STYLE_DROPDOWN_ICON = {
     icon_only = DROPDOWN_ICON_PLAYER,
     marked_icon = DROPDOWN_ICON_PLAYER,
@@ -17,6 +35,8 @@ local PLAYER_MARKER_STYLE_DROPDOWN_ICON = {
     marked_dot = DROPDOWN_ICON_DEFAULT,
 }
 
+--- Normalises a player marker style, defaulting to `marked_icon`.
+-- treturn: string `icon_only`, `marked_icon`, `dot_only` or `marked_dot`
 local function _normalized_player_marker_style(value)
     if value == "icon_only" or value == "marked_icon" or value == "dot_only" or value == "marked_dot" then
         return value
@@ -25,6 +45,7 @@ local function _normalized_player_marker_style(value)
     return "marked_icon"
 end
 
+--- UI packages holding the icon materials used by the settings menu and the radar, exposed as `required_icon_packages`.
 local REQUIRED_ICON_PACKAGES = {
     "packages/ui/views/inventory_view/inventory_view",
     "packages/ui/views/inventory_weapons_view/inventory_weapons_view",
@@ -47,111 +68,113 @@ local REQUIRED_ICON_PACKAGES = {
     "packages/ui/views/expedition_view/expedition_view",
 }
 
+--- Option icons of the artwork / icon / off dropdowns, by setting id.
 local ARTWORK_DROPDOWN_PRESENTATIONS = {
     show_crates = {
         artwork_icon = "content/ui/materials/icons/engrams/engram_rarity_04",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/icons/generic/loot",
-        icon_colour = { 255, 225, 200, 136 },
+        icon_colour = RadarColorSettings.default_marker_color("crate_unknown"),
     },
     show_diamantine = {
         artwork_icon = "content/ui/materials/icons/currencies/diamantine_big",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/environment_generic",
-        icon_colour = { 255, 70, 130, 220 },
+        icon_colour = RadarColorSettings.default_marker_color("material_diamantine"),
     },
     show_plasteel = {
         artwork_icon = "content/ui/materials/icons/currencies/plasteel_big",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/environment_generic",
-        icon_colour = { 255, 130, 135, 140 },
+        icon_colour = RadarColorSettings.default_marker_color("material_plasteel"),
     },
     show_expeditions_currency = {
         artwork_icon = "content/ui/materials/icons/currencies/salvage_big",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/expeditions_salvage",
-        icon_colour = { 255, 120, 160, 140 },
+        icon_colour = RadarColorSettings.default_marker_color("material_expeditions_currency"),
     },
     show_expeditions_loot = {
         artwork_icon = DROPDOWN_ICON_TECH_REMNANT,
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/expeditions_loot",
-        icon_colour = { 255, 192, 160, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("material_expeditions_loot"),
     },
     show_expeditions_dropped_loot = {
         artwork_icon = "content/ui/materials/icons/notifications/tech_dropped",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/expeditions_loot",
-        icon_colour = { 220, 255, 0, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("material_expeditions_loot_player_drop"),
     },
     show_pocketable_airstrike = {
         artwork_icon = "content/ui/materials/icons/throwables/hud/valkyrie_payload",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/valkyrie_payload",
-        icon_colour = { 255, 95, 125, 70 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_airstrike"),
     },
     show_pocketable_artillery_strike = {
         artwork_icon = "content/ui/materials/icons/throwables/hud/artillery_strike",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/artillery_strike",
-        icon_colour = { 255, 95, 125, 70 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_artillery_strike"),
     },
     show_pocketable_big_grenade = {
         artwork_icon = "content/ui/materials/icons/throwables/hud/big_fn_grenade",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/big_fn_grenade",
-        icon_colour = { 255, 205, 156, 77 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_big_grenade"),
     },
     show_pocketable_valkyrie_hover = {
         artwork_icon = "content/ui/materials/icons/throwables/hud/valkyrie_hover",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/valkyrie_hover",
-        icon_colour = { 255, 95, 125, 70 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_valkyrie_hover"),
     },
     show_pocketable_landmine_explosive = {
         artwork_icon = "content/ui/materials/icons/pocketables/hud/landmine_explosive",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/landmine_explosive",
-        icon_colour = { 255, 205, 156, 77 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_landmine_explosive"),
     },
     show_pocketable_landmine_fire = {
         artwork_icon = "content/ui/materials/icons/pocketables/hud/landmine_fire",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/landmine_fire",
-        icon_colour = { 255, 255, 110, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_landmine_fire"),
     },
     show_pocketable_landmine_shock = {
         artwork_icon = "content/ui/materials/icons/pocketables/hud/landmine_shock",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/landmine_shock",
-        icon_colour = { 255, 80, 160, 255 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_landmine_shock"),
     },
     show_pocketable_void_shield = {
         artwork_icon = "content/ui/materials/icons/pocketables/hud/void_shield",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/void_shield",
-        icon_colour = { 255, 181, 166, 66 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_void_shield"),
     },
     show_tainted_skull = {
         artwork_icon = "content/ui/materials/icons/currencies/live_events/skulls_live_event_small",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/hud/interactions/icons/enemy",
-        icon_colour = { 255, 150, 190, 60 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_tainted_skull"),
     },
     show_saints = {
         artwork_icon = "content/ui/materials/icons/currencies/live_events/saints_live_event_small",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/icons/circumstances/live_event_01",
-        icon_colour = { 255, 192, 160, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_saints"),
     },
     show_leftover = {
         artwork_icon = "content/ui/materials/icons/currencies/live_events/leftover_live_event_small",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/icons/circumstances/live_event_01",
-        icon_colour = { 255, 150, 190, 60 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_leftover"),
     },
 }
 
+--- Option icons of the enemy icon / marked icon / off dropdowns, by setting id.
 local ENEMY_DROPDOWN_PRESENTATIONS = {
     show_enemy_cultist_melee = {
         icon = DROPDOWN_ICON_DEFAULT,
@@ -235,7 +258,7 @@ local ENEMY_DROPDOWN_PRESENTATIONS = {
     },
     show_enemy_renegade_flamer = {
         icon = "content/ui/materials/icons/presets/preset_20",
-        icon_colour = { 255, 255, 102, 0 },
+        icon_colour = RadarColorSettings.default_color("enemy_renegade_flamer_marker"),
     },
     show_enemy_cultist_flamer = {
         icon = "content/ui/materials/icons/presets/preset_20",
@@ -251,7 +274,7 @@ local ENEMY_DROPDOWN_PRESENTATIONS = {
     },
     show_enemy_chaos_armored_hound = {
         icon = "content/ui/materials/icons/circumstances/hunting_grounds_01",
-        icon_colour = { 255, 150, 150, 150 },
+        icon_colour = RadarColorSettings.default_color("enemy_armored_hound_marker"),
     },
     show_enemy_chaos_hound = {
         icon = "content/ui/materials/icons/circumstances/hunting_grounds_01",
@@ -271,6 +294,7 @@ local ENEMY_DROPDOWN_PRESENTATIONS = {
     },
 }
 
+--- Option icons of the Expedition location dropdowns, by setting id.
 local EXPEDITION_DROPDOWN_PRESENTATIONS = {
     show_expedition_objective_opportunity = {
         icon = "content/ui/materials/backgrounds/scanner/scanner_map_greek_01",
@@ -298,70 +322,73 @@ local EXPEDITION_DROPDOWN_PRESENTATIONS = {
     },
 }
 
+--- Option icons of the marker dropdowns, by setting id.
+-- A checkbox whose setting id is listed here is turned into an icon / off dropdown, and the
+-- icon / distance / off dropdowns take their icons from here too.
 local MARKER_DROPDOWN_PRESENTATIONS = {
     show_ammo_small = {
         icon = "content/ui/materials/hud/interactions/icons/ammunition",
-        icon_colour = { 255, 240, 210, 80 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_ammo_small"),
     },
     show_ammo_big = {
         icon = "content/ui/materials/icons/presets/preset_16",
-        icon_colour = { 255, 240, 210, 80 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_ammo_big"),
     },
     show_grenades = {
         icon = "content/ui/materials/hud/interactions/icons/grenade",
-        icon_colour = { 255, 205, 156, 77 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_grenade"),
     },
     show_pocketable_ammo_crate = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_ammo_crate",
-        icon_colour = { 255, 240, 210, 80 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_ammo_crate"),
     },
     show_pocketable_medical_crate = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_medic_crate",
-        icon_colour = { 255, 38, 205, 26 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_medical_crate"),
     },
     show_pocketable_syringe_ability = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_syringe_ability",
-        icon_colour = { 255, 230, 192, 13 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_syringe_ability"),
     },
     show_pocketable_syringe_corruption = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_syringe_corruption",
-        icon_colour = { 255, 38, 205, 26 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_syringe_corruption"),
     },
     show_pocketable_syringe_power = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_syringe_power",
-        icon_colour = { 255, 205, 51, 26 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_syringe_power"),
     },
     show_pocketable_syringe_speed = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_syringe_speed",
-        icon_colour = { 255, 0, 127, 218 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_syringe_speed"),
     },
     show_power_cell_teal = {
         icon = "content/ui/materials/icons/player_states/lugged",
-        icon_colour = { 255, 0, 200, 200 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_power_cell_teal"),
     },
     show_cryonic_rod = {
         icon = "content/ui/materials/icons/player_states/lugged",
-        icon_colour = { 255, 180, 220, 255 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_cryonic_rod"),
     },
     show_moebian_pox_zetaphyte_13_sample = {
         icon = "content/ui/materials/icons/player_states/lugged",
-        icon_colour = { 255, 150, 190, 60 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_moebian_pox_zetaphyte_13_sample"),
     },
     show_vacuum_capsule = {
         icon = "content/ui/materials/icons/player_states/lugged",
-        icon_colour = { 255, 80, 85, 90 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_vacuum_capsule"),
     },
     show_special_issue_ammo = {
         icon = "content/ui/materials/icons/player_states/lugged",
-        icon_colour = { 255, 95, 125, 70 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_special_issue_ammo"),
     },
     show_prismata_crystal_repository = {
         icon = "content/ui/materials/icons/player_states/lugged",
-        icon_colour = { 255, 255, 70, 90 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_prismata_crystal_repository"),
     },
     show_mortis_relic = {
         icon = "content/ui/materials/icons/item_types/devices",
-        icon_colour = { 255, 110, 95, 125 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_mortis_relic"),
     },
     show_coordinates_paper = {
         icon = "content/ui/materials/icons/system/escape/credits",
@@ -369,31 +396,31 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
     },
     show_pocketable_grimoire = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_grimoire",
-        icon_colour = { 255, 150, 190, 60 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_grimoire"),
     },
     show_pocketable_scripture = {
         icon = "content/ui/materials/icons/pocketables/hud/small/party_scripture",
-        icon_colour = { 255, 192, 160, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_scripture"),
     },
     show_data_reliquaries = {
         icon = "content/ui/materials/icons/player_states/lugged",
-        icon_colour = { 255, 192, 160, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_data_reliquary"),
     },
     show_promethium_barrel = {
         icon = "content/ui/materials/hud/interactions/icons/barrel_explosive",
-        icon_colour = { 255, 255, 110, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_promethium_barrel"),
     },
     show_explosive_barrels = {
         icon = "content/ui/materials/hud/interactions/icons/barrel_explosive",
-        icon_colour = { 255, 205, 156, 77 },
+        icon_colour = RadarColorSettings.default_marker_color("hazard_explosive_barrel"),
     },
     show_fire_barrels = {
         icon = "content/ui/materials/hud/interactions/icons/barrel_explosive",
-        icon_colour = { 255, 255, 110, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("hazard_fire_barrel"),
     },
     show_large_ammunition_crate = {
         icon = "content/ui/materials/hud/interactions/icons/pocketable_ammo",
-        icon_colour = { 255, 240, 210, 80 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_large_ammunition_crate"),
     },
     show_anti_rad_stimm = {
         icon = "content/ui/materials/hud/interactions/icons/time_syringe",
@@ -425,31 +452,31 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
     },
     show_martyr_skull = {
         icon = "content/ui/materials/hud/interactions/icons/enemy",
-        icon_colour = { 255, 255, 215, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_martyr_skull"),
     },
     show_power_cell_orange = {
         icon = "content/ui/materials/icons/player_states/lugged",
-        icon_colour = { 255, 255, 140, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_power_cell_orange"),
     },
     show_medicae_station = {
         icon = "content/ui/materials/hud/interactions/icons/respawn",
-        icon_colour = { 255, 38, 205, 26 },
+        icon_colour = RadarColorSettings.default_marker_color("medicae_station"),
     },
     show_luggable_socket = {
         icon = "content/ui/materials/icons/presets/preset_11",
-        icon_colour = { 255, 255, 245, 80 },
+        icon_colour = RadarColorSettings.default_marker_color("luggable_socket"),
     },
     show_heretic_idol = {
         icon = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_rampaging_enemies",
-        icon_colour = { 255, 150, 190, 60 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_heretic_idol"),
     },
     show_ammo_crate_deployable = {
         icon = "content/ui/materials/hud/interactions/icons/pocketable_ammo",
-        icon_colour = { 255, 240, 210, 80 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_ammo_cache_deployable"),
     },
     show_medical_crate_deployable = {
         icon = "content/ui/materials/hud/interactions/icons/pocketable_medkit",
-        icon_colour = { 255, 38, 205, 26 },
+        icon_colour = RadarColorSettings.default_marker_color("medical_crate_deployable"),
     },
     show_monstrosities = {
         icon = "content/ui/materials/icons/presets/preset_05",
@@ -477,19 +504,19 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
     },
     show_dark_rites_totem = {
         icon = "content/ui/materials/icons/achievements/categories/category_heretics",
-        icon_colour = { 255, 150, 190, 60 },
+        icon_colour = RadarColorSettings.default_marker_color("dark_rites_totem"),
     },
     show_dark_rites_servo_skull = {
         icon = "content/ui/materials/icons/abilities/default",
-        icon_colour = { 255, 150, 190, 60 },
+        icon_colour = RadarColorSettings.default_marker_color("dark_rites_servo_skull"),
     },
     show_pocketable_corrupted_auspex_scanner = {
         icon = "content/ui/materials/icons/pocketables/hud/auspex_scanner",
-        icon_colour = { 255, 255, 120, 0 },
+        icon_colour = RadarColorSettings.default_marker_color("pocketable_corrupted_auspex_scanner"),
     },
     show_stolen_rations = {
         icon = "content/ui/materials/icons/pickups/default",
-        icon_colour = { 255, 150, 190, 60 },
+        icon_colour = RadarColorSettings.default_marker_color("pickup_stolen_rations"),
     },
     show_unknown_pickups = {
         icon = "content/ui/materials/icons/traits/empty",
@@ -497,13 +524,21 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
     },
 }
 
+--- Option icon for dropdowns without a presentation of their own.
 local DEFAULT_DROPDOWN_PRESENTATION = {
     icon = DROPDOWN_ICON_DEFAULT,
     icon_colour = DROPDOWN_ICON_COLOUR_WHITE,
 }
 
+--- Declared ahead so the dropdown builders below can use it; assigned further down.
 local _dropdown_marker_icon_colour
 
+--- Builds a dropdown option, with an optional icon.
+-- string: text localization id of the option
+-- param: value option value
+-- ?string: icon icon material
+-- ?tab: icon_colour icon colour, white when nil
+-- treturn: tab
 local function _dropdown_option(text, value, icon, icon_colour)
     local option = {
         text = text,
@@ -518,11 +553,14 @@ local function _dropdown_option(text, value, icon, icon_colour)
     return option
 end
 
+--- Builds a player marker style option with its style's icon.
 local function _player_marker_style_dropdown_option(text, value)
     return _dropdown_option(text, value, PLAYER_MARKER_STYLE_DROPDOWN_ICON[value] or DROPDOWN_ICON_PLAYER,
         DROPDOWN_ICON_COLOUR_WHITE)
 end
 
+--- Builds the player marker style options, optionally followed by `off`.
+-- treturn: tab
 local function _player_marker_style_options(include_off)
     local options = {
         _player_marker_style_dropdown_option("display_style_icon_only", "icon_only"),
@@ -538,6 +576,8 @@ local function _player_marker_style_options(include_off)
     return options
 end
 
+--- Returns the value the player marker dropdown shows, reading the older teammate and style settings when unset.
+-- treturn: string
 local function _player_markers_dropdown_value()
     local value = mod:get("show_players")
 
@@ -556,6 +596,7 @@ local function _player_markers_dropdown_value()
     return _normalized_player_marker_style(mod:get("player_display_style"))
 end
 
+--- Saves the player marker dropdown into `show_players` and the player marker style.
 local function _set_player_markers_dropdown_value(new_value)
     if new_value == "off" then
         mod:set("show_players", "off")
@@ -568,6 +609,7 @@ local function _set_player_markers_dropdown_value(new_value)
     mod:set("player_display_style", style)
 end
 
+--- Builds the icon / off options of a marker dropdown.
 local function _marker_enabled_options(setting_id)
     local presentation = MARKER_DROPDOWN_PRESENTATIONS[setting_id] or DEFAULT_DROPDOWN_PRESENTATION
     local icon_colour = _dropdown_marker_icon_colour(setting_id, presentation.icon_colour)
@@ -578,6 +620,7 @@ local function _marker_enabled_options(setting_id)
     }
 end
 
+--- Maps a saved marker setting (checkbox or dropdown value) to `icon` or `off`.
 local function _marker_enabled_dropdown_value(value, default_value)
     if value == nil then
         return default_value
@@ -590,6 +633,9 @@ local function _marker_enabled_dropdown_value(value, default_value)
     return "icon"
 end
 
+--- Rewrites a saved checkbox value of a marker setting as its dropdown value.
+-- The player marker setting keeps its style and mirrors it into the style setting.
+-- string: setting_id setting to migrate
 local function _migrate_marker_enabled_dropdown_setting(setting_id)
     local value = mod:get(setting_id)
 
@@ -618,12 +664,16 @@ local function _migrate_marker_enabled_dropdown_setting(setting_id)
     end
 end
 
+--- Migrates every marker setting that changed from a checkbox to a dropdown.
 function mod:migrate_marker_enabled_dropdown_settings()
     for setting_id in pairs(MARKER_DROPDOWN_PRESENTATIONS) do
         _migrate_marker_enabled_dropdown_setting(setting_id)
     end
 end
 
+--- Builds the tab button overrides (font size, tooltip, truncation) of a settings tab.
+-- string: tooltip_key localization id of the tab tooltip
+-- treturn: tab
 local function _tab_overrides(tooltip_key)
     return {
         font_size = 16,
@@ -632,6 +682,7 @@ local function _tab_overrides(tooltip_key)
     }
 end
 
+--- Localized tab names and tab button overrides of the settings menu.
 local TAB_GENERAL = mod:localize("tab_general")
 local TAB_LAYOUT = mod:localize("tab_layout")
 local TAB_PICKUPS = mod:localize("tab_pickups")
@@ -650,6 +701,11 @@ local TAB_OVERRIDES_ENEMIES = _tab_overrides("radar_tab_enemies_tooltip")
 local TAB_OVERRIDES_PLAYERS = _tab_overrides("radar_tab_players_tooltip")
 local TAB_OVERRIDES_DEBUG = _tab_overrides("radar_tab_debug_tooltip")
 
+--- Builds an artwork / icon / off dropdown widget.
+-- Its getter maps legacy checkbox values; `false` reads as `off`.
+-- string: setting_id setting id
+-- ?string: default_value default mode, `artwork` when nil
+-- treturn: tab widget
 local function _artwork_icon_off_dropdown(setting_id, default_value)
     local presentation = ARTWORK_DROPDOWN_PRESENTATIONS[setting_id] or DEFAULT_DROPDOWN_PRESENTATION
     local artwork_icon = presentation.artwork_icon or presentation.icon
@@ -686,6 +742,8 @@ local function _artwork_icon_off_dropdown(setting_id, default_value)
     }
 end
 
+--- Builds an icon size slider in percent (50 to 300, default 100).
+-- treturn: tab widget
 local function _icon_scale_slider(setting_id, title_key)
     return {
         setting_id = setting_id,
@@ -698,6 +756,7 @@ local function _icon_scale_slider(setting_id, title_key)
     }
 end
 
+--- The four colour channels, in ARGB order, with their setting suffixes.
 local COLOR_CHANNELS = {
     {
         suffix = "opacity",
@@ -721,6 +780,7 @@ local COLOR_CHANNELS = {
     },
 }
 
+--- Title suffix of a colour slider group by role, with an English fallback.
 local COLOR_LABEL_SUFFIX_BY_ROLE = {
     icon = {
         key = "color_option_icon_suffix",
@@ -736,6 +796,8 @@ local COLOR_LABEL_SUFFIX_BY_ROLE = {
     },
 }
 
+--- Builds a 0 to 255 slider for one colour channel.
+-- treturn: tab widget
 local function _color_channel_slider(setting_id, default_value, title, tooltip)
     return {
         setting_id = setting_id,
@@ -750,6 +812,8 @@ local function _color_channel_slider(setting_id, default_value, title, tooltip)
     }
 end
 
+--- Returns the setting id of one channel of a colour prefix; mirrors the colour runtime's naming.
+-- treturn: string
 local function _color_setting_id(prefix, suffix)
     local opacity_setting_by_prefix = RadarColorSettings.opacity_setting_by_prefix
 
@@ -760,6 +824,7 @@ local function _color_setting_id(prefix, suffix)
     return prefix .. "_" .. suffix
 end
 
+--- Colour prefixes of dropdowns whose colour cannot be derived from their setting id.
 local DROPDOWN_COLOR_PREFIX_BY_SETTING_ID = {
     show_monstrosities = "enemy_boss_marker",
     show_captains = "enemy_boss_marker",
@@ -767,8 +832,10 @@ local DROPDOWN_COLOR_PREFIX_BY_SETTING_ID = {
     show_enemy_horde = "enemy_horde_marker",
 }
 
+--- The live dropdown icon colour tables by colour prefix, refreshed in place when settings change.
 local _dropdown_icon_color_by_prefix = {}
 
+--- Returns the icon colour prefix anchored under a setting widget.
 local function _dropdown_color_prefix_from_anchor(setting_id)
     local anchored_color_settings = RadarColorSettings.anchored_color_settings
     local color_descriptors = anchored_color_settings and anchored_color_settings[setting_id] or nil
@@ -788,6 +855,10 @@ local function _dropdown_color_prefix_from_anchor(setting_id)
     return nil
 end
 
+--- Returns the colour prefix a dropdown's icon is tinted with.
+-- Tries the explicit table, then the colours anchored under the widget, then the marker or
+-- enemy kind named by the `show_<kind>` setting id.
+-- treturn: ?string
 local function _dropdown_color_prefix(setting_id)
     local prefix = DROPDOWN_COLOR_PREFIX_BY_SETTING_ID[setting_id]
 
@@ -814,6 +885,8 @@ local function _dropdown_color_prefix(setting_id)
         enemy_icon_prefix_by_kind and enemy_icon_prefix_by_kind[kind] or nil
 end
 
+--- Reads one configured colour channel for a dropdown icon.
+-- treturn: int
 local function _dropdown_color_channel(prefix, suffix, default_value)
     local value = tonumber(mod:get(_color_setting_id(prefix, suffix)))
 
@@ -830,6 +903,7 @@ local function _dropdown_color_channel(prefix, suffix, default_value)
     return math.floor(value + 0.5)
 end
 
+--- Refreshes one dropdown icon colour table in place from the settings.
 local function _refresh_dropdown_icon_colour(prefix)
     local color = prefix and _dropdown_icon_color_by_prefix[prefix] or nil
 
@@ -845,12 +919,19 @@ local function _refresh_dropdown_icon_colour(prefix)
     color[4] = _dropdown_color_channel(prefix, "blue", defaults[4] or 255)
 end
 
+--- Refreshes every dropdown icon colour table from the settings.
 local function _refresh_dropdown_icon_colours()
     for prefix in pairs(_dropdown_icon_color_by_prefix) do
         _refresh_dropdown_icon_colour(prefix)
     end
 end
 
+--- Returns the live icon colour table of a dropdown.
+-- The table is shared by every option using the same colour prefix and updated in place, so
+-- the menu shows colour changes without rebuilding the widgets.
+-- string: setting_id dropdown setting id
+-- ?tab: fallback colour for dropdowns without a colour prefix
+-- treturn: tab ARGB colour array
 _dropdown_marker_icon_colour = function(setting_id, fallback)
     local prefix = _dropdown_color_prefix(setting_id)
 
@@ -877,6 +958,9 @@ _dropdown_marker_icon_colour = function(setting_id, fallback)
     return color
 end
 
+--- Chains `mod.on_setting_changed` once so the dropdown icon colours follow the colour settings.
+-- The refresh function itself is replaced on every load, so a reloaded data file refreshes
+-- its own colour tables.
 local function _install_dropdown_icon_color_refresh()
     mod._radar_dropdown_icon_color_refresh = _refresh_dropdown_icon_colours
 
@@ -888,6 +972,9 @@ local function _install_dropdown_icon_color_refresh()
 
     local previous_on_setting_changed = mod.on_setting_changed
 
+    --- DMF callback, chained after any previously installed handler; refreshes the dropdown icon colours.
+    -- string: setting_id changed setting
+    -- param: ... further DMF arguments, forwarded to the previous handler
     mod.on_setting_changed = function(setting_id, ...)
         if previous_on_setting_changed then
             previous_on_setting_changed(setting_id, ...)
@@ -903,6 +990,7 @@ end
 
 _install_dropdown_icon_color_refresh()
 
+--- Returns the localized text of an id, or the id itself when it has no localization.
 local function _localized_or_raw(text_id)
     if text_id == nil then
         return nil
@@ -917,6 +1005,7 @@ local function _localized_or_raw(text_id)
     return text_id
 end
 
+--- Returns the localized title of a widget.
 local function _localized_setting_title(widget)
     local title = widget and (widget.title or widget.setting_id) or nil
 
@@ -927,6 +1016,7 @@ local function _localized_setting_title(widget)
     return _localized_or_raw(title)
 end
 
+--- Returns the localized title suffix of a colour slider group role.
 local function _localized_color_label_suffix(label_role)
     local suffix = COLOR_LABEL_SUFFIX_BY_ROLE[label_role]
 
@@ -943,6 +1033,9 @@ local function _localized_color_label_suffix(label_role)
     return suffix.fallback
 end
 
+--- Returns the title of a colour slider group.
+-- Combines the label prefix, or the anchor widget's title, with the role suffix; otherwise
+-- falls back to the descriptor's title.
 local function _color_setting_group_title(descriptor, anchor_widget)
     local label_role = descriptor.label_role
     local label_suffix = descriptor.label_suffix or (label_role and _localized_color_label_suffix(label_role))
@@ -961,6 +1054,8 @@ local function _color_setting_group_title(descriptor, anchor_widget)
     return _localized_or_raw(descriptor.title_prefix or "marker_color")
 end
 
+--- Builds the channel sliders of a colour descriptor.
+-- treturn: tab widgets
 local function _color_setting_sliders(descriptor)
     local sliders = {}
     local prefix = descriptor.prefix
@@ -985,6 +1080,12 @@ local function _color_setting_sliders(descriptor)
     return sliders
 end
 
+--- Builds the slider group of a colour descriptor.
+-- tab: descriptor colour slider descriptor from `Radar_color_settings.lua`
+-- ?tab: anchor_widget widget the group is inserted after
+-- ?string: tab settings tab
+-- ?tab: tab_overrides tab button overrides
+-- treturn: tab widget
 local function _color_setting_group(descriptor, anchor_widget, tab, tab_overrides)
     local tooltip = descriptor.tooltip or "marker_color_slider_tooltip"
 
@@ -1008,6 +1109,8 @@ local function _color_setting_group(descriptor, anchor_widget, tab, tab_override
     return group
 end
 
+--- Builds the slider groups of every colour anchored to a setting id.
+-- treturn: tab widgets
 local function _color_setting_groups(anchor, tab, tab_overrides)
     local groups = {}
     local anchored_color_settings = RadarColorSettings.anchored_color_settings
@@ -1024,6 +1127,11 @@ local function _color_setting_groups(anchor, tab, tab_overrides)
     return groups
 end
 
+--- Inserts the colour slider groups directly after each widget they are anchored to, recursively.
+-- Widgets with `skip_color_settings` get none.
+-- tab: widgets widget list, modified in place
+-- ?string: tab inherited settings tab
+-- ?tab: tab_overrides inherited tab button overrides
 local function _insert_color_settings(widgets, tab, tab_overrides)
     local anchored_color_settings = RadarColorSettings.anchored_color_settings or {}
     local i = 1
@@ -1060,6 +1168,7 @@ local function _insert_color_settings(widgets, tab, tab_overrides)
     end
 end
 
+--- Builds the checkbox that shows nearby highlight distance text on the radar for a group.
 local function _nearby_highlight_radar_distance_text_checkbox(setting_id)
     return {
         setting_id = setting_id,
@@ -1070,6 +1179,7 @@ local function _nearby_highlight_radar_distance_text_checkbox(setting_id)
     }
 end
 
+--- Builds a vertical arrows checkbox for an enemy category.
 local function _enemy_vertical_arrows_checkbox(setting_id)
     return {
         setting_id = setting_id,
@@ -1079,6 +1189,7 @@ local function _enemy_vertical_arrows_checkbox(setting_id)
     }
 end
 
+--- Maps a saved enemy setting (checkbox or dropdown value) to `icon_only`, `marked_icon` or `off`.
 local function _normalize_icon_marked_off_default(value, fallback)
     if value == false or value == "off" then
         return "off"
@@ -1095,6 +1206,8 @@ local function _normalize_icon_marked_off_default(value, fallback)
     return fallback or "icon_only"
 end
 
+--- Builds an enemy icon / marked icon / off dropdown widget.
+-- treturn: tab widget
 local function _icon_marked_off_dropdown(setting_id, default_value)
     local presentation = ENEMY_DROPDOWN_PRESENTATIONS[setting_id] or DEFAULT_DROPDOWN_PRESENTATION
     local icon = presentation.icon
@@ -1112,6 +1225,12 @@ local function _icon_marked_off_dropdown(setting_id, default_value)
     }
 end
 
+--- Builds an icon / icon and distance / off dropdown widget.
+-- Its getter maps legacy checkbox values.
+-- string: setting_id setting id
+-- string: default_value default mode
+-- ?tab: presentations option icon table, `MARKER_DROPDOWN_PRESENTATIONS` when nil
+-- treturn: tab widget
 local function _icon_distance_off_dropdown(setting_id, default_value, presentations)
     presentations = presentations or MARKER_DROPDOWN_PRESENTATIONS
 
@@ -1147,10 +1266,12 @@ local function _icon_distance_off_dropdown(setting_id, default_value, presentati
     }
 end
 
+--- Builds an Expedition location display mode dropdown.
 local function _expedition_marker_display_mode_dropdown(setting_id, default_value)
     return _icon_distance_off_dropdown(setting_id, default_value, EXPEDITION_DROPDOWN_PRESENTATIONS)
 end
 
+--- Builds the Tech-Remnant marker mode dropdown (default, scaled, clustered).
 local function _expedition_loot_marker_mode_dropdown(setting_id)
     return {
         setting_id = setting_id,
@@ -1165,6 +1286,10 @@ local function _expedition_loot_marker_mode_dropdown(setting_id)
 end
 
 
+--- Turns the marker checkboxes listed in `MARKER_DROPDOWN_PRESENTATIONS` into dropdowns, recursively.
+-- Saved checkbox values are migrated first. The player marker checkbox becomes the player
+-- marker style dropdown; every other one an icon / off dropdown.
+-- tab: widgets widget list, modified in place
 local function _apply_marker_enabled_dropdowns(widgets)
     for i = 1, #widgets do
         local widget = widgets[i]
@@ -1205,6 +1330,7 @@ local function _apply_marker_enabled_dropdowns(widgets)
     end
 end
 
+--- Gives every widget without a tooltip the `<setting_id>_tooltip` localization id, recursively.
 local function _apply_missing_tooltips(widgets)
     for i = 1, #widgets do
         local widget = widgets[i]
@@ -1216,6 +1342,7 @@ local function _apply_missing_tooltips(widgets)
         end
     end
 end
+--- The DMF mod data table.
 return {
     name = mod:localize("mod_name"),
     description = mod:localize("mod_description"),

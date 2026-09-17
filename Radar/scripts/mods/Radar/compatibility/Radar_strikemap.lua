@@ -1,5 +1,26 @@
+--- Optional integration with the Strikemap mod's public compatibility API.
+-- Resolves Strikemap and its versioned API lazily (so no fixed load order is needed),
+-- registers Radar as a geometry consumer, fetches and validates the map context (the
+-- walkable triangles and their spatial index) and the optional vector context (contours,
+-- stairs, hatches, slopes, transitions), and caches both per geometry revision.
+--
+-- The integration runs as a small status machine. `waiting` and `map_unavailable` retry
+-- after an interval, `active` polls Strikemap's status for new geometry revisions, and
+-- `incompatible` and `error` are sticky until `reset` (a map geometry source change or a
+-- mod reload). Each status change is logged once; a failure never affects the rest of
+-- Radar, which falls back to its own background or the live navmesh layer.
+--
+-- Explicit module. `Radar.lua` and `ui/Radar_strikemap_geometry.lua` both load it through
+-- `mod:io_dofile`, which runs the file again each time, so the singleton is cached on
+-- `mod._strikemap_compatibility` and returned by every later load. Loading it also adds
+-- `mod:reset_strikemap_integration` and chains `mod.on_setting_changed` and `mod.on_disabled`.
+-- module: Radar_strikemap
+-- alias: StrikemapCompatibility
+-- author: LucLeto
 local mod = get_mod("Radar")
 
+-- `mod:io_dofile` runs the file again on every load; reuse the first instance so its state and
+-- callbacks exist only once.
 if mod._strikemap_compatibility then
     return mod._strikemap_compatibility
 end
@@ -12,6 +33,9 @@ local type = type
 local math_floor = math.floor
 local string_format = string.format
 
+--- Strikemap API contract Radar understands.
+-- Map triangles are flat records of `TRIANGLE_STRIDE` numbers; each vector layer names its
+-- array, count and stride fields and the stride Radar can read.
 local SUPPORTED_STRIKEMAP_API_VERSION = 1
 local TRIANGLE_STRIDE = 7
 local VECTOR_LAYER_SPECS = {
@@ -21,17 +45,19 @@ local VECTOR_LAYER_SPECS = {
     { array_field = "slopes", count_field = "slope_count", stride_field = "slope_stride", stride = 5 },
     { array_field = "transitions", count_field = "transition_count", stride_field = "transition_stride", stride = 4 },
 }
+--- Consumer id Radar registers with Strikemap, and the retry intervals in seconds while no map is usable.
 local CONSUMER_ID = "Radar"
 local RETRY_WAITING_INTERVAL = 2
 local RETRY_MAP_UNAVAILABLE_INTERVAL = 5
--- While a map is active, get_status is polled at this fast interval so newly
--- scanned floor appears on the radar almost immediately after Strikemap
--- publishes a new geometry revision. The full context is still only refetched
--- when the revision actually changes.
+--- Interval at which Strikemap's status is polled while a map is active.
+-- Short, so newly scanned floor appears on the radar almost immediately after Strikemap
+-- publishes a new geometry revision; the full context is only refetched when the revision
+-- actually changes.
 local STATUS_POLL_INTERVAL = 0.25
--- Slow fallback for API variants whose status does not report a geometry
--- revision; every poll then refetches and revalidates the full map context.
+--- Slow fallback refresh for API variants whose status reports no geometry revision.
+-- Every refresh then refetches and revalidates the full map context.
 local CONTEXT_REFRESH_INTERVAL = 3
+--- Mod names Strikemap may be registered under with DMF, tried in order.
 local STRIKEMAP_MOD_NAME_CANDIDATES = {
     "strikemap",
     "Strikemap",
@@ -40,11 +66,15 @@ local STRIKEMAP_MOD_NAME_CANDIDATES = {
     "Strike_Map",
 }
 
+--- Statuses that stop all further attempts and unregister the consumer until the integration is reset.
 local STICKY_STATUSES = {
     incompatible = true,
     error = true,
 }
 
+--- Integration singleton and its cached state.
+-- `_vector_failed_revision` starts as `false` rather than nil so it can never match a map
+-- context without a revision.
 local StrikemapCompatibility = {
     _status = "disabled",
     _status_detail = nil,
@@ -59,6 +89,11 @@ local StrikemapCompatibility = {
     _next_refresh_t = 0,
 }
 
+--- Moves the integration to a status and logs the transition once.
+-- Repeating the current status and detail is a no-op, so polling never spams the log. A
+-- sticky status also unregisters the consumer.
+-- string: status `disabled`, `waiting`, `active`, `map_unavailable`, `incompatible` or `error`
+-- ?string: detail map id for `active`, otherwise a reason
 function StrikemapCompatibility:_set_status(status, detail)
     if self._status == status and self._status_detail == detail then
         return
@@ -89,6 +124,8 @@ function StrikemapCompatibility:_set_status(status, detail)
     end
 end
 
+--- Returns whether the map geometry source setting asks for Strikemap geometry (`strikemap` or `auto`).
+-- treturn: bool
 function StrikemapCompatibility:is_integration_enabled()
     local get_map_geometry_source = mod.get_map_geometry_source
 
@@ -101,14 +138,9 @@ function StrikemapCompatibility:is_integration_enabled()
     return source == "strikemap" or source == "auto"
 end
 
-function StrikemapCompatibility:is_available()
-    return self._status == "active" and self._context ~= nil
-end
-
-function StrikemapCompatibility:get_status()
-    return self._status, self._status_detail
-end
-
+--- Finds the Strikemap mod object under any of its known names.
+-- A mod that reports itself disabled is skipped; one without `is_enabled` is accepted.
+-- treturn: ?tab Strikemap mod, or nil when it is not installed or not enabled
 local function _resolve_strikemap_mod()
     local get_mod_fn = rawget(_G, "get_mod")
 
@@ -137,6 +169,10 @@ local function _resolve_strikemap_mod()
     return nil
 end
 
+--- Returns Strikemap's compatibility API from `get_compatibility_api` or the `compatibility_api` field.
+-- An API is only accepted when it provides `get_map_context`.
+-- tab: strikemap_mod Strikemap mod object
+-- treturn: ?tab compatibility API
 local function _resolve_strikemap_api(strikemap_mod)
     local get_api = strikemap_mod.get_compatibility_api
 
@@ -157,6 +193,8 @@ local function _resolve_strikemap_api(strikemap_mod)
     return nil
 end
 
+--- Registers Radar as a Strikemap geometry consumer once.
+-- tab: api compatibility API
 function StrikemapCompatibility:_register_consumer(api)
     if self._consumer_registered then
         return
@@ -171,6 +209,7 @@ function StrikemapCompatibility:_register_consumer(api)
     end
 end
 
+--- Unregisters Radar as a Strikemap consumer if it is registered.
 function StrikemapCompatibility:_unregister_consumer()
     if not self._consumer_registered then
         return
@@ -186,6 +225,13 @@ function StrikemapCompatibility:_unregister_consumer()
     end
 end
 
+--- Validates a Strikemap map context before any renderer touches it.
+-- Checks the API version, a map identifier, the triangle array, stride and format (the
+-- first and last record must be numbers), the spatial index and the optional bounds.
+-- param: context value returned by `get_map_context`
+-- treturn: ?tab the context when it is usable
+-- treturn: ?string failure kind, `map_unavailable`, `incompatible_version` or `invalid_geometry`
+-- treturn: ?string failure detail
 local function _validate_map_context(context)
     if type(context) ~= "table" then
         return nil, "map_unavailable"
@@ -239,6 +285,14 @@ local function _validate_map_context(context)
     return context
 end
 
+--- Validates a Strikemap vector context against the map revision and the known layer specs.
+-- Checks each layer's stride and that its array is at least as long as its count, and that
+-- every transition chain reference exists.
+-- param: vector_context value returned by `get_vector_context`
+-- param: map_revision revision of the validated map context, may be nil
+-- treturn: ?tab the vector context when it is usable
+-- treturn: ?string failure detail
+-- treturn: ?tab record count per layer array field
 local function _validate_vector_context(vector_context, map_revision)
     if type(vector_context) ~= "table" then
         return nil, "the Strikemap vector context is not a table"
@@ -320,6 +374,10 @@ local function _validate_vector_context(vector_context, map_revision)
     return vector_context, nil, counts
 end
 
+--- Disables vector details for one geometry revision after they failed to load or draw.
+-- The map triangles keep drawing; vectors are retried when Strikemap publishes a new revision.
+-- param: revision geometry revision the failure belongs to
+-- string: detail failure reason for the log
 function StrikemapCompatibility:_mark_vector_failed(revision, detail)
     self._vector_context = nil
     self._vector_counts = nil
@@ -328,6 +386,10 @@ function StrikemapCompatibility:_mark_vector_failed(revision, detail)
         tostring(detail)))
 end
 
+--- Fetches and validates the vector context for a freshly validated map context.
+-- Skipped when the API has no vector support or vectors already failed for this revision.
+-- tab: api compatibility API
+-- tab: map_context validated map context
 function StrikemapCompatibility:_refresh_vector_context(api, map_context)
     self._vector_context = nil
     self._vector_counts = nil
@@ -368,6 +430,12 @@ function StrikemapCompatibility:_refresh_vector_context(api, map_context)
     self._vector_counts = counts
 end
 
+--- Resolves the API if needed, polls Strikemap's status and refetches the map context when it changed.
+-- All API calls run through `pcall`. When the status reports the same geometry revision as
+-- the cached context, only the next poll is scheduled. Every outcome sets the status and the
+-- time of the next attempt or refresh.
+-- number: now gameplay time
+-- treturn: ?tab validated map context, or nil when none is usable
 function StrikemapCompatibility:_refresh(now)
     local api = self._api
 
@@ -499,6 +567,11 @@ function StrikemapCompatibility:_refresh(now)
     return valid_context
 end
 
+--- Returns the Strikemap map context for this frame, refreshing it when due.
+-- Returns nil without touching Strikemap while the integration is disabled by setting, in a
+-- sticky failure status or waiting for its retry interval.
+-- ?number: t gameplay time
+-- treturn: ?tab validated map context
 function StrikemapCompatibility:get_map_context(t)
     if not self:is_integration_enabled() then
         if self._status ~= "disabled" then
@@ -526,6 +599,12 @@ function StrikemapCompatibility:get_map_context(t)
     return self:_refresh(now)
 end
 
+--- Returns everything the Strikemap geometry renderer needs for this frame.
+-- ?number: t gameplay time
+-- treturn: ?tab map context
+-- treturn: ?tab vector context, nil when unsupported or failed for this revision
+-- return: geometry revision of the map context, may be nil
+-- treturn: ?tab record count per vector layer
 function StrikemapCompatibility:get_geometry_contexts(t)
     local context = self:get_map_context(t)
 
@@ -536,12 +615,16 @@ function StrikemapCompatibility:get_geometry_contexts(t)
     return context, self._vector_context, self._context_revision, self._vector_counts
 end
 
+--- Returns the API version reported by the resolved Strikemap API, if any.
+-- treturn: ?number
 function StrikemapCompatibility:get_api_version()
     local api = self._api
 
     return api and tonumber(api.api_version) or nil
 end
 
+--- Drops the cached contexts and enters the sticky `error` status, for renderer failures.
+-- param: err error value
 function StrikemapCompatibility:mark_error(err)
     self._context = nil
     self._vector_context = nil
@@ -549,10 +632,14 @@ function StrikemapCompatibility:mark_error(err)
     self:_set_status("error", tostring(err))
 end
 
+--- Disables vector details for the current geometry revision after a vector draw error.
+-- param: err error value
 function StrikemapCompatibility:mark_vector_error(err)
     self:_mark_vector_failed(self._context_revision, tostring(err))
 end
 
+--- Drops the cached contexts and enters the sticky `incompatible` status.
+-- param: reason reason for the log
 function StrikemapCompatibility:mark_unsupported(reason)
     self._context = nil
     self._vector_context = nil
@@ -560,6 +647,9 @@ function StrikemapCompatibility:mark_unsupported(reason)
     self:_set_status("incompatible", tostring(reason))
 end
 
+--- Clears all cached contexts, retry timers and failure state, and resets the geometry renderer.
+-- The consumer is unregistered when the integration ends up disabled.
+-- ?string: status status to start from; `waiting` or `disabled` by setting when nil
 function StrikemapCompatibility:reset(status)
     self._context = nil
     self._context_revision = nil
@@ -582,16 +672,18 @@ function StrikemapCompatibility:reset(status)
     end
 end
 
+--- Resets the Strikemap integration so it resolves Strikemap and its map again.
 function mod:reset_strikemap_integration()
     StrikemapCompatibility:reset()
 end
 
-function mod:get_strikemap_integration_status()
-    return StrikemapCompatibility:get_status()
-end
-
 local previous_on_setting_changed = mod.on_setting_changed
 
+--- DMF callback, chained after any previously installed handler.
+-- Resets the integration when the map geometry source changes, to `waiting` when Strikemap
+-- geometry is now wanted and to `disabled` otherwise.
+-- string: setting_id changed setting
+-- param: ... further DMF arguments, forwarded to the previous handler
 mod.on_setting_changed = function(setting_id, ...)
     if previous_on_setting_changed then
         previous_on_setting_changed(setting_id, ...)
@@ -608,6 +700,8 @@ end
 
 local previous_on_disabled = mod.on_disabled
 
+--- DMF callback, chained after any previously installed handler; unregisters Radar as a Strikemap consumer.
+-- param: ... DMF arguments, forwarded to the previous handler
 mod.on_disabled = function(...)
     if previous_on_disabled then
         previous_on_disabled(...)
@@ -616,6 +710,7 @@ mod.on_disabled = function(...)
     StrikemapCompatibility:_unregister_consumer()
 end
 
+-- Cached for the reload guard at the top of the file.
 mod._strikemap_compatibility = StrikemapCompatibility
 
 return StrikemapCompatibility

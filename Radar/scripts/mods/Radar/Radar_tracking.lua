@@ -1,10 +1,25 @@
+--- Category-agnostic tracking and radar target collection layer.
+-- Owns what the radar knows about the world and when it looks. It keeps the registry of
+-- tracked units and positions, schedules the scans in three rates, dispatches interactees
+-- to the feature classifiers, filters tracked entries into radar targets (enablement,
+-- range, floor, tags, marker limit) and publishes the snapshot the HUD element draws. It
+-- also owns overview mode, radar zoom and position, the input capture for zoom keys, the
+-- settings getters the HUD reads, the mission reset, the hooks and DMF callbacks, and
+-- registers the HUD element. Feature modules decide what a unit is; this module decides
+-- whether and where it is shown.
+--
+-- Installer module, installed third into Radar's shared runtime environment (see
+-- `Radar.lua`). Contributes `_track_unit`, `_clear_tracked_unit_from_source`, `_track_point`,
+-- `_kind_enabled`, the range predicates and distance helpers, and most of the radar `mod`
+-- API. Relies on the registries from `Radar_enemy_definitions.lua`, the runtime helpers,
+-- and at call time on the feature modules installed after it (players, pickups, mission
+-- objectives, expeditions and events), whose scans and resets it drives.
+-- module: Radar_tracking
+-- author: LucLeto
 return function(env)
     setfenv(1, env)
 
     local mod = mod
-
-    local GameSession = GameSession
-    local PlayerUnitVisualLoadout = PlayerUnitVisualLoadout
     local pcall = pcall
     local pairs = pairs
     local rawget = rawget
@@ -25,69 +40,43 @@ return function(env)
     local string_sub = string.sub
     local table_concat = table.concat
     local table_sort = table.sort
+
     local table_clear = table.clear or function(t)
         for k in pairs(t) do
             t[k] = nil
         end
     end
+
     local os_clock = os and os.clock or nil
 
+    -- ----------------------------------------------------------------------------
+    -- Constants
+    -- ----------------------------------------------------------------------------
 
-    local function _reuse_or_new_table(t)
-        if t then
-            table_clear(t)
-            return t
-        end
-
-        return {}
-    end
-
-    local function _reset_runtime_output_tables()
-        mod._tracked_points = _reuse_or_new_table(mod._tracked_points)
-        mod._radar_targets = _reuse_or_new_table(mod._radar_targets)
-        mod._screen_highlight_targets = _reuse_or_new_table(mod._screen_highlight_targets)
-        mod._unclustered_radar_targets = _reuse_or_new_table(mod._unclustered_radar_targets)
-        mod._highlight_source_radar_targets = _reuse_or_new_table(mod._highlight_source_radar_targets)
-        mod._radar_snapshot = nil
-    end
-
-    local function _reset_tracked_units_table()
-        mod._tracked_units = _reuse_or_new_table(mod._tracked_units)
-        mod._radar_player_unit_by_player = _reuse_or_new_table(mod._radar_player_unit_by_player)
-    end
-
-    local _scratch_kind_enabled_cache = {}
-    local _scratch_ignore_range_cache = {}
-    local _scratch_infinite_range_cache = {}
-    local _scratch_supports_vertical_cache = {}
-    local _scratch_render_layer_cache = {}
-    local _scratch_selection_priority_cache = {}
-    local _scratch_priority_target_cache = {}
-    local _scratch_seen_interactees = {}
-    local _scratch_seen_chests = {}
-    local _scratch_seen_destructibles = {}
-    local _scratch_seen_hazard_props = {}
-    local _scratch_seen_radar_players = {}
-    local _scratch_mastiff_disabled_enemy_units = {}
-    local _scratch_minion_kind_enabled_cache = {}
-    local OVERVIEW_MIN_ZOOM_RANGE = 25
-    local OVERVIEW_MAX_ZOOM_RANGE = 500
-    local OVERVIEW_DEFAULT_ZOOM_RANGE = OVERVIEW_MAX_ZOOM_RANGE
-    local OVERVIEW_SCREEN_PADDING = 80
-    local OVERVIEW_RANGE_TRANSITION_DURATION = 0.28
-    local OVERVIEW_RANGE_TRANSITION_SCAN_INTERVAL = 0.05
+    --- Scan tiers.
+    -- Self-moving targets (enemies, teammates, companions) are scanned at the configurable
+    -- rate. Interactees, droppable items, smart tags and tracked points rescan at
+    -- `DROPPABLE_SCAN_INTERVAL`, and fully static props (chests, destructibles, hazards) at the
+    -- slower `STATIC_SCAN_INTERVAL`, since they never move.
     local STATIC_SCAN_INTERVAL = SCAN_INTERVAL * 2
-    -- Only self-moving targets (enemies, teammates, companions) follow the
-    -- configurable rate. Droppable items (pocketables, deployables, expedition
-    -- drops, tag points) rescan at the fixed DROPPABLE_SCAN_INTERVAL, and fully
-    -- static props (chests, destructibles, hazards) keep the even slower
-    -- STATIC_SCAN_INTERVAL since they never move.
+
+    --- Scan interval of each `radar_scan_rate` setting value.
     local SCAN_INTERVAL_BY_RATE = {
         low = SCAN_INTERVAL,
         medium = 0.1,
         high = 0.05,
     }
     local DROPPABLE_SCAN_INTERVAL = SCAN_INTERVAL
+    --- Overview mode and normal radar zoom limits in metres, transition timing and marker limit.
+    -- Overview zoom moves in steps of `OVERVIEW_MIN_ZOOM_RANGE`. A zoom modifier press stays
+    -- active for `NORMAL_RADAR_ZOOM_MODIFIER_GRACE` seconds, and the zoom factor indicator is
+    -- shown for `NORMAL_RADAR_ZOOM_INDICATOR_DURATION` seconds.
+    local OVERVIEW_MIN_ZOOM_RANGE = 25
+    local OVERVIEW_MAX_ZOOM_RANGE = 500
+    local OVERVIEW_DEFAULT_ZOOM_RANGE = OVERVIEW_MAX_ZOOM_RANGE
+    local OVERVIEW_SCREEN_PADDING = 80
+    local OVERVIEW_RANGE_TRANSITION_DURATION = 0.28
+    local OVERVIEW_RANGE_TRANSITION_SCAN_INTERVAL = 0.05
     local OVERVIEW_RESET_FIT_EDGE_FRACTION = 0.9
     local OVERVIEW_RADAR_MARKER_LIMIT = 300
     local NORMAL_RADAR_MIN_ZOOM_RANGE = 10
@@ -96,10 +85,7 @@ return function(env)
     local NORMAL_RADAR_RESET_ZOOM_RANGE = NORMAL_RADAR_MIN_ZOOM_RANGE
     local NORMAL_RADAR_ZOOM_MODIFIER_GRACE = 0.12
     local NORMAL_RADAR_ZOOM_INDICATOR_DURATION = 1
-    local SERVO_SKULL_OWNER_HIDE_DISTANCE_SQ = 2.5 * 2.5
-    local COMPANION_TARGET_OVERLAP_DISTANCE_SQ = 2 * 2
-    local COMPANION_ACTION_RENDER_LAYER = 6
-    local SERVO_SKULL_STATES = CompanionServoSkullSettings.STATES
+    --- Game input actions swallowed while mouse wheel zoom is in use, by wheel direction.
     local OVERVIEW_CAPTURED_ACTIONS_BY_DIRECTION = {
         up = {
             tactical_overlay_scroll_up = true,
@@ -110,7 +96,112 @@ return function(env)
             wield_scroll_down = true,
         },
     }
+    --- Render layer of a companion that is acting on a target, drawn above the target's marker.
+    local COMPANION_ACTION_RENDER_LAYER = 6
 
+    --- Sources whose units move on their own every frame (enemies, teammates, companions).
+    -- Units from any other source only get their stored position refreshed on droppable scan
+    -- ticks, since props never move and droppables move rarely.
+    local MOVING_TRACK_SOURCES = {
+        unit_data_system = true,
+        player_manager = true,
+        player_companion = true,
+    }
+
+    --- Kinds that move under their own power even though they are tracked from a slower scan tier.
+    -- Their positions refresh at the configurable scan rate, so a flying servo skull does not
+    -- lag a quarter of a second behind.
+    local MOVING_TRACK_KINDS = {
+        mission_objective_servo_skull = true,
+    }
+    --- Height difference in metres from which a vertical arrow shows a target is on another floor.
+    ITEM_VERTICAL_ARROW_Z_DEADZONE = 2
+
+    --- Per-kind overrides of the vertical arrow height difference.
+    -- The flying servo skull hovers well above head height and bobs as it moves, so the shared
+    -- 2 m deadzone reads it as being on another floor; a larger deadzone keeps the arrow for
+    -- genuine floor changes. Only the height at which an arrow appears changes; the "show
+    -- vertical arrows within range" distance setting still applies.
+    local VERTICAL_ARROW_Z_DEADZONE_BY_KIND = {
+        mission_objective_servo_skull = 6,
+    }
+
+    --- Kinds that are never hidden for being too far above or below the player.
+    -- Every mission objective marker qualifies as well; an objective a floor up is exactly
+    -- what the player needs to see, and losing the marker is worse than an imprecise one.
+    -- Objective kinds are matched by predicate in `_is_vertical_hide_exempt`, so a new
+    -- objective category is covered without an edit here.
+    local VERTICAL_HIDE_EXEMPT_KINDS = {
+        pickup_heretic_idol = true,
+    }
+
+    -- ----------------------------------------------------------------------------
+    -- Mutable runtime state
+    -- ----------------------------------------------------------------------------
+
+    --- Tracking state shared with the other modules and the HUD element.
+    -- `_tracked_units` maps a unit to its entry (`kind`, `source`, `position`, `meta`,
+    -- `last_seen_t`) and `_tracked_points` an id to a position-only entry. `_radar_targets` are
+    -- the targets to draw after clustering, sorting and the marker limit;
+    -- `_unclustered_radar_targets` and `_highlight_source_radar_targets` keep the list before
+    -- clustering for highlights. `_radar_snapshot` is what the HUD element reads each frame.
+    mod._next_scan_t = 0
+    mod._tracked_units = {}
+    mod._tracked_points = {}
+    mod._logged_units = {}
+    mod._radar_targets = {}
+    mod._radar_snapshot = nil
+    mod._gameplay_run = false
+    mod._last_update_t = nil
+    mod._last_scan_signature = nil
+    mod._last_block_signature = nil
+    mod._screen_highlight_targets = {}
+    mod._unclustered_radar_targets = {}
+    mod._highlight_source_radar_targets = {}
+
+    --- Per-pass caches of kind lookups, cleared at the start of each target collection.
+    local _scratch_kind_enabled_cache = {}
+    local _scratch_ignore_range_cache = {}
+    local _scratch_infinite_range_cache = {}
+    local _scratch_supports_vertical_cache = {}
+    local _scratch_render_layer_cache = {}
+    local _scratch_selection_priority_cache = {}
+    local _scratch_priority_target_cache = {}
+    local _scratch_seen_interactees = {}
+
+    -- ----------------------------------------------------------------------------
+    -- Generic helpers
+    -- ----------------------------------------------------------------------------
+
+    --- Empties and returns an existing table, or returns a new one, avoiding a per-scan allocation.
+    -- ?tab: t table to reuse
+    -- treturn: tab
+    local function _reuse_or_new_table(t)
+        if t then
+            table_clear(t)
+            return t
+        end
+
+        return {}
+    end
+
+    --- Clears the published outputs (points, targets, highlights, snapshot) while tracked units are kept.
+    local function _reset_runtime_output_tables()
+        mod._tracked_points = _reuse_or_new_table(mod._tracked_points)
+        mod._radar_targets = _reuse_or_new_table(mod._radar_targets)
+        mod._screen_highlight_targets = _reuse_or_new_table(mod._screen_highlight_targets)
+        mod._unclustered_radar_targets = _reuse_or_new_table(mod._unclustered_radar_targets)
+        mod._highlight_source_radar_targets = _reuse_or_new_table(mod._highlight_source_radar_targets)
+        mod._radar_snapshot = nil
+    end
+
+    --- Clears every tracked unit and the per-player unit map.
+    local function _reset_tracked_units_table()
+        mod._tracked_units = _reuse_or_new_table(mod._tracked_units)
+        mod._radar_player_unit_by_player = _reuse_or_new_table(mod._radar_player_unit_by_player)
+    end
+
+    --- Clears the per-pass kind lookup caches.
     local function _clear_scratch_radar_caches()
         table_clear(_scratch_kind_enabled_cache)
         table_clear(_scratch_ignore_range_cache)
@@ -121,6 +212,10 @@ return function(env)
         table_clear(_scratch_priority_target_cache)
     end
 
+    --- Grows the pool of reusable radar target tables to at least the given size.
+    -- Targets are written into pooled tables every scan instead of allocating new ones.
+    -- ?number: min_size pool size to reach
+    -- treturn: tab pool
     local function _warm_radar_target_pool(min_size)
         local pool = mod._radar_target_pool or {}
         local target_size = math_floor(tonumber(min_size) or 0)
@@ -133,6 +228,272 @@ return function(env)
         return pool
     end
 
+    --- Returns the squared horizontal distance between two positions, `math.huge` when either is invalid.
+    -- ?tab: a first position
+    -- ?tab: b second position
+    -- treturn: number
+    function _distance_squared_horizontal(a, b)
+        if not a or not b then
+            return math_huge
+        end
+
+        local ax, ay = a.x, a.y
+        local bx, by = b.x, b.y
+
+        if not _is_finite_number(ax) or not _is_finite_number(ay) then
+            return math_huge
+        end
+
+        if not _is_finite_number(bx) or not _is_finite_number(by) then
+            return math_huge
+        end
+
+        local dx = ax - bx
+        local dy = ay - by
+
+        return dx * dx + dy * dy
+    end
+
+    --- Returns how far `b` lies above `a` in metres.
+    -- ?tab: a reference position
+    -- ?tab: b other position
+    -- treturn: ?number nil when either height is invalid
+    function _vertical_delta(a, b)
+        if not a or not b then
+            return nil
+        end
+
+        local az = a.z
+        local bz = b.z
+
+        if not _is_finite_number(az) or not _is_finite_number(bz) then
+            return nil
+        end
+
+        return bz - az
+    end
+
+    --- Formats a position as `x,y,z` with three decimals for debug output.
+    -- treturn: string `nil` for an invalid position
+    function _debug_position_text(position)
+        local x, y, z = _vector3_components(position)
+
+        if not _is_finite_number(x) or not _is_finite_number(y) or not _is_finite_number(z) then
+            return "nil"
+        end
+
+        return string_format("%.3f,%.3f,%.3f", x, y, z)
+    end
+
+    --- Formats a unit's position for debug output.
+    -- treturn: string
+    function _debug_unit_position_text(unit)
+        return _debug_position_text(_safe_unit_position(unit))
+    end
+
+    -- ----------------------------------------------------------------------------
+    -- Unit and point tracking
+    -- ----------------------------------------------------------------------------
+
+    --- Records or refreshes a unit on the radar.
+    -- Units that are no longer trackable are ignored, and Expedition items outside the current
+    -- section are removed instead. The stored position comes from `meta.position` when given,
+    -- otherwise from the unit. An existing entry keeps its meta unless new meta is passed.
+    -- Entries not refreshed by any scan for 2.5 seconds are pruned.
+    -- param: unit unit handle
+    -- ?string: kind marker kind; nothing is tracked when nil
+    -- ?string: source scan source, such as `interactee_system` or `unit_data_system`
+    -- ?tab: meta kind-specific data carried to the HUD element
+    function _track_unit(unit, kind, source, meta)
+        if not kind or not _is_trackable_unit_alive(unit, kind) then
+            return
+        end
+
+        local tracked_units = mod._tracked_units
+
+        if not _is_valid_expedition_item_for_current_section(kind, unit) then
+            tracked_units[unit] = nil
+            return
+        end
+
+        local existing = tracked_units[unit]
+        local now = _safe_gameplay_time() or 0
+        local position = meta and _copy_vector3(meta.position) or nil
+
+        position = position or _safe_unit_position(unit)
+
+        if existing then
+            existing.kind = kind
+            existing.source = source or existing.source
+            existing.last_seen_t = now
+            existing.position = position or existing.position
+
+            if meta ~= nil then
+                existing.meta = meta
+            end
+        else
+            tracked_units[unit] = {
+                kind = kind,
+                source = source,
+                last_seen_t = now,
+                position = position,
+                meta = meta,
+            }
+        end
+    end
+
+    --- Stops tracking a unit, but only if the given source tracked it.
+    -- One scan cannot drop a unit another source has claimed.
+    -- param: unit unit handle
+    -- string: source scan source
+    function _clear_tracked_unit_from_source(unit, source)
+        local tracked_units = mod._tracked_units
+        local tracked = tracked_units and tracked_units[unit]
+
+        if tracked and tracked.source == source then
+            tracked_units[unit] = nil
+        end
+    end
+
+    --- Records a radar target that has a position but no unit, such as a tag point or Expedition location.
+    -- Points are rebuilt from scratch on every droppable scan.
+    -- param: id stable point id
+    -- string: kind marker kind
+    -- tab: position world position
+    -- ?string: source scan source
+    -- ?tab: meta kind-specific data
+    function _track_point(id, kind, position, source, meta)
+        if not id or not kind or not position then
+            return
+        end
+
+        mod._tracked_points[id] = {
+            kind = kind,
+            source = source,
+            position = position,
+            meta = meta,
+        }
+    end
+
+    -- ----------------------------------------------------------------------------
+    -- Marker kind enablement and range
+    -- ----------------------------------------------------------------------------
+
+    --- Returns whether a kind follows the boss marker range setting (monstrosities, captains, Karnak twins).
+    -- treturn: bool
+    function _is_boss_marker_kind(kind)
+        return kind == "enemy_monstrosity"
+            or kind == "enemy_captain"
+            or kind == "enemy_karnak_twin"
+    end
+
+    --- Returns whether a kind is shown at any distance and on any floor.
+    -- True for dropped Tech-Remnants, and for teammates and bosses when their range setting is `infinite`.
+    -- treturn: bool
+    function _has_infinite_radar_range_for_kind(kind)
+        if kind == "material_expeditions_loot_player_drop" then
+            return true
+        end
+
+        if kind == "player_teammate" and mod:get_player_marker_range_mode() == "infinite" then
+            return true
+        end
+
+        if _is_boss_marker_kind(kind) and mod:get_boss_marker_range_mode() == "infinite" then
+            return true
+        end
+
+        return false
+    end
+
+    --- Returns whether a kind is shown beyond the radar's range.
+    -- True for player smart tags, kinds with infinite range and, when enabled, Expedition
+    -- location markers other than loot converters.
+    -- treturn: bool
+    function _ignore_radar_range_for_kind(kind)
+        if kind == "expedition_loot_converter" then
+            return false
+        end
+
+        if _is_player_smart_tag_kind(kind) then
+            return true
+        end
+
+        if _has_infinite_radar_range_for_kind(kind) then
+            return true
+        end
+
+        return _is_expedition_marker_kind(kind) and mod:get("ignore_radar_range_for_expedition_markers") == true
+    end
+
+    --- Returns whether the settings show a marker kind at all.
+    -- Resolves the kind through the first setting that covers it; the player and companion
+    -- settings, the enemy dropdown, the icon/distance dropdown, the Expedition dropdown, the
+    -- artwork dropdown, and finally its plain visibility setting. Kinds without any setting
+    -- are enabled.
+    -- ?string: kind marker kind
+    -- treturn: bool
+    function _kind_enabled(kind)
+        local get_enemy_marker_mode = mod.get_enemy_marker_mode
+        local get_icon_distance_marker_display_mode = mod.get_icon_distance_marker_display_mode
+        local get_expedition_marker_display_mode = mod.get_expedition_marker_display_mode
+        local get_marker_display_mode = mod.get_marker_display_mode
+        local get_setting = mod.get
+        local enemy_display_mode = get_enemy_marker_mode(mod, kind)
+
+        if kind == "player_teammate" then
+            if mod.get_show_players then
+                return mod:get_show_players()
+            end
+
+            local show_players = get_setting(mod, "show_players")
+
+            return show_players ~= false and show_players ~= "off"
+        end
+
+        if kind == "player_companion_dog" or kind == "player_companion_servo_skull" then
+            local companion_setting_id = KIND_TO_SETTING[kind]
+            local companion_setting = companion_setting_id and get_setting(mod, companion_setting_id)
+
+            return companion_setting ~= false and companion_setting ~= "off"
+        end
+
+        if enemy_display_mode ~= nil then
+            return enemy_display_mode ~= "off"
+        end
+
+        local icon_distance_display_mode = get_icon_distance_marker_display_mode and
+            get_icon_distance_marker_display_mode(mod, kind) or nil
+        if icon_distance_display_mode ~= nil then
+            return icon_distance_display_mode ~= "off"
+        end
+
+        local expedition_display_mode = get_expedition_marker_display_mode and
+            get_expedition_marker_display_mode(mod, kind) or nil
+        if expedition_display_mode ~= nil then
+            return expedition_display_mode ~= "off"
+        end
+
+        local display_mode = get_marker_display_mode(mod, kind)
+        if display_mode ~= nil then
+            return display_mode ~= "off"
+        end
+
+        local setting_id = KIND_TO_SETTING[kind]
+        if not setting_id then
+            return true
+        end
+
+        local value = get_setting(mod, setting_id)
+
+        return value ~= false and value ~= "off"
+    end
+
+    -- ----------------------------------------------------------------------------
+    -- Input and keybind helpers
+    -- ----------------------------------------------------------------------------
+
+    --- Normalises a key name for comparison (lower case, underscores as spaces, trimmed).
     local function _normalized_keybind_entry(value)
         if value == nil then
             return nil
@@ -147,6 +508,10 @@ return function(env)
         return normalized
     end
 
+    --- Returns whether a DMF keybind uses the mouse wheel in a direction.
+    -- ?tab: binding keybind setting value
+    -- string: direction `up` or `down`
+    -- treturn: bool
     local function _keybind_uses_wheel_direction(binding, direction)
         if type(binding) ~= "table" then
             return false
@@ -163,6 +528,7 @@ return function(env)
         return false
     end
 
+    --- Returns whether a button of a raw input device is held, trying the name with underscores and with spaces.
     local function _raw_device_button_held(device, local_name)
         if not device or not local_name then
             return false
@@ -190,6 +556,7 @@ return function(env)
         return ok_value and (tonumber(value) or 0) > 0.5
     end
 
+    --- Returns whether either side of a modifier key (`shift`, `ctrl`, `alt`) is held.
     local function _keyboard_modifier_alias_held(name)
         local keyboard = Keyboard
 
@@ -207,6 +574,7 @@ return function(env)
         return false
     end
 
+    --- Returns whether a key named in a keybind is held on the keyboard or mouse.
     local function _raw_input_button_held(name)
         local normalized = _normalized_keybind_entry(name)
 
@@ -237,6 +605,10 @@ return function(env)
             or _raw_device_button_held(mouse, normalized)
     end
 
+    --- Returns whether a keybind combination is held.
+    -- Keys joined by `+` must all be held; keys after a `-` must not be.
+    -- param: binding_entry keybind entry
+    -- treturn: bool
     local function _raw_input_combo_held(binding_entry)
         if binding_entry == nil then
             return false
@@ -265,6 +637,9 @@ return function(env)
         return has_required_input
     end
 
+    --- Returns whether the radar zoom modifier keybind is currently held.
+    -- DMF keybind callbacks only report the press, so the held state is read from the raw devices.
+    -- treturn: bool
     local function _radar_zoom_modifier_binding_held()
         local binding = mod:get("radar_zoom_modifier_key")
 
@@ -281,6 +656,8 @@ return function(env)
         return false
     end
 
+    --- Rebuilds the set of game input actions to swallow from the zoom keybinds.
+    -- Scroll actions are only captured when a zoom keybind uses the mouse wheel in that direction.
     local function _refresh_overview_input_capture()
         local capture_actions = mod._overview_capture_actions or {}
         local zoom_in_binding = mod:get("overview_zoom_in_key")
@@ -307,6 +684,14 @@ return function(env)
         mod._overview_capture_actions = capture_actions
     end
 
+    -- ----------------------------------------------------------------------------
+    -- Radar geometry and zoom helpers
+    -- ----------------------------------------------------------------------------
+
+    --- Returns the top-left position of the radar from the configured anchor and offsets.
+    -- ?number: size radar size, the configured size when nil
+    -- treturn: int x
+    -- treturn: int y
     local function _configured_radar_origin(size)
         local radar_size = tonumber(size) or mod:get_configured_radar_size()
         local anchor = mod:get_radar_anchor()
@@ -317,6 +702,9 @@ return function(env)
         return math_floor(x + 0.5), math_floor(y + 0.5)
     end
 
+    --- Returns the top-left position that centres the overview radar on screen.
+    -- treturn: int x
+    -- treturn: int y
     local function _overview_radar_origin(size)
         local radar_size = tonumber(size) or mod:get_radar_size()
         local ui_width, ui_height = _get_ui_space_size()
@@ -326,6 +714,8 @@ return function(env)
         return x, y
     end
 
+    --- Returns the overview radar size; the shorter screen side minus padding, at least 100.
+    -- treturn: int
     local function _overview_max_radar_size()
         local ui_width, ui_height = _get_ui_space_size()
         local max_size = math_min(ui_width, ui_height) - OVERVIEW_SCREEN_PADDING
@@ -337,6 +727,8 @@ return function(env)
         return math_floor(max_size + 0.5)
     end
 
+    --- Clamps an overview zoom range to its limits and rounds it to whole metres.
+    -- treturn: int
     local function _normalize_overview_zoom_range(value)
         local normalized = tonumber(value) or OVERVIEW_DEFAULT_ZOOM_RANGE
 
@@ -349,6 +741,8 @@ return function(env)
         return math_floor(normalized + 0.5)
     end
 
+    --- Clamps a normal radar range to its limits and rounds it to whole metres.
+    -- treturn: int
     local function _normalize_normal_radar_zoom_range(value)
         local normalized = tonumber(value) or NORMAL_RADAR_DEFAULT_ZOOM_RANGE
 
@@ -361,6 +755,10 @@ return function(env)
         return math_floor(normalized + 0.5)
     end
 
+    --- Returns the next normal radar range step (10, 25, 50, 75, 100, 150 or 200 m) in a zoom direction.
+    -- param: current_range current range
+    -- ?string: direction `in` or `out`; the normalised current range otherwise
+    -- treturn: int
     local function _next_normal_radar_zoom_range(current_range, direction)
         local current = _normalize_normal_radar_zoom_range(current_range)
 
@@ -397,6 +795,9 @@ return function(env)
         return current
     end
 
+    --- Maps a normal radar range to the zoom factor shown to the player, in hundredths.
+    -- 10 m reads as 2.00x, 100 m as 1.00x and 200 m as 0.25x, interpolated between the steps.
+    -- treturn: int
     local function _normal_radar_zoom_factor_hundredths(range)
         local normalized = _normalize_normal_radar_zoom_range(range)
 
@@ -417,6 +818,7 @@ return function(env)
         return math_floor(50 - (normalized - 150) * 25 / 50 + 0.5)
     end
 
+    --- Smoothstep easing of a zoom transition's progress, clamped to 0 to 1.
     local function _ease_overview_range_transition(progress)
         if progress <= 0 then
             return 0
@@ -427,6 +829,8 @@ return function(env)
         return progress * progress * (3 - 2 * progress)
     end
 
+    --- Returns the eased range of the running overview zoom transition, ending it when complete.
+    -- treturn: ?number range in metres, nil when no transition is running
     local function _current_overview_range_transition()
         if not mod._overview_range_transition_active then
             return nil
@@ -460,6 +864,8 @@ return function(env)
         return from_range + (to_range - from_range) * eased
     end
 
+    --- Starts an animated overview zoom from one range to another and requests an immediate scan.
+    -- Changes under half a metre end any transition instead.
     local function _start_overview_range_transition(from_range, to_range)
         local from = tonumber(from_range) or OVERVIEW_DEFAULT_ZOOM_RANGE
         local to = tonumber(to_range) or from
@@ -481,6 +887,10 @@ return function(env)
         mod._next_scan_t = 0
     end
 
+    --- Returns the overview range that fits every range-limited target, for the zoom reset key.
+    -- The farthest target is kept within 90% of the radar edge and the range is rounded up to
+    -- a zoom step.
+    -- treturn: int
     local function _overview_reset_zoom_range()
         local targets = mod._radar_targets or {}
         local max_distance_sq = 0
@@ -508,689 +918,16 @@ return function(env)
         return _normalize_overview_zoom_range(stepped_range)
     end
 
-    local ROTTEN_ARMOR_BREED_ALIAS_BY_BASE_BREED = {
-        chaos_ogryn_executor = "chaos_ogryn_executor_gibbing_rotten_armor",
-        renegade_executor = "renegade_executor_gibbing_rotten_armor",
-        renegade_berzerker = "renegade_berzerker_gibbing_rotten_armor",
-    }
-
-    local function _resolve_enemy_breed_name(unit, breed_name)
-        local rotten_armor_breed_name = ROTTEN_ARMOR_BREED_ALIAS_BY_BASE_BREED[breed_name]
-
-        if rotten_armor_breed_name
-            and (_safe_unit_has_keyword(unit, "rotten_armor")
-                or _safe_unit_has_buff_template(unit, "mutator_rotten_armor")) then
-            return rotten_armor_breed_name
-        end
-
-        return breed_name
-    end
-
-    local ABILITY_OUTLINE_BRACKET_ALPHA = 220
-    local SUPPORTED_ABILITY_OUTLINE_CONFIG_BY_NAME = {
-        psyker_marked_target = {
-            default_color = { 255, 80, 160, 255 },
-            default_priority = 1,
-        },
-        veteran_smart_tag = {
-            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 255, 204, 102 },
-            default_priority = 1,
-        },
-        adamant_mark_target = {
-            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 128, 102, 255 },
-            default_priority = 2,
-        },
-        adamant_smart_tag = {
-            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 255, 64, 64 },
-            default_priority = 2,
-        },
-        broker_proximity_target = {
-            default_color = { ABILITY_OUTLINE_BRACKET_ALPHA, 122, 204, 245 },
-            default_priority = 2,
-        },
-        special_target = {
-            default_priority = 3,
-        },
-    }
-    local VETERAN_SPECIAL_TARGET_BRACKET_COLOR = { 255, 220, 120, 26 }
-    local CACHED_ABILITY_OUTLINE_BRACKET_COLORS = {}
-    local OGRYN_TAUNT_SHOUT_ABILITY_NAME = "ogryn_taunt_shout"
-
-    local function _supported_ability_outline_config(outline_name)
-        if outline_name == nil then
-            return nil
-        end
-
-        return SUPPORTED_ABILITY_OUTLINE_CONFIG_BY_NAME[tostring(outline_name)]
-    end
-
-    local function _special_target_local_context(player_unit)
-        if not _safe_unit_alive(player_unit) then
-            return nil
-        end
-
-        if _safe_unit_has_keyword(player_unit, "veteran_combat_ability_stance") then
-            return "veteran_executioners_stance"
-        end
-
-        return nil
-    end
-
-    local function _special_target_fallback_bracket_color()
-        local player_unit = _player_unit()
-        local local_context = _special_target_local_context(player_unit)
-
-        if local_context == "veteran_executioners_stance" then
-            return VETERAN_SPECIAL_TARGET_BRACKET_COLOR
-        end
-
-        return nil
-    end
-
-    local function _default_ability_outline_bracket_color(outline_name)
-        local config = _supported_ability_outline_config(outline_name)
-
-        if not config then
-            return nil
-        end
-
-        if outline_name == "special_target" then
-            return _special_target_fallback_bracket_color()
-        end
-
-        return config.default_color
-    end
-
-    local function _cached_ability_outline_bracket_color(outline_name, color)
-        if type(color) ~= "table" then
-            return _default_ability_outline_bracket_color(outline_name)
-        end
-
-        local alpha = tonumber(color.a)
-        local red = tonumber(color.r)
-        local green = tonumber(color.g)
-        local blue = tonumber(color.b)
-
-        if red == nil and green == nil and blue == nil then
-            local fourth = tonumber(color[4])
-
-            if fourth ~= nil then
-                alpha = tonumber(color[1])
-                red = tonumber(color[2])
-                green = tonumber(color[3])
-                blue = fourth
-            else
-                red = tonumber(color[1])
-                green = tonumber(color[2])
-                blue = tonumber(color[3])
-            end
-        end
-
-        if not red or not green or not blue then
-            return _default_ability_outline_bracket_color(outline_name)
-        end
-
-        if red <= 1 and green <= 1 and blue <= 1 then
-            red = red * 255
-            green = green * 255
-            blue = blue * 255
-        end
-
-        if alpha == nil then
-            alpha = ABILITY_OUTLINE_BRACKET_ALPHA
-        elseif alpha <= 1 then
-            alpha = alpha * 255
-        end
-
-        alpha = _clamp(math_floor(alpha + 0.5), 0, 255)
-        red = _clamp(math_floor(red + 0.5), 0, 255)
-        green = _clamp(math_floor(green + 0.5), 0, 255)
-        blue = _clamp(math_floor(blue + 0.5), 0, 255)
-
-        local cache_key = tostring(outline_name) .. ":" .. tostring(alpha) .. ":" .. tostring(red) .. ":" ..
-            tostring(green) .. ":" .. tostring(blue)
-        local cached_color = CACHED_ABILITY_OUTLINE_BRACKET_COLORS[cache_key]
-
-        if cached_color == nil then
-            cached_color = {
-                alpha,
-                red,
-                green,
-                blue,
-            }
-            CACHED_ABILITY_OUTLINE_BRACKET_COLORS[cache_key] = cached_color
-        end
-
-        return cached_color
-    end
-
-    local function _outline_setting_bracket_color(outline_extension, outline_name)
-        if type(outline_extension) ~= "table" or outline_name == nil then
-            return nil
-        end
-
-        local settings = rawget(outline_extension, "settings")
-        local outline_settings = type(settings) == "table" and settings[outline_name] or nil
-        local color = type(outline_settings) == "table" and rawget(outline_settings, "color") or nil
-
-        return _cached_ability_outline_bracket_color(outline_name, color)
-    end
-
-    local function _outline_setting_priority(outline_extension, outline_name)
-        if outline_name == nil then
-            return 0
-        end
-
-        local priority = nil
-
-        if type(outline_extension) == "table" then
-            local settings = rawget(outline_extension, "settings")
-            local outline_settings = type(settings) == "table" and settings[outline_name] or nil
-            priority = type(outline_settings) == "table" and tonumber(rawget(outline_settings, "priority")) or nil
-        end
-
-        if priority == nil then
-            local config = _supported_ability_outline_config(outline_name)
-            priority = config and config.default_priority or 0
-        end
-
-        return priority or 0
-    end
-
-    local function _supported_ability_outline_state_for_unit(unit, outline_extension_map, local_player_unit)
-        local outline_extension = _safe_unit_outline_extension(unit, outline_extension_map)
-
-        if type(outline_extension) ~= "table" then
-            return nil, nil
-        end
-
-        local outlines = rawget(outline_extension, "outlines")
-
-        if type(outlines) ~= "table" or #outlines == 0 then
-            return nil, nil
-        end
-
-        local outline_names = nil
-        local seen_outline_names = nil
-        local bracket_color = nil
-        local primary_outline_name = nil
-        local primary_outline_priority = -math_huge
-        local bracket_outline_priority = -math_huge
-        local special_target_allowed = _special_target_local_context(local_player_unit) ~= nil
-
-        for i = 1, #outlines do
-            local outline = outlines[i]
-            local outline_name = outline and outline.name and tostring(outline.name) or nil
-
-            if outline_name ~= nil
-                and _supported_ability_outline_config(outline_name) ~= nil
-                and (outline_name ~= "special_target" or special_target_allowed) then
-                if seen_outline_names == nil or not seen_outline_names[outline_name] then
-                    seen_outline_names = seen_outline_names or {}
-                    seen_outline_names[outline_name] = true
-                    outline_names = outline_names or {}
-                    outline_names[#outline_names + 1] = outline_name
-                end
-
-                local outline_priority = _outline_setting_priority(outline_extension, outline_name)
-
-                if outline_priority > primary_outline_priority then
-                    primary_outline_name = outline_name
-                    primary_outline_priority = outline_priority
-                end
-
-                local outline_bracket_color = _outline_setting_bracket_color(outline_extension, outline_name)
-
-                if outline_bracket_color ~= nil and outline_priority > bracket_outline_priority then
-                    bracket_color = outline_bracket_color
-                    bracket_outline_priority = outline_priority
-                end
-            end
-        end
-
-        return outline_names, bracket_color, primary_outline_name, primary_outline_priority
-    end
-
-    local function _unit_has_supported_ogryn_taunt_marker(unit)
-        return _safe_unit_has_keyword(unit, "taunted")
-            or _safe_unit_has_buff_template(unit, "taunted")
-            or _safe_unit_has_buff_template(unit, "taunted_short")
-    end
-
-    local function _supported_ability_marker_state_for_unit(unit, outline_extension_map, local_player_unit, local_combat_ability_name)
-        local marker_names, bracket_color, primary_marker_name, primary_marker_priority = _supported_ability_outline_state_for_unit(unit, outline_extension_map, local_player_unit)
-
-        if marker_names ~= nil then
-            return marker_names, bracket_color, primary_marker_name, primary_marker_priority
-        end
-
-        if local_combat_ability_name == OGRYN_TAUNT_SHOUT_ABILITY_NAME
-            and _unit_has_supported_ogryn_taunt_marker(unit) then
-            return { OGRYN_TAUNT_SHOUT_ABILITY_NAME }, nil, OGRYN_TAUNT_SHOUT_ABILITY_NAME, 0
-        end
-
-        return nil, nil, nil, nil
-    end
-
-    local function _player_companion_kind(unit, has_extension)
-        if not unit or not has_extension or not _safe_unit_alive(unit) then
-            return nil
-        end
-
-        local unit_data_extension = has_extension(unit, "unit_data_system")
-        local breed_fn = unit_data_extension and unit_data_extension.breed
-
-        if not breed_fn then
-            return nil
-        end
-
-        local ok_breed, breed = pcall(breed_fn, unit_data_extension)
-        local tags = ok_breed and breed and breed.tags or nil
-
-        if not tags or tags.companion ~= true then
-            return nil
-        end
-
-        local breed_name = breed.name
-
-        if breed_name == "companion_dog" then
-            return "player_companion_dog"
-        elseif breed_name == "companion_servo_skull" then
-            return "player_companion_servo_skull"
-        end
-
-        return nil
-    end
-
-    local function _companion_dog_target_uses_disable_action(unit, has_extension)
-        local unit_data_extension = has_extension and has_extension(unit, "unit_data_system")
-        local breed_fn = unit_data_extension and unit_data_extension.breed
-
-        if not breed_fn then
-            return false
-        end
-
-        local ok_breed, breed = pcall(breed_fn, unit_data_extension)
-        local pounce_setting = ok_breed and breed and breed.companion_pounce_setting or nil
-
-        return pounce_setting and pounce_setting.companion_pounce_action == "human" or false
-    end
-
-    local function _safe_spawned_companion_unit(companion_spawner_extension, special_rule)
-        local lookup_fn = companion_spawner_extension and companion_spawner_extension.spawned_unit_lookup
-
-        if not lookup_fn then
-            return nil
-        end
-
-        local ok_lookup, unit = pcall(lookup_fn, companion_spawner_extension, special_rule)
-
-        return ok_lookup and unit or nil
-    end
-
-    local function _safe_unit_game_object_field(unit, field_name)
-        local state = Managers and Managers.state
-        local game_session_manager = state and state.game_session
-        local unit_spawner_manager = state and state.unit_spawner
-        local game_session_fn = game_session_manager and game_session_manager.game_session
-        local game_object_id_fn = unit_spawner_manager and unit_spawner_manager.game_object_id
-        local game_object_field = GameSession and GameSession.game_object_field
-        local game_object_exists = GameSession and GameSession.game_object_exists
-
-        if not game_session_fn or not game_object_id_fn or not game_object_field then
-            return nil
-        end
-
-        local ok_session, game_session = pcall(game_session_fn, game_session_manager)
-        local ok_id, game_object_id = pcall(game_object_id_fn, unit_spawner_manager, unit)
-
-        if not ok_session or not game_session or not ok_id or game_object_id == nil then
-            return nil
-        end
-
-        if game_object_exists then
-            local ok_exists, exists = pcall(game_object_exists, game_session, game_object_id)
-
-            if not ok_exists or not exists then
-                return nil
-            end
-        end
-
-        local ok_field, value = pcall(game_object_field, game_session, game_object_id, field_name)
-
-        return ok_field and value or nil
-    end
-
-    local function _safe_unit_from_game_object_id(game_object_id)
-        if game_object_id == nil then
-            return nil
-        end
-
-        local state = Managers and Managers.state
-        local unit_spawner_manager = state and state.unit_spawner
-        local unit_fn = unit_spawner_manager and unit_spawner_manager.unit
-
-        if not unit_fn then
-            return nil
-        end
-
-        local ok_unit, unit = pcall(unit_fn, unit_spawner_manager, game_object_id)
-
-        return ok_unit and _safe_unit_alive(unit) and unit or nil
-    end
-
-    local function _distance_squared_horizontal(a, b)
-        if not a or not b then
-            return math_huge
-        end
-
-        local ax, ay = a.x, a.y
-        local bx, by = b.x, b.y
-
-        if not _is_finite_number(ax) or not _is_finite_number(ay) then
-            return math_huge
-        end
-
-        if not _is_finite_number(bx) or not _is_finite_number(by) then
-            return math_huge
-        end
-
-        local dx = ax - bx
-        local dy = ay - by
-
-        return dx * dx + dy * dy
-    end
-
-    local function _safe_companion_dog_target(unit)
-        local blackboard = BLACKBOARDS and BLACKBOARDS[unit]
-        local pounce_component = blackboard and blackboard.pounce
-        local pounce_target = pounce_component and pounce_component.pounce_target or nil
-
-        if pounce_target
-            and (pounce_component.has_pounce_target or pounce_component.has_pounce_started)
-            and _safe_unit_alive(pounce_target) then
-            return pounce_target, true
-        end
-
-        local target_unit_id = _safe_unit_game_object_field(unit, "target_unit_id")
-        local target_unit = _safe_unit_from_game_object_id(target_unit_id)
-
-        if pounce_component then
-            return target_unit, false
-        end
-
-        return target_unit, nil
-    end
-
-    local function _servo_skull_state_is(state, state_name)
-        return state == state_name or state == SERVO_SKULL_STATES[state_name]
-    end
-
-    local PLAYER_CAPTURE_DISABLING_TYPES = {
-        grabbed = true,
-        consumed = true,
-        mutant_charged = true,
-        netted = true,
-        pounced = true,
-    }
-    local SLOT_LUGGABLE = "slot_luggable"
-
-    local function _safe_player_component(unit_data_extension, component_name)
-        if not unit_data_extension or not unit_data_extension.read_component then
-            return nil
-        end
-
-        local ok, component = pcall(unit_data_extension.read_component, unit_data_extension, component_name)
-
-        return ok and component or nil
-    end
-
-    -- Whether a player is carrying a luggable: wielding the luggable slot with
-    -- something equipped in it.
-    function _unit_carries_luggable(unit, has_extension)
-        local unit_data_extension = has_extension and has_extension(unit, "unit_data_system") or nil
-        local inventory_component = _safe_player_component(unit_data_extension, "inventory")
-
-        if not inventory_component or inventory_component.wielded_slot ~= SLOT_LUGGABLE then
-            return false
-        end
-
-        local visual_loadout_extension = has_extension(unit, "visual_loadout_system")
-        local slot_equipped = PlayerUnitVisualLoadout and PlayerUnitVisualLoadout.slot_equipped
-
-        if not visual_loadout_extension or not slot_equipped then
-            return false
-        end
-
-        local ok, equipped = pcall(slot_equipped, inventory_component, visual_loadout_extension, SLOT_LUGGABLE)
-
-        return ok and equipped and true or false
-    end
-
-    local function _player_radar_state(unit, has_extension)
-        local unit_data_extension = has_extension and has_extension(unit, "unit_data_system") or nil
-        local character_state_component = _safe_player_component(unit_data_extension, "character_state")
-        local state_name = character_state_component and character_state_component.state_name or nil
-
-        if state_name == "hogtied" then
-            return "rescue"
-        end
-
-        if state_name == "dead" or _safe_health_alive(unit) == false then
-            return "dead"
-        end
-
-        if state_name == "knocked_down" or state_name == "ledge_hanging" then
-            return "rescue"
-        end
-
-        local disabled_state_component = _safe_player_component(unit_data_extension, "disabled_character_state")
-        local disabling_type = disabled_state_component
-            and disabled_state_component.is_disabled
-            and disabled_state_component.disabling_type or nil
-
-        if PLAYER_CAPTURE_DISABLING_TYPES[disabling_type] then
-            return "captured"
-        end
-
-        if _unit_carries_luggable(unit, has_extension) then
-            return "luggable"
-        end
-
-        return nil
-    end
-
-    local function _refresh_player_units()
-        local mastiff_disabled_enemy_units = _scratch_mastiff_disabled_enemy_units
-        table_clear(mastiff_disabled_enemy_units)
-
-        local player_manager = _player_manager()
-        if not player_manager or not player_manager.players then
-            return
-        end
-
-        local local_player = _local_player()
-        local players = player_manager:players()
-        local script_unit = ScriptUnit
-        local has_extension = script_unit and script_unit.has_extension
-        local radar_player_unit_by_player = mod._radar_player_unit_by_player or {}
-        local seen_radar_players = _scratch_seen_radar_players
-        local scan_player_states = mod:get("show_player_state_icons") ~= false
-            and mod:get_show_players()
-        local show_cyber_mastiff = mod:get("show_cyber_mastiff") ~= false
-        local scan_player_companions = show_cyber_mastiff
-            or mod:get("show_servo_skulls") ~= false
-
-        mod._radar_player_unit_by_player = radar_player_unit_by_player
-        table_clear(seen_radar_players)
-
-        for _, player in pairs(players) do
-            local unit = player.player_unit
-            local unit_alive = unit and _safe_unit_alive(unit)
-            local player_radar_state = unit_alive
-                and player ~= local_player
-                and scan_player_states
-                and _player_radar_state(unit, has_extension) or nil
-
-            if player ~= local_player then
-                seen_radar_players[player] = true
-
-                if unit_alive then
-                    local previous_unit = radar_player_unit_by_player[player]
-
-                    if previous_unit and previous_unit ~= unit then
-                        _clear_tracked_unit_from_source(previous_unit, "player_manager")
-                    end
-
-                    radar_player_unit_by_player[player] = unit
-                end
-            end
-
-            if scan_player_companions and unit_alive then
-                local player_slot = _safe_player_slot(player)
-                local owner_marker_visible
-
-                if player == local_player then
-                    owner_marker_visible = mod:get_show_player_center_dot()
-                else
-                    owner_marker_visible = mod:get_show_players()
-                end
-
-                local companion_spawner_extension = has_extension and
-                    has_extension(unit, "companion_spawner_system") or nil
-                local owned_units = player.owned_units
-                local hack_skull = nil
-                local medicae_skull = nil
-                local flamer_skull = nil
-                local servo_skull_roles_resolved = false
-
-                if type(owned_units) == "table" then
-                    for owned_unit, _ in pairs(owned_units) do
-                        local companion_kind = _player_companion_kind(owned_unit, has_extension)
-
-                        if companion_kind then
-                            local servo_skull_role = nil
-                            local servo_skull_following_owner = false
-                            local companion_action = nil
-                            local companion_action_target = nil
-                            local companion_pounce_active = nil
-
-                            if companion_kind == "player_companion_servo_skull" then
-                                if not servo_skull_roles_resolved then
-                                    hack_skull = _safe_spawned_companion_unit(
-                                        companion_spawner_extension,
-                                        "cryptic_servo_skull_hack"
-                                    )
-                                    medicae_skull = _safe_spawned_companion_unit(
-                                        companion_spawner_extension,
-                                        "cryptic_servo_skull_inject_ally"
-                                    )
-                                    flamer_skull = _safe_spawned_companion_unit(
-                                        companion_spawner_extension,
-                                        "cryptic_servo_skull_flamethrower"
-                                    )
-                                    servo_skull_roles_resolved = true
-                                end
-
-                                if owned_unit == medicae_skull then
-                                    servo_skull_role = "medicae"
-                                elseif owned_unit == flamer_skull then
-                                    servo_skull_role = "flamer"
-                                elseif owned_unit == hack_skull then
-                                    servo_skull_role = "default"
-                                end
-
-                                local servo_skull_state = _safe_unit_game_object_field(owned_unit, "state")
-
-                                if _servo_skull_state_is(servo_skull_state, "hacking") then
-                                    companion_action = "hacking"
-                                elseif _servo_skull_state_is(servo_skull_state, "inject_ally") then
-                                    companion_action = "inject_ally"
-                                elseif _servo_skull_state_is(servo_skull_state, "flamethrower")
-                                    or _servo_skull_state_is(servo_skull_state, "flamethrower_shooting") then
-                                    companion_action = "flamethrower"
-                                elseif _servo_skull_state_is(servo_skull_state, "following")
-                                    or _servo_skull_state_is(servo_skull_state, "following_shooting")
-                                    or _servo_skull_state_is(servo_skull_state, "following_shooting_ability") then
-                                    servo_skull_following_owner = true
-                                end
-                            elseif companion_kind == "player_companion_dog" then
-                                companion_action_target, companion_pounce_active =
-                                    _safe_companion_dog_target(owned_unit)
-
-                                if show_cyber_mastiff
-                                    and companion_action_target
-                                    and companion_pounce_active ~= false
-                                    and _companion_dog_target_uses_disable_action(
-                                        companion_action_target,
-                                        has_extension
-                                    ) then
-                                    local companion_position = _safe_unit_position(owned_unit)
-                                    local target_position = _safe_unit_position(companion_action_target)
-
-                                    if companion_position
-                                        and target_position
-                                        and _distance_squared_horizontal(companion_position, target_position) <=
-                                        COMPANION_TARGET_OVERLAP_DISTANCE_SQ then
-                                        mastiff_disabled_enemy_units[companion_action_target] = true
-                                    end
-                                end
-                            end
-
-                            _track_unit(owned_unit, companion_kind, "player_companion", {
-                                player_slot = player_slot,
-                                owner_unit = unit,
-                                owner_marker_visible = owner_marker_visible,
-                                servo_skull_following_owner = servo_skull_following_owner,
-                                servo_skull_role = servo_skull_role,
-                                companion_action = companion_action,
-                                companion_action_target = companion_action_target,
-                            })
-                        end
-                    end
-                end
-            end
-
-            if unit_alive and player ~= local_player then
-                local archetype_name = nil
-                local player_name = nil
-                local player_slot = _safe_player_slot(player)
-
-                local ok_player_name, resolved_player_name = pcall(player.name, player)
-                if ok_player_name then
-                    player_name = resolved_player_name
-                end
-
-                local ok_profile, profile = pcall(player.profile, player)
-                if ok_profile and profile and profile.archetype and profile.archetype.name then
-                    archetype_name = profile.archetype.name
-                end
-
-                local unit_data_extension = has_extension and has_extension(unit, "unit_data_system")
-                if unit_data_extension and unit_data_extension.archetype_name then
-                    local ok_archetype, value = pcall(unit_data_extension.archetype_name, unit_data_extension)
-                    if ok_archetype and value ~= nil then
-                        archetype_name = value
-                    end
-                end
-
-                _track_unit(unit, "player_teammate", "player_manager", {
-                    player = player_name,
-                    player_slot = player_slot,
-                    archetype_name = archetype_name,
-                    player_radar_state = player_radar_state,
-                })
-            end
-        end
-
-        for player, unit in pairs(radar_player_unit_by_player) do
-            if not seen_radar_players[player] then
-                _clear_tracked_unit_from_source(unit, "player_manager")
-                radar_player_unit_by_player[player] = nil
-            end
-        end
-    end
-
+    -- ----------------------------------------------------------------------------
+    -- Unit scans
+    -- ----------------------------------------------------------------------------
+
+    --- Scans the interactee system and tracks the interactables and pickups the radar shows.
+    -- Reads each interactee's active, used and prompt state, feeds the mission objective
+    -- lifecycle, classifies usable interactees through the feature modules and drops units that
+    -- stopped being interactees. Hidden objective and Martyr's Skull riddle interactables are
+    -- classified even before the game shows their prompt. Finishes with the mission objective
+    -- target scan.
     local function _scan_interactees()
         local interactee_map = _safe_unit_to_extension_map("interactee_system")
         if not interactee_map then
@@ -1337,378 +1074,10 @@ return function(env)
         _scan_mission_objective_targets(interactee_map)
     end
 
-    local function _scan_chests()
-        local chest_map = _safe_unit_to_extension_map("chest_system")
-        if not chest_map then
-            return
-        end
-
-        local tracked_units = mod._tracked_units
-        local seen_chests = _scratch_seen_chests
-        local track_item_tags = mod:get_show_only_tagged_items()
-        table_clear(seen_chests)
-
-        for unit, extension in pairs(chest_map) do
-            if _safe_unit_alive(unit) and extension then
-                seen_chests[unit] = true
-
-                local is_open_fn = extension.is_open
-
-                if is_open_fn then
-                    local ok_open, is_open = pcall(is_open_fn, extension)
-
-                    if ok_open and not is_open then
-                        local meta = nil
-
-                        if track_item_tags then
-                            meta = {
-                                marked_by_player_slot = _marked_by_player_slot_for_unit(unit),
-                            }
-                        end
-
-                        _track_unit(unit, "crate_unknown", "chest_system", meta)
-                    else
-                        _clear_tracked_unit_from_source(unit, "chest_system")
-                    end
-                else
-                    _clear_tracked_unit_from_source(unit, "chest_system")
-                end
-            else
-                _clear_tracked_unit_from_source(unit, "chest_system")
-            end
-        end
-
-        for unit, data in pairs(tracked_units) do
-            if data and data.source == "chest_system" and not seen_chests[unit] then
-                tracked_units[unit] = nil
-            end
-        end
-    end
-
-    local function _safe_hazard_prop_extension_map()
-        local hazard_prop_system = _safe_extension_system("hazard_prop_system")
-        if not hazard_prop_system then
-            return nil
-        end
-
-        local unit_to_extension_map = hazard_prop_system.unit_to_extension_map
-
-        if type(unit_to_extension_map) == "function" then
-            local ok_map, map = pcall(unit_to_extension_map, hazard_prop_system)
-
-            if ok_map and type(map) == "table" then
-                return map
-            end
-        end
-
-        if type(hazard_prop_system) == "table" then
-            local map = rawget(hazard_prop_system, "_unit_to_extension_map")
-
-            if type(map) == "table" then
-                return map
-            end
-        end
-
-        return nil
-    end
-
-    local function _safe_hazard_prop_content(extension)
-        local content_fn = extension and extension.content
-
-        if type(content_fn) ~= "function" then
-            return nil
-        end
-
-        local ok_content, content = pcall(content_fn, extension)
-
-        return ok_content and content or nil
-    end
-
-    local function _safe_hazard_prop_state(extension)
-        local current_state_fn = extension and extension.current_state
-
-        if type(current_state_fn) ~= "function" then
-            return nil
-        end
-
-        local ok_state, state = pcall(current_state_fn, extension)
-
-        return ok_state and state or nil
-    end
-
-    local function _safe_hazard_prop_broadphase_position(extension)
-        local broadphase_position_fn = extension and extension.broadphase_position
-
-        if type(broadphase_position_fn) ~= "function" then
-            return nil
-        end
-
-        local ok_position, position = pcall(broadphase_position_fn, extension)
-
-        return ok_position and _copy_vector3(position) or nil
-    end
-
-    local function _hazard_prop_position(unit, extension)
-        return _safe_unit_node_position(unit, "c_explosion")
-            or _safe_hazard_prop_broadphase_position(extension)
-            or _safe_unit_position(unit)
-    end
-
-    local function _hazard_prop_state_is_broken(state)
-        local hazard_state = rawget(_G, "hazard_state")
-
-        if type(hazard_state) == "table" and hazard_state.broken ~= nil and state == hazard_state.broken then
-            return true
-        end
-
-        return _safe_lower_string(state) == "broken"
-    end
-
-    local function _hazard_prop_kind_from_content(content)
-        local hazard_content = rawget(_G, "hazard_content")
-
-        if type(hazard_content) == "table" then
-            if hazard_content.explosion ~= nil and content == hazard_content.explosion then
-                return "hazard_explosive_barrel"
-            end
-
-            if hazard_content.fire ~= nil and content == hazard_content.fire then
-                return "hazard_fire_barrel"
-            end
-        end
-
-        local content_key = _safe_lower_string(content)
-
-        if content_key == "explosion" then
-            return "hazard_explosive_barrel"
-        elseif content_key == "fire" then
-            return "hazard_fire_barrel"
-        end
-
-        return nil
-    end
-
-    local function _scan_hazard_props()
-        local hazard_prop_map = _safe_hazard_prop_extension_map()
-        if not hazard_prop_map then
-            return
-        end
-
-        local tracked_units = mod._tracked_units
-        local seen_hazard_props = _scratch_seen_hazard_props
-        local track_item_tags = mod:get_show_only_tagged_items()
-        table_clear(seen_hazard_props)
-
-        for unit, extension in pairs(hazard_prop_map) do
-            if _safe_unit_alive(unit) and extension then
-                seen_hazard_props[unit] = true
-
-                local state = _safe_hazard_prop_state(extension)
-
-                if not _hazard_prop_state_is_broken(state) then
-                    local content = _safe_hazard_prop_content(extension)
-                    local kind = _hazard_prop_kind_from_content(content)
-                    local position = kind and _hazard_prop_position(unit, extension) or nil
-
-                    if position then
-                        _track_unit(unit, kind, "hazard_prop_system", {
-                            content = content,
-                            state = state,
-                            position = position,
-                            marked_by_player_slot = track_item_tags and _marked_by_player_slot_for_unit(unit) or nil,
-                        })
-                    else
-                        _clear_tracked_unit_from_source(unit, "hazard_prop_system")
-                    end
-                else
-                    _clear_tracked_unit_from_source(unit, "hazard_prop_system")
-                end
-            else
-                _clear_tracked_unit_from_source(unit, "hazard_prop_system")
-            end
-        end
-
-        for unit, data in pairs(tracked_units) do
-            if data and data.source == "hazard_prop_system" and not seen_hazard_props[unit] then
-                tracked_units[unit] = nil
-            end
-        end
-    end
-
-    local function _scan_minions()
-        local unit_data_map = _safe_unit_to_extension_map("unit_data_system")
-        if not unit_data_map then
-            return
-        end
-
-        local track_enemy_tags = mod:get_show_only_tagged_enemies()
-        local show_ability_marked_enemies = mod:get_show_ability_marked_enemies()
-        local outline_extension_map = show_ability_marked_enemies and _safe_outline_extension_data_map() or nil
-        local local_player_unit = show_ability_marked_enemies and _player_unit() or nil
-        local local_combat_ability_name = show_ability_marked_enemies
-            and _safe_unit_ability_name(local_player_unit, "combat_ability")
-            or nil
-        local kind_enabled_cache = _scratch_minion_kind_enabled_cache
-        table_clear(kind_enabled_cache)
-
-        for unit, extension in pairs(unit_data_map) do
-            if _safe_unit_alive(unit) and extension then
-                local breed_name_fn = extension.breed_name
-
-                if breed_name_fn then
-                    local ok_breed, breed_name = pcall(breed_name_fn, extension)
-
-                    if ok_breed and breed_name then
-                        local resolved_breed_name = _resolve_enemy_breed_name(unit, breed_name)
-                        local kind = _classify_enemy_from_breed(resolved_breed_name)
-                        if kind and _is_trackable_unit_alive(unit, kind) then
-                            local kind_enabled = kind_enabled_cache[kind]
-
-                            if kind_enabled == nil then
-                                kind_enabled = _kind_enabled(kind)
-                                kind_enabled_cache[kind] = kind_enabled
-                            end
-
-                            local ability_marker_names = nil
-                            local ability_marker_bracket_color = nil
-
-                            if show_ability_marked_enemies then
-                                ability_marker_names,
-                                ability_marker_bracket_color = _supported_ability_marker_state_for_unit(
-                                        unit,
-                                        outline_extension_map,
-                                        local_player_unit,
-                                        local_combat_ability_name
-                                    )
-                            end
-
-                            if kind_enabled or ability_marker_names ~= nil then
-                                _track_unit(unit, kind, "unit_data_system", {
-                                    breed_name = breed_name,
-                                    marked_by_player_slot = track_enemy_tags and _marked_by_player_slot_for_unit(unit) or nil,
-                                    ability_marked = ability_marker_names ~= nil,
-                                    ability_outline_bracket_color = ability_marker_bracket_color,
-                                })
-                            else
-                                _clear_tracked_unit_from_source(unit, "unit_data_system")
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    local function _scan_destructibles()
-        local destructible_map = _safe_unit_to_extension_map("destructible_system")
-        if not destructible_map then
-            return
-        end
-
-        local tracked_units = mod._tracked_units
-        local seen_destructibles = _scratch_seen_destructibles
-        local track_item_tags = mod:get_show_only_tagged_items()
-        local dark_rites_scan_allowed = _is_dark_rites_marker_scan_allowed()
-        table_clear(seen_destructibles)
-
-        for unit, extension in pairs(destructible_map) do
-            if _safe_unit_alive(unit) and extension then
-                seen_destructibles[unit] = true
-
-                local collectible_type = _safe_unit_collectible_type(unit)
-                local collectible_data = _safe_destructible_collectible_data(extension)
-                local collectible_id = collectible_data and collectible_data.id or nil
-                local collectible_section_id = collectible_data and collectible_data.section_id or nil
-                local collectible_key = _idol_collectible_key(collectible_section_id, collectible_id)
-                local prop_data_name = nil
-                local unit_data_breed_name = nil
-                local is_live_event_skulls_totem = false
-                local extension_visible = _safe_destructible_visible(extension)
-                local unit_visible = _safe_unit_main_visible(unit)
-                local health_alive = _safe_health_alive(unit)
-                local has_active_collectible = collectible_id ~= nil and collectible_section_id ~= nil
-                local destroyed_by_event = mod._idol_destroyed_units[unit] ~= nil
-                    or (collectible_key ~= nil and mod._idol_destroyed_collectible_keys[collectible_key] ~= nil)
-
-                if dark_rites_scan_allowed then
-                    if collectible_type == "nurgle_totem" then
-                        is_live_event_skulls_totem = true
-                    elseif collectible_type ~= "heretic_idol" or not has_active_collectible then
-                        prop_data_name = _safe_unit_prop_data_name(unit)
-                        unit_data_breed_name = _safe_unit_data_breed_name(unit)
-                        is_live_event_skulls_totem = _is_live_event_skulls_totem_unit(collectible_type, unit_data_breed_name,
-                            prop_data_name)
-                    end
-                end
-
-                if not destroyed_by_event
-                    and (has_active_collectible or is_live_event_skulls_totem)
-                    and extension_visible == true
-                    and health_alive ~= false
-                    and unit_visible ~= false then
-                    local kind = is_live_event_skulls_totem and "dark_rites_totem" or "pickup_heretic_idol"
-
-                    _track_unit(unit, kind, "destructible_system", {
-                        collectible_type = collectible_type,
-                        collectible_id = collectible_id,
-                        collectible_section_id = collectible_section_id,
-                        marked_by_player_slot = track_item_tags and _marked_by_player_slot_for_unit(unit) or nil,
-                    })
-                else
-                    _clear_tracked_unit_from_source(unit, "destructible_system")
-                end
-            else
-                _clear_tracked_unit_from_source(unit, "destructible_system")
-            end
-        end
-
-        for unit, data in pairs(tracked_units) do
-            if data and data.source == "destructible_system" and not seen_destructibles[unit] then
-                tracked_units[unit] = nil
-            end
-        end
-
-        _prune_destroyed_idol_state()
-    end
-
-    local function _scan_smart_tag_targets()
-        local smart_tag_map = _safe_unit_to_extension_map("smart_tag_system")
-        if not smart_tag_map then
-            return
-        end
-
-        for unit, extension in pairs(smart_tag_map) do
-            if _safe_unit_alive(unit) and extension then
-                local smart_tag_target_type = _safe_unit_smart_tag_target_type(unit)
-
-                if smart_tag_target_type == "medical_crate_deployable" then
-                    _track_unit(unit, "medical_crate_deployable", "smart_tag_system", {
-                        smart_tag_target_type = smart_tag_target_type,
-                        deployable_type = _safe_unit_deployable_type(unit),
-                        unit_name = _safe_lower_string(_safe_unit_name(unit)),
-                    })
-                end
-            end
-        end
-    end
-
-    -- Sources whose units move on their own every frame (enemies, teammates,
-    -- companions). Units from any other source only get their stored position
-    -- refreshed on droppable-item ticks, since props never move and droppables
-    -- move rarely.
-    local MOVING_TRACK_SOURCES = {
-        unit_data_system = true,
-        player_manager = true,
-        player_companion = true,
-    }
-
-    -- Kinds that move under their own power even though they are tracked from a
-    -- slow scan tier. Their positions refresh at the configurable scan rate, so
-    -- a flying servo skull does not lag a quarter of a second behind.
-    local MOVING_TRACK_KINDS = {
-        mission_objective_servo_skull = true,
-    }
-
+    --- Drops dead and stale tracked units and refreshes stored positions.
+    -- Moving sources and kinds refresh every scan; everything else only when
+    -- `refresh_item_positions` is set. A unit whose position can no longer be read is dropped.
+    -- bool: refresh_item_positions whether this is a droppable scan tick
     local function _prune_units(refresh_item_positions)
         local now = _safe_gameplay_time() or 0
         local tracked_units = mod._tracked_units
@@ -1738,51 +1107,19 @@ return function(env)
         end
     end
 
-    local function _vertical_delta(a, b)
-        if not a or not b then
-            return nil
-        end
+    -- ----------------------------------------------------------------------------
+    -- Target filtering
+    -- ----------------------------------------------------------------------------
 
-        local az = a.z
-        local bz = b.z
-
-        if not _is_finite_number(az) or not _is_finite_number(bz) then
-            return nil
-        end
-
-        return bz - az
-    end
-
-    local ITEM_VERTICAL_ARROW_Z_DEADZONE = 2
-
-    -- The flying servo skull hovers well above head height and bobs as it moves,
-    -- so the shared 2 m deadzone reads it as being on another floor. A larger
-    -- deadzone keeps the arrow for genuine floor changes only. This overrides the
-    -- height at which an arrow appears; the player's own "show vertical arrows
-    -- within range" distance setting still applies unchanged.
-    local VERTICAL_ARROW_Z_DEADZONE_BY_KIND = {
-        mission_objective_servo_skull = 6,
-    }
-
-    -- Kinds that must never be hidden for being above or below the player.
-    -- Every mission objective marker qualifies: an objective a floor up is
-    -- exactly what you need to see, and losing the marker is worse than an
-    -- imprecise one. Objective kinds are matched by predicate so a new category
-    -- is covered without a second edit here.
-    local VERTICAL_HIDE_EXEMPT_KINDS = {
-        pickup_heretic_idol = true,
-    }
-
+    --- Returns whether a kind is never hidden for its height difference.
+    -- treturn: bool
     local function _is_vertical_hide_exempt(kind)
         return VERTICAL_HIDE_EXEMPT_KINDS[kind] == true or _is_mission_objective_marker_kind(kind)
     end
 
-    local function _is_player_smart_tag_kind(kind)
-        return kind == "location_attention"
-            or kind == "location_ping"
-            or kind == "location_threat"
-    end
-
+    --- Returns whether a kind counts as an item for the tagged-items filter and vertical arrows.
+    -- Everything except players, companions, smart tags, enemies and Expedition locations.
+    -- treturn: bool
     local function _is_item_kind(kind)
         if not kind then
             return false
@@ -1809,6 +1146,8 @@ return function(env)
         return true
     end
 
+    --- Returns whether a player has tagged a target, as a smart tag target or through its tag attribution.
+    -- treturn: bool
     local function _target_has_explicit_tag(source, meta)
         if source == "smart_tag_system" then
             return true
@@ -1817,10 +1156,15 @@ return function(env)
         return meta ~= nil and meta.marked_by_player_slot ~= nil
     end
 
+    --- Returns whether an enemy is outlined by a supported ability of the local player.
+    -- treturn: bool
     local function _target_has_ability_outline_mark(meta)
         return meta ~= nil and meta.ability_marked == true
     end
 
+    --- Applies the "only tagged enemies" and "only tagged items" options to a target.
+    -- Ability-outlined enemies pass the enemy filter too.
+    -- treturn: bool
     local function _passes_tag_visibility_filter(kind, source, meta, only_tagged_enemies, only_tagged_items)
         if only_tagged_enemies and _is_enemy_kind(kind) then
             return _target_has_explicit_tag(source, meta) or _target_has_ability_outline_mark(meta)
@@ -1833,6 +1177,8 @@ return function(env)
         return true
     end
 
+    --- Returns whether a kind gets vertical arrows and floor hiding; items always, enemies when enabled.
+    -- treturn: bool
     local function _supports_vertical_marker(kind)
         if _is_item_kind(kind) then
             return true
@@ -1847,217 +1193,12 @@ return function(env)
         return show_enemy_vertical_arrows ~= nil and show_enemy_vertical_arrows(mod, kind) == true
     end
 
-    local function _expedition_loot_target_value(target)
-        local meta = target and target.meta or nil
-        local value = meta and tonumber(meta.remnant_value or meta.remnant_cluster_value) or nil
+    -- ----------------------------------------------------------------------------
+    -- Radar target collection and update
+    -- ----------------------------------------------------------------------------
 
-        if value and value > 0 then
-            return value
-        end
-
-        local pickup_name = meta and meta.pickup_name or nil
-
-        return _expedition_loot_value_for_pickup_name(pickup_name) or 0
-    end
-
-    local function _should_cluster_expedition_loot_target(target)
-        return target ~= nil and target.kind == "material_expeditions_loot" and target.position ~= nil
-    end
-
-    local function _expedition_loot_cluster_center(cluster_members)
-        local total_weight = 0
-        local sum_x = 0
-        local sum_y = 0
-        local sum_z = 0
-        local fallback_position = cluster_members[1] and cluster_members[1].position or nil
-
-        for i = 1, #cluster_members do
-            local member = cluster_members[i]
-            local position = member and member.position
-
-            if position then
-                local weight = _expedition_loot_target_value(member)
-
-                if weight <= 0 then
-                    weight = 1
-                end
-
-                total_weight = total_weight + weight
-                sum_x = sum_x + position.x * weight
-                sum_y = sum_y + position.y * weight
-                sum_z = sum_z + (position.z or 0) * weight
-            end
-        end
-
-        if total_weight <= 0 or not fallback_position then
-            return fallback_position
-        end
-
-        return {
-            x = sum_x / total_weight,
-            y = sum_y / total_weight,
-            z = sum_z / total_weight,
-        }
-    end
-
-    local function _expedition_loot_vertical_state(player_pos, position, item_vertical_arrow_threshold_sq,
-                                                   item_vertical_hide_threshold)
-        local vertical_delta = _vertical_delta(player_pos, position)
-        local vertical_state = nil
-
-        if vertical_delta ~= nil then
-            local abs_vertical_delta = math_abs(vertical_delta)
-            local distance_sq_horizontal = _distance_squared_horizontal(player_pos, position)
-
-            if abs_vertical_delta >= item_vertical_hide_threshold then
-                return nil, nil, true
-            end
-
-            if abs_vertical_delta >= ITEM_VERTICAL_ARROW_Z_DEADZONE
-                and distance_sq_horizontal <= item_vertical_arrow_threshold_sq then
-                if vertical_delta > 0 then
-                    vertical_state = "up"
-                elseif vertical_delta < 0 then
-                    vertical_state = "down"
-                end
-            end
-        end
-
-        return vertical_delta, vertical_state, false
-    end
-
-    local function _create_expedition_loot_cluster_target(cluster_members, player_pos, item_vertical_arrow_threshold_sq,
-                                                          item_vertical_hide_threshold)
-        local position = _expedition_loot_cluster_center(cluster_members)
-
-        if not position then
-            return nil
-        end
-
-        local total_value = 0
-        local marked_by_player_slot = nil
-
-        for i = 1, #cluster_members do
-            local member = cluster_members[i]
-            local meta = member and member.meta or nil
-
-            total_value = total_value + _expedition_loot_target_value(member)
-
-            if meta and meta.marked_by_player_slot ~= nil and marked_by_player_slot == nil then
-                marked_by_player_slot = meta.marked_by_player_slot
-            end
-        end
-
-        local vertical_delta, vertical_state, should_hide = _expedition_loot_vertical_state(player_pos, position,
-            item_vertical_arrow_threshold_sq, item_vertical_hide_threshold)
-
-        if should_hide then
-            return nil
-        end
-
-        return {
-            unit = nil,
-            kind = "material_expeditions_loot",
-            position = position,
-            source = "expedition_loot_cluster",
-            meta = {
-                is_tech_remnant_cluster = true,
-                remnant_cluster_value = total_value,
-                remnant_value = total_value,
-                marked_by_player_slot = marked_by_player_slot,
-            },
-            distance_sq = _distance_squared_horizontal(player_pos, position),
-            distance_sq_3d = _distance_squared(player_pos, position),
-            vertical_delta = vertical_delta,
-            vertical_state = vertical_state,
-            ignore_radar_range = false,
-        }
-    end
-
-    local function _cluster_expedition_loot_targets(targets, player_pos, item_vertical_arrow_threshold_sq,
-                                                    item_vertical_hide_threshold)
-        if mod:get_expedition_loot_marker_mode() ~= "clustered" then
-            return targets
-        end
-
-        local pass_through_targets = {}
-        local cluster_candidates = {}
-        local pass_count = 0
-        local cluster_candidate_count = 0
-
-        for i = 1, #targets do
-            local target = targets[i]
-
-            if _should_cluster_expedition_loot_target(target) then
-                cluster_candidate_count = cluster_candidate_count + 1
-                cluster_candidates[cluster_candidate_count] = target
-            else
-                pass_count = pass_count + 1
-                pass_through_targets[pass_count] = target
-            end
-        end
-
-        local horizontal_radius = mod:get_expedition_loot_cluster_horizontal_radius()
-        local vertical_threshold = mod:get_expedition_loot_cluster_vertical_radius()
-        local radius_sq = horizontal_radius * horizontal_radius
-        local consumed = {}
-
-        for i = 1, cluster_candidate_count do
-            if not consumed[i] then
-                local seed = cluster_candidates[i]
-                local cluster_members = { seed }
-                local cluster_member_count = 1
-
-                consumed[i] = true
-
-                local changed = true
-
-                while changed do
-                    changed = false
-
-                    local center = _expedition_loot_cluster_center(cluster_members)
-
-                    for j = i + 1, cluster_candidate_count do
-                        if not consumed[j] then
-                            local candidate = cluster_candidates[j]
-                            local distance_sq_horizontal = _distance_squared_horizontal(center, candidate.position)
-                            local vertical_delta = _vertical_delta(center, candidate.position)
-                            local abs_vertical_delta = vertical_delta and math_abs(vertical_delta) or 0
-
-                            if distance_sq_horizontal <= radius_sq
-                                and abs_vertical_delta <= vertical_threshold then
-                                consumed[j] = true
-                                cluster_member_count = cluster_member_count + 1
-                                cluster_members[cluster_member_count] = candidate
-                                changed = true
-                            end
-                        end
-                    end
-                end
-
-                if cluster_member_count > 1 then
-                    local clustered_target = _create_expedition_loot_cluster_target(cluster_members, player_pos,
-                        item_vertical_arrow_threshold_sq, item_vertical_hide_threshold)
-
-                    if clustered_target then
-                        pass_count = pass_count + 1
-                        pass_through_targets[pass_count] = clustered_target
-                    else
-                        for j = 1, cluster_member_count do
-                            pass_count = pass_count + 1
-                            pass_through_targets[pass_count] = cluster_members[j]
-                        end
-                    end
-                else
-                    pass_count = pass_count + 1
-                    pass_through_targets[pass_count] = seed
-                end
-            end
-        end
-
-        return pass_through_targets
-    end
-
+    --- Sort order of radar targets; higher selection priority first, then nearer, then by kind name.
+    -- Targets beyond the marker limit are cut from the end of this order.
     local function _compare_radar_targets_for_display(a, b)
         local a_priority = a and a.selection_priority or 0
         local b_priority = b and b.selection_priority or 0
@@ -2076,6 +1217,14 @@ return function(env)
         return tostring(a.kind) < tostring(b.kind)
     end
 
+    --- Builds the list of radar targets to draw from the tracked units and points.
+    -- Every entry passes kind enablement, the companion and tag filters, the container filter,
+    -- the range rules (with the exemptions for tags, ability marks, objectives the game points
+    -- at and sockets while carrying a luggable) and the floor rules, and is written into a
+    -- pooled target table with its distances, vertical arrow state, render layer and selection
+    -- priority. The unclustered list is kept for highlights; Tech-Remnants are then clustered,
+    -- the list sorted and cut to the marker limit.
+    -- treturn: tab radar targets
     local function _collect_radar_targets()
         local player_unit = _player_unit()
         if not _safe_unit_alive(player_unit) then
@@ -2117,7 +1266,11 @@ return function(env)
         local get_target_render_layer = mod.get_target_render_layer
         local get_target_selection_priority = mod.get_target_selection_priority
         local is_event_marker_kind = mod.is_event_marker_kind
+        local distance_squared_horizontal = _distance_squared_horizontal
+        local get_vertical_delta = _vertical_delta
+        local mastiff_disabled_enemy_units = _mastiff_disabled_enemy_units()
 
+        --- Per-pass memoised lookups of the kind predicates, render layer and selection priority.
         local function _cached_kind_enabled(kind)
             local enabled = kind_enabled_cache[kind]
 
@@ -2204,6 +1357,9 @@ return function(env)
             return selection_priority
         end
 
+        --- Filters one tracked unit or point and appends it as a radar target.
+        -- param: unit unit handle, or the point id
+        -- tab: data tracked entry
         local function append_target(unit, data)
             local position = data and data.position
             local kind = data and data.kind
@@ -2213,18 +1369,7 @@ return function(env)
             local ability_marked_enemy = show_ability_marked_enemies
                 and _is_enemy_kind(kind)
                 and _target_has_ability_outline_mark(meta)
-            local companion_action = meta and meta.companion_action or nil
-            local companion_action_target = meta and meta.companion_action_target or nil
-            local companion_target_position = companion_action_target and
-                _safe_unit_position(companion_action_target) or nil
-            local companion_overlapping_target = kind == "player_companion_dog"
-                and companion_target_position ~= nil
-                and _distance_squared_horizontal(position, companion_target_position) <=
-                COMPANION_TARGET_OVERLAP_DISTANCE_SQ
-            local companion_action_active = companion_action == "hacking"
-                or companion_action == "inject_ally"
-                or companion_action == "flamethrower"
-                or companion_overlapping_target
+            local companion_action_active = _player_companion_action_active(kind, position, meta)
             -- A socket is drawn as what goes into it: one fed mission cargo
             -- rather than a power cell is an objective step, shown, coloured and
             -- switched with the other steps. It is still a socket to the range
@@ -2239,17 +1384,8 @@ return function(env)
                 return
             end
 
-            if kind == "player_companion_servo_skull"
-                and meta
-                and meta.owner_marker_visible
-                and meta.servo_skull_following_owner then
-                local owner_position = _safe_unit_position(meta.owner_unit)
-
-                if owner_position
-                    and _distance_squared_horizontal(owner_position, position) <=
-                    SERVO_SKULL_OWNER_HIDE_DISTANCE_SQ then
-                    return
-                end
+            if kind == "player_companion_servo_skull" and _is_servo_skull_hidden_by_owner(position, meta) then
+                return
             end
 
             if not _passes_tag_visibility_filter(kind, source, meta, only_tagged_enemies, only_tagged_items) then
@@ -2272,7 +1408,7 @@ return function(env)
                 end
             end
 
-            local distance_sq_horizontal = _distance_squared_horizontal(player_pos, position)
+            local distance_sq_horizontal = distance_squared_horizontal(player_pos, position)
             local infinite_range = _cached_infinite_radar_range(kind)
             local ignore_range = infinite_range or _cached_ignore_radar_range(kind)
 
@@ -2329,7 +1465,7 @@ return function(env)
             local vertical_state = nil
 
             if _cached_supports_vertical_marker(kind) then
-                vertical_delta = _vertical_delta(player_pos, position)
+                vertical_delta = get_vertical_delta(player_pos, position)
 
                 if vertical_delta ~= nil then
                     local abs_vertical_delta = math_abs(vertical_delta)
@@ -2379,7 +1515,7 @@ return function(env)
             target.ignore_radar_range = ignore_range
             target.render_layer = render_layer
             target.selection_priority = selection_priority
-            target.disabled_by_mastiff = _scratch_mastiff_disabled_enemy_units[unit] == true
+            target.disabled_by_mastiff = mastiff_disabled_enemy_units[unit] == true
                 and _is_enemy_kind(kind)
 
             targets[target_count] = target
@@ -2422,12 +1558,14 @@ return function(env)
         mod._last_radar_unclustered_marker_count = unclustered_total
         mod._last_radar_candidate_marker_count = target_total
         mod._last_radar_active_marker_count = #targets
-        mod._last_radar_marker_cap = max_markers
         mod._last_radar_marker_capped = was_capped
 
         return targets
     end
 
+    --- Refreshes the reused radar snapshot with the player's state and the current targets.
+    -- treturn: tab snapshot (`player_unit`, `player_position`, `player_rotation`, `player_slot`,
+    --   `targets`, `screen_highlights`)
     local function _write_radar_snapshot(player_unit, player_pos)
         local local_player = _local_player()
         local snapshot = mod._radar_snapshot or {}
@@ -2442,6 +1580,7 @@ return function(env)
         return snapshot
     end
 
+    --- Returns a refreshed snapshot, or nil without a live, positioned local player.
     local function _collect_radar_snapshot()
         local player_unit = _player_unit()
         if not _safe_unit_alive(player_unit) then
@@ -2456,6 +1595,7 @@ return function(env)
         return _write_radar_snapshot(player_unit, player_pos)
     end
 
+    --- Logs tracked counts, scan cost and runtime context in debug mode whenever they change.
     local function _debug_log_scan()
         if mod:get("debug_mode") ~= true then
             return
@@ -2533,63 +1673,7 @@ return function(env)
         ))
     end
 
-    local function _reset_runtime_state()
-        mod._screen_highlight_targets = {}
-        mod._unclustered_radar_targets = {}
-        mod._highlight_source_radar_targets = {}
-        mod._next_scan_t = 0
-        mod._next_droppable_scan_t = 0
-        mod._next_static_scan_t = 0
-        mod._last_scan_cost_ms = nil
-        _invalidate_runtime_state_cache()
-        mod._tracked_units = {}
-        mod._tracked_points = {}
-        mod._logged_units = {}
-        mod._radar_targets = {}
-        mod._radar_snapshot = nil
-        mod._radar_target_pool = {}
-        mod._radar_player_unit_by_player = {}
-        mod._last_update_t = nil
-        mod._last_scan_signature = nil
-        mod._last_block_signature = nil
-        mod._last_state_gameplay = nil
-        _reset_dark_rites_marker_scan_cache()
-        mod._idol_destroyed_collectible_keys = {}
-        mod._idol_destroyed_units = {}
-        mod._martyr_skull_riddle_solved_by_mission = {}
-        mod._martyr_skull_riddle_fallback_state_by_position = {}
-        _reset_mission_objective_marker_state()
-        mod._last_safe_zone_section_index = nil
-        mod._last_expedition_in_safe_zone = nil
-        mod._player_smart_tag_generation = 0
-        mod._player_smart_tag_state_by_id = {}
-        mod._overview_mode_active = false
-        mod._overview_zoom_range = _normalize_overview_zoom_range(mod:get("overview_zoom_range"))
-        mod._overview_capture_actions = mod._overview_capture_actions or {}
-        mod._overview_range_transition_active = false
-        mod._overview_range_transition_start_t = nil
-        mod._overview_range_transition_from = nil
-        mod._overview_range_transition_to = nil
-        mod._normal_radar_zoom_modifier_t = nil
-        mod._normal_radar_zoom_indicator_t = nil
-        mod._last_radar_unclustered_marker_count = 0
-        mod._last_radar_candidate_marker_count = 0
-        mod._last_radar_active_marker_count = 0
-        mod._last_radar_marker_cap = 0
-        mod._last_radar_marker_capped = false
-        mod._overview_marker_high_raw = 0
-        mod._overview_marker_high_candidates = 0
-        mod._overview_marker_high_active = 0
-        mod._overview_marker_high_drawn = 0
-        mod._last_overview_marker_debug_signature = nil
-
-        if mod.reset_strikemap_integration then
-            mod:reset_strikemap_integration()
-        end
-
-        _refresh_overview_input_capture()
-    end
-
+    --- Logs why the radar is not running in debug mode, once per distinct reason and context.
     local function _debug_log_block(reason, gameplay_t, mission_name, activity, mechanism_name)
         if mod:get("debug_mode") ~= true then
             return
@@ -2623,6 +1707,7 @@ return function(env)
         ))
     end
 
+    --- Returns whether a UI view currently owns the input, such as a menu or the chat.
     local function _is_ui_input_active()
         local managers = Managers
         local ui_manager = managers and managers.ui
@@ -2631,12 +1716,21 @@ return function(env)
         return using_input and using_input(ui_manager, true) == true
     end
 
+    --- Returns whether radar keybinds may act; not while UI input is active or outside an allowed mission.
     local function _is_radar_keybind_runtime_allowed()
         return not _is_ui_input_active()
             and mod.is_radar_runtime_game_mode_allowed
             and mod:is_radar_runtime_game_mode_allowed()
     end
 
+    --- Runs one radar update; the entry point of every scan.
+    -- Called from the `StateGameplay.update` hook and from `mod.update`, and runs at most once
+    -- per gameplay time. With the radar disabled (and overview off) or the runtime not allowed
+    -- it clears the outputs and returns; tracked units are also dropped while the local player
+    -- has no unit, is dead, captured or spectating. Otherwise the snapshot is refreshed every frame, and
+    -- when the scan is due the scans run in a fixed order for their tier, followed by pruning,
+    -- target collection, highlight collection and the final snapshot.
+    -- ?number: t time passed by the caller, used when no gameplay time is available
     local function _update_internal(t)
         if mod:get("enable_radar") == false and not mod:is_overview_mode_active() then
             _reset_runtime_output_tables()
@@ -2723,6 +1817,7 @@ return function(env)
         _refresh_player_units()
 
         if droppable_scan_due then
+            mod._tracked_points = {}
             _scan_expedition_objectives()
             _scan_martyr_skull_riddle_coordinate_fallbacks()
             _scan_player_tag_points()
@@ -2741,6 +1836,69 @@ return function(env)
         _debug_log_scan()
     end
 
+    -- ----------------------------------------------------------------------------
+    -- Mission lifecycle
+    -- ----------------------------------------------------------------------------
+
+    --- Resets all tracking, scan scheduling, overview and feature module state for a new mission.
+    -- Also resets the Strikemap integration and rebuilds the input capture.
+    local function _reset_runtime_state()
+        mod._screen_highlight_targets = {}
+        mod._unclustered_radar_targets = {}
+        mod._highlight_source_radar_targets = {}
+        mod._next_scan_t = 0
+        mod._next_droppable_scan_t = 0
+        mod._next_static_scan_t = 0
+        mod._last_scan_cost_ms = nil
+        _invalidate_runtime_state_cache()
+        mod._tracked_units = {}
+        mod._tracked_points = {}
+        mod._logged_units = {}
+        mod._radar_targets = {}
+        mod._radar_snapshot = nil
+        mod._radar_target_pool = {}
+        mod._radar_player_unit_by_player = {}
+        mod._last_update_t = nil
+        mod._last_scan_signature = nil
+        mod._last_block_signature = nil
+        mod._last_state_gameplay = nil
+        _reset_dark_rites_marker_scan_cache()
+        _reset_destroyed_idol_state()
+        _reset_martyr_skull_riddle_state()
+        _reset_mission_objective_marker_state()
+        _reset_expedition_runtime_state()
+        mod._overview_mode_active = false
+        mod._overview_zoom_range = _normalize_overview_zoom_range(mod:get("overview_zoom_range"))
+        mod._overview_capture_actions = mod._overview_capture_actions or {}
+        mod._overview_range_transition_active = false
+        mod._overview_range_transition_start_t = nil
+        mod._overview_range_transition_from = nil
+        mod._overview_range_transition_to = nil
+        mod._normal_radar_zoom_modifier_t = nil
+        mod._normal_radar_zoom_indicator_t = nil
+        mod._last_radar_unclustered_marker_count = 0
+        mod._last_radar_candidate_marker_count = 0
+        mod._last_radar_active_marker_count = 0
+        mod._last_radar_marker_capped = false
+        mod._overview_marker_high_raw = 0
+        mod._overview_marker_high_candidates = 0
+        mod._overview_marker_high_active = 0
+        mod._overview_marker_high_drawn = 0
+        mod._last_overview_marker_debug_signature = nil
+
+        if mod.reset_strikemap_integration then
+            mod:reset_strikemap_integration()
+        end
+
+        _refresh_overview_input_capture()
+    end
+
+    --- DMF callback for game state changes.
+    -- Entering `GameplayStateRun` starts the radar with an immediate scan and a warm target
+    -- pool. Leaving it, or entering a loading, menu, title or gameplay init state, resets all
+    -- runtime state so nothing carries into the next mission.
+    -- string: status `enter` or `exit`
+    -- string: state_name game state class name
     mod.on_game_state_changed = function(status, state_name)
         if status == "enter" and state_name == "GameplayStateRun" then
             mod._gameplay_run = true
@@ -2771,101 +1929,18 @@ return function(env)
         end
     end
 
-    mod:register_hud_element({
-        class_name = "HudElementRadar",
-        filename = "Radar/scripts/mods/Radar/ui/Radar_hud_element",
-        visibility_groups = {
-            "communication_wheel",
-            "emote_wheel",
-            "alive",
-        },
-        use_hud_scale = true,
-    })
+    -- ----------------------------------------------------------------------------
+    -- Public interface
+    -- ----------------------------------------------------------------------------
 
-    local function _neutralize_input_value(value)
-        local value_type = type(value)
-
-        if value_type == "boolean" then
-            return false
-        end
-
-        if value_type == "number" then
-            return 0
-        end
-
-        if value_type == "userdata" and Vector3 then
-            return Vector3(0, 0, 0)
-        end
-
-        return value
-    end
-
-    local function _overview_input_action_hook(func, self, action_name, ...)
-        local value = func(self, action_name, ...)
-
-        if not mod:should_capture_overview_input_action(action_name) then
-            return value
-        end
-
-        return _neutralize_input_value(value)
-    end
-
-    mod:hook(CLASS.InputService, "_get", _overview_input_action_hook)
-    mod:hook(CLASS.InputService, "_get_simulate", _overview_input_action_hook)
-
-    mod:hook_safe("StateGameplay", "update", function(self, dt, t, ...)
-        mod._last_state_gameplay = self
-        _update_internal(t)
-    end)
-
-    mod:hook_safe("CollectiblesManager", "rpc_player_destroyed_destructible_collectible",
-        function(self, channel_id, peer_id, local_player_id, section_id, id)
-            _clear_tracked_idol_by_collectible(section_id, id)
-        end)
-
-    mod:hook_safe("CollectiblesManager", "collectible_destroyed", function(self, data, attacking_unit)
-        if data then
-            _clear_tracked_idol_by_collectible(data.section_id, data.id)
-        end
-    end)
-
-    mod:hook_safe("DestructibleExtension", "rpc_destructible_last_destruction", function(self)
-        _mark_idol_unit_destroyed(self and self._unit or nil, self)
-    end)
-
-    mod:hook_safe("DestructibleExtension", "rpc_sync_destructible",
-        function(self, current_stage, visible, from_hot_join_sync)
-            if current_stage == 0 then
-                _mark_idol_unit_destroyed(self and self._unit or nil, self)
-            end
-        end)
-
-    mod.update = function()
-        if not mod._gameplay_run then
-            return
-        end
-
-        _update_internal(_safe_gameplay_time())
-    end
-
-    local previous_on_setting_changed = mod.on_setting_changed
-
-    mod.on_setting_changed = function(setting_id, ...)
-        if previous_on_setting_changed then
-            previous_on_setting_changed(setting_id, ...)
-        end
-
-        if setting_id == "overview_zoom_in_key" or setting_id == "overview_zoom_out_key" then
-            _refresh_overview_input_capture()
-        elseif setting_id == "show_player_state_icons" then
-            mod._next_scan_t = 0
-        end
-    end
-
+    --- Returns whether the centred overview radar is open.
+    -- treturn: bool
     function mod:is_overview_mode_active()
         return self._overview_mode_active == true
     end
 
+    --- Returns the overview zoom range in metres, read from the setting on first use.
+    -- treturn: int
     function mod:get_overview_zoom_range()
         local value = self._overview_zoom_range
 
@@ -2877,6 +1952,10 @@ return function(env)
         return _normalize_overview_zoom_range(value)
     end
 
+    --- Sets the overview zoom range, animating the change while overview mode is open.
+    -- param: value range in metres
+    -- ?bool: persist save the range to the setting unless false
+    -- treturn: int normalised range
     function mod:set_overview_zoom_range(value, persist)
         local normalized = _normalize_overview_zoom_range(value)
         local previous_range = self:get_overview_zoom_range()
@@ -2895,6 +1974,8 @@ return function(env)
         return normalized
     end
 
+    --- Returns whether the zoom modifier is held (or was pressed within the grace period) for the normal radar.
+    -- treturn: bool
     function mod:is_normal_radar_zoom_modifier_active()
         if self:is_overview_mode_active() then
             return false
@@ -2919,6 +2000,9 @@ return function(env)
         return now - last_t <= NORMAL_RADAR_ZOOM_MODIFIER_GRACE
     end
 
+    --- Saves a normal radar range, shows the zoom factor indicator and requests an immediate scan.
+    -- param: value range in metres
+    -- treturn: int normalised range
     function mod:set_normal_radar_zoom_range(value)
         local normalized = _normalize_normal_radar_zoom_range(value)
 
@@ -2929,6 +2013,10 @@ return function(env)
         return normalized
     end
 
+    --- Handles the zoom reset key.
+    -- In overview mode zooms to fit the targets; on the normal radar, while the modifier is
+    -- held, zooms to the closest range.
+    -- treturn: int|bool new range, or false when nothing was done
     function mod:reset_radar_zoom()
         if not _is_radar_keybind_runtime_allowed() then
             return false
@@ -2945,6 +2033,10 @@ return function(env)
         return self:set_normal_radar_zoom_range(NORMAL_RADAR_RESET_ZOOM_RANGE)
     end
 
+    --- Opens or closes overview mode, animating between the normal and overview ranges.
+    -- Opening is refused while radar keybinds are not allowed.
+    -- bool: active whether overview mode should be open
+    -- treturn: bool resulting state
     function mod:set_overview_mode_active(active)
         local is_active = active == true
 
@@ -2992,6 +2084,9 @@ return function(env)
         return is_active
     end
 
+    --- Zooms the overview radar one step in or out.
+    -- ?string: direction `in` or `out`
+    -- treturn: int|bool new range, or false when overview mode is closed or keybinds are not allowed
     function mod:adjust_overview_zoom(direction)
         if not self:is_overview_mode_active() then
             return false
@@ -3013,6 +2108,9 @@ return function(env)
         return self:set_overview_zoom_range(new_range)
     end
 
+    --- Zooms the normal radar one range step in or out while the zoom modifier is held.
+    -- ?string: direction `in` or `out`
+    -- treturn: int|bool new range, or false when nothing was done
     function mod:adjust_normal_radar_zoom(direction)
         if not _is_radar_keybind_runtime_allowed() then
             return false
@@ -3028,6 +2126,9 @@ return function(env)
         return self:set_normal_radar_zoom_range(new_range)
     end
 
+    --- Zooms whichever radar is showing.
+    -- ?string: direction `in` or `out`
+    -- treturn: int|bool new range, or false when nothing was done
     function mod:adjust_radar_zoom(direction)
         if self:is_overview_mode_active() then
             return self:adjust_overview_zoom(direction)
@@ -3036,6 +2137,11 @@ return function(env)
         return self:adjust_normal_radar_zoom(direction)
     end
 
+    --- Returns whether a game input action must be swallowed because a zoom key uses it.
+    -- Only scroll actions bound to a zoom keybind are captured, and only while overview mode is
+    -- open or the zoom modifier is held.
+    -- ?string: action_name game input action
+    -- treturn: bool
     function mod:should_capture_overview_input_action(action_name)
         if action_name == nil then
             return false
@@ -3059,70 +2165,32 @@ return function(env)
         return _is_radar_keybind_runtime_allowed()
     end
 
-    function mod:get_player_display_style()
-        local value = self:get("show_players")
-
-        if value ~= "icon_only"
-            and value ~= "marked_icon"
-            and value ~= "dot_only"
-            and value ~= "marked_dot" then
-            value = self:get("player_display_style")
-        end
-
-        value = tostring(value or "marked_icon")
-
-        if value ~= "icon_only"
-            and value ~= "marked_icon"
-            and value ~= "dot_only"
-            and value ~= "marked_dot" then
-            value = "marked_icon"
-        end
-
-        return value
-    end
-
-    function mod:get_show_players()
-        local value = self:get("show_players")
-
-        if value == nil then
-            value = self:get("show_teammates")
-        end
-
-        return value ~= false and value ~= "off"
-    end
-
-    function mod:get_show_player_center_dot()
-        local value = self:get("show_player_center_dot")
-
-        return value ~= false and value ~= "off"
-    end
-
-    function mod:get_player_marker_range_mode()
-        local value = tostring(self:get("player_marker_range_mode") or "normal")
-
-        if value ~= "infinite" then
-            value = "normal"
-        end
-
-        return value
-    end
-
+    --- Returns the radar snapshot the HUD element draws this frame.
+    -- treturn: ?tab
     function mod:get_radar_snapshot()
         return self._radar_snapshot
     end
 
+    --- Returns whether only enemies a player tagged are shown.
+    -- treturn: bool
     function mod:get_show_only_tagged_enemies()
         return self:get("show_only_tagged_enemies") == true
     end
 
+    --- Returns whether enemies outlined by a supported ability are shown regardless of the tag filter and range.
+    -- treturn: bool
     function mod:get_show_ability_marked_enemies()
         return self:get("show_ability_marked_enemies") == true
     end
 
+    --- Returns whether only items a player tagged are shown.
+    -- treturn: bool
     function mod:get_show_only_tagged_items()
         return self:get("show_only_tagged_items") == true
     end
 
+    --- Returns whether the HUD element should draw the radar this frame.
+    -- treturn: bool
     function mod:should_draw_radar()
         if self:get("enable_radar") == false and not self:is_overview_mode_active() then
             return false
@@ -3139,6 +2207,8 @@ return function(env)
         return _is_allowed_runtime()
     end
 
+    --- Returns the configured radar size in UI pixels, clamped to 100 to 1200.
+    -- treturn: int
     function mod:get_configured_radar_size()
         local value = tonumber(self:get("radar_size")) or 220
 
@@ -3151,6 +2221,8 @@ return function(env)
         return math_floor(value + 0.5)
     end
 
+    --- Returns the size of the radar currently shown, the overview size while overview mode is open.
+    -- treturn: int
     function mod:get_radar_size()
         if self:is_overview_mode_active() then
             return _overview_max_radar_size()
@@ -3159,10 +2231,14 @@ return function(env)
         return self:get_configured_radar_size()
     end
 
+    --- Returns the configured normal radar range in metres.
+    -- treturn: int
     function mod:get_configured_radar_range()
         return _normalize_normal_radar_zoom_range(self:get("radar_range") or 40)
     end
 
+    --- Returns the range the radar is drawn at, following a running overview zoom transition.
+    -- treturn: number
     function mod:get_radar_range()
         if self:is_overview_mode_active() then
             return _current_overview_range_transition() or self:get_overview_zoom_range()
@@ -3171,6 +2247,10 @@ return function(env)
         return self:get_configured_radar_range()
     end
 
+    --- Returns the range targets are collected within.
+    -- Overview mode collects every target except during a zoom transition. Also advances the
+    -- transition state.
+    -- treturn: number
     function mod:get_radar_collection_range()
         if self:is_overview_mode_active() then
             local transition_range = _current_overview_range_transition()
@@ -3187,6 +2267,8 @@ return function(env)
         return self:get_radar_range()
     end
 
+    --- Formats the zoom factor of a normal radar range, such as `1.0x` or `1.75x`.
+    -- treturn: string
     function mod:get_normal_radar_zoom_factor_text(range)
         local hundredths = _normal_radar_zoom_factor_hundredths(range)
         local factor = hundredths / 100
@@ -3198,6 +2280,9 @@ return function(env)
         return string_format("%.2fx", factor)
     end
 
+    --- Returns the zoom factor indicator to show after a normal radar zoom, fading out towards the end.
+    -- treturn: ?string zoom factor text, nil when no indicator is showing
+    -- treturn: ?number alpha scale
     function mod:get_normal_radar_zoom_indicator()
         if self:is_overview_mode_active() then
             return nil, nil
@@ -3229,6 +2314,7 @@ return function(env)
         return self:get_normal_radar_zoom_factor_text(self:get_configured_radar_range()), alpha_scale
     end
 
+    --- Logs overview marker counts and their highs in debug mode whenever they change, to verify the marker limits.
     function mod:log_overview_marker_draw_counts(collected_count, drawn_count, configured_cap, widget_cap, center_dot_drawn)
         if self:get("debug_mode") ~= true or not self:is_overview_mode_active() then
             return
@@ -3292,6 +2378,8 @@ return function(env)
         ))
     end
 
+    --- Returns the marker limit of the radar currently shown (10 to 200, or the overview limit).
+    -- treturn: int
     function mod:get_max_radar_markers()
         if self:is_overview_mode_active() then
             return self:get_overview_max_radar_markers()
@@ -3308,6 +2396,8 @@ return function(env)
         return math_floor(value)
     end
 
+    --- Returns the overview marker limit, clamped to 100 to `OVERVIEW_RADAR_MARKER_LIMIT`.
+    -- treturn: int
     function mod:get_overview_max_radar_markers()
         local value = tonumber(self:get("overview_max_radar_markers")) or OVERVIEW_RADAR_MARKER_LIMIT
 
@@ -3320,6 +2410,8 @@ return function(env)
         return math_floor(value)
     end
 
+    --- Returns the boss marker range mode.
+    -- treturn: string `normal` or `infinite`
     function mod:get_boss_marker_range_mode()
         local value = tostring(self:get("boss_marker_range_mode") or "normal")
 
@@ -3330,48 +2422,8 @@ return function(env)
         return value
     end
 
-    function mod:get_expedition_loot_marker_mode()
-        local value = tostring(self:get("expedition_loot_marker_mode") or "default")
-
-        if value ~= "scaled" and value ~= "clustered" then
-            value = "default"
-        end
-
-        return value
-    end
-
-    function mod:get_show_expedition_loot_cluster_value()
-        return self:get("show_expedition_loot_cluster_value") == true
-    end
-
-    function mod:get_show_expedition_loot_value_text()
-        return self:get_show_expedition_loot_cluster_value()
-    end
-
-    function mod:get_expedition_loot_cluster_horizontal_radius()
-        local value = tonumber(self:get("expedition_loot_cluster_horizontal_radius")) or 5
-
-        if value < 1 then
-            value = 1
-        elseif value > 10 then
-            value = 10
-        end
-
-        return value
-    end
-
-    function mod:get_expedition_loot_cluster_vertical_radius()
-        local value = tonumber(self:get("expedition_loot_cluster_vertical_radius")) or 3
-
-        if value < 1 then
-            value = 1
-        elseif value > 5 then
-            value = 5
-        end
-
-        return value
-    end
-
+    --- Returns the horizontal distance in metres within which vertical arrows are shown (25 to 100).
+    -- treturn: number
     function mod:get_item_vertical_arrow_threshold()
         local value = tonumber(self:get("item_vertical_arrow_threshold")) or 25
 
@@ -3384,6 +2436,8 @@ return function(env)
         return value
     end
 
+    --- Returns the height difference in metres from which targets are hidden as being on another floor (8 to 50).
+    -- treturn: number
     function mod:get_item_vertical_hide_threshold()
         local value = tonumber(self:get("item_vertical_hide_threshold")) or 12
 
@@ -3396,6 +2450,8 @@ return function(env)
         return value
     end
 
+    --- Returns the radar style.
+    -- treturn: string `square`, `circle` or `auspex`
     function mod:get_radar_style()
         local value = tostring(self:get("radar_style") or "square")
 
@@ -3406,6 +2462,8 @@ return function(env)
         return value
     end
 
+    --- Returns the radar outline style.
+    -- treturn: string `solid`, `dotted` or `off`
     function mod:get_radar_outline()
         local value = tostring(self:get("radar_outline") or "solid")
 
@@ -3416,6 +2474,8 @@ return function(env)
         return value
     end
 
+    --- Returns the map geometry source, honouring the two toggles it replaced when it is unset.
+    -- treturn: string `off`, `live`, `strikemap` or `auto`
     function mod:get_map_geometry_source()
         local value = self:get("map_geometry_source")
 
@@ -3434,6 +2494,8 @@ return function(env)
         return value
     end
 
+    --- Returns the radar guide style.
+    -- treturn: string `crosshair`, `view_guides`, `range_rings`, `auspex_background` or `off`
     function mod:get_radar_guides()
         local value = tostring(self:get("radar_guides") or "crosshair")
 
@@ -3445,6 +2507,8 @@ return function(env)
         return value
     end
 
+    --- Returns how many UI pixels one radar move keypress nudges the radar (1 to 200).
+    -- treturn: int
     function mod:get_radar_move_step()
         local value = tonumber(self:get("radar_move_step")) or DEFAULT_RADAR_MOVE_STEP
 
@@ -3457,14 +2521,21 @@ return function(env)
         return math_floor(value)
     end
 
+    --- Returns the screen corner the radar position is measured from.
+    -- treturn: string `top_left`, `top_right`, `bottom_left` or `bottom_right`
     function mod:get_radar_anchor()
         return _normalize_radar_anchor(self:get("radar_anchor"))
     end
 
+    --- Returns whether the radar may be placed partly off screen.
+    -- treturn: bool
     function mod:is_radar_position_unrestricted()
         return self:get("unrestricted_radar_position") == true
     end
 
+    --- Returns the saved horizontal offset from the anchor corner, clamped to the screen unless unrestricted.
+    -- ?number: size radar size, the configured size when nil
+    -- treturn: int
     function mod:get_radar_offset_x(size)
         local radar_size = tonumber(size) or self:get_configured_radar_size()
         local max_x = _get_radar_position_bounds(radar_size)
@@ -3479,6 +2550,9 @@ return function(env)
         )
     end
 
+    --- Returns the saved vertical offset from the anchor corner, clamped to the screen unless unrestricted.
+    -- ?number: size radar size, the configured size when nil
+    -- treturn: int
     function mod:get_radar_offset_y(size)
         local radar_size = tonumber(size) or self:get_configured_radar_size()
         local _, max_y = _get_radar_position_bounds(radar_size)
@@ -3493,6 +2567,9 @@ return function(env)
         )
     end
 
+    --- Returns the left edge of the radar currently shown.
+    -- ?number: size radar size, the current size when nil
+    -- treturn: int
     function mod:get_radar_pos_x(size)
         local radar_size = tonumber(size) or self:get_radar_size()
 
@@ -3507,6 +2584,9 @@ return function(env)
         return x
     end
 
+    --- Returns the top edge of the radar currently shown.
+    -- ?number: size radar size, the current size when nil
+    -- treturn: int
     function mod:get_radar_pos_y(size)
         local radar_size = tonumber(size) or self:get_radar_size()
 
@@ -3521,6 +2601,8 @@ return function(env)
         return y
     end
 
+    --- Returns whether nearby highlights are enabled for any settings group.
+    -- treturn: bool
     function mod:has_any_nearby_highlight_enabled()
         for _, setting_id in pairs(NEARBY_HIGHLIGHT_SETTING_BY_GROUP) do
             if self:get(setting_id) == true then
@@ -3531,6 +2613,8 @@ return function(env)
         return false
     end
 
+    --- Returns the distance in metres within which nearby highlights are drawn (5 to 20).
+    -- treturn: number
     function mod:get_nearby_highlight_range()
         local value = tonumber(self:get("highlight_distance")) or 10
 
@@ -3543,12 +2627,16 @@ return function(env)
         return value
     end
 
+    --- Returns whether nearby highlight distance text is drawn on screen.
+    -- treturn: bool
     function mod:show_nearby_highlight_distance_text_on_screen()
         local value = self:get("nearby_highlight_distance_text")
 
         return value == true or value == "screen" or value == "both"
     end
 
+    --- Returns the nearby highlight bracket thickness override in pixels, 0 for the default.
+    -- treturn: int
     function mod:get_nearby_highlight_thickness()
         local value = tonumber(self:get("nearby_highlight_thickness")) or 0
 
@@ -3561,6 +2649,8 @@ return function(env)
         return math_floor(value + 0.5)
     end
 
+    --- Returns the nearby highlight colour of a kind, or its default before the colour runtime exists.
+    -- treturn: tab ARGB colour array
     function mod:get_nearby_highlight_color(kind)
         if self.get_highlight_color then
             return self:get_highlight_color(kind)
@@ -3569,6 +2659,8 @@ return function(env)
         return _copy_color_array(NEARBY_OUTLINE_COLOR_BY_KIND[kind]) or DEFAULT_COLOR_ARRAY_WHITE
     end
 
+    --- Returns whether an enabled kind shows distance text with its nearby highlight on the radar.
+    -- treturn: bool
     function mod:is_nearby_highlight_distance_text_enabled_for_kind(kind)
         if not kind or not _kind_enabled(kind) then
             return false
@@ -3584,6 +2676,8 @@ return function(env)
         return self:get(setting_id) == true
     end
 
+    --- Returns whether an enabled, non-excluded kind gets a nearby highlight on the radar.
+    -- treturn: bool
     function mod:is_nearby_highlight_enabled_for_kind(kind)
         if not kind or not _kind_enabled(kind) then
             return false
@@ -3603,6 +2697,11 @@ return function(env)
         return self:get(setting_id) == true
     end
 
+    --- Saves radar offsets from the anchor corner; either may be nil to keep it.
+    -- param: x horizontal offset
+    -- param: y vertical offset
+    -- treturn: int resulting left edge
+    -- treturn: int resulting top edge
     function mod:set_radar_position(x, y)
         local radar_size = self:get_configured_radar_size()
         local max_x, max_y = _get_radar_position_bounds(radar_size)
@@ -3639,6 +2738,11 @@ return function(env)
         return resolved_x, resolved_y
     end
 
+    --- Places the radar's top-left corner at a screen position, saved as offsets from the anchor corner.
+    -- param: x left edge
+    -- param: y top edge
+    -- treturn: int resulting left edge
+    -- treturn: int resulting top edge
     function mod:set_radar_origin(x, y)
         local radar_size = self:get_configured_radar_size()
         local anchor = self:get_radar_anchor()
@@ -3671,6 +2775,11 @@ return function(env)
         return resolved_x, resolved_y
     end
 
+    --- Changes the anchor corner.
+    -- param: anchor new anchor, normalised
+    -- ?bool: preserve_visual_position keep the radar where it is on screen instead of keeping the offsets
+    -- treturn: int resulting left edge
+    -- treturn: int resulting top edge
     function mod:set_radar_anchor(anchor, preserve_visual_position)
         local radar_size = self:get_configured_radar_size()
         local current_x, current_y = _configured_radar_origin(radar_size)
@@ -3685,6 +2794,9 @@ return function(env)
         return self:set_radar_position(self:get("radar_pos_x"), self:get("radar_pos_y"))
     end
 
+    --- Moves the normal radar by a pixel offset; not while overview mode is open or keybinds are not allowed.
+    -- treturn: int|bool resulting left edge, or false
+    -- treturn: ?int resulting top edge
     function mod:nudge_radar(dx, dy)
         if self:is_overview_mode_active() then
             return false
@@ -3699,6 +2811,9 @@ return function(env)
         return self:set_radar_origin(x + (tonumber(dx) or 0), y + (tonumber(dy) or 0))
     end
 
+    --- Saves whether the radar is enabled, clearing the published targets when it is disabled.
+    -- bool: enabled
+    -- treturn: bool
     function mod:set_radar_enabled(enabled)
         local is_enabled = enabled == true
 
@@ -3721,6 +2836,9 @@ return function(env)
         return is_enabled
     end
 
+    --- DMF keybind callback that toggles the radar.
+    -- Like every keybind callback below, it does nothing and returns false while radar keybinds
+    -- are not allowed (a UI view owns the input, or no allowed mission is running).
     function mod.toggle_radar_keybind(_)
         if not _is_radar_keybind_runtime_allowed() then
             return false
@@ -3731,6 +2849,7 @@ return function(env)
         return mod:set_radar_enabled(not current_value)
     end
 
+    --- DMF keybind callback that opens or closes overview mode.
     function mod.toggle_overview_keybind(_)
         if not _is_radar_keybind_runtime_allowed() then
             return false
@@ -3739,6 +2858,7 @@ return function(env)
         return mod:set_overview_mode_active(not mod:is_overview_mode_active())
     end
 
+    --- DMF keybind callback that records a zoom modifier press, which stays active for a short grace period.
     function mod.radar_zoom_modifier_keybind(_)
         if not _is_radar_keybind_runtime_allowed() then
             return false
@@ -3749,34 +2869,47 @@ return function(env)
         return true
     end
 
+    --- DMF keybind callback that zooms the radar in.
     function mod.overview_zoom_in_keybind(_)
         return mod:adjust_radar_zoom("in")
     end
 
+    --- DMF keybind callback that zooms the radar out.
     function mod.overview_zoom_out_keybind(_)
         return mod:adjust_radar_zoom("out")
     end
 
+    --- DMF keybind callback that resets the radar zoom.
     function mod.radar_zoom_reset_keybind(_)
         return mod:reset_radar_zoom()
     end
 
+    --- DMF keybind callback that nudges the radar left by the move step.
     function mod.move_radar_left(_)
         return mod:nudge_radar(-mod:get_radar_move_step(), 0)
     end
 
+    --- DMF keybind callback that nudges the radar right.
     function mod.move_radar_right(_)
         return mod:nudge_radar(mod:get_radar_move_step(), 0)
     end
 
+    --- DMF keybind callback that nudges the radar up.
     function mod.move_radar_up(_)
         return mod:nudge_radar(0, -mod:get_radar_move_step())
     end
 
+    --- DMF keybind callback that nudges the radar down.
     function mod.move_radar_down(_)
         return mod:nudge_radar(0, mod:get_radar_move_step())
     end
 
+    --- Returns the radar's top-left position, draw layer and radius.
+    -- ?number: size radar size, the current size when nil
+    -- treturn: int x
+    -- treturn: int y
+    -- treturn: int z
+    -- treturn: number radius
     function mod:get_radar_origin(size)
         local radar_size = tonumber(size) or self:get_radar_size()
         local x = self:get_radar_pos_x(radar_size)
@@ -3787,6 +2920,17 @@ return function(env)
         return x, y, z, radius
     end
 
+    --- Projects a world position onto the radar, relative to the player and aligned to the view.
+    -- Targets outside the range are dropped unless they ignore the range or overview mode is
+    -- open, in which case they are pinned to the radar edge (circle or square).
+    -- tab: player_pos player position
+    -- param: player_rot rotation the radar is aligned to; north-up when unavailable
+    -- tab: target_pos target position
+    -- number: max_radius radar radius in UI pixels
+    -- number: range radar range in metres
+    -- ?bool: ignore_radar_range pin out-of-range targets to the edge instead of dropping them
+    -- treturn: ?number x offset from the radar centre
+    -- treturn: ?number y offset from the radar centre
     function mod:project_target_to_radar(player_pos, player_rot, target_pos, max_radius, range, ignore_radar_range)
         if not player_pos or not target_pos then
             return nil, nil
@@ -3856,4 +3000,100 @@ return function(env)
 
         return px, py
     end
+
+    -- ----------------------------------------------------------------------------
+    -- Hooks
+    -- ----------------------------------------------------------------------------
+
+    --- Returns the neutral value of an input action result (false, 0 or a zero vector).
+    local function _neutralize_input_value(value)
+        local value_type = type(value)
+
+        if value_type == "boolean" then
+            return false
+        end
+
+        if value_type == "number" then
+            return 0
+        end
+
+        if value_type == "userdata" and Vector3 then
+            return Vector3(0, 0, 0)
+        end
+
+        return value
+    end
+
+    --- Hook on `InputService` action reads that swallows scroll actions used by the zoom keys.
+    -- Without it, scrolling to zoom would also switch weapons or scroll the tactical overlay.
+    -- func: func original method
+    -- tab: self input service
+    -- string: action_name input action being read
+    -- param: ... remaining arguments
+    -- return: the original value, or its neutral value when the action is captured
+    local function _overview_input_action_hook(func, self, action_name, ...)
+        local value = func(self, action_name, ...)
+
+        if not mod:should_capture_overview_input_action(action_name) then
+            return value
+        end
+
+        return _neutralize_input_value(value)
+    end
+
+    mod:hook(CLASS.InputService, "_get", _overview_input_action_hook)
+
+    mod:hook(CLASS.InputService, "_get_simulate", _overview_input_action_hook)
+
+    -- Drives the radar from the gameplay state's update and remembers the state, whose shared
+    -- state the runtime helpers read the mission and circumstance from.
+    mod:hook_safe("StateGameplay", "update", function(self, dt, t, ...)
+        mod._last_state_gameplay = self
+        _update_internal(t)
+    end)
+
+    -- ----------------------------------------------------------------------------
+    -- DMF callbacks and initialization
+    -- ----------------------------------------------------------------------------
+
+    --- DMF update callback; runs the radar update while gameplay is running (at most once per gameplay time).
+    mod.update = function()
+        if not mod._gameplay_run then
+            return
+        end
+
+        _update_internal(_safe_gameplay_time())
+    end
+
+    local previous_on_setting_changed = mod.on_setting_changed
+
+    --- DMF callback, chained after any previously installed handler.
+    -- Rebuilds the input capture when a zoom key changes and rescans when player state icons
+    -- are toggled.
+    -- string: setting_id changed setting
+    -- param: ... further DMF arguments, forwarded to the previous handler
+    mod.on_setting_changed = function(setting_id, ...)
+        if previous_on_setting_changed then
+            previous_on_setting_changed(setting_id, ...)
+        end
+
+        if setting_id == "overview_zoom_in_key" or setting_id == "overview_zoom_out_key" then
+            _refresh_overview_input_capture()
+        elseif setting_id == "show_player_state_icons" then
+            mod._next_scan_t = 0
+        end
+    end
+
+    -- The radar HUD element, loaded by DMF from `ui/Radar_hud_element.lua` and scaled with the HUD.
+    mod:register_hud_element({
+        class_name = "HudElementRadar",
+        filename = "Radar/scripts/mods/Radar/ui/Radar_hud_element",
+        visibility_groups = {
+            "communication_wheel",
+            "emote_wheel",
+            "alive",
+        },
+        use_hud_scale = true,
+    })
+
 end

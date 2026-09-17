@@ -1,3 +1,19 @@
+--- Radar's DMF localization table for all twelve supported languages.
+-- Returns a table from localization id to a table of texts by language code; DMF resolves
+-- `mod:localize(id)` against it. Settings titles, tooltips, dropdown options and colour slider
+-- labels live here. Text shared by many entries (option names, colour channel names and
+-- colour labels) is declared once above the table, and entries that name game content
+-- (enemies, talents, abilities) are built from the game's own localization with `Localize`, so
+-- they follow the player's game language.
+--
+-- Loaded by DMF as `mod_localization`, as declared in `Radar.mod`; not part of the runtime's
+-- shared environment. Traditional Chinese texts are edited against the Darktide translation
+-- glossary linked in the README.
+-- module: Radar_localization
+-- author: LucLeto
+-- author: CaimaoLittle2
+-- author: SyuanTsai
+--- Language codes every localization entry provides.
 local _localization_languages = {
     "en",
     "fr",
@@ -13,6 +29,9 @@ local _localization_languages = {
     "zh-tw",
 }
 
+--- Returns a localization entry with the same text in every language.
+-- string: text text
+-- treturn: tab texts by language code
 local function _localized_text_for_all_languages(text)
     local localization = {}
 
@@ -23,10 +42,16 @@ local function _localized_text_for_all_languages(text)
     return localization
 end
 
+--- Returns a localization entry holding the game's own text for a key, in the game's current language.
+-- string: localization_key game localization key
+-- treturn: tab texts by language code
 local function _localized_game_text(localization_key)
     return _localized_text_for_all_languages(Localize(localization_key))
 end
 
+--- Localizes a list of game keys.
+-- tab: localization_keys game localization keys
+-- treturn: tab localized names
 local function _localized_game_names(localization_keys)
     local localized_names = {}
 
@@ -37,6 +62,10 @@ local function _localized_game_names(localization_keys)
     return localized_names
 end
 
+--- Joins names into an enumeration, such as `a, b and c`.
+-- tab: localized_names names
+-- string: conjunction word before the last name
+-- treturn: string
 local function _join_localized_names(localized_names, conjunction)
     local count = #localized_names
 
@@ -61,6 +90,9 @@ local function _join_localized_names(localized_names, conjunction)
     return result .. " " .. conjunction .. " " .. localized_names[count]
 end
 
+--- Builds a tooltip listing example enemies by their game names, in every language.
+-- tab: localization_keys game localization keys of the enemies
+-- treturn: tab texts by language code
 local function _enemy_examples_tooltip(localization_keys)
     local localized_names = _localized_game_names(localization_keys)
 
@@ -80,6 +112,9 @@ local function _enemy_examples_tooltip(localization_keys)
     }
 end
 
+--- Builds the tooltip of an enemy marker dropdown with the enemy's game name, in every language.
+-- string: localization_key game localization key of the enemy
+-- treturn: tab texts by language code
 local function _enemy_marker_display_tooltip(localization_key)
     local enemy_name = Localize(localization_key)
 
@@ -99,6 +134,7 @@ local function _enemy_marker_display_tooltip(localization_key)
     }
 end
 
+--- Game keys of the abilities and talents whose enemy outlines the ability-marked enemies option supports.
 local _ability_marked_enemy_outline_localization_keys = {
     "loc_talent_psyker_marked_enemies_passive",
     "loc_talent_broker_ability_focus_improved",
@@ -109,6 +145,9 @@ local _ability_marked_enemy_outline_localization_keys = {
     "loc_ability_ogryn_taunt_shout",
 }
 
+--- Localizes a list of game keys, each wrapped in quotes.
+-- tab: localization_keys game localization keys
+-- treturn: tab quoted names
 local function _quoted_localized_game_names(localization_keys)
     local quoted_names = {}
 
@@ -119,6 +158,8 @@ local function _quoted_localized_game_names(localization_keys)
     return quoted_names
 end
 
+--- Builds the tooltip of the ability-marked enemies option, naming the supported abilities, in every language.
+-- treturn: tab texts by language code
 local function _ability_marked_enemies_tooltip()
     local ability_outline_names = _quoted_localized_game_names(_ability_marked_enemy_outline_localization_keys)
 
@@ -161,6 +202,7 @@ local function _ability_marked_enemies_tooltip()
     }
 end
 
+--- Option texts shared by many dropdowns.
 local _text_off = {
     en = "Off",
     fr = "Désactivé",
@@ -266,6 +308,7 @@ local _text_icon_distance_m = {
     ["zh-tw"] = "圖示 + 距離 m",
 }
 
+--- Colour channel names, colour slider group labels and colour slider tooltips, by key.
 local _color_channel_names = {
     opacity = {
         en = "Opacity",
@@ -663,32 +706,46 @@ local _color_label_texts = {
         ["zh-tw"] = "首領敵人標記顏色",
     },
     enemy_boss_background = {
-        en = "Boss enemy marked background color",
-        fr = "Couleur de fond marque pour boss ennemi",
-        de = "Markierte Bossgegner-Hintergrundfarbe",
-        it = "Colore sfondo contrassegnato boss nemico",
-        es = "Color de fondo marcado de jefe enemigo",
-        pl = "Kolor oznaczonego tla bossa",
-        ["pt-br"] = "Cor de fundo marcada do chefe inimigo",
-        ru = "Цвет отмеченного фона босса",
-        ja = "ボス敵マーク背景色",
-        ko = "보스 적 표시 배경 색상",
-        ["zh-cn"] = "首领敌人已标记背景颜色",
-        ["zh-tw"] = "首領敵人已標記背景顏色",
+        en = "Boss enemy bracket color",
+        fr = "Couleur des crochets d'ennemi boss",
+        de = "Bossgegner-Klammerfarbe",
+        it = "Colore parentesi nemico boss",
+        es = "Color de corchetes de jefe enemigo",
+        pl = "Kolor nawiasów bossa",
+        ["pt-br"] = "Cor dos colchetes do chefe inimigo",
+        ru = "Цвет скобок босса",
+        ja = "ボス敵ブラケット色",
+        ko = "보스 적 괄호 색상",
+        ["zh-cn"] = "首领敌人括号颜色",
+        ["zh-tw"] = "首領敵人括號顏色",
     },
     enemy_marked_background = {
-        en = "Marked enemy background color",
-        fr = "Couleur de fond d'ennemi marque",
-        de = "Markierte Gegner-Hintergrundfarbe",
-        it = "Colore sfondo nemico contrassegnato",
-        es = "Color de fondo de enemigo marcado",
-        pl = "Kolor oznaczonego tla wroga",
-        ["pt-br"] = "Cor de fundo do inimigo marcado",
-        ru = "Цвет фона отмеченного врага",
-        ja = "マーク済み敵背景色",
-        ko = "표시된 적 배경 색상",
-        ["zh-cn"] = "已标记敌人背景颜色",
-        ["zh-tw"] = "已標記敵人背景顏色",
+        en = "Enemy background color",
+        fr = "Couleur de fond des ennemis",
+        de = "Gegner-Hintergrundfarbe",
+        it = "Colore sfondo nemici",
+        es = "Color de fondo de enemigos",
+        pl = "Kolor tła wrogów",
+        ["pt-br"] = "Cor de fundo dos inimigos",
+        ru = "Цвет фона врагов",
+        ja = "敵背景色",
+        ko = "적 배경 색상",
+        ["zh-cn"] = "敌人背景颜色",
+        ["zh-tw"] = "敵人背景顏色",
+    },
+    enemy_bracket = {
+        en = "Enemy bracket color",
+        fr = "Couleur des crochets des ennemis",
+        de = "Gegner-Klammerfarbe",
+        it = "Colore parentesi nemici",
+        es = "Color de corchetes de enemigos",
+        pl = "Kolor nawiasów wrogów",
+        ["pt-br"] = "Cor dos colchetes dos inimigos",
+        ru = "Цвет скобок врагов",
+        ja = "敵ブラケット色",
+        ko = "적 괄호 색상",
+        ["zh-cn"] = "敌人括号颜色",
+        ["zh-tw"] = "敵人括號顏色",
     },
     enemy_scab = {
         en = "Scab enemy color",
@@ -805,6 +862,20 @@ local _color_tooltip_texts = {
         ["zh-cn"] = "设置任务目标标记周围边框的颜色。",
         ["zh-tw"] = "設定任務目標標記周圍邊框的顏色。",
     },
+    mission_objective_background = {
+        en = "Sets the color of the plate drawn behind the frame of mission objective markers.",
+        fr = "Définit la couleur de la plaque dessinée derrière le cadre des marqueurs d'objectif.",
+        de = "Legt die Farbe der Platte hinter dem Rahmen der Missionsziel-Marker fest.",
+        it = "Imposta il colore della piastra dietro la cornice dei marcatori degli obiettivi.",
+        es = "Define el color de la placa dibujada detrás del marco de los marcadores de objetivo.",
+        pl = "Ustawia kolor płytki rysowanej za ramką znaczników celów misji.",
+        ["pt-br"] = "Define a cor da placa desenhada atrás da moldura dos marcadores de objetivo.",
+        ru = "Задаёт цвет подложки за рамкой маркеров задач миссии.",
+        ja = "ミッション目標マーカーのフレームの背後に描かれるプレートの色を設定します。",
+        ko = "임무 목표 마커의 프레임 뒤에 그려지는 판의 색상을 설정합니다.",
+        ["zh-cn"] = "设置任务目标标记边框后方底板的颜色。",
+        ["zh-tw"] = "設定任務目標標記邊框後方底板的顏色。",
+    },
     marker = {
         en = "Adjust the configured ARGB marker color. Opacity is the alpha channel.",
         fr = "Ajuste la couleur ARGB configuree du marqueur. L'opacite est le canal alpha.",
@@ -876,18 +947,74 @@ local _color_tooltip_texts = {
         ["zh-tw"] = "調整已設定的 ARGB 敵人標記顏色。不透明度是 Alpha 通道。",
     },
     enemy_background = {
-        en = "Adjust the configured ARGB enemy marked-background color.",
-        fr = "Ajuste la couleur ARGB configuree du fond marque des ennemis.",
-        de = "Passt die konfigurierte ARGB-Farbe fuer markierte Gegnerhintergruende an.",
-        it = "Regola il colore ARGB configurato dello sfondo nemico contrassegnato.",
-        es = "Ajusta el color ARGB configurado del fondo marcado del enemigo.",
-        pl = "Dostosowuje skonfigurowany kolor ARGB oznaczonego tla wroga.",
-        ["pt-br"] = "Ajusta a cor ARGB configurada do fundo marcado do inimigo.",
-        ru = "Настраивает заданный ARGB-цвет отмеченного фона врага.",
-        ja = "設定された ARGB 敵マーク背景色を調整します。",
-        ko = "설정된 ARGB 적 표시 배경 색상을 조정합니다.",
-        ["zh-cn"] = "调整已配置的 ARGB 敌人已标记背景颜色。",
-        ["zh-tw"] = "調整已設定的 ARGB 敵人已標記背景顏色。",
+        en = "Background of every enemy marker except hordes and bosses. Opacity is the alpha channel.",
+        fr = "Fond de tous les marqueurs d'ennemis, sauf les hordes et les boss. L'opacité est le canal alpha.",
+        de = "Hintergrund aller Gegnermarker außer Horden und Bossen. Deckkraft ist der Alphakanal.",
+        it = "Sfondo di tutti i marcatori nemici, tranne orde e boss. L'opacità è il canale alfa.",
+        es = "Fondo de todos los marcadores de enemigos, salvo hordas y jefes. La opacidad es el canal alfa.",
+        pl = "Tło wszystkich znaczników wrogów oprócz hord i bossów. Krycie to kanał alfa.",
+        ["pt-br"] = "Fundo de todos os marcadores de inimigos, exceto hordas e chefes. A opacidade é o canal alfa.",
+        ru = "Фон всех маркеров врагов, кроме орд и боссов. Непрозрачность — это альфа-канал.",
+        ja = "ホードとボスを除くすべての敵マーカーの背景です。不透明度はアルファチャンネルです。",
+        ko = "무리와 보스를 제외한 모든 적 마커의 배경입니다. 불투명도는 알파 채널입니다.",
+        ["zh-cn"] = "除尸潮和首领外所有敌人标记的背景。不透明度是 Alpha 通道。",
+        ["zh-tw"] = "除群怪與首領外所有敵人標記的背景。不透明度是 Alpha 通道。",
+    },
+    enemy_bracket = {
+        en = "Brackets around enemy markers, except hordes and bosses, in the Marked icon display style. Enemies marked by an ability use the ability's color instead. Opacity is the alpha channel.",
+        fr = "Crochets autour des marqueurs d'ennemis, sauf les hordes et les boss, avec le style d'affichage « Icône marquée ». Les ennemis marqués par une capacité utilisent plutôt la couleur de la capacité. L'opacité est le canal alpha.",
+        de = "Klammern um Gegnermarker außer Horden und Bossen im Anzeigestil „Symbol mit Markierung“. Durch Fähigkeiten markierte Gegner nutzen stattdessen die Farbe der Fähigkeit. Deckkraft ist der Alphakanal.",
+        it = "Parentesi attorno ai marcatori nemici, tranne orde e boss, con lo stile di visualizzazione “Icona marcata”. I nemici contrassegnati da abilità usano invece il colore dell'abilità. L'opacità è il canale alfa.",
+        es = "Corchetes alrededor de los marcadores de enemigos, salvo hordas y jefes, con el estilo de visualización «Icono marcado». Los enemigos marcados por habilidad usan en su lugar el color de la habilidad. La opacidad es el canal alfa.",
+        pl = "Nawiasy wokół znaczników wrogów oprócz hord i bossów w stylu wyświetlania „Ikona z oznaczeniem”. Wrogowie oznaczeni zdolnością używają zamiast tego koloru zdolności. Krycie to kanał alfa.",
+        ["pt-br"] = "Colchetes ao redor dos marcadores de inimigos, exceto hordas e chefes, no estilo de exibição “Ícone marcado”. Inimigos marcados por habilidade usam a cor da habilidade. A opacidade é o canal alfa.",
+        ru = "Скобки вокруг маркеров врагов, кроме орд и боссов, в стиле отображения «Значок с меткой». Враги, помеченные способностью, используют цвет способности. Непрозрачность — это альфа-канал.",
+        ja = "表示スタイル「マーク付きアイコン」で、ホードとボスを除く敵マーカーの周りに表示されるブラケットです。アビリティでマーキングされた敵にはアビリティの色が使われます。不透明度はアルファチャンネルです。",
+        ko = "표시 스타일이 “표식 아이콘”일 때 무리와 보스를 제외한 적 마커 주위에 표시되는 괄호입니다. 능력으로 표시된 적에는 능력 색상이 대신 사용됩니다. 불투명도는 알파 채널입니다.",
+        ["zh-cn"] = "在“带标记的图标”显示样式下，除尸潮和首领外敌人标记周围的括号。被技能标记的敌人改用技能的颜色。不透明度是 Alpha 通道。",
+        ["zh-tw"] = "在「帶標記圖示」顯示樣式下，除群怪與首領外敵人標記周圍的括號。被技能標記的敵人改用技能的顏色。不透明度是 Alpha 通道。",
+    },
+    enemy_boss_bracket = {
+        en = "Brackets around boss enemy markers in the Marked icon display style. Opacity is the alpha channel.",
+        fr = "Crochets autour des marqueurs d'ennemis boss avec le style d'affichage « Icône marquée ». L'opacité est le canal alpha.",
+        de = "Klammern um Bossgegner-Marker im Anzeigestil „Symbol mit Markierung“. Deckkraft ist der Alphakanal.",
+        it = "Parentesi attorno ai marcatori dei nemici boss con lo stile di visualizzazione “Icona marcata”. L'opacità è il canale alfa.",
+        es = "Corchetes alrededor de los marcadores de jefes enemigos con el estilo de visualización «Icono marcado». La opacidad es el canal alfa.",
+        pl = "Nawiasy wokół znaczników bossów w stylu wyświetlania „Ikona z oznaczeniem”. Krycie to kanał alfa.",
+        ["pt-br"] = "Colchetes ao redor dos marcadores de chefes inimigos no estilo de exibição “Ícone marcado”. A opacidade é o canal alfa.",
+        ru = "Скобки вокруг маркеров боссов в стиле отображения «Значок с меткой». Непрозрачность — это альфа-канал.",
+        ja = "表示スタイル「マーク付きアイコン」で、ボス敵マーカーの周りに表示されるブラケットです。不透明度はアルファチャンネルです。",
+        ko = "표시 스타일이 “표식 아이콘”일 때 보스 적 마커 주위에 표시되는 괄호입니다. 불투명도는 알파 채널입니다.",
+        ["zh-cn"] = "在“带标记的图标”显示样式下，首领敌人标记周围的括号。不透明度是 Alpha 通道。",
+        ["zh-tw"] = "在「帶標記圖示」顯示樣式下，首領敵人標記周圍的括號。不透明度是 Alpha 通道。",
+    },
+    mission_objective_minigame = {
+        en = "Colors puzzle devices of every mission objective category while their puzzle waits for a player or is being solved, replacing the category color on the marker and its nearby highlight. Opacity is the alpha channel.",
+        fr = "Colore les dispositifs à énigme de toutes les catégories d'objectif de mission tant que leur énigme attend un joueur ou est en cours de résolution, à la place de la couleur de la catégorie sur le marqueur et sa surbrillance proche. L'opacité est le canal alpha.",
+        de = "Färbt Rätselgeräte aller Missionsziel-Kategorien, solange ihr Rätsel auf einen Spieler wartet oder gelöst wird, anstelle der Kategoriefarbe auf dem Marker und seiner nahen Hervorhebung. Deckkraft ist der Alphakanal.",
+        it = "Colora i dispositivi con enigma di ogni categoria di obiettivo di missione mentre il loro enigma attende un giocatore o è in corso di risoluzione, al posto del colore della categoria sul marcatore e sulla sua evidenziazione vicina. L'opacità è il canale alfa.",
+        es = "Colorea los dispositivos con puzle de todas las categorías de objetivo de misión mientras su puzle espera a un jugador o está en curso, en lugar del color de la categoría en el marcador y su resaltado cercano. La opacidad es el canal alfa.",
+        pl = "Koloruje urządzenia z zagadką we wszystkich kategoriach celów misji, gdy ich zagadka czeka na gracza lub jest rozwiązywana, zamiast koloru kategorii na znaczniku i jego pobliskim podświetleniu. Krycie to kanał alfa.",
+        ["pt-br"] = "Colore os dispositivos com quebra-cabeça de todas as categorias de objetivo de missão enquanto o quebra-cabeça aguarda um jogador ou está sendo resolvido, no lugar da cor da categoria no marcador e no seu destaque próximo. A opacidade é o canal alfa.",
+        ru = "Окрашивает устройства с головоломкой во всех категориях задач миссии, пока головоломка ждёт игрока или решается, вместо цвета категории на маркере и его подсветке рядом. Непрозрачность — это альфа-канал.",
+        ja = "パズルがプレイヤーを待っている間、または解答中の間、すべてのミッション目標カテゴリーのパズル装置のマーカーと近距離ハイライトを、カテゴリーの色の代わりにこの色で表示します。不透明度はアルファチャンネルです。",
+        ko = "퍼즐이 플레이어를 기다리거나 해결 중인 동안, 모든 임무 목표 분류의 퍼즐 장치 마커와 근처 강조에 분류 색상 대신 이 색상을 사용합니다. 불투명도는 알파 채널입니다.",
+        ["zh-cn"] = "谜题等待玩家或正在解谜时，所有任务目标类别的谜题装置的标记及其附近高亮改用此颜色，替代类别颜色。不透明度是 Alpha 通道。",
+        ["zh-tw"] = "謎題等待玩家或正在解謎時，所有任務目標類別的謎題裝置標記及其附近高亮改用此顏色，取代類別顏色。不透明度是 Alpha 通道。",
+    },
+    expedition_location = {
+        en = "Used until a player marks it. After that, the color of the player who marked it is used. Opacity is the alpha channel.",
+        fr = "Utilisée tant qu'aucun joueur ne l'a marqué. Ensuite, la couleur du joueur qui l'a marqué est utilisée. L'opacité est le canal alpha.",
+        de = "Gilt, bis ein Spieler es markiert. Danach wird die Farbe des markierenden Spielers verwendet. Deckkraft ist der Alphakanal.",
+        it = "Usato finché nessun giocatore lo contrassegna. Dopo, viene usato il colore del giocatore che lo ha contrassegnato. L'opacità è il canale alfa.",
+        es = "Se usa hasta que un jugador lo marca. Después se usa el color del jugador que lo marcó. La opacidad es el canal alfa.",
+        pl = "Używany, dopóki żaden gracz go nie oznaczy. Potem używany jest kolor gracza, który go oznaczył. Krycie to kanał alfa.",
+        ["pt-br"] = "Usada até que um jogador o marque. Depois disso, é usada a cor do jogador que o marcou. A opacidade é o canal alfa.",
+        ru = "Используется, пока никто из игроков его не отметил. После этого используется цвет игрока, который его отметил. Непрозрачность — это альфа-канал.",
+        ja = "プレイヤーがマークするまで使われます。マーク後は、マークしたプレイヤーの色が使われます。不透明度はアルファチャンネルです。",
+        ko = "플레이어가 표시하기 전까지 사용됩니다. 표시한 후에는 표시한 플레이어의 색상이 사용됩니다. 불투명도는 알파 채널입니다.",
+        ["zh-cn"] = "在玩家标记之前使用此颜色。标记后改用标记该处的玩家的颜色。不透明度是 Alpha 通道。",
+        ["zh-tw"] = "在玩家標記之前使用此顏色。標記後改用標記該處之玩家的顏色。不透明度是 Alpha 通道。",
     },
     radar = {
         en = "Adjust the configured ARGB Radar UI color. Opacity is the alpha channel.",
@@ -919,14 +1046,22 @@ local _color_tooltip_texts = {
     },
 }
 
+--- Returns the localization entry of a colour label, or the key itself in every language.
+-- treturn: tab texts by language code
 local function _color_label_text(label_key)
     return _color_label_texts[label_key] or _localized_text_for_all_languages(tostring(label_key))
 end
 
+--- Returns the localization entry of a colour tooltip, or the key itself in every language.
+-- treturn: tab texts by language code
 local function _color_tooltip_text(tooltip_key)
     return _color_tooltip_texts[tooltip_key] or _localized_text_for_all_languages(tostring(tooltip_key))
 end
 
+--- Builds the title of one colour channel slider, `<label> - <channel>`, in every language.
+-- string: label_key colour label key
+-- string: channel_key `opacity`, `red`, `green` or `blue`
+-- treturn: tab texts by language code
 local function _color_channel_text(label_key, channel_key)
     channel_key = string.lower(tostring(channel_key or ""))
 
@@ -943,6 +1078,7 @@ local function _color_channel_text(label_key, channel_key)
     return localization
 end
 
+--- The DMF localization table.
 return {
     mod_name = {
         en = "Radar",
@@ -1097,6 +1233,11 @@ return {
     enemy_marked_background_color_red = _color_channel_text("enemy_marked_background", "red"),
     enemy_marked_background_color_green = _color_channel_text("enemy_marked_background", "green"),
     enemy_marked_background_color_blue = _color_channel_text("enemy_marked_background", "blue"),
+    enemy_bracket_color = _color_label_text("enemy_bracket"),
+    enemy_bracket_color_opacity = _color_channel_text("enemy_bracket", "opacity"),
+    enemy_bracket_color_red = _color_channel_text("enemy_bracket", "red"),
+    enemy_bracket_color_green = _color_channel_text("enemy_bracket", "green"),
+    enemy_bracket_color_blue = _color_channel_text("enemy_bracket", "blue"),
     enemy_scab_color = _color_label_text("enemy_scab"),
     enemy_scab_color_opacity = _color_channel_text("enemy_scab", "opacity"),
     enemy_scab_color_red = _color_channel_text("enemy_scab", "red"),
@@ -1178,9 +1319,14 @@ return {
     highlight_color_slider_tooltip = _color_tooltip_text("highlight"),
     icon_marker_color_slider_tooltip = _color_tooltip_text("icon_marker"),
     mission_objective_frame_color_slider_tooltip = _color_tooltip_text("mission_objective_frame"),
+    mission_objective_background_color_slider_tooltip = _color_tooltip_text("mission_objective_background"),
     marker_background_color_slider_tooltip = _color_tooltip_text("marker_background"),
     enemy_marker_color_slider_tooltip = _color_tooltip_text("enemy_marker"),
     enemy_background_color_slider_tooltip = _color_tooltip_text("enemy_background"),
+    enemy_bracket_color_slider_tooltip = _color_tooltip_text("enemy_bracket"),
+    enemy_boss_bracket_color_slider_tooltip = _color_tooltip_text("enemy_boss_bracket"),
+    mission_objective_minigame_color_slider_tooltip = _color_tooltip_text("mission_objective_minigame"),
+    expedition_location_color_slider_tooltip = _color_tooltip_text("expedition_location"),
     radar_color_slider_tooltip = _color_tooltip_text("radar"),
     radar_background_color_slider_tooltip = _color_tooltip_text("radar_background"),
     tab_general = {
