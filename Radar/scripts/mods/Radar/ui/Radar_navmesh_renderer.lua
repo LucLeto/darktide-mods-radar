@@ -39,7 +39,7 @@ local Quaternion_forward = Quaternion and Quaternion.forward
 local NAVMESH_CURRENT_FALLBACK_COLOR = { 80, 101, 133, 96 }
 local NAVMESH_BELOW_FALLBACK_COLOR = { 55, 120, 98, 76 }
 local NAVMESH_ABOVE_FALLBACK_COLOR = { 32, 120, 150, 185 }
-local NAVMESH_DEFAULT_RANGE_ABOVE = 3
+local NAVMESH_DEFAULT_RANGE_ABOVE = 7
 local NAVMESH_DEFAULT_RANGE_BELOW = 7
 local NAVMESH_OVERVIEW_RANGE = 30
 --- Half height in metres of the current floor band around the player.
@@ -172,17 +172,18 @@ local function _any_band_visible()
     return (current[1] or 0) > 0 or (below[1] or 0) > 0 or (above[1] or 0) > 0
 end
 
---- Clamps a configured floor range to 0.5 to 100 metres.
+--- Clamps a configured floor range to 1 to 30 metres, the range of its settings slider.
+-- The Strikemap geometry layer clamps the same settings the same way.
 -- param: value setting value
 -- number: fallback value used when the setting is not a number
 -- treturn: number
 local function _clamp_range(value, fallback)
     value = tonumber(value) or fallback
 
-    if value < 0.5 then
-        value = 0.5
-    elseif value > 100 then
-        value = 100
+    if value < 1 then
+        value = 1
+    elseif value > 30 then
+        value = 30
     end
 
     return value

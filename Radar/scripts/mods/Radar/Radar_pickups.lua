@@ -348,7 +348,9 @@ return function(env)
         end
     end
 
-    --- Retires a destructible that was destroyed, if it is a Heretic Idol or a Dark Rites totem.
+    --- Retires a destroyed destructible at once if it is a Dark Rites totem.
+    -- Only totems are recognised here, by their breed name. Destroyed Heretic Idols are retired
+    -- by the collectibles manager hooks, which the game calls for every destroyed collectible.
     -- param: unit destructible unit
     -- ?tab: extension destructible extension
     function _mark_idol_unit_destroyed(unit, extension)
@@ -356,16 +358,8 @@ return function(env)
             return
         end
 
-        local collectible_type = _safe_unit_collectible_type(unit)
-        local is_live_event_skulls_totem = false
-
-        if collectible_type ~= "heretic_idol" and _is_dark_rites_marker_scan_allowed() then
-            local prop_data_name = _safe_unit_prop_data_name(unit)
-            local unit_data_breed_name = _safe_unit_data_breed_name(unit)
-            is_live_event_skulls_totem = _is_live_event_skulls_totem_unit(collectible_type, unit_data_breed_name, prop_data_name)
-        end
-
-        if collectible_type ~= "heretic_idol" and not is_live_event_skulls_totem then
+        if not _is_dark_rites_marker_scan_allowed()
+            or not _is_live_event_skulls_totem_unit(_safe_unit_data_breed_name(unit)) then
             return
         end
 
@@ -629,14 +623,10 @@ return function(env)
             if _safe_unit_alive(unit) and extension then
                 seen_destructibles[unit] = true
 
-                local collectible_type = _safe_unit_collectible_type(unit)
                 local collectible_data = _safe_destructible_collectible_data(extension)
                 local collectible_id = collectible_data and collectible_data.id or nil
                 local collectible_section_id = collectible_data and collectible_data.section_id or nil
                 local collectible_key = _idol_collectible_key(collectible_section_id, collectible_id)
-                local prop_data_name = nil
-                local unit_data_breed_name = nil
-                local is_live_event_skulls_totem = false
                 local extension_visible = _safe_destructible_visible(extension)
                 local unit_visible = _safe_unit_main_visible(unit)
                 local health_alive = _safe_health_alive(unit)
@@ -644,16 +634,9 @@ return function(env)
                 local destroyed_by_event = mod._idol_destroyed_units[unit] ~= nil
                     or (collectible_key ~= nil and mod._idol_destroyed_collectible_keys[collectible_key] ~= nil)
 
-                if dark_rites_scan_allowed then
-                    if collectible_type == "nurgle_totem" then
-                        is_live_event_skulls_totem = true
-                    elseif collectible_type ~= "heretic_idol" or not has_active_collectible then
-                        prop_data_name = _safe_unit_prop_data_name(unit)
-                        unit_data_breed_name = _safe_unit_data_breed_name(unit)
-                        is_live_event_skulls_totem = _is_live_event_skulls_totem_unit(collectible_type, unit_data_breed_name,
-                            prop_data_name)
-                    end
-                end
+                -- A totem is no collectible; only its breed name identifies it.
+                local is_live_event_skulls_totem = dark_rites_scan_allowed and not has_active_collectible
+                    and _is_live_event_skulls_totem_unit(_safe_unit_data_breed_name(unit)) or false
 
                 if not destroyed_by_event
                     and (has_active_collectible or is_live_event_skulls_totem)
@@ -663,7 +646,6 @@ return function(env)
                     local kind = is_live_event_skulls_totem and "dark_rites_totem" or "pickup_heretic_idol"
 
                     _track_unit(unit, kind, "destructible_system", {
-                        collectible_type = collectible_type,
                         collectible_id = collectible_id,
                         collectible_section_id = collectible_section_id,
                         marked_by_player_slot = track_item_tags and _marked_by_player_slot_for_unit(unit) or nil,

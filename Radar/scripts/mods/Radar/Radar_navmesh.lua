@@ -11,9 +11,8 @@
 --
 -- Installer module, installed last into Radar's shared runtime environment (see
 -- `Radar.lua`). It shares nothing through `shared_env`; its interface is a set of `mod`
--- methods. `ui/Radar_navmesh_renderer.lua` uses `ensure_navmesh_geometry`,
--- `get_navmesh_nearby_buckets` and `clear_navmesh_geometry`; `mark_navmesh_dirty` and
--- `get_navmesh_geometry` currently have no callers.
+-- methods, `ensure_navmesh_geometry`, `get_navmesh_nearby_buckets` and
+-- `clear_navmesh_geometry`, all used by `ui/Radar_navmesh_renderer.lua`.
 -- module: Radar_navmesh
 -- author: dreams
 local mod = get_mod("Radar")
@@ -300,11 +299,6 @@ return function(env)
         return true
     end
 
-    --- Requests a navmesh rebuild on the next `ensure_navmesh_geometry` call.
-    function mod:mark_navmesh_dirty()
-        dirty = true
-    end
-
     --- Releases the extracted geometry and forgets the nav world, so the next use rebuilds from scratch.
     -- Called when the navmesh layer turns inactive, so the mesh is not kept in memory.
     function mod:clear_navmesh_geometry()
@@ -435,11 +429,5 @@ return function(env)
         end
 
         return n
-    end
-
-    --- Returns the current navmesh geometry without building it.
-    -- treturn: tab geometry
-    function mod:get_navmesh_geometry()
-        return geometry
     end
 end

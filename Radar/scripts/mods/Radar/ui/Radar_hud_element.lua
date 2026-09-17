@@ -421,11 +421,6 @@ local PRESENTATIONS = {
         color = _widget_color(255, 240, 210, 80),
         size = 18,
     },
-    pickup_medkit = {
-        icon = "content/ui/materials/hud/interactions/icons/pocketable_medkit",
-        color = _widget_color(255, 38, 205, 26),
-        size = 18,
-    },
     medical_crate_deployable = {
         icon = "content/ui/materials/hud/interactions/icons/pocketable_medkit",
         color = _widget_color(255, 38, 205, 26),
@@ -2097,7 +2092,10 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         arrow_offset[3] = icon_z + 3
         arrow_size_tbl[1] = arrow_size
         arrow_size_tbl[2] = arrow_size
-        arrow_icon_style.color = arrow_color or WHITE_WIDGET_COLOR
+
+        if arrow_color then
+            arrow_icon_style.color = arrow_color
+        end
     end
 end
 
@@ -2867,7 +2865,8 @@ end
 
 --- Builds the visual of an enemy from its radar definition, cached per kind.
 -- Enemies with a background compose the background as the base icon and their icon as the
--- overlay; hordes and definitions whose icon and background are identical draw one icon.
+-- overlay; hordes and definitions whose icon and background are identical draw one icon. Enemies
+-- with a background also get brackets, in the enemy bracket colour.
 -- treturn: ?tab visual, nil for kinds without a definition
 local function _enemy_radar_visual(target, draw_cache)
     local kind = target and target.kind
@@ -2897,6 +2896,11 @@ local function _enemy_radar_visual(target, draw_cache)
     local background_icon = definition.background_icon
     local background_color = definition.background_color and
         _any_to_widget_color(_configured_enemy_background_color(kind, definition.background_color)) or nil
+    local configured_bracket_color = background_color and _configured_radar_color("enemy_bracket_marker") or nil
+    -- Brackets have a colour of their own, opacity included. Without the colour runtime they keep
+    -- the look they had before, the background colour at a fixed opacity.
+    local bracket_color = configured_bracket_color and _any_to_widget_color(configured_bracket_color)
+        or background_color and _with_alpha_widget(background_color, 180) or nil
     local should_compose = definition.category ~= "horde"
         and background_icon ~= nil
         and background_color ~= nil
@@ -2919,14 +2923,14 @@ local function _enemy_radar_visual(target, draw_cache)
             background_base_size = background_size,
             overlay_base_size = icon_size,
             bracket_base_size = bracket_size or background_size,
-            accent_color = _with_alpha_widget(background_color, 180),
+            accent_color = bracket_color,
             size = background_size,
         }
     else
         visual = {
             icon = icon or background_icon or DEFAULT_INTERACTION_ICON,
             color = icon_color or background_color or WHITE_WIDGET_COLOR,
-            accent_color = background_color and _with_alpha_widget(background_color, 180) or nil,
+            accent_color = bracket_color,
             bracket_base_size = bracket_size or icon_size,
             size = icon_size,
         }

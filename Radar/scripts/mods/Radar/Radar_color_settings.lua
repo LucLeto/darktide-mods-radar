@@ -233,10 +233,14 @@ _add_radar_color("map_geometry_source", "radar_navmesh", _color(80, 101, 133, 96
 _add_radar_color("map_geometry_source", "radar_navmesh_above", _color(32, 120, 150, 185), "radar_navmesh_above_color")
 _add_radar_color("map_geometry_source", "radar_navmesh_below", _color(55, 120, 98, 76), "radar_navmesh_below_color")
 
--- Enemy icon and background colours, shared by many enemy kinds and anchored below.
+-- Enemy icon, background and bracket colours, shared by many enemy kinds and anchored below.
+-- The boss background colour only tints the brackets of boss markers, which draw no background.
+-- Brackets of the other enemies used the background colour at a fixed opacity of 180 before they
+-- got a colour of their own, so that is the bracket default.
 _add_default("enemy_boss_marker", _color(255, 255, 64, 64))
 _add_default("enemy_boss_background", _color(220, 255, 0, 0))
 _add_default("enemy_background_marker", _color(220, 255, 0, 0))
+_add_default("enemy_bracket_marker", _color(180, 255, 0, 0))
 _add_default("enemy_scab_marker", WHITE)
 _add_default("enemy_dreg_marker", _color(255, 255, 255, 0))
 _add_default("enemy_tox_marker", _color(255, 0, 255, 0))
@@ -255,13 +259,19 @@ _add_anchor("show_enemy_boss_vertical_arrows", {
     prefix = "enemy_boss_background",
     default = default_by_prefix.enemy_boss_background,
     title_prefix = "enemy_boss_background_color",
-    tooltip = "enemy_background_color_slider_tooltip",
+    tooltip = "enemy_boss_bracket_color_slider_tooltip",
 })
 _add_anchor("enemies_icon_scale", {
     prefix = "enemy_background_marker",
     default = default_by_prefix.enemy_background_marker,
     title_prefix = "enemy_marked_background_color",
     tooltip = "enemy_background_color_slider_tooltip",
+})
+_add_anchor("enemies_icon_scale", {
+    prefix = "enemy_bracket_marker",
+    default = default_by_prefix.enemy_bracket_marker,
+    title_prefix = "enemy_bracket_color",
+    tooltip = "enemy_bracket_color_slider_tooltip",
 })
 _add_anchor("enemies_icon_scale", {
     prefix = "enemy_scab_marker",
@@ -324,6 +334,7 @@ _add_enemy_kinds("enemy_scab_marker", {
     "enemy_renegade_netgunner",
     "enemy_chaos_mutator_ritualist",
     "enemy_cultist_ritualist",
+    "enemy_renegade_melee",
 })
 _add_enemy_kinds("enemy_dreg_marker", {
     "enemy_cultist_gunner",
@@ -498,18 +509,6 @@ _add_marker({
     default = _color(255, 0, 127, 218),
     supports_highlight = true,
 })
-_add_marker({
-    kind = "pickup_medkit",
-    anchor = "show_medkits",
-    default = _color(255, 38, 205, 26),
-    supports_highlight = true,
-})
-_add_marker({
-    kind = "pickup_stimm",
-    anchor = "show_stimms",
-    default = WHITE,
-    supports_highlight = true,
-})
 
 _add_marker({
     kind = "luggable_power_cell_teal",
@@ -576,31 +575,37 @@ _add_marker({
 _add_marker({
     kind = "expedition_loot_converter",
     anchor = "show_expedition_loot_converter",
+    tooltip = "expedition_location_color_slider_tooltip",
     default = _color(255, 192, 160, 0),
 })
 _add_marker({
     kind = "expedition_objective_opportunity",
     anchor = "show_expedition_objective_opportunity",
+    tooltip = "expedition_location_color_slider_tooltip",
     default = _color(255, 54, 198, 49),
 })
 _add_marker({
     kind = "expedition_objective_transition",
     anchor = "show_expedition_objective_transition",
+    tooltip = "expedition_location_color_slider_tooltip",
     default = _color(255, 54, 198, 49),
 })
 _add_marker({
     kind = "expedition_objective_main_objective",
     anchor = "show_expedition_objective_main_objective",
+    tooltip = "expedition_location_color_slider_tooltip",
     default = _color(255, 54, 198, 49),
 })
 _add_marker({
     kind = "expedition_objective_extraction",
     anchor = "show_expedition_objective_extraction",
+    tooltip = "expedition_location_color_slider_tooltip",
     default = _color(255, 54, 198, 49),
 })
 _add_marker({
     kind = "expedition_objective_arrival",
     anchor = "show_expedition_objective_arrival",
+    tooltip = "expedition_location_color_slider_tooltip",
     default = _color(255, 54, 198, 49),
 })
 
@@ -713,11 +718,6 @@ _add_marker({
     supports_highlight = true,
     highlight_default = _color(255, 181, 166, 66),
 })
-_add_marker({
-    kind = "pocketable_breach_charge",
-    anchor = "show_pocketable_breach_charge",
-    default = WHITE,
-})
 
 _add_marker({
     kind = "mission_objective_scanner",
@@ -744,6 +744,7 @@ _add_marker({
     label_prefix = "mission_objective_minigame_waiting_color_title",
     label_suffix = "",
     label_role = "minigame_state",
+    tooltip = "mission_objective_minigame_color_slider_tooltip",
 })
 _add_marker({
     kind = "mission_objective_minigame_active",
@@ -752,6 +753,7 @@ _add_marker({
     label_prefix = "mission_objective_minigame_active_color_title",
     label_suffix = "",
     label_role = "minigame_state",
+    tooltip = "mission_objective_minigame_color_slider_tooltip",
 })
 -- The plate behind the objective frame. One colour for the whole family, since
 -- they share the frame, anchored to the group's icon size slider so it appears
@@ -760,7 +762,7 @@ _add_marker({
 local MISSION_OBJECTIVE_BACKGROUND = _color(235, 16, 18, 20)
 
 _add_radar_color("mission_objective_icon_scale", "mission_objective_background_marker", MISSION_OBJECTIVE_BACKGROUND,
-    "marker_background_color", "marker_background_color_slider_tooltip")
+    "marker_background_color", "mission_objective_background_color_slider_tooltip")
 
 -- The frame itself, separate from the icon inside it. One colour for the whole
 -- family, so the frame stays the family's identity while each icon keeps its own
@@ -842,6 +844,7 @@ _add_marker({
 _add_marker({
     kind = "pickup_tainted_skull",
     anchor = "show_tainted_skull",
+    tooltip = "icon_marker_color_slider_tooltip",
     default = _color(255, 150, 190, 60),
     supports_highlight = true,
 })
@@ -866,12 +869,14 @@ _add_marker({
 _add_marker({
     kind = "pickup_saints",
     anchor = "show_saints",
+    tooltip = "icon_marker_color_slider_tooltip",
     default = _color(255, 192, 160, 0),
     supports_highlight = true,
 })
 _add_marker({
     kind = "pickup_leftover",
     anchor = "show_leftover",
+    tooltip = "icon_marker_color_slider_tooltip",
     default = _color(255, 150, 190, 60),
     supports_highlight = true,
 })
@@ -1142,8 +1147,11 @@ function ColorSettings.install_runtime(mod)
     --- Migrates colour settings saved by versions before configurable colours.
     -- Runs on every start from `mod.on_all_mods_loaded`. Copies the old background opacity into
     -- the radar background colour when that is unset, and the old global nearby highlight
-    -- opacity and custom colour into every highlight colour still at its default. Afterwards
-    -- the old highlight opacity is set to 255 and the custom colour switch turned off.
+    -- opacity and custom colour into every highlight colour still at its default. The old
+    -- opacity is only copied when it differs from its old default of 255. The old highlight
+    -- opacity and custom colour switch are then deleted, so later starts do not migrate again.
+    -- Once per profile, enemy brackets also take the RGB of a customised enemy background colour,
+    -- which they were drawn in before they had a colour of their own.
     function mod:migrate_radar_color_settings()
         local mod_get = self.get
         local mod_set = self.set
@@ -1157,10 +1165,44 @@ function ColorSettings.install_runtime(mod)
             migrated = true
         end
 
-        local legacy_opacity = mod_get(self, "nearby_highlight_opacity")
-        local legacy_custom_color = mod_get(self, "nearby_highlight_use_custom_color") == true
+        -- A saved flag rather than the bracket colour marks this as done, so brackets a player sets
+        -- back to their default later are not recoloured on the next start.
+        if mod_get(self, "enemy_bracket_color_migrated") ~= true then
+            local background_defaults = default_by_prefix.enemy_background_marker
+            local red = _clamp_channel(mod_get(self, _setting_id("enemy_background_marker", "red")), background_defaults[2])
+            local green = _clamp_channel(mod_get(self, _setting_id("enemy_background_marker", "green")),
+                background_defaults[3])
+            local blue = _clamp_channel(mod_get(self, _setting_id("enemy_background_marker", "blue")),
+                background_defaults[4])
 
-        if legacy_opacity == nil and not legacy_custom_color then
+            if red ~= background_defaults[2] or green ~= background_defaults[3] or blue ~= background_defaults[4] then
+                mod_set(self, _setting_id("enemy_bracket_marker", "red"), red)
+                mod_set(self, _setting_id("enemy_bracket_marker", "green"), green)
+                mod_set(self, _setting_id("enemy_bracket_marker", "blue"), blue)
+                migrated = true
+            end
+
+            mod_set(self, "enemy_bracket_color_migrated", true)
+        end
+
+        local legacy_opacity = mod_get(self, "nearby_highlight_opacity")
+        local legacy_custom_color_setting = mod_get(self, "nearby_highlight_use_custom_color")
+        local legacy_custom_color = legacy_custom_color_setting == true
+        -- The old slider defaulted to 255 and DMF saves option defaults, so 255 is an opacity the
+        -- player never changed. Copying it would only raise the highlights whose default is lower.
+        local copy_legacy_opacity = legacy_opacity ~= nil and _clamp_channel(legacy_opacity, 255) ~= 255
+
+        -- Deleting the old keys, rather than resetting them, keeps later starts from migrating
+        -- again and overriding highlight opacities the player set back to their default.
+        if legacy_opacity ~= nil then
+            mod_set(self, "nearby_highlight_opacity", nil)
+        end
+
+        if legacy_custom_color_setting ~= nil then
+            mod_set(self, "nearby_highlight_use_custom_color", nil)
+        end
+
+        if not copy_legacy_opacity and not legacy_custom_color then
             if migrated then
                 self:invalidate_radar_color_cache()
             end
@@ -1176,7 +1218,7 @@ function ColorSettings.install_runtime(mod)
             local prefix = highlight_prefixes[i]
             local defaults = default_by_prefix[prefix] or WHITE
 
-            if legacy_opacity ~= nil then
+            if copy_legacy_opacity then
                 local opacity_setting_id = _setting_id(prefix, "opacity")
                 local default_opacity = defaults[1] or 255
                 local current_opacity = mod_get(self, opacity_setting_id)
@@ -1212,14 +1254,6 @@ function ColorSettings.install_runtime(mod)
                     migrated = true
                 end
             end
-        end
-
-        if legacy_opacity ~= nil then
-            mod_set(self, "nearby_highlight_opacity", 255)
-        end
-
-        if legacy_custom_color then
-            mod_set(self, "nearby_highlight_use_custom_color", false)
         end
 
         if migrated then

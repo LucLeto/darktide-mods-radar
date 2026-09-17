@@ -13,8 +13,7 @@
 -- Explicit module. `Radar.lua` and `ui/Radar_strikemap_geometry.lua` both load it through
 -- `mod:io_dofile`, which runs the file again each time, so the singleton is cached on
 -- `mod._strikemap_compatibility` and returned by every later load. Loading it also adds
--- `mod:reset_strikemap_integration` and `mod:get_strikemap_integration_status` and chains
--- `mod.on_setting_changed` and `mod.on_disabled`.
+-- `mod:reset_strikemap_integration` and chains `mod.on_setting_changed` and `mod.on_disabled`.
 -- module: Radar_strikemap
 -- alias: StrikemapCompatibility
 -- author: LucLeto
@@ -137,19 +136,6 @@ function StrikemapCompatibility:is_integration_enabled()
     local source = get_map_geometry_source(mod)
 
     return source == "strikemap" or source == "auto"
-end
-
---- Returns whether a validated Strikemap map context is currently cached and active.
--- treturn: bool
-function StrikemapCompatibility:is_available()
-    return self._status == "active" and self._context ~= nil
-end
-
---- Returns the current integration status and its detail.
--- treturn: string status
--- treturn: ?string detail
-function StrikemapCompatibility:get_status()
-    return self._status, self._status_detail
 end
 
 --- Finds the Strikemap mod object under any of its known names.
@@ -689,13 +675,6 @@ end
 --- Resets the Strikemap integration so it resolves Strikemap and its map again.
 function mod:reset_strikemap_integration()
     StrikemapCompatibility:reset()
-end
-
---- Returns the Strikemap integration status and its detail.
--- treturn: string status
--- treturn: ?string detail
-function mod:get_strikemap_integration_status()
-    return StrikemapCompatibility:get_status()
 end
 
 local previous_on_setting_changed = mod.on_setting_changed

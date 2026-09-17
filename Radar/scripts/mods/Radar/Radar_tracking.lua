@@ -1727,7 +1727,7 @@ return function(env)
     -- Called from the `StateGameplay.update` hook and from `mod.update`, and runs at most once
     -- per gameplay time. With the radar disabled (and overview off) or the runtime not allowed
     -- it clears the outputs and returns; tracked units are also dropped while the local player
-    -- is dead, captured or spectating. Otherwise the snapshot is refreshed every frame, and
+    -- has no unit, is dead, captured or spectating. Otherwise the snapshot is refreshed every frame, and
     -- when the scan is due the scans run in a fixed order for their tier, followed by pruning,
     -- target collection, highlight collection and the final snapshot.
     -- ?number: t time passed by the caller, used when no gameplay time is available

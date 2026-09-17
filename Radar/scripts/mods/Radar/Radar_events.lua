@@ -230,15 +230,14 @@ return function(env)
         return nil
     end
 
-    --- Returns whether a unit is a Nurgle totem of the skulls event, by any of its identifying names.
-    -- ?string: collectible_type collectible type of the unit
+    --- Returns whether a unit is a Nurgle totem of the skulls event, by its breed name.
+    -- The unit data extension of a totem reports its prop data entry, `nurgle_totem`, as the
+    -- breed. Its prop data name and collectible type are component data that unit data reads
+    -- cannot reach, and a totem's collectible type is `none` anyway.
     -- ?string: unit_data_breed_name breed name from the unit data extension
-    -- ?string: prop_data_name prop data name
     -- treturn: bool
-    function _is_live_event_skulls_totem_unit(collectible_type, unit_data_breed_name, prop_data_name)
-        return collectible_type == "nurgle_totem"
-            or unit_data_breed_name == "nurgle_totem"
-            or prop_data_name == "nurgle_totem"
+    function _is_live_event_skulls_totem_unit(unit_data_breed_name)
+        return unit_data_breed_name == "nurgle_totem"
     end
 
 end

@@ -363,18 +363,6 @@ return function(env)
         return _safe_unit_data_string(unit, "smart_tag_target_type")
     end
 
-    --- Returns a unit's `collectible_type` data.
-    -- treturn: ?string
-    function _safe_unit_collectible_type(unit)
-        return _safe_unit_data_string(unit, "collectible_type")
-    end
-
-    --- Returns a unit's `armor_data_name` data.
-    -- treturn: ?string
-    function _safe_unit_prop_data_name(unit)
-        return _safe_unit_data_string(unit, "armor_data_name")
-    end
-
     --- Returns the breed name reported by a unit's unit data extension, in lower case.
     -- treturn: ?string
     function _safe_unit_data_breed_name(unit)
@@ -1590,7 +1578,8 @@ return function(env)
     --- Evaluates whether the radar may run right now, cached per gameplay time.
     -- treturn: bool allowed
     -- treturn: string reason, `ok` when allowed; otherwise such as `loading`, `hub_runtime`,
-    --   `game_mode_disabled`, `spectating_teammate`, `player_not_alive` or `player_captured`
+    --   `game_mode_disabled`, `spectating_teammate`, `no_player_unit`, `player_not_alive` or
+    --   `player_captured`
     -- treturn: ?number gameplay time
     -- treturn: ?string mission name
     -- treturn: ?string presence activity
@@ -1649,6 +1638,11 @@ return function(env)
 
         if _is_local_player_using_foreign_unit(player_unit) then
             return _store_runtime_state(false, "spectating_teammate", gameplay_t, mission_name, activity, mechanism_name,
+                player_unit, player_pos)
+        end
+
+        if not player_unit then
+            return _store_runtime_state(false, "no_player_unit", gameplay_t, mission_name, activity, mechanism_name,
                 player_unit, player_pos)
         end
 
@@ -2620,9 +2614,10 @@ return function(env)
 
                     if distance_sq ~= nil and distance_sq <= max_distance_sq then
                         -- Follows the radar marker, so a puzzle's bracket and its
-                        -- dot never disagree about whether it needs a player.
-                        local color = screen_highlight_color_for_kind(
-                            marker_color_kind(mod, kind, target.meta))
+                        -- dot never disagree about whether it needs a player, in
+                        -- view or behind level geometry.
+                        local color_kind = marker_color_kind(mod, kind, target.meta)
+                        local color = screen_highlight_color_for_kind(color_kind)
                         local world_position = screen_highlight_anchor_position(target, interactee_extension_map)
                         local fallback_world_position = screen_highlight_projection_fallback_position(target)
 
@@ -2635,7 +2630,7 @@ return function(env)
                                 fallback_world_position = fallback_world_position or world_position,
                                 color = color,
                                 occluded_color = get_occluded_highlight_color and
-                                    get_occluded_highlight_color(mod, kind, NEARBY_OUTLINE_OCCLUDED_MULTIPLIER) or
+                                    get_occluded_highlight_color(mod, color_kind, NEARBY_OUTLINE_OCCLUDED_MULTIPLIER) or
                                     darkened_color_array(color, NEARBY_OUTLINE_OCCLUDED_MULTIPLIER),
                                 distance_sq_3d = distance_sq,
                             }

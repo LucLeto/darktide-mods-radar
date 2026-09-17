@@ -49,7 +49,7 @@ local CURRENT_FLOOR_HALF_HEIGHT = 2.5
 local BAND_CURRENT_FALLBACK_COLOR = { 80, 101, 133, 96 }
 local BAND_ABOVE_FALLBACK_COLOR = { 32, 120, 150, 185 }
 local BAND_BELOW_FALLBACK_COLOR = { 55, 120, 98, 76 }
-local DEFAULT_RANGE_ABOVE = 3
+local DEFAULT_RANGE_ABOVE = 7
 local DEFAULT_RANGE_BELOW = 7
 local OVERVIEW_RANGE = 30
 --- Integer key packing for grid cells, `(cx + OFFSET) * STRIDE + cy + OFFSET`.
@@ -528,7 +528,8 @@ local function _line_color(raw, alpha_mult, brighten)
     return Color(alpha, r, g, b)
 end
 
---- Clamps a configured floor range to 1 to 30 metres.
+--- Clamps a configured floor range to 1 to 30 metres, the range of its settings slider.
+-- The navmesh layer clamps the same settings the same way.
 local function _clamp_band_range(value, default_value)
     value = tonumber(value) or default_value
 
