@@ -288,12 +288,12 @@ local ARTWORK_MODE_ICON_PRESENTATIONS = {
         size = 20,
     },
     material_diamantine = {
-        icon = "content/ui/materials/hud/interactions/icons/environment_generic",
+        glyph = "\238\128\172", -- U+E02C, official diamantine glyph
         color = _widget_color(255, 70, 130, 220),
         size = 14,
     },
     material_plasteel = {
-        icon = "content/ui/materials/hud/interactions/icons/environment_generic",
+        glyph = "\238\128\173", -- U+E02D, official plasteel glyph
         color = _widget_color(255, 130, 135, 140),
         size = 14,
     },
@@ -3138,7 +3138,7 @@ local function _target_visual(target, draw_cache)
                 LogBuckets.visuals,
                 "icon_mode:" .. tostring(target_kind),
                 string_format("[Radar] visual icon mode | kind=%s icon=%s", tostring(target_kind),
-                    tostring(icon_visual.icon))
+                    tostring(icon_visual.icon or icon_visual.glyph))
             )
         end
 

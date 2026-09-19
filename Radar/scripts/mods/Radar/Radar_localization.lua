@@ -202,6 +202,26 @@ local function _ability_marked_enemies_tooltip()
     }
 end
 
+--- Padding between a Darktide glyph and the option text behind it.
+-- A dropdown indents an option's text while the option carries an icon material. A glyph option
+-- carries none, so its text starts further left than the text of its icon siblings. Measured in
+-- the settings menu, that indent is about four space widths, which this padding makes up.
+local GLYPH_LABEL_PADDING = "     "
+
+--- Returns a copy of an option text with a Darktide glyph in front of every language.
+-- string: glyph glyph character
+-- tab: text texts by language code
+-- treturn: tab texts by language code
+local function _glyph_prefixed_text(glyph, text)
+    local prefixed = {}
+
+    for language, value in pairs(text) do
+        prefixed[language] = glyph .. GLYPH_LABEL_PADDING .. value
+    end
+
+    return prefixed
+end
+
 --- Option texts shared by many dropdowns.
 local _text_off = {
     en = "Off",
@@ -2272,6 +2292,8 @@ return {
     },
     marker_display_mode_artwork = _text_artwork,
     marker_display_mode_icon = _text_icon,
+    marker_display_mode_icon_diamantine = _glyph_prefixed_text("\238\128\172", _text_icon),
+    marker_display_mode_icon_plasteel = _glyph_prefixed_text("\238\128\173", _text_icon),
     radar_outline_off = _text_off,
     radar_guides = {
         en = "Radar guides",

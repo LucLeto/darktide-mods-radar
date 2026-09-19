@@ -48,6 +48,8 @@ local function _normalized_player_marker_style(value)
 end
 
 --- Option icons of the artwork / icon / off dropdowns, by setting id.
+-- An entry with `icon_text` labels its icon option with that localization id instead of
+-- carrying an icon material, which lets the option show a Darktide glyph in its text.
 local ARTWORK_DROPDOWN_PRESENTATIONS = {
     show_crates = {
         artwork_icon = "content/ui/materials/icons/engrams/engram_rarity_04",
@@ -58,13 +60,13 @@ local ARTWORK_DROPDOWN_PRESENTATIONS = {
     show_diamantine = {
         artwork_icon = "content/ui/materials/icons/currencies/diamantine_big",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
-        icon = "content/ui/materials/hud/interactions/icons/environment_generic",
+        icon_text = "marker_display_mode_icon_diamantine",
         icon_colour = RadarColorSettings.default_marker_color("material_diamantine"),
     },
     show_plasteel = {
         artwork_icon = "content/ui/materials/icons/currencies/plasteel_big",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
-        icon = "content/ui/materials/hud/interactions/icons/environment_generic",
+        icon_text = "marker_display_mode_icon_plasteel",
         icon_colour = RadarColorSettings.default_marker_color("material_plasteel"),
     },
     show_expeditions_currency = {
@@ -680,7 +682,8 @@ end
 
 --- Builds an artwork / icon / off dropdown widget.
 -- A value saved by the checkbox it replaced is converted first. Artwork is never tinted, so the
--- widget's `icon_color_mode` limits its icon colour to the `icon` mode.
+-- widget's `icon_color_mode` limits its icon colour to the `icon` mode. A presentation with
+-- `icon_text` labels the icon option with a glyph of its own and carries no icon material.
 -- string: setting_id setting id
 -- ?string: default_value default mode, `artwork` when nil
 -- treturn: tab widget
@@ -689,6 +692,7 @@ local function _artwork_icon_off_dropdown(setting_id, default_value)
     local artwork_icon = presentation.artwork_icon or presentation.icon
     local artwork_colour = presentation.artwork_colour or presentation.icon_colour or DROPDOWN_ICON_COLOUR_WHITE
     local icon = presentation.icon
+    local icon_text = presentation.icon_text or "marker_display_mode_icon"
     local icon_colour = _dropdown_marker_icon_colour(setting_id, presentation.icon_colour)
     default_value = default_value or "artwork"
 
@@ -701,7 +705,7 @@ local function _artwork_icon_off_dropdown(setting_id, default_value)
         icon_color_mode = "icon",
         options = {
             _dropdown_option("marker_display_mode_artwork", "artwork", artwork_icon, artwork_colour),
-            _dropdown_option("marker_display_mode_icon", "icon", icon, icon_colour),
+            _dropdown_option(icon_text, "icon", icon, icon_colour),
             _dropdown_option("radar_outline_off", "off"),
         },
     }
