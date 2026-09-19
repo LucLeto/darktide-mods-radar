@@ -792,8 +792,8 @@ Player tags intentionally stay flatter and cleaner than supported item markers. 
 
 | Preview | Marker | Notes |
 | --- | --- | --- |
-| <img src="doc/img/material_diamantine.png"  width="80" alt="Diamantine marker" /> | Diamantine | Supports **Artwork**, **Icon**, and **Off**. Icon mode uses a simplified blue material icon. |
-| <img src="doc/img/material_plasteel.png"  width="80" alt="Plasteel marker" /> | Plasteel | Supports **Artwork**, **Icon**, and **Off**. Icon mode uses a simplified steel-grey material icon. |
+| <img src="doc/img/material_diamantine.png"  width="80" alt="Diamantine marker" /> | Diamantine | Supports **Artwork**, **Icon**, and **Off**. Icon mode uses the official Diamantine glyph. |
+| <img src="doc/img/material_plasteel.png"  width="80" alt="Plasteel marker" /> | Plasteel | Supports **Artwork**, **Icon**, and **Off**. Icon mode uses the official Plasteel glyph. |
 
 ### Primary Objective Items
 
@@ -958,13 +958,13 @@ Examples:
 
 ### Icon mode
 
-Icon mode swaps supported markers to simplified HUD icon materials with configurable ARGB colors. The table lists the default ARGB values.
+Icon mode swaps supported markers to simplified HUD icon materials with configurable ARGB colors, or to a Darktide glyph where the game provides one. The table lists the default ARGB values.
 
 | Marker family | Icon material | ARGB |
 | --- | --- | --- |
 | Crates | `content/ui/materials/icons/generic/loot` | `(255, 225, 200, 136)` |
-| Diamantine | `content/ui/materials/hud/interactions/icons/environment_generic` | `(255, 70, 130, 220)` |
-| Plasteel | `content/ui/materials/hud/interactions/icons/environment_generic` | `(255, 130, 135, 140)` |
+| Diamantine | Darktide glyph `U+E02C` | `(255, 70, 130, 220)` |
+| Plasteel | Darktide glyph `U+E02D` | `(255, 130, 135, 140)` |
 | Salvage | `content/ui/materials/hud/interactions/icons/expeditions_salvage` | `(255, 120, 160, 140)` |
 | Tech-Remnants | `content/ui/materials/hud/interactions/icons/expeditions_loot` | `(255, 192, 160, 0)` |
 | Dropped Tech-Remnants | `content/ui/materials/hud/interactions/icons/expeditions_loot` | `(220, 255, 0, 0)` |

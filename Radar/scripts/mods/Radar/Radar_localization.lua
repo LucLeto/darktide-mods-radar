@@ -202,6 +202,7 @@ local function _ability_marked_enemies_tooltip()
     }
 end
 
+
 --- Option texts shared by many dropdowns.
 local _text_off = {
     en = "Off",

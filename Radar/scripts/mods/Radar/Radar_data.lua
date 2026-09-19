@@ -48,6 +48,8 @@ local function _normalized_player_marker_style(value)
 end
 
 --- Option icons of the artwork / icon / off dropdowns, by setting id.
+-- An entry with `icon_glyph` labels its icon option with that glyph instead of carrying an
+-- icon material, because a native option icon is a material and cannot render a glyph.
 local ARTWORK_DROPDOWN_PRESENTATIONS = {
     show_crates = {
         artwork_icon = "content/ui/materials/icons/engrams/engram_rarity_04",
@@ -58,13 +60,13 @@ local ARTWORK_DROPDOWN_PRESENTATIONS = {
     show_diamantine = {
         artwork_icon = "content/ui/materials/icons/currencies/diamantine_big",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
-        icon = "content/ui/materials/hud/interactions/icons/environment_generic",
+        icon_glyph = "\238\128\172", -- U+E02C, official diamantine glyph
         icon_colour = RadarColorSettings.default_marker_color("material_diamantine"),
     },
     show_plasteel = {
         artwork_icon = "content/ui/materials/icons/currencies/plasteel_big",
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
-        icon = "content/ui/materials/hud/interactions/icons/environment_generic",
+        icon_glyph = "\238\128\173", -- U+E02D, official plasteel glyph
         icon_colour = RadarColorSettings.default_marker_color("material_plasteel"),
     },
     show_expeditions_currency = {
@@ -150,6 +152,12 @@ local ARTWORK_DROPDOWN_PRESENTATIONS = {
         artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
         icon = "content/ui/materials/icons/circumstances/live_event_01",
         icon_colour = RadarColorSettings.default_marker_color("pickup_leftover"),
+    },
+    show_stolen_rations = {
+        artwork_icon = "content/ui/materials/icons/currencies/stolen_rations/rations_live_event_medium",
+        artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
+        icon = "content/ui/materials/icons/pickups/default",
+        icon_colour = RadarColorSettings.default_marker_color("pickup_stolen_rations"),
     },
 }
 
@@ -493,10 +501,6 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
         icon = "content/ui/materials/icons/pocketables/hud/auspex_scanner",
         icon_colour = RadarColorSettings.default_marker_color("pocketable_corrupted_auspex_scanner"),
     },
-    show_stolen_rations = {
-        icon = "content/ui/materials/icons/pickups/default",
-        icon_colour = RadarColorSettings.default_marker_color("pickup_stolen_rations"),
-    },
     show_unknown_pickups = {
         icon = "content/ui/materials/icons/traits/empty",
         icon_colour = DROPDOWN_ICON_COLOUR_WHITE,
@@ -520,6 +524,11 @@ local _dropdown_icon_prefix_by_colour = {}
 
 --- Options tinted with each live colour prefix, which get a new icon style when the colour changes.
 local _dropdown_icon_options_by_prefix = {}
+
+--- Glyph options tinted with each live colour prefix, relabelled when the colour changes.
+-- A glyph carries its colour in the label rather than in an icon style, so these are kept apart
+-- from the icon options and each entry keeps the parts its label is rebuilt from.
+local _dropdown_glyph_options_by_prefix = {}
 
 --- Colour prefix of each native colour setting that tints dropdown icons.
 local _dropdown_icon_prefix_by_setting_id = {}
@@ -552,8 +561,9 @@ local function _dropdown_icon_style(colour)
     return style
 end
 
---- Declared ahead so the dropdown builders below can use it; assigned further down.
+--- Declared ahead so the dropdown builders below can use them; assigned further down.
 local _dropdown_marker_icon_colour
+local _register_glyph_option
 
 --- Builds a dropdown option, with an optional tinted icon.
 -- string: text localization id of the option
@@ -678,9 +688,29 @@ local function _migrate_checkbox_display_mode_setting(setting_id, enabled_value)
     end
 end
 
+--- Padding between a Darktide glyph and the option text behind it.
+-- A dropdown indents an option's text while the option carries an icon material. A glyph
+-- option carries none, so this padding lines its text up with its icon-bearing siblings.
+local GLYPH_LABEL_PADDING = "     "
+
+--- Returns an icon option label whose glyph carries the marker colour.
+-- The menu reads Darktide colour tags, which is the only way to tint a glyph, since the
+-- colour of an option applies to its icon material and a glyph is text. Only the glyph is
+-- tinted, so the label itself keeps the colour every other option label has.
+-- string: glyph glyph character
+-- tab: colour ARGB colour array
+-- string: text localized option text
+-- treturn: string
+local function _glyph_option_text(glyph, colour, text)
+    return string.format("{#color(%d,%d,%d)}%s{#reset()}%s%s",
+        colour[2], colour[3], colour[4], glyph, GLYPH_LABEL_PADDING, text)
+end
+
 --- Builds an artwork / icon / off dropdown widget.
 -- A value saved by the checkbox it replaced is converted first. Artwork is never tinted, so the
--- widget's `icon_color_mode` limits its icon colour to the `icon` mode.
+-- widget's `icon_color_mode` limits its icon colour to the `icon` mode. A presentation with
+-- `icon_glyph` labels the icon option with a tinted glyph and carries no icon material, and
+-- its options are localized here because they are built as finished text.
 -- string: setting_id setting id
 -- ?string: default_value default mode, `artwork` when nil
 -- treturn: tab widget
@@ -689,21 +719,41 @@ local function _artwork_icon_off_dropdown(setting_id, default_value)
     local artwork_icon = presentation.artwork_icon or presentation.icon
     local artwork_colour = presentation.artwork_colour or presentation.icon_colour or DROPDOWN_ICON_COLOUR_WHITE
     local icon = presentation.icon
+    local icon_glyph = presentation.icon_glyph
     local icon_colour = _dropdown_marker_icon_colour(setting_id, presentation.icon_colour)
     default_value = default_value or "artwork"
 
     _migrate_checkbox_display_mode_setting(setting_id, default_value)
+
+    local options
+
+    if icon_glyph then
+        local icon_label = mod:localize("marker_display_mode_icon")
+        local glyph_option = _dropdown_option(_glyph_option_text(icon_glyph, icon_colour, icon_label), "icon")
+
+        _register_glyph_option(setting_id, glyph_option, icon_glyph, icon_label)
+
+        options = {
+            _dropdown_option(mod:localize("marker_display_mode_artwork"), "artwork", artwork_icon,
+                artwork_colour),
+            glyph_option,
+            _dropdown_option(mod:localize("radar_outline_off"), "off"),
+        }
+        options.localize = false
+    else
+        options = {
+            _dropdown_option("marker_display_mode_artwork", "artwork", artwork_icon, artwork_colour),
+            _dropdown_option("marker_display_mode_icon", "icon", icon, icon_colour),
+            _dropdown_option("radar_outline_off", "off"),
+        }
+    end
 
     return {
         setting_id = setting_id,
         type = "dropdown",
         default_value = default_value,
         icon_color_mode = "icon",
-        options = {
-            _dropdown_option("marker_display_mode_artwork", "artwork", artwork_icon, artwork_colour),
-            _dropdown_option("marker_display_mode_icon", "icon", icon, icon_colour),
-            _dropdown_option("radar_outline_off", "off"),
-        },
+        options = options,
     }
 end
 
@@ -854,6 +904,38 @@ local function _refresh_dropdown_icon_colour(prefix)
     for i = 1, #options do
         options[i].icon_style = style
     end
+
+    local glyph_options = _dropdown_glyph_options_by_prefix[prefix]
+
+    for i = 1, #glyph_options do
+        local entry = glyph_options[i]
+        local text = _glyph_option_text(entry.glyph, color, entry.text)
+
+        -- DMF copies an option's text into its display name while it builds the widget, and the
+        -- menu reads the display name of the open list and of the closed preview every frame.
+        entry.option.text = text
+        entry.option.display_name = text
+    end
+end
+
+--- Records a glyph option against its colour prefix, so a colour change can relabel it.
+-- string: setting_id dropdown setting id
+-- tab: option dropdown option
+-- string: glyph glyph character
+-- string: text localized option text
+_register_glyph_option = function(setting_id, option, glyph, text)
+    local prefix = _dropdown_color_prefix(setting_id)
+    local glyph_options = prefix and _dropdown_glyph_options_by_prefix[prefix] or nil
+
+    if glyph_options == nil then
+        return
+    end
+
+    glyph_options[#glyph_options + 1] = {
+        option = option,
+        glyph = glyph,
+        text = text,
+    }
 end
 
 --- Refreshes the live dropdown icon colour of a changed colour setting; other settings are ignored.
@@ -893,6 +975,7 @@ _dropdown_marker_icon_colour = function(setting_id, fallback)
         _dropdown_icon_color_by_prefix[prefix] = color
         _dropdown_icon_prefix_by_colour[color] = prefix
         _dropdown_icon_options_by_prefix[prefix] = {}
+        _dropdown_glyph_options_by_prefix[prefix] = {}
         _dropdown_icon_prefix_by_setting_id[RadarColorSettings.setting_id(prefix)] = prefix
         _refresh_dropdown_icon_colour(prefix)
     end
@@ -2047,11 +2130,7 @@ return {
                                 },
                                 _artwork_icon_off_dropdown("show_saints", "artwork"),
                                 _artwork_icon_off_dropdown("show_leftover", "artwork"),
-                                {
-                                    setting_id = "show_stolen_rations",
-                                    type = "checkbox",
-                                    default_value = true,
-                                },
+                                _artwork_icon_off_dropdown("show_stolen_rations", "artwork"),
                             },
                         },
                     },

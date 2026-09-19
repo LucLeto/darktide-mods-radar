@@ -234,7 +234,7 @@ local VERTICAL_ARROW_SIZE_RATIO = 0.34
 --- Smallest vertical arrow in pixels; below this it stops reading as an arrow at all.
 local VERTICAL_ARROW_MIN_SIZE = 6
 local RADAR_ZOOM_INDICATOR_WIDGET_COLOR = { 210, 0, 255, 0 }
---- Live event artwork, with per-size presentations for the saints and leftover pickups.
+--- Live event artwork, with per-size presentations for the pickups that ship several sizes.
 local TAINTED_SKULL_LIVE_EVENT_ICON = "content/ui/materials/icons/currencies/live_events/skulls_live_event_small"
 local SAINTS_LIVE_EVENT_SMALL_ICON = "content/ui/materials/icons/currencies/live_events/saints_live_event_small"
 local SAINTS_LIVE_EVENT_MEDIUM_ICON = "content/ui/materials/icons/currencies/live_events/saints_live_event_medium"
@@ -242,44 +242,73 @@ local SAINTS_LIVE_EVENT_LARGE_ICON = "content/ui/materials/icons/currencies/live
 local LEFTOVER_LIVE_EVENT_SMALL_ICON = "content/ui/materials/icons/currencies/live_events/leftover_live_event_small"
 local LEFTOVER_LIVE_EVENT_MEDIUM_ICON = "content/ui/materials/icons/currencies/live_events/leftover_live_event_medium"
 local LEFTOVER_LIVE_EVENT_LARGE_ICON = "content/ui/materials/icons/currencies/live_events/leftover_live_event_large"
-local SAINTS_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME = {
-    live_event_saints_01_pickup_small = {
-        icon = SAINTS_LIVE_EVENT_SMALL_ICON,
-        color = WHITE_WIDGET_COLOR,
-        size = 14,
+local RATIONS_LIVE_EVENT_SMALL_ICON = "content/ui/materials/icons/currencies/stolen_rations/rations_live_event_small"
+local RATIONS_LIVE_EVENT_MEDIUM_ICON = "content/ui/materials/icons/currencies/stolen_rations/rations_live_event_medium"
+--- Artwork of every live event pickup that has its own, by marker kind then pickup name.
+-- `fallback` is the presentation a kind shows for a pickup name it does not list, and the one
+-- `PRESENTATIONS` carries for the kind. It is filled in under the table, because a constructor
+-- cannot reference the table it builds.
+local LIVE_EVENT_ARTWORK_BY_KIND = {
+    pickup_saints = {
+        fallback_pickup_name = "live_event_saints_01_pickup_small",
+        by_pickup_name = {
+            live_event_saints_01_pickup_small = {
+                icon = SAINTS_LIVE_EVENT_SMALL_ICON,
+                color = WHITE_WIDGET_COLOR,
+                size = 14,
+            },
+            live_event_saints_01_pickup_medium = {
+                icon = SAINTS_LIVE_EVENT_MEDIUM_ICON,
+                color = WHITE_WIDGET_COLOR,
+                size = 14,
+            },
+            live_event_saints_01_pickup_large = {
+                icon = SAINTS_LIVE_EVENT_LARGE_ICON,
+                color = WHITE_WIDGET_COLOR,
+                size = 14,
+            },
+        },
     },
-    live_event_saints_01_pickup_medium = {
-        icon = SAINTS_LIVE_EVENT_MEDIUM_ICON,
-        color = WHITE_WIDGET_COLOR,
-        size = 14,
+    pickup_leftover = {
+        fallback_pickup_name = "live_event_leftover_01_pickup_small",
+        by_pickup_name = {
+            live_event_leftover_01_pickup_small = {
+                icon = LEFTOVER_LIVE_EVENT_SMALL_ICON,
+                color = WHITE_WIDGET_COLOR,
+                size = 14,
+            },
+            live_event_leftover_01_pickup_medium = {
+                icon = LEFTOVER_LIVE_EVENT_MEDIUM_ICON,
+                color = WHITE_WIDGET_COLOR,
+                size = 16,
+            },
+            live_event_leftover_01_pickup_large = {
+                icon = LEFTOVER_LIVE_EVENT_LARGE_ICON,
+                color = WHITE_WIDGET_COLOR,
+                size = 18,
+            },
+        },
     },
-    live_event_saints_01_pickup_large = {
-        icon = SAINTS_LIVE_EVENT_LARGE_ICON,
-        color = WHITE_WIDGET_COLOR,
-        size = 14,
+    pickup_stolen_rations = {
+        fallback_pickup_name = "stolen_rations_01_pickup_medium",
+        by_pickup_name = {
+            stolen_rations_01_pickup_small = {
+                icon = RATIONS_LIVE_EVENT_SMALL_ICON,
+                color = WHITE_WIDGET_COLOR,
+                size = 14,
+            },
+            stolen_rations_01_pickup_medium = {
+                icon = RATIONS_LIVE_EVENT_MEDIUM_ICON,
+                color = WHITE_WIDGET_COLOR,
+                size = 14,
+            },
+        },
     },
 }
-local DEFAULT_SAINTS_ARTWORK_PRESENTATION =
-    SAINTS_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME.live_event_saints_01_pickup_small
-local LEFTOVER_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME = {
-    live_event_leftover_01_pickup_small = {
-        icon = LEFTOVER_LIVE_EVENT_SMALL_ICON,
-        color = WHITE_WIDGET_COLOR,
-        size = 14,
-    },
-    live_event_leftover_01_pickup_medium = {
-        icon = LEFTOVER_LIVE_EVENT_MEDIUM_ICON,
-        color = WHITE_WIDGET_COLOR,
-        size = 16,
-    },
-    live_event_leftover_01_pickup_large = {
-        icon = LEFTOVER_LIVE_EVENT_LARGE_ICON,
-        color = WHITE_WIDGET_COLOR,
-        size = 18,
-    },
-}
-local DEFAULT_LEFTOVER_ARTWORK_PRESENTATION =
-    LEFTOVER_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME.live_event_leftover_01_pickup_small
+
+for _, artwork in pairs(LIVE_EVENT_ARTWORK_BY_KIND) do
+    artwork.fallback = artwork.by_pickup_name[artwork.fallback_pickup_name]
+end
 --- Plain icon presentations for kinds whose artwork dropdown is set to `icon`.
 local ARTWORK_MODE_ICON_PRESENTATIONS = {
     crate_unknown = {
@@ -288,12 +317,12 @@ local ARTWORK_MODE_ICON_PRESENTATIONS = {
         size = 20,
     },
     material_diamantine = {
-        icon = "content/ui/materials/hud/interactions/icons/environment_generic",
+        glyph = "\238\128\172", -- U+E02C, official diamantine glyph
         color = _widget_color(255, 70, 130, 220),
         size = 14,
     },
     material_plasteel = {
-        icon = "content/ui/materials/hud/interactions/icons/environment_generic",
+        glyph = "\238\128\173", -- U+E02D, official plasteel glyph
         color = _widget_color(255, 130, 135, 140),
         size = 14,
     },
@@ -364,6 +393,11 @@ local ARTWORK_MODE_ICON_PRESENTATIONS = {
     },
     pickup_leftover = {
         icon = "content/ui/materials/icons/circumstances/live_event_01",
+        color = _widget_color(255, 150, 190, 60),
+        size = 14,
+    },
+    pickup_stolen_rations = {
+        icon = "content/ui/materials/icons/pickups/default",
         color = _widget_color(255, 150, 190, 60),
         size = 14,
     },
@@ -601,13 +635,9 @@ local PRESENTATIONS = {
         color = _widget_color(255, 150, 190, 60),
         size = 14,
     },
-    pickup_saints = DEFAULT_SAINTS_ARTWORK_PRESENTATION,
-    pickup_leftover = DEFAULT_LEFTOVER_ARTWORK_PRESENTATION,
-    pickup_stolen_rations = {
-        icon = "content/ui/materials/icons/pickups/default",
-        color = _widget_color(255, 150, 190, 60),
-        size = 14,
-    },
+    pickup_saints = LIVE_EVENT_ARTWORK_BY_KIND.pickup_saints.fallback,
+    pickup_leftover = LIVE_EVENT_ARTWORK_BY_KIND.pickup_leftover.fallback,
+    pickup_stolen_rations = LIVE_EVENT_ARTWORK_BY_KIND.pickup_stolen_rations.fallback,
     crate_unknown = {
         icon = "content/ui/materials/icons/engrams/engram_rarity_04",
         color = WHITE_WIDGET_COLOR,
@@ -2787,22 +2817,15 @@ local function _artwork_mode_icon_visual(kind, draw_cache)
     return visual
 end
 
---- Returns the saints artwork of a pickup's size.
-local function _pickup_saints_artwork_presentation(target)
+--- Returns the live event artwork of a target's pickup size, or its kind's fallback artwork.
+-- tab: artwork entry of `LIVE_EVENT_ARTWORK_BY_KIND`
+-- tab: target radar target
+-- treturn: tab presentation
+local function _live_event_artwork_presentation(artwork, target)
     local meta = target and target.meta or nil
     local pickup_name = meta and meta.pickup_name or nil
 
-    return (pickup_name and SAINTS_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME[pickup_name])
-        or DEFAULT_SAINTS_ARTWORK_PRESENTATION
-end
-
---- Returns the leftover artwork of a pickup's size.
-local function _pickup_leftover_artwork_presentation(target)
-    local meta = target and target.meta or nil
-    local pickup_name = meta and meta.pickup_name or nil
-
-    return (pickup_name and LEFTOVER_ARTWORK_PRESENTATIONS_BY_PICKUP_NAME[pickup_name])
-        or DEFAULT_LEFTOVER_ARTWORK_PRESENTATION
+    return (pickup_name and artwork.by_pickup_name[pickup_name]) or artwork.fallback
 end
 
 --- Builds the visual of an Expedition location.
@@ -3138,7 +3161,7 @@ local function _target_visual(target, draw_cache)
                 LogBuckets.visuals,
                 "icon_mode:" .. tostring(target_kind),
                 string_format("[Radar] visual icon mode | kind=%s icon=%s", tostring(target_kind),
-                    tostring(icon_visual.icon))
+                    tostring(icon_visual.icon or icon_visual.glyph))
             )
         end
 
@@ -3150,10 +3173,12 @@ local function _target_visual(target, draw_cache)
     if presentation ~= nil then
         local display_mode = _artwork_mode(target_kind, draw_cache)
 
-        if target_kind == "pickup_saints" and display_mode == "artwork" then
-            presentation = _pickup_saints_artwork_presentation(target)
-        elseif target_kind == "pickup_leftover" and display_mode == "artwork" then
-            presentation = _pickup_leftover_artwork_presentation(target)
+        if display_mode == "artwork" then
+            local artwork = LIVE_EVENT_ARTWORK_BY_KIND[target_kind]
+
+            if artwork ~= nil then
+                presentation = _live_event_artwork_presentation(artwork, target)
+            end
         end
 
         if debug_mode then

@@ -19,11 +19,8 @@
 -- `Radar_tracking` registers the HUD element (`ui/Radar_hud_element.lua`), which reaches the
 -- runtime through `mod` methods only. `compatibility/Radar_strikemap.lua` is loaded last as an
 -- explicit module that registers its own callbacks.
---
--- This file also keeps the scroll position of Radar's category in the DMF options view.
 -- module: Radar
 -- author: LucLeto
--- author: Alfthebigheaded
 local mod = get_mod("Radar")
 local Pickups = require("scripts/settings/pickup/pickups")
 local PlayerUnitStatus = require("scripts/utilities/attack/player_unit_status")
@@ -73,74 +70,5 @@ _install("Radar/scripts/mods/Radar/Radar_events", shared_env)
 _install("Radar/scripts/mods/Radar/Radar_navmesh", shared_env)
 
 mod:io_dofile("Radar/scripts/mods/Radar/compatibility/Radar_strikemap")
-
---- Scroll state of Radar's category in the DMF options view.
--- Remembered so that returning to Radar's long settings list restores the previous
--- position instead of jumping back to the top. Contributed by Alfthebigheaded.
-local last_scroll_amount = 0
-local last_category = nil
-
---- Returns whether the DMF options view currently shows Radar's settings category.
--- DMF names each category after the mod's localized display name.
--- tab: self DMF options view instance
--- treturn: bool true while Radar's category is selected
-local function is_radar_category(self)
-    local selected_category = self._selected_category
-    if not selected_category then
-        return false
-    end
-
-    return selected_category == mod:localize("mod_name")
-end
-
--- Forgets the selected category when the DMF options view closes, so the next visit
--- counts as entering Radar's category and restores the remembered scroll position.
-mod:hook_safe(CLASS.BaseView, "on_exit", function(self)
-    if self.view_name == "dmf_options_view" then
-        last_category = nil
-    end
-end)
-
--- Restores the remembered scroll position when Radar's category is entered and keeps
--- recording it while the category stays selected. Navigation grid 2 is the settings
--- list of the DMF options view.
-mod:hook_safe(CLASS.BaseView, "update", function(self)
-    if self.view_name ~= "dmf_options_view" then
-        return
-    end
-
-    local navigation_grids = self._navigation_grids
-    if not navigation_grids then
-        return
-    end
-
-    local settings_grid = navigation_grids[2]
-    if not settings_grid then
-        return
-    end
-
-    local scrollbar_widget = settings_grid._scrollbar_widget
-    local scrollbar_content = scrollbar_widget and scrollbar_widget.content
-    if not scrollbar_content then
-        return
-    end
-
-    local current_category = self._selected_category
-    local in_radar_category = is_radar_category(self)
-
-    if in_radar_category and (last_category ~= current_category or last_category == nil) then
-        scrollbar_content.scroll_value = last_scroll_amount
-        scrollbar_content.value = last_scroll_amount
-    end
-
-    if in_radar_category then
-        local scroll_progress = settings_grid._scroll_progress
-        if scroll_progress ~= nil and last_scroll_amount ~= scroll_progress then
-            last_scroll_amount = scroll_progress
-        end
-    end
-
-    last_category = current_category
-end)
 
 return mod
