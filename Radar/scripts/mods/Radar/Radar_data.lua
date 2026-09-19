@@ -153,6 +153,12 @@ local ARTWORK_DROPDOWN_PRESENTATIONS = {
         icon = "content/ui/materials/icons/circumstances/live_event_01",
         icon_colour = RadarColorSettings.default_marker_color("pickup_leftover"),
     },
+    show_stolen_rations = {
+        artwork_icon = "content/ui/materials/icons/currencies/stolen_rations/rations_live_event_medium",
+        artwork_colour = DROPDOWN_ICON_COLOUR_WHITE,
+        icon = "content/ui/materials/icons/pickups/default",
+        icon_colour = RadarColorSettings.default_marker_color("pickup_stolen_rations"),
+    },
 }
 
 --- Option icons of the enemy icon / marked icon / off dropdowns, by setting id.
@@ -494,10 +500,6 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
     show_pocketable_corrupted_auspex_scanner = {
         icon = "content/ui/materials/icons/pocketables/hud/auspex_scanner",
         icon_colour = RadarColorSettings.default_marker_color("pocketable_corrupted_auspex_scanner"),
-    },
-    show_stolen_rations = {
-        icon = "content/ui/materials/icons/pickups/default",
-        icon_colour = RadarColorSettings.default_marker_color("pickup_stolen_rations"),
     },
     show_unknown_pickups = {
         icon = "content/ui/materials/icons/traits/empty",
@@ -2051,11 +2053,7 @@ return {
                                 },
                                 _artwork_icon_off_dropdown("show_saints", "artwork"),
                                 _artwork_icon_off_dropdown("show_leftover", "artwork"),
-                                {
-                                    setting_id = "show_stolen_rations",
-                                    type = "checkbox",
-                                    default_value = true,
-                                },
+                                _artwork_icon_off_dropdown("show_stolen_rations", "artwork"),
                             },
                         },
                     },

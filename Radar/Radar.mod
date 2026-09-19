@@ -29,5 +29,7 @@ return {
 		"packages/ui/views/penance_overview_view/penance_overview_view",
 		"packages/ui/views/expedition_view/expedition_view",
 		"packages/ui/views/end_player_view/end_player_view",
+		"packages/content/live_events/leftover/leftover_ui_assets",
+		"packages/content/live_events/stolen_rations/stolen_rations_ui_assets",
 	},
 }

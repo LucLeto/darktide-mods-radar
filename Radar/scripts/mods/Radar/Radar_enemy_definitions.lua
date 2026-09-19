@@ -283,12 +283,14 @@ return function(env)
         pickup_tainted_skull = "show_tainted_skull",
         pickup_saints = "show_saints",
         pickup_leftover = "show_leftover",
+        pickup_stolen_rations = "show_stolen_rations",
     }
 
     local ARTWORK_MODE_DEFAULT_BY_SETTING = {
         show_tainted_skull = "artwork",
         show_saints = "artwork",
         show_leftover = "artwork",
+        show_stolen_rations = "artwork",
     }
 
     --- Settings group of each non-enemy marker kind.
@@ -1094,6 +1096,7 @@ return function(env)
         "show_tainted_skull",
         "show_saints",
         "show_leftover",
+        "show_stolen_rations",
     }
 
     EXPEDITION_MARKER_DISPLAY_MODE_SETTING_IDS = {
