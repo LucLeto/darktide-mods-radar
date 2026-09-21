@@ -2446,7 +2446,9 @@ return function(env)
 
     --- Returns where a highlight bracket is placed when the game draws no interaction marker for the unit.
     -- For a scan target that is always the case. The anchor position only feeds the occlusion
-    -- test on the path where the game's marker exists; it never positions the bracket.
+    -- test on the path where the game's marker exists; it never positions the bracket. A hazard
+    -- barrel is placed on the live `c_explosion` node the game detonates from, then on its
+    -- tracked position, since a hanging barrel's origin is its ceiling mount.
     -- tab: target radar target
     -- treturn: ?tab `{ x, y, z }`
     function _screen_highlight_projection_fallback_position(target)
@@ -2466,6 +2468,8 @@ return function(env)
             -- so this is the only thing that can place them.
             if type(kind) == "string" and kind:sub(1, 18) == "mission_objective_" then
                 position = _safe_unit_box_center(unit)
+            elseif kind == "hazard_explosive_barrel" or kind == "hazard_fire_barrel" then
+                position = _safe_unit_node_position(unit, "c_explosion") or target.position
             end
 
             position = position or _safe_unit_position(unit)
