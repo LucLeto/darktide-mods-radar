@@ -1137,8 +1137,9 @@ check_declared_aliases(definitions_source, "Radar_enemy_definitions.lua")
 
 -- With no interaction marker from the game -- always the case for a scan target
 -- -- the bracket is placed on the fallback position, not the anchor. Objectives
--- are framed on the centre of their box; everything else keeps the origin that
--- #103 chose for pickups, whose node floats above them where the prompt goes.
+-- are framed on the centre of their box; everything else but the hazard barrels
+-- keeps the origin that #103 chose for pickups, whose node floats above them
+-- where the prompt goes.
 check(helpers_source:find("function _safe_unit_box_center(unit)", 1, true) ~= nil,
     "the box centre helper is missing")
 check(helpers_source:find("local ok_box, pose = pcall(box, unit)", 1, true) ~= nil

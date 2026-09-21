@@ -23,11 +23,13 @@ local function assert_near(expected, actual, message)
 end
 
 -- `boxes[unit]` is the box centre the engine reports for that unit. Leaving a
--- unit out means the engine has no box for it.
+-- unit out means the engine has no box for it. `nodes[unit][name]` is the world
+-- position of that unit's named node; a node left out does not exist.
 local function new_harness(options)
     options = options or {}
 
     local boxes = {}
+    local nodes = {}
     local mod = { _logged_units = {} }
 
     function mod:get()
@@ -45,8 +47,18 @@ local function new_harness(options)
         alive = function()
             return true
         end,
-        has_node = function()
-            return false
+        has_node = options.has_node or function(unit, name)
+            local unit_nodes = nodes[unit]
+
+            return unit_nodes ~= nil and unit_nodes[name] ~= nil
+        end,
+        node = options.node or function(_, name)
+            return name
+        end,
+        world_position = options.world_position or function(unit, index)
+            local unit_nodes = nodes[unit]
+
+            return unit_nodes and unit_nodes[index] or nil
         end,
         box = options.box or function(unit)
             local center = boxes[unit]
@@ -82,6 +94,7 @@ local function new_harness(options)
     return {
         env = env,
         boxes = boxes,
+        nodes = nodes,
         place = function(target)
             return env._screen_highlight_projection_fallback_position(target)
         end,
@@ -225,6 +238,123 @@ test("a target with no unit still uses its recorded position", function()
     local placed = harness.place({ kind = "mission_objective_scanner", position = { x = 5, y = 6, z = 7 } })
 
     assert_near(5, placed.x, "a unitless target lost its position")
+end)
+
+-- #170: a hanging barrel's origin is its ceiling mount, so the bracket floated
+-- at the ceiling. The game detonates both barrel kinds from `c_explosion`, and
+-- tracking already records that node, so the barrel body wins over the origin.
+local BARREL_KINDS = { "hazard_explosive_barrel", "hazard_fire_barrel" }
+
+local function hanging_barrel()
+    return { position = { x = 1, y = 2, z = 8 } }
+end
+
+test("a hanging barrel is framed on its explosion node, not its mounting point", function()
+    for _, kind in ipairs(BARREL_KINDS) do
+        local harness = new_harness()
+        local barrel = hanging_barrel()
+
+        harness.nodes[barrel] = { c_explosion = { x = 1.3, y = 2.4, z = 5 } }
+
+        local placed = harness.place({ unit = barrel, kind = kind, position = { x = 1.3, y = 2.4, z = 5 } })
+
+        assert_near(1.3, placed.x, kind .. " is not on its explosion node")
+        assert_near(2.4, placed.y, kind .. " is not on its explosion node")
+        assert_near(5 + 0.12, placed.z, kind .. " is not on its explosion node")
+    end
+end)
+
+test("a barrel's bracket follows its explosion node as it moves", function()
+    for _, kind in ipairs(BARREL_KINDS) do
+        local harness = new_harness()
+        local barrel = hanging_barrel()
+        local target = { unit = barrel, kind = kind, position = { x = 1, y = 2, z = 5 } }
+
+        harness.nodes[barrel] = { c_explosion = { x = 1, y = 2, z = 5 } }
+        assert_near(5 + 0.12, harness.place(target).z, kind .. " is not on its explosion node")
+
+        harness.nodes[barrel].c_explosion = { x = 1.2, y = 2, z = 4.5 }
+
+        local moved = harness.place(target)
+
+        assert_near(1.2, moved.x, kind .. " stayed on a stale position")
+        assert_near(4.5 + 0.12, moved.z, kind .. " stayed on a stale position")
+    end
+end)
+
+test("a barrel with no explosion node uses its recorded position, not its origin", function()
+    for _, kind in ipairs(BARREL_KINDS) do
+        local harness = new_harness()
+        local placed = harness.place({ unit = hanging_barrel(), kind = kind, position = { x = 1, y = 2, z = 5 } })
+
+        assert_near(5 + 0.12, placed.z, kind .. " fell to its origin despite a recorded position")
+    end
+end)
+
+-- Every way the node lookup can fail has to degrade to the recorded position,
+-- and none of them may raise.
+test("a failing explosion node lookup falls back and does not raise", function()
+    local function raises()
+        error("engine refused")
+    end
+
+    for label, options in pairs({
+        has_node_raises = { has_node = raises },
+        node_raises = { has_node = function() return true end, node = raises },
+        world_position_raises = { has_node = function() return true end, world_position = raises },
+        world_position_empty = { has_node = function() return true end, world_position = function() return nil end },
+        world_position_nonsense = {
+            has_node = function() return true end,
+            world_position = function() return "not a vector" end,
+        },
+    }) do
+        for _, kind in ipairs(BARREL_KINDS) do
+            local harness = new_harness(options)
+            local target = { unit = hanging_barrel(), kind = kind, position = { x = 1, y = 2, z = 5 } }
+            local ok, placed = pcall(harness.place, target)
+
+            assert_equal(true, ok, label .. ": " .. kind .. " placement raised")
+            assert_near(5 + 0.12, placed.z, label .. ": " .. kind .. " did not fall back to its recorded position")
+        end
+    end
+end)
+
+test("a barrel with neither node nor recorded position keeps its origin", function()
+    for _, kind in ipairs(BARREL_KINDS) do
+        local harness = new_harness()
+        local placed = harness.place({ unit = hanging_barrel(), kind = kind })
+
+        assert_near(1, placed.x, kind .. " lost its origin")
+        assert_near(8 + 0.12, placed.z, kind .. " lost its origin")
+    end
+end)
+
+test("a barrel target with no unit uses its recorded position", function()
+    for _, kind in ipairs(BARREL_KINDS) do
+        local harness = new_harness()
+        local placed = harness.place({ kind = kind, position = { x = 3, y = 4, z = 5 } })
+
+        assert_near(3, placed.x, kind .. " lost its recorded position")
+        assert_near(5 + 0.12, placed.z, kind .. " lost its recorded position")
+    end
+end)
+
+test("only barrels are placed on an explosion node", function()
+    local harness = new_harness()
+    local ammo = { position = { x = 7, y = 8, z = 9 } }
+    local terminal = { position = { x = 10, y = 20, z = 0 } }
+
+    harness.nodes[ammo] = { c_explosion = { x = 70, y = 80, z = 90 } }
+    harness.nodes[terminal] = { c_explosion = { x = 70, y = 80, z = 90 } }
+    harness.boxes[terminal] = { x = 10.4, y = 19.1, z = -1.2 }
+
+    local pickup = harness.place({ unit = ammo, kind = "pickup_ammo_big", position = { x = 60, y = 60, z = 60 } })
+    local objective = harness.place({ unit = terminal, kind = "mission_objective_scanner" })
+
+    assert_near(7, pickup.x, "a pickup moved off its origin")
+    assert_near(9 + 0.08, pickup.z, "a pickup moved off its origin")
+    assert_near(10.4, objective.x, "an objective moved off its box centre")
+    assert_near(-1.2 + 0.12, objective.z, "an objective moved off its box centre")
 end)
 
 -- The marker list says "the game shows something here" for every marker type.
