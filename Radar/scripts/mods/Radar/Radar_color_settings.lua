@@ -905,6 +905,31 @@ _add_marker({
     default = _color(255, 150, 190, 60),
     supports_highlight = true,
 })
+
+-- Respawn awareness. The defaults start from the colours Respawn Rewind draws its own markers
+-- in, so a player who turns the radar markers on recognises them, and they are Radar settings
+-- from that point on: nothing here reads or writes anything that belongs to the other mod.
+-- No highlight colours, since the respawn kinds have no nearby highlight of their own.
+_add_marker({
+    kind = "respawn_active",
+    anchor = "show_respawn_active",
+    default = _color(255, 120, 200, 255),
+})
+_add_marker({
+    kind = "respawn_runback",
+    anchor = "show_respawn_runback",
+    default = _color(255, 120, 220, 120),
+})
+_add_marker({
+    kind = "respawn_practice_beacon",
+    anchor = "show_respawn_practice_beacon",
+    default = _color(255, 130, 170, 200),
+})
+_add_marker({
+    kind = "respawn_practice_line",
+    anchor = "show_respawn_practice_line",
+    default = _color(255, 175, 175, 175),
+})
 --- Converts a setting value into a colour channel, rounded and clamped to 0 to 255.
 -- param: value setting value
 -- ?number: fallback channel used when the value is not a number, 255 when nil

@@ -13,6 +13,7 @@
 -- 4. `Radar_players`, `Radar_pickups`, `Radar_mission_objectives`, `Radar_expeditions` and
 --    `Radar_events` (feature modules)
 -- 5. `Radar_navmesh` (live map geometry source)
+-- 6. `compatibility/Radar_respawn_rewind` (optional Respawn Rewind marker import)
 --
 -- The order only matters for code that runs while a module installs; shared functions are
 -- looked up in `shared_env` when called, so a module may call one installed after it.
@@ -68,6 +69,8 @@ _install("Radar/scripts/mods/Radar/Radar_expeditions", shared_env)
 _install("Radar/scripts/mods/Radar/Radar_events", shared_env)
 
 _install("Radar/scripts/mods/Radar/Radar_navmesh", shared_env)
+
+_install("Radar/scripts/mods/Radar/compatibility/Radar_respawn_rewind", shared_env)
 
 mod:io_dofile("Radar/scripts/mods/Radar/compatibility/Radar_strikemap")
 

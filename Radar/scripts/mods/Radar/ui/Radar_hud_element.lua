@@ -527,6 +527,26 @@ local PRESENTATIONS = {
         icon = "content/ui/materials/icons/traits/empty",
         size = 14,
     },
+    respawn_active = {
+        glyph = "\238\128\133", -- U+E005, Darktide respawn point glyph
+        color = _widget_color(255, 120, 200, 255),
+        size = 18,
+    },
+    respawn_runback = {
+        glyph = "\238\128\135", -- U+E007, Darktide run-back point glyph
+        color = _widget_color(255, 120, 220, 120),
+        size = 18,
+    },
+    respawn_practice_beacon = {
+        glyph = "\238\128\133", -- U+E005, Darktide respawn point glyph
+        color = _widget_color(255, 130, 170, 200),
+        size = 14,
+    },
+    respawn_practice_line = {
+        glyph = "\238\128\135", -- U+E007, Darktide run-back point glyph
+        color = _widget_color(255, 175, 175, 175),
+        size = 14,
+    },
     medicae_station = {
         icon = "content/ui/materials/hud/interactions/icons/respawn",
         color = _widget_color(255, 38, 205, 26),
@@ -826,6 +846,7 @@ local _draw_cache = {
     nearby_highlight_enabled_by_kind = {},
     nearby_highlight_distance_text_enabled_by_kind = {},
     show_player_tag_distance_text = false,
+    show_respawn_runback_offset = false,
     show_boss_distance_text = false,
     show_ability_marked_enemies = false,
     show_medicae_station_charges = false,
@@ -1131,6 +1152,7 @@ local function _build_draw_cache(t)
     draw_cache.show_player_center_dot = get_show_player_center_dot and get_show_player_center_dot(mod) or
         (show_player_center_dot ~= false and show_player_center_dot ~= "off")
     draw_cache.show_player_tag_distance_text = get(mod, "show_player_tag_distance_text") == true
+    draw_cache.show_respawn_runback_offset = get(mod, "show_respawn_runback_offset") ~= false
     draw_cache.boss_display_style = _normalized_enemy_display_style(get(mod, "boss_display_style"))
     draw_cache.show_ability_marked_enemies = get_show_ability_marked_enemies and
         get_show_ability_marked_enemies(mod) or false
@@ -2597,6 +2619,37 @@ local function _cached_icon_distance_marker_display_mode(kind, draw_cache)
     return mode
 end
 
+--- Returns Respawn Rewind's run-back offset of a target, when it is wanted and available.
+-- The offset says how far the team stands from the respawn threshold, which is not the
+-- player's distance to the marker, so it replaces that distance rather than joining it.
+-- The marker's own dropdown still decides whether it carries any text, so `icon_only` stays
+-- icon only; this setting only chooses which number the text is. The `Hold back` fallback label
+-- carries no offset, and then the normal distance is drawn.
+-- tab: target radar target
+-- ?tab: draw_cache draw cache
+-- treturn: ?string
+local function _respawn_runback_offset_text(target, draw_cache)
+    local kind = target and target.kind or nil
+
+    if kind ~= "respawn_runback"
+        or _cached_icon_distance_marker_display_mode(kind, draw_cache) ~= "icon_distance" then
+        return nil
+    end
+
+    -- Defaults to on, so a missing draw cache value may not fall through to the setting: the
+    -- cache saying `false` would be overruled by a setting that has never been written.
+    local show_offset = draw_cache ~= nil and draw_cache.show_respawn_runback_offset or
+        (draw_cache == nil and mod:get("show_respawn_runback_offset") ~= false)
+
+    if not show_offset then
+        return nil
+    end
+
+    local meta = target.meta
+
+    return meta and meta.respawn_offset_text or nil
+end
+
 local function _icon_distance_marker_distance_text(target, draw_cache)
     local kind = target and target.kind or nil
 
@@ -2725,6 +2778,19 @@ local function _apply_target_specific_visual_overrides(target, visual, draw_cach
     if expedition_marker_distance_text ~= nil then
         local result = _copy_visual(visual)
         result.value_text = expedition_marker_distance_text
+        result.value_text_color = _configured_radar_color("marker_distance_text", BOSS_DISTANCE_TEXT_WIDGET_COLOR)
+        result.value_text_anchor = "bottom_center"
+        result.value_text_offset_x = 3
+        result.value_text_offset_y = -3
+
+        return result
+    end
+
+    local respawn_runback_offset_text = _respawn_runback_offset_text(target, draw_cache)
+
+    if respawn_runback_offset_text ~= nil then
+        local result = _copy_visual(visual)
+        result.value_text = respawn_runback_offset_text
         result.value_text_color = _configured_radar_color("marker_distance_text", BOSS_DISTANCE_TEXT_WIDGET_COLOR)
         result.value_text_anchor = "bottom_center"
         result.value_text_offset_x = 3

@@ -149,6 +149,7 @@ local EXPECTED_TABS = {
     { "expeditions_group", "tab_expeditions" },
     { "enemies_group", "tab_enemies" },
     { "players_group", "tab_players" },
+    { "respawn_group", "tab_respawn" },
     { "debug_group", "tab_debug" },
 }
 
