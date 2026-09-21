@@ -17,7 +17,7 @@ This README serves two audiences. The first half is a feature and settings refer
 ## Feature Overview
 
 - Tracks nearby pickups, materials, mission items, deployables, environment interactables, live-event pickups and objectives, expedition POIs, teammates, player companions, player smart tags, tagged targets, supported ability-outlined enemies, and high-priority enemies on a single camera-oriented radar or the temporary centered overview.
-- Supports **Square**, **Circle**, and **Auspex** radar styles. Square and Circle use configurable **outline** and **guide** options, including the Auspex background guide, while **Auspex** adds its dedicated scanner frame treatment.
+- Supports **Square**, **Circle**, and **Auspex** radar styles. All three use the configurable **outline**. Square and Circle also use the **guide** options, including the Auspex background guide, while **Auspex** adds its dedicated scanner frame treatment.
 - Optionally draws the mission's walkable **map geometry** beneath all markers, sourced from a built-in **live scan** of the navigation mesh or from the **Strikemap** mod's pre-baked floor plans, with configurable floor-band colors and floor range windows.
 - Lets you tune **radar size**, normal radar **range**, centered overview **zoom range**, **Radar Colors**, **maximum marker count**, **nearby highlight range**, supported vertical arrow and hiding behavior, and the dedicated nearby-highlight presentation settings.
 - Supports per-category **Icon size (%)** sliders across item, player, player companion, enemy, event, and debug marker groups, plus dedicated enemy sub-category scaling.
@@ -90,7 +90,7 @@ Nearby highlights add small screen-space brackets for supported non-enemy marker
 
 ### Resource charges and deployed medical radius
 
-Medicae Stations and deployed Ammo Crates can show their remaining team-resource charges as a small number near the top-right of the marker. If nearby radar-marker distance text is also enabled for that marker group, distance text stays below the icon.
+Medicae Stations and deployed Ammo Crates can show their remaining team-resource charges as a small number near the top-right of the marker. If **Show distance on radar markers** is also enabled for that marker group, distance text stays below the icon.
 
 <p>
   <img src="doc/img/medicae_station_charges.png" width="80" alt="Medicae Station marker with remaining charges" />
@@ -143,7 +143,7 @@ The floor plan is shaded in three height bands relative to your current position
 - **Floors above** render as a faint cool-blue veil drawn on top, so upper walkways read as "over you" without hiding your own floor.
 - **Floors below** render dimmer in a warm umber beneath your floor.
 
-Each band has its own ARGB color picker under **Map Geometry**, shown while a geometry source is selected; its **A** channel is that band's opacity, and **0** hides the band entirely. On the normal radar, **Floors Above Range** and **Floors Below Range** (in meters) limit how far up and down geometry is shown. The defaults, **3 m** above and **7 m** below, are tuned for stacked interiors; on open terrain with large height differences, such as Expedition canyons, raise them (for example **15 m**) to keep ramps and upper areas visible. Centered overview mode ignores both sliders and always uses **30 m** above and below.
+Each band has its own ARGB color picker under **Map Geometry**, shown while a geometry source is selected; its **A** channel is that band's opacity, and **0** hides the band entirely. On the normal radar, **Floors Above Range** and **Floors Below Range** (in meters) limit how far up and down geometry is shown. The defaults, **7 m** above and **7 m** below, are tuned for stacked interiors; on open terrain with large height differences, such as Expedition canyons, raise them (for example **15 m**) to keep ramps and upper areas visible. Centered overview mode ignores both sliders and always uses **30 m** above and below.
 
 On the compact radar, the floor plan stays beneath the regular marker presentation, so pickups, tagged targets, teammates, and distance text render unchanged on top of the geometry:
 
@@ -290,9 +290,10 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Hide vertical markers above/below (m) | Adjustable from **8 m** to **50 m**. Supported item markers and enemy markers with vertical arrows enabled are hidden when their vertical separation is larger than this value. |
 | Max radar markers | Adjustable from **10** to **200** for the normal radar. |
 | Max overview markers | Adjustable from **100** to **300** for centered overview mode. |
-| Scale icons with radar size | Keeps marker size fixed or scales it with the radar. The final combined icon size is capped at **4.0x**. |
+| Marker update rate | **Low (4 per second)**, **Medium (10 per second)**, or **High (20 per second)**. Controls how often enemies, teammates, and companions are rescanned so their markers move more smoothly. Droppable items such as pocketables and deployables always update at the **Low** rate, and fully static props update even less often. |
+| Scale icons with radar size | Keeps marker size fixed or scales it with the radar. The radar-size factor is the radar size divided by **300**, limited to **0.5x** to **3.0x**. |
 | Radar style | **Square**, **Circle**, or **Auspex**. |
-| Radar outline | **Solid**, **Dotted**, or **Off**. Only used by the **Square** and **Circle** radar styles. |
+| Radar outline | **Solid**, **Dotted**, or **Off**. Used by all three radar styles; on **Auspex** it selects the scanner frame. |
 | Radar guides | **Crosshair**, **View guides**, **Range rings**, **Auspex**, or **Off**. Only used by the **Square** and **Circle** radar styles. |
 | Radar Colors | ARGB color pickers for Radar UI colors such as background, outline, guides, Auspex layers, marker text, vertical arrows, and overview legend indicators. |
 | Animated radar sweep | Enables or disables the animated sweep used by the **Auspex** radar style and **Auspex** guides. |
@@ -302,20 +303,19 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Floors Below Range | Adjustable from **1 m** to **30 m** for the normal radar. Geometry more than this far below you is hidden; centered overview always uses **30 m**. |
 | Show geometry in overview mode | Also draws the Strikemap floor plan while centered overview mode is active. |
 | Nearby highlight range (m) | Adjustable from **5 m** to **20 m**. Controls how close supported items must be before their screen-space bracket highlights appear. |
-| Highlight thickness | Adjusts the line thickness used by nearby screen-space highlight brackets. |
+| Nearby highlight thickness | Adjusts the line thickness used by nearby screen-space highlight brackets, from **0** to **6**. **0**, the default, keeps the adaptive thickness. |
 | Show distance above nearby highlights | Shows item distance text above supported nearby screen-space highlights. |
-| Show distance on radar markers | Shows distance text on supported nearby radar markers. |
+| Show distance on radar markers | Per marker group. Shows distance text under every radar marker of that group, independent of the nearby highlight toggle and range. |
 | Medicae Station Charges | Shows remaining healing charges on Medicae Station radar markers when their marker is visible. |
 | Ammo Crate Charges | Shows remaining resupply charges on deployed Ammo Crate radar markers when their marker is visible. |
 | Boss marker style | **Icon only** or **Marked icon**. |
 | Boss marker range | **Normal** or **Infinite**. Lets boss-type markers follow the normal radar range or stay visible at any distance. |
 | Show boss distance text | Shows yellow distance text in meters for bosses except the daemonhost. |
-| Teammates | Shows or hides teammate markers on the radar. |
+| Teammate marker style | **Icon only**, **Marked icon**, **Dot only**, **Marked Dot**, or **Off**. The two teammate settings below are hidden while it is **Off**. |
 | Teammate state icons | Replaces teammate class or dot markers with contextual state icons. |
-| Player marker range | **Normal** or **Infinite**. Lets teammate markers follow the normal radar range or stay visible at any distance. |
-| Player center dot | Shows or hides your own center point on the radar. |
-| Player marker style | **Icon only**, **Marked icon**, **Dot only**, or **Marked dot**. |
-| Player companions - Icon size (%) | Resizes Cyber Mastiff and Servo Skull markers independently from player markers. Default: **100%**. |
+| Teammate marker range | **Normal** or **Infinite**. Lets teammate markers follow the normal radar range or stay visible at any distance. |
+| Player center dot | **Icon** or **Off**. Shows or hides your own center point on the radar. |
+| Icon size (%) (Player Companions) | Resizes Cyber Mastiff and Servo Skull markers independently from player markers. Default: **100%**. |
 | Show Cyber Mastiff | Shows or hides friendly Arbitrator Cyber Mastiff markers. |
 | Show Servo Skulls | Shows or hides friendly Skitarii Servo Skull markers. |
 | Player Tags | Shows or hides player smart tags and pings on the radar. |
@@ -323,7 +323,7 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Ability-marked enemies | Also includes supported ability-marked and smart-tag outlined enemies such as keystone, passive, and callout-driven outline states. |
 | Tagged enemies only | Only shows enemy markers while the enemy has an active in-game tag. Tagged enemies also ignore the normal radar range limit while tagged. |
 | Tagged items only | Only shows supported item markers while the item has an active in-game tag. Tagged items also ignore the normal radar range limit while tagged. |
-| Player tag display style | **Icon only** or **Marked icon**. |
+| Player tag style | **Icon only** or **Marked icon**. |
 | Radar anchor | **Top left**, **Top right**, **Bottom left**, or **Bottom right**. Sets the corner the radar offsets from. |
 | Allow unrestricted radar positioning | Removes the normal UI-space clamping fallback, which is useful for ultrawide or highly customized layouts. |
 | Horizontal offset | Sets the radar's horizontal offset from the selected anchor. |
@@ -347,13 +347,16 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Mission Objective Interactables | Scanner targets, Hacking terminals, Servo skull objectives, Daemonic growth, Targets to destroy, Other objective interactions | **Icon only**, **Icon + Distance m**, **Off** |
 | Environment | Explosive Barrels, Fire Barrels | **Icon only**, **Icon + Distance m**, **Off** |
 | Respawn | Active respawn, Run-back threshold, Practice respawn points, Practice thresholds | **Icon only**, **Icon + Distance m**, **Off** |
-| Enemy bosses | Daemonhost, Monstrosities, Captains, Karnak Twins | **Icon only**, **Marked icon** |
-| Enemy groups | Common enemies and Shooters | **Icon only**, **Marked icon**, **Off** |
-| Individual enemy toggles | Dreg and Scab Bruisers, Vanguards, Shooters, Elite, Special, and Misc enemies listed below | **Icon only**, **Marked icon**, **Off** |
+| Enemy bosses (Boss marker style) | Daemonhost, Monstrosities, Captains, Karnak Twins | **Icon only**, **Marked icon** |
+| Individual enemies | Dreg and Scab Bruisers and Vanguards, Dreg and Scab Stalkers, Scab Shooters, and the Elite, Special, and Misc enemies listed below | **Icon only**, **Marked icon**, **Off** |
+| Teammates | Teammate marker style | **Icon only**, **Marked icon**, **Dot only**, **Marked Dot**, **Off** |
+| Single markers | Every other pickup, luggable, objective item, environment, and deployed-item marker, Martyr's Skull and its Power Cell, Dark Rites Totems and Servo Skulls, Tainted Communications Device, Monstrosities, Captains, Karnak Twins, Horde enemies, Player center dot, and Show unknown pickups | **Icon**, **Off** |
+
+Riddle interactables, the charge annotations, the companion toggles, and the player tag toggle remain checkboxes.
 
 ### Per-category icon size controls
 
-Each major option group now includes an **Icon size (%)** slider. These sliders resize the whole marker family from **50%** to **300%**. When combined with **Scale icons with radar size**, the final rendered icon size is still capped at **4.0x**.
+Each major option group now includes an **Icon size (%)** slider. These sliders resize the whole marker family from **50%** to **300%**. They multiply with the **Scale icons with radar size** factor, and the final size is clamped to fixed pixel limits: **10** to **48** px for most markers, and per enemy category for enemy markers (up to **72** px for bosses, elites, specials, and misc enemies).
 
 | Option group | Affects |
 | --- | --- |
@@ -367,15 +370,15 @@ Each major option group now includes an **Icon size (%)** slider. These sliders 
 | Martyr's Skull Items | Martyr's Skull markers, riddle interactables, and related power cell markers |
 | Environment | Medicae Station, Power Socket, Heretic Idol, Explosive Barrels, and Fire Barrels |
 | Deployed Items | Ammo Crate and Medical Crate deployables |
-| Enemies | High-priority boss markers |
-| Enemy Boss | Daemonhost, Monstrosities, Captains, Karnak Twins |
-| Enemy Horde | Horde enemies |
-| Enemy Common | Common enemies |
-| Enemy Shooter | Shooter enemies |
-| Enemy Elite | Elite enemies |
-| Enemy Special | Special enemies |
-| Enemy Misc | Ritualists |
-| Players | Teammate markers |
+| All enemy icon size | Every enemy marker, combined with the category slider below |
+| Monstrosity/Captain/Twins icon size | Daemonhost, Monstrosities, Captains, Karnak Twins |
+| Horde enemy icon size | Horde enemies |
+| Common enemy icon size | Common enemies |
+| Shooter enemy icon size | Shooter enemies |
+| Elite enemy icon size | Elite enemies |
+| Special enemy icon size | Special enemies |
+| Misc enemy icon size | Ritualists |
+| Players (Teammates) | Teammate markers and player tag markers |
 | Player Companions | Cyber Mastiffs and Servo Skulls |
 | Event-Related Items | Event pickups and event objectives, including Dark Rites totems and servo skulls |
 | Respawn | Active respawn, run-back threshold, and the practice respawn points and thresholds |
@@ -389,7 +392,7 @@ Each major option group now includes an **Icon size (%)** slider. These sliders 
 | Ability-marked enemies | Also includes enemies while they have a supported ability or smart-tag outline, subject to the normal enemy display rules. |
 | Captains | Shows captain markers. |
 | Karnak Twins | Shows the dedicated Karnak Twins marker. |
-| Horde enemies | Single toggle for horde markers. Horde enemies stay on or off rather than using per-unit display modes. |
+| Horde enemies | Single **Icon** / **Off** setting for all horde markers, off by default. Horde enemies do not use per-unit display modes. |
 | Common enemies | Independent display-style dropdowns for Dreg Bruisers, Scab Bruisers, Dreg Vanguards, and Scab Vanguards. |
 | Shooters | Independent display-style dropdowns for Dreg Stalkers, Scab Stalkers, and Scab Shooters. |
 | Elite enemies | Per-unit display-style dropdowns for Dreg Gunners, Ragers, Shotgunners, Scab Gunners, Maulers, Plasma Gunners, Ragers, Shotgunners, and Ogryn elites. |
@@ -398,7 +401,7 @@ Each major option group now includes an **Icon size (%)** slider. These sliders 
 
 ### Enemy vertical arrow controls
 
-Enemy vertical arrows are controlled per enemy category. These options only control whether the **up** or **down** arrow overlay can be shown for that category. They do not change the core marker visibility, display style, range mode, or tagged-only behavior.
+Enemy vertical arrows are controlled per enemy category. Enabling them lets the **up** or **down** arrow overlay be shown for that category, and also makes that category subject to **Hide vertical markers above/below (m)**: its markers are hidden beyond that height difference, like item markers. Enemy categories without vertical arrows are never hidden for height. The toggles do not change display style, range mode, or tagged-only behavior.
 
 | Option | What it controls |
 | --- | --- |
@@ -416,10 +419,10 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 
 | Option | What it controls |
 | --- | --- |
-| Highlight thickness | Adjusts the line thickness used by nearby screen-space highlight brackets. |
+| Nearby highlight thickness | Adjusts the line thickness used by nearby screen-space highlight brackets, from **0** to **6**. **0**, the default, keeps the adaptive thickness. |
 | Marker highlight colors | ARGB color pickers used directly by nearby highlights for a specific supported marker. |
 | Show distance above nearby highlights | Shows item distance text above supported nearby screen-space highlights. |
-| Show distance on radar markers | Shows distance text on supported nearby radar markers. |
+| Show distance on radar markers | Per marker group. Shows distance text under every radar marker of that group, independent of the nearby highlight toggle and range. |
 
 | Option group | What it controls |
 | --- | --- |
@@ -431,7 +434,7 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Expeditions-Specific Items | Highlights nearby salvage, tech-remnants, expedition pocketables, and related expedition pickups. |
 | Martyr's Skull Items | Highlights nearby Martyr's Skull items, riddle interactables, and orange power cell markers. |
 | Environment | Highlights nearby medicae stations, power sockets, heretic idols, and hazard barrels. |
-| Deployed Items | Adds nearby radar-marker distance text for deployed ammo and medical crates. |
+| Deployed Items | Has no nearby highlight; only the radar-marker distance text for deployed ammo and medical crates. |
 | Event-Related Items | Highlights nearby event pickups and event objectives, including Dark Rites totems and servo skulls. |
 
 ### Tech-Remnant controls
@@ -439,16 +442,16 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Option | What it controls |
 | --- | --- |
 | Tech-Remnant marker mode | **Default**, **Scale by value**, or **Merge nearby piles**. |
-| Show cluster value | Shows a value badge on clustered tech-remnant markers. |
-| Cluster horizontal radius | Horizontal merge range for clustered tech-remnant markers. |
-| Cluster vertical radius | Vertical merge range for clustered tech-remnant markers. |
+| Cluster horizontal range radius (m) | Horizontal merge range for clustered tech-remnant markers, **1** to **10** m (default **5**). |
+| Cluster vertical range radius (m) | Vertical merge range for clustered tech-remnant markers, **1** to **5** m (default **3**). |
+| Show tech-remnant value text | Shows each tech-remnant marker's value, the combined value for merged piles. |
 
 ### Expedition POI Controls
 
 | Option | Modes / default | What it controls |
 | --- | --- | --- |
 | Expeditions POI | Option group | Contains independent display mode dropdowns for expedition location markers. |
-| Ignore range limit for POI | Checkbox, default on | Lets expedition POI markers bypass the normal radar range filter. |
+| Ignore range limit for POI | Checkbox, default on | Lets expedition POI markers, except Data Reliquary Harvesters, bypass the normal radar range filter. |
 | Sites of Interest | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon + Distance m**. | Controls registered expedition opportunity locations, including numbered scanner-map opportunity markers. |
 | Deadsider Sanctuaries | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls expedition transition or sanctuary locations with the dedicated transition icon. |
 | Data Reliquary Harvesters | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls expedition loot converters with the dedicated harvester icon while inside the sanctuary where they are usable, and clears stale harvester markers across sanctuary transitions. |
@@ -502,8 +505,8 @@ A device keeps its marker for as long as its objective runs, so nothing blinks o
 | Option | What it controls |
 | --- | --- |
 | Environment | Group of toggles for interactable world objects and hazard barrels that are useful to spot on the radar. |
-| Explosive Barrels | Shows static explosive hazard barrels. Supports **Icon**, **Icon + Distance**, and **Off**; defaults to **Icon**. |
-| Fire Barrels | Shows static fire/promethium hazard barrels. Supports **Icon**, **Icon + Distance**, and **Off**; defaults to **Icon**. |
+| Explosive Barrels | Shows static explosive hazard barrels. Supports **Icon only**, **Icon + Distance m**, and **Off**; defaults to **Icon only**. |
+| Fire Barrels | Shows static fire/promethium hazard barrels. Supports **Icon only**, **Icon + Distance m**, and **Off**; defaults to **Icon only**. |
 | Medicae Station | Shows medicae station and equivalent health station interactions. |
 | Medicae Station Charges | Shows the remaining healing charges on visible Medicae Station markers. Unpowered stations with a missing battery use a light grey marker, while fully depleted stations follow the game's marker visibility. |
 | Power Socket | Shows luggable power socket targets. Sockets for other mission cargo, such as vacuum capsules, ammunition canisters, cryonic rods, Moebian samples, and the Prismata case, follow Other objective interactions instead. |
@@ -514,7 +517,7 @@ A device keeps its marker for as long as its objective runs, so nothing blinks o
 | Option | What it controls |
 | --- | --- |
 | Deployed Items | Group of controls for player-deployed team support tools. |
-| Show distance on radar markers | Shows distance text below nearby deployed Ammo Crate and Medical Crate radar markers. |
+| Show distance on radar markers | Shows distance text below deployed Ammo Crate and Medical Crate radar markers. |
 | Ammo Crate | Shows deployed Ammo Crate markers. |
 | Ammo Crate Charges | Shows remaining resupply charges on visible deployed Ammo Crate markers. |
 | Medical Crate | Shows deployed Medical Crate markers with a radar-scaled healing-radius ring. |
@@ -558,14 +561,14 @@ Each marker has its own icon color picker, which is hidden while the marker is *
 
 ### Marker Rules
 
-- **Enemies**, **teammates**, **player companions**, and **player smart tags** each use their own display rules and settings. Teammates also have a **Player marker range** mode and an optional **Teammate state icons** override for disabled, rescue, luggable, and dead states. The local **center dot** has its own toggle and always keeps its normal dot icon.
+- **Enemies**, **teammates**, **player companions**, and **player smart tags** each use their own display rules and settings. Teammates also have a **Teammate marker range** mode and an optional **Teammate state icons** override for disabled, rescue, luggable, and dead states. The local **center dot** has its own toggle and always keeps its normal dot icon.
 - Companion markers use their owning player's bright slot color. Player markers take priority over following companions at the same position, while Servo Skulls performing an active task and Cyber Mastiffs pinning an enemy are drawn above the assisted or disabled unit.
 - Following Servo Skulls are hidden when they are very close to their visible owner marker. Hacking, reviving, and active Purgator/Flamer skulls remain visible near their owner.
 - While a Cyber Mastiff is mauling an enemy that uses Darktide's actual companion-disable behavior, that enemy's icon and background are made transparent so the Mastiff remains readable; enabled enemy marker brackets remain visible.
 - Supported enemies can also be surfaced through active ability-mark or smart-tag outline states when **Ability-marked enemies** is enabled.
 - **Tagged enemies only** and **Tagged items only** restrict visibility to actively tagged targets, and those tagged targets ignore the usual radar range limit while the tag remains active.
 - Supported item markers and enemy markers from enabled enemy categories can show vertical **up** and **down** arrows. They use the shared vertical arrow range and shared vertical hide threshold, while nearby highlight brackets and optional distance text remain item-focused presentation features.
-- Medicae Stations and deployed Ammo Crates can show their remaining team-resource charges as a small top-right number. If nearby radar-marker distance text is enabled for the same marker, the distance remains below the icon.
+- Medicae Stations and deployed Ammo Crates can show their remaining team-resource charges as a small top-right number. If **Show distance on radar markers** is enabled for the same marker group, the distance remains below the icon.
 - Medicae Stations use the normal green marker while powered and usable. Unpowered stations with a missing battery use a light grey marker. Depleted stations without remaining charges follow the game's normal marker visibility.
 - Deployed Medical Crates include a circular healing-radius indicator that scales with the configured radar range. The ring is hidden when the full radius would extend outside the radar bounds.
 - Event-related markers use elevated marker priority so event objectives stay visible when dense enemy markers are nearby.
@@ -613,7 +616,7 @@ Left: **Icon only**. Right: **Marked icon**.
 
 | Preview | Marker | Notes |
 | --- | --- | --- |
-| <img src="doc/img/horde.png"  width="80" alt="Horde enemy marker" /> | Horde enemies | Shared horde presentation used for Groaners, Moebian 21st infantry, Poxwalkers, lesser mutated poxwalkers, mutated poxwalkers, and related horde-only infected. Horde enemies use a single on or off toggle plus the **Enemy Horde** size slider. |
+| <img src="doc/img/horde.png"  width="80" alt="Horde enemy marker" /> | Horde enemies | Shared horde presentation used for Groaners, Moebian 21st infantry, Poxwalkers, lesser mutated poxwalkers, mutated poxwalkers, and related horde-only infected. Horde enemies use a single **Icon** / **Off** setting plus the **Horde enemy icon size** slider. |
 
 ### Common Enemies
 
@@ -679,13 +682,13 @@ Left: **Icon only**. Right: **Marked icon**.
 
 | Preview | Marker | Notes |
 | --- | --- | --- |
-| <img src="doc/img/chaos_ritualist.png"  width="80" alt="Ritualist marker" /> | Ritualist | Dedicated misc enemy toggle with its own **Enemy Misc** size slider. |
+| <img src="doc/img/chaos_ritualist.png"  width="80" alt="Ritualist marker" /> | Ritualist | Dedicated misc enemy toggle with its own **Misc enemy icon size** slider. |
 
 ### Teammates
 
 | Preview | Marker | Notes |
 | --- | --- | --- |
-| <img src="doc/img/player_teammate_sample.png"  width="80" alt="Teammate marker sample" /> | Teammates | Uses class icons, colored by teammate slot at runtime. Can be shown as **Icon only**, **Marked icon**, **Dot only**, or **Marked dot**. Optional contextual state icons replace the selected marker while a teammate is disabled, needs rescue, carries a luggable, or is dead. **Player marker range** can be set to **Normal** or **Infinite**, and teammate visibility can be toggled independently from the unchanged local player center dot. |
+| <img src="doc/img/player_teammate_sample.png"  width="80" alt="Teammate marker sample" /> | Teammates | Uses class icons, colored by teammate slot at runtime. **Teammate marker style** shows them as **Icon only**, **Marked icon**, **Dot only**, or **Marked Dot**, or turns them **Off**. Optional contextual state icons replace the selected marker while a teammate is disabled, needs rescue, carries a luggable, or is dead. **Teammate marker range** can be set to **Normal** or **Infinite**, and teammate visibility can be toggled independently from the unchanged local player center dot. |
 
 Display style example for teammate markers:
 
@@ -738,13 +741,13 @@ Radar detects friendly companions belonging to the local player and teammates. T
 | <img src="doc/img/player_companion_medicae_servo_skull.png" width="80" alt="Medicae Servo Skull companion marker" /> | Medicae Servo Skull | Adds a green medkit annotation. It remains visible and is drawn above the player it is actively reviving. |
 | <img src="doc/img/player_companion_purgator_servo_skull.png" width="80" alt="Purgator Flamer Servo Skull companion marker" /> | Purgator / Flamer Servo Skull | Adds an orange flame annotation and remains visible near its owner while its flamethrower action is active. |
 
-Companion marker size is controlled by the dedicated **Player companions - Icon size (%)** slider, with **100%** as the default. **Show Cyber Mastiff** and **Show Servo Skulls** control the two companion families independently.
+Companion marker size is controlled by the **Icon size (%)** slider of the **Player Companions** group, with **100%** as the default. **Show Cyber Mastiff** and **Show Servo Skulls** control the two companion families independently.
 
 ### Player Tags
 
 | Preview | Marker | Notes |
 | --- | --- | --- |
-| <img src="doc/img/player_tag_enemy_marked.png" width="80" alt="Enemy player tag marker" /> | Enemy | Radar support for enemy callout tags. Uses the dedicated **Player tag display style** setting and can optionally show distance text. |
+| <img src="doc/img/player_tag_enemy_marked.png" width="80" alt="Enemy player tag marker" /> | Enemy | Radar support for enemy callout tags. Uses the dedicated **Player tag style** setting and can optionally show distance text. |
 | <img src="doc/img/player_tag_go_there_marked.png" width="80" alt="Go there player tag marker" /> | Go There | Radar support for movement and positioning callouts placed by players. |
 | <img src="doc/img/player_tag_look_there_marked.png" width="80" alt="Look there player tag marker" /> | Look There | Radar support for attention and look-here callouts placed by players. |
 
@@ -872,8 +875,8 @@ These markers are driven by expedition navigation data rather than standard pick
 | <img src="doc/img/medicae_station.png"  width="80" alt="Medicae Station marker" /> | Medicae Station | Green medical interaction marker used for medicae stations and equivalent health-station interactions. Can show remaining healing charges as a top-right number. Unpowered stations with a missing battery use a light grey marker. |
 | <img src="doc/img/luggable_socket.png"  width="80" alt="Power Socket marker" /> | Power Socket | Yellow power socket marker for luggable socket targets. While you carry a luggable, sockets stay on the radar beyond its range and on any floor. Sockets for mission cargo -- vacuum capsules, ammunition canisters, cryonic rods, Moebian samples, and the Prismata case -- feed the mission's own machinery rather than a power line, so they are drawn as Other objective interactions instead. |
 | <img src="doc/img/heretic_idol.png"  width="80" alt="Heretic Idol marker" /> | Heretic Idol | Sickly green idol marker shown while the idol is still active. Active idols now appear reliably on the radar. |
-| <img src="doc/img/hazard_explosive_barrel.png"  width="80" alt="Explosive Barrel marker" /> | Explosive Barrel | Tan hazard marker for static explosive barrels. Supports **Icon**, **Icon + Distance**, and **Off**. |
-| <img src="doc/img/hazard_fire_barrel.png"  width="80" alt="Fire Barrel marker" /> | Fire Barrel | Orange hazard marker for static fire/promethium barrels. Supports **Icon**, **Icon + Distance**, and **Off**. |
+| <img src="doc/img/hazard_explosive_barrel.png"  width="80" alt="Explosive Barrel marker" /> | Explosive Barrel | Tan hazard marker for static explosive barrels. Supports **Icon only**, **Icon + Distance m**, and **Off**. |
+| <img src="doc/img/hazard_fire_barrel.png"  width="80" alt="Fire Barrel marker" /> | Fire Barrel | Orange hazard marker for static fire/promethium barrels. Supports **Icon only**, **Icon + Distance m**, and **Off**. |
 
 ### Deployed Items
 
@@ -1533,7 +1536,7 @@ Optional, never required:
 - **Auspex** is a full radar style with an optional animated sweep, and the same Auspex scanner background can also be selected as a guide option for Square and Circle radar styles.
 - Teammates, teammate marker range, the local player center dot, and player smart tags now have separate controls, so ally information can be tuned more precisely.
 - Player smart tags support optional distance text, but no longer use player-tag elevation arrows or related elevation hiding behavior. Enemy markers can use vertical arrows separately through their own category options.
-- Supported ability-marked and smart-tag outlined enemies can optionally be treated as radar-visible targets, and shared `special_target` outline handling is gated to the local owning context so unrelated outlines do not leak into radar visibility. Enemy vertical arrow toggles only affect arrow display, not whether those enemies are eligible for radar visibility.
+- Supported ability-marked and smart-tag outlined enemies can optionally be treated as radar-visible targets, and shared `special_target` outline handling is gated to the local owning context so unrelated outlines do not leak into radar visibility. Enemy vertical arrow toggles do not decide whether those enemies are eligible for radar visibility, but an enabled category is hidden beyond **Hide vertical markers above/below (m)** like item markers.
 - Nearby highlights now support thickness, per-marker ARGB highlight colors, and optional distance labels, and their placement was adjusted to stay aligned more reliably under scaled HUD layouts.
 - Standard marked-enemy brackets remain one pixel thick at every marker size, avoiding abrupt visual weight changes when category scaling crosses a size threshold. The separate nearby-highlight thickness setting is unaffected.
 - **Tagged enemies only** and **Tagged items only** are filters, not new marker families. They reuse the game's active tag state and let tagged targets ignore the normal radar range limit while tagged.
