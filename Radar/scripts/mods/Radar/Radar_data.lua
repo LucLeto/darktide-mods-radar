@@ -311,7 +311,8 @@ local EXPEDITION_DROPDOWN_PRESENTATIONS = {
 
 --- Option icons of the marker dropdowns, by setting id.
 -- A checkbox whose setting id is listed here is turned into an icon / off dropdown, and the
--- icon / distance / off dropdowns take their icons from here too.
+-- icon / distance / off dropdowns take their icons from here too. An entry with `icon_glyph`
+-- labels those dropdowns' icon options with that glyph instead of carrying an icon material.
 local MARKER_DROPDOWN_PRESENTATIONS = {
     show_ammo_small = {
         icon = "content/ui/materials/hud/interactions/icons/ammunition",
@@ -500,6 +501,22 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
     show_pocketable_corrupted_auspex_scanner = {
         icon = "content/ui/materials/icons/pocketables/hud/auspex_scanner",
         icon_colour = RadarColorSettings.default_marker_color("pocketable_corrupted_auspex_scanner"),
+    },
+    show_respawn_active = {
+        icon_glyph = "\238\128\133", -- U+E005, Darktide respawn point glyph
+        icon_colour = RadarColorSettings.default_marker_color("respawn_active"),
+    },
+    show_respawn_runback = {
+        icon_glyph = "\238\128\135", -- U+E007, Darktide run-back point glyph
+        icon_colour = RadarColorSettings.default_marker_color("respawn_runback"),
+    },
+    show_respawn_practice_beacon = {
+        icon_glyph = "\238\128\133", -- U+E005, Darktide respawn point glyph
+        icon_colour = RadarColorSettings.default_marker_color("respawn_practice_beacon"),
+    },
+    show_respawn_practice_line = {
+        icon_glyph = "\238\128\135", -- U+E007, Darktide run-back point glyph
+        icon_colour = RadarColorSettings.default_marker_color("respawn_practice_line"),
     },
     show_unknown_pickups = {
         icon = "content/ui/materials/icons/traits/empty",
@@ -1229,7 +1246,10 @@ local function _icon_marked_off_dropdown(setting_id, default_value)
 end
 
 --- Builds an icon / icon and distance / off dropdown widget.
--- A value saved by the checkbox it replaced is converted first.
+-- A value saved by the checkbox it replaced is converted first. A presentation with
+-- `icon_glyph` labels both icon options with a tinted glyph and carries no icon material, the
+-- way the artwork / icon / off dropdown does, and its options are localized here because they
+-- are built as finished text.
 -- string: setting_id setting id
 -- string: default_value default mode
 -- ?tab: presentations option icon table, `MARKER_DROPDOWN_PRESENTATIONS` when nil
@@ -1239,20 +1259,62 @@ local function _icon_distance_off_dropdown(setting_id, default_value, presentati
 
     local presentation = presentations[setting_id] or DEFAULT_DROPDOWN_PRESENTATION
     local icon = presentation.icon
+    local icon_glyph = presentation.icon_glyph
     local icon_colour = _dropdown_marker_icon_colour(setting_id, presentation.icon_colour)
 
     _migrate_checkbox_display_mode_setting(setting_id, "icon_only")
+
+    local options
+
+    if icon_glyph then
+        local icon_only_label = mod:localize("display_style_icon_only")
+        local icon_distance_label = mod:localize("display_style_icon_distance")
+        local icon_only_option = _dropdown_option(_glyph_option_text(icon_glyph, icon_colour, icon_only_label),
+            "icon_only")
+        local icon_distance_option = _dropdown_option(
+            _glyph_option_text(icon_glyph, icon_colour, icon_distance_label), "icon_distance")
+
+        _register_glyph_option(setting_id, icon_only_option, icon_glyph, icon_only_label)
+        _register_glyph_option(setting_id, icon_distance_option, icon_glyph, icon_distance_label)
+
+        options = {
+            icon_only_option,
+            icon_distance_option,
+            _dropdown_option(mod:localize("radar_outline_off"), "off"),
+        }
+        options.localize = false
+    else
+        options = {
+            _dropdown_option("display_style_icon_only", "icon_only", icon, icon_colour),
+            _dropdown_option("display_style_icon_distance", "icon_distance", icon, icon_colour),
+            _dropdown_option("radar_outline_off", "off"),
+        }
+    end
 
     return {
         setting_id = setting_id,
         type = "dropdown",
         default_value = default_value,
-        options = {
-            _dropdown_option("display_style_icon_only", "icon_only", icon, icon_colour),
-            _dropdown_option("display_style_icon_distance", "icon_distance", icon, icon_colour),
-            _dropdown_option("radar_outline_off", "off"),
+        options = options,
+    }
+end
+
+--- Builds the run-back threshold dropdown, with its offset text checkbox nested inside it.
+-- The checkbox hangs off the dropdown so DMF hides it while the marker is off, the way the
+-- player tag settings follow their own toggle.
+-- treturn: tab widget
+local function _respawn_runback_dropdown()
+    local widget = _icon_distance_off_dropdown("show_respawn_runback", "icon_distance")
+
+    widget.sub_widgets = {
+        {
+            setting_id = "show_respawn_runback_offset",
+            type = "checkbox",
+            default_value = true,
         },
     }
+
+    return widget
 end
 
 --- Builds an Expedition location display mode dropdown.
@@ -2504,6 +2566,23 @@ return {
                                     },
                                 },
                             },
+                        },
+                    },
+                },
+                {
+                    setting_id = "respawn_group",
+                    title = "tab_respawn",
+                    type = "group",
+                    sub_widgets = {
+                        _icon_scale_slider("respawn_icon_scale", nil),
+                        _icon_distance_off_dropdown("show_respawn_active", "icon_distance"),
+                        _respawn_runback_dropdown(),
+                        _icon_distance_off_dropdown("show_respawn_practice_beacon", "off"),
+                        _icon_distance_off_dropdown("show_respawn_practice_line", "off"),
+                        {
+                            setting_id = "respawn_practice_overview_only",
+                            type = "checkbox",
+                            default_value = true,
                         },
                     },
                 },

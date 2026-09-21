@@ -133,6 +133,10 @@ return function(env)
     -- objective category is covered without an edit here.
     local VERTICAL_HIDE_EXEMPT_KINDS = {
         pickup_heretic_idol = true,
+        respawn_active = true,
+        respawn_runback = true,
+        respawn_practice_beacon = true,
+        respawn_practice_line = true,
     }
 
     -- ----------------------------------------------------------------------------
@@ -1143,6 +1147,10 @@ return function(env)
             return false
         end
 
+        if RESPAWN_MARKER_KINDS[kind] then
+            return false
+        end
+
         return true
     end
 
@@ -1181,6 +1189,10 @@ return function(env)
     -- treturn: bool
     local function _supports_vertical_marker(kind)
         if _is_item_kind(kind) then
+            return true
+        end
+
+        if RESPAWN_MARKER_KINDS[kind] then
             return true
         end
 
@@ -1328,7 +1340,8 @@ return function(env)
                     _is_mission_objective_marker_kind(kind) or
                     kind == "location_attention" or
                     kind == "location_ping" or
-                    kind == "location_threat"
+                    kind == "location_threat" or
+                    RESPAWN_MARKER_KINDS[kind] == true
                 priority_target_cache[kind] = is_priority_target
             end
 
@@ -1821,6 +1834,7 @@ return function(env)
             _scan_expedition_objectives()
             _scan_martyr_skull_riddle_coordinate_fallbacks()
             _scan_player_tag_points()
+            _scan_respawn_rewind_markers()
         end
 
         _prune_units(droppable_scan_due)
@@ -1867,6 +1881,7 @@ return function(env)
         _reset_martyr_skull_riddle_state()
         _reset_mission_objective_marker_state()
         _reset_expedition_runtime_state()
+        _reset_respawn_rewind_state()
         mod._overview_mode_active = false
         mod._overview_zoom_range = _normalize_overview_zoom_range(mod:get("overview_zoom_range"))
         mod._overview_capture_actions = mod._overview_capture_actions or {}

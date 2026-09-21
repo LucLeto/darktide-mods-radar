@@ -83,6 +83,8 @@ local objectives_source = assert(io.open("Radar/scripts/mods/Radar/Radar_mission
 local players_source = assert(io.open("Radar/scripts/mods/Radar/Radar_players.lua")):read("*a")
 local pickups_source = assert(io.open("Radar/scripts/mods/Radar/Radar_pickups.lua")):read("*a")
 local events_source = assert(io.open("Radar/scripts/mods/Radar/Radar_events.lua")):read("*a")
+local respawn_rewind_source =
+    assert(io.open("Radar/scripts/mods/Radar/compatibility/Radar_respawn_rewind.lua")):read("*a")
 local definitions_source = assert(io.open("Radar/scripts/mods/Radar/Radar_enemy_definitions.lua")):read("*a")
 
 local problems = {}
@@ -536,6 +538,7 @@ for label, source in pairs({
     ["Radar_players.lua"] = players_source,
     ["Radar_pickups.lua"] = pickups_source,
     ["Radar_events.lua"] = events_source,
+    ["compatibility/Radar_respawn_rewind.lua"] = respawn_rewind_source,
 }) do
     local count = 0
 
@@ -1129,6 +1132,7 @@ check_declared_aliases(tracking_source, "Radar_tracking.lua")
 check_declared_aliases(players_source, "Radar_players.lua")
 check_declared_aliases(pickups_source, "Radar_pickups.lua")
 check_declared_aliases(events_source, "Radar_events.lua")
+check_declared_aliases(respawn_rewind_source, "compatibility/Radar_respawn_rewind.lua")
 check_declared_aliases(definitions_source, "Radar_enemy_definitions.lua")
 
 -- With no interaction marker from the game -- always the case for a scan target
@@ -1221,6 +1225,194 @@ check_local_use_before_declaration(tracking_source, "Radar_tracking.lua")
 check_local_use_before_declaration(players_source, "Radar_players.lua")
 check_local_use_before_declaration(pickups_source, "Radar_pickups.lua")
 check_local_use_before_declaration(events_source, "Radar_events.lua")
+check_local_use_before_declaration(respawn_rewind_source, "compatibility/Radar_respawn_rewind.lua")
+
+-- --------------------------------------------------------------------------------------------
+-- Respawn awareness, mirrored from the Respawn Rewind mod's world markers.
+-- --------------------------------------------------------------------------------------------
+
+local RESPAWN_KINDS = {
+    "respawn_active",
+    "respawn_runback",
+    "respawn_practice_beacon",
+    "respawn_practice_line",
+}
+
+local RESPAWN_DEFAULT_BY_KIND = {
+    respawn_active = "icon_distance",
+    respawn_runback = "icon_distance",
+    -- Radar mirrors the markers Respawn Rewind has made; it never asks for its practice mode.
+    respawn_practice_beacon = "off",
+    respawn_practice_line = "off",
+}
+
+for i = 1, #RESPAWN_KINDS do
+    local kind = RESPAWN_KINDS[i]
+    local setting_id = "show_" .. kind
+
+    check(env.RESPAWN_MARKER_KINDS[kind] == true, kind .. ": missing from RESPAWN_MARKER_KINDS")
+    check(mod:get_marker_scale_group(kind) == "respawn_group",
+        kind .. ": is in the " .. tostring(mod:get_marker_scale_group(kind)) .. " scale group")
+    check(mod:get_icon_distance_marker_display_mode(kind) == RESPAWN_DEFAULT_BY_KIND[kind],
+        kind .. ": defaults to " .. tostring(mod:get_icon_distance_marker_display_mode(kind)))
+
+    -- Each dropdown drives its own kind and no other.
+    mod:set(setting_id, "icon_only")
+    check(mod:get_icon_distance_marker_display_mode(kind) == "icon_only",
+        kind .. ": does not follow its own dropdown")
+
+    for j = 1, #RESPAWN_KINDS do
+        if j ~= i then
+            check(mod:get_icon_distance_marker_display_mode(RESPAWN_KINDS[j]) ==
+                RESPAWN_DEFAULT_BY_KIND[RESPAWN_KINDS[j]],
+                kind .. ": its dropdown also changed " .. RESPAWN_KINDS[j])
+        end
+    end
+
+    mod:set(setting_id, nil)
+
+    check(#mod:get_marker_color(kind) == 4, kind .. ": has no marker colour")
+
+    check(hud_source:find("    " .. kind .. " = {", 1, true) ~= nil,
+        kind .. ": missing PRESENTATIONS entry")
+    check(data_source:find("    " .. setting_id .. " = {", 1, true) ~= nil,
+        kind .. ": missing MARKER_DROPDOWN_PRESENTATIONS entry")
+    check(localization_source:find("    " .. setting_id .. " = {", 1, true) ~= nil
+        and localization_source:find("    " .. setting_id .. "_tooltip = {", 1, true) ~= nil,
+        kind .. ": its dropdown has no label or tooltip text")
+end
+
+settings_store.respawn_icon_scale = 150
+check(mod:get_marker_scale_factor("respawn_group") == 1.5, "the respawn icon size slider is not read")
+settings_store.respawn_icon_scale = nil
+
+-- The active respawn and the run-back line matter most when the radar is fullest, so both have to
+-- outrank the marker limit, above even the live event markers. The practice set does not.
+check(mod:get_target_selection_priority("respawn_active") > 600
+    and mod:get_target_selection_priority("respawn_runback") > 600,
+    "the live respawn markers do not outrank the live event markers under the marker limit")
+check(mod:get_target_selection_priority("respawn_active")
+    > mod:get_target_selection_priority("respawn_runback"),
+    "the run-back line is not ranked below the active respawn")
+check(mod:get_target_selection_priority("respawn_practice_beacon") == 0
+    and mod:get_target_selection_priority("respawn_practice_line") == 0,
+    "a practice marker competes with the live markers under the marker limit")
+check(mod:get_target_render_layer("respawn_active") > mod:get_target_render_layer("respawn_runback"),
+    "the active respawn does not draw above the run-back line")
+
+-- A respawn marker is neither an item nor an enemy. The item tag filter must not hide it, but a
+-- beacon on another floor is still worth an arrow, and it is never dropped for being up or down.
+check(tracking_source:find("        if RESPAWN_MARKER_KINDS[kind] then" .. LF
+    .. "            return false" .. LF
+    .. "        end" .. LF .. LF
+    .. "        return true", 1, true) ~= nil,
+    "a respawn marker is still treated as an item by the tag filter")
+check(tracking_source:find("        if RESPAWN_MARKER_KINDS[kind] then" .. LF
+    .. "            return true" .. LF
+    .. "        end", 1, true) ~= nil,
+    "respawn markers lost their vertical arrows")
+check(tracking_source:find("RESPAWN_MARKER_KINDS[kind] == true" .. LF
+    .. "                priority_target_cache[kind] = is_priority_target", 1, true) ~= nil,
+    "respawn markers never reach the priority and render layer lookup")
+
+for i = 1, #RESPAWN_KINDS do
+    check(tracking_source:find("        " .. RESPAWN_KINDS[i] .. " = true,", 1, true) ~= nil,
+        RESPAWN_KINDS[i] .. ": is not exempt from the vertical hide threshold")
+end
+
+-- The scan has to run in the block that rebuilds the tracked points, or its points are wiped
+-- again on the same tick. The 12 space indent is that block; the declaration near the top has 4.
+local respawn_droppable_block =
+    tracking_source:match(LF .. "            mod%._tracked_points = {}(.-)" .. LF .. "        end")
+check(respawn_droppable_block ~= nil
+    and respawn_droppable_block:find("_scan_respawn_rewind_markers()", 1, true) ~= nil,
+    "the respawn scan does not run in the droppable block that rebuilds the tracked points")
+check(tracking_source:find("_reset_respawn_rewind_state()", 1, true) ~= nil,
+    "the mission reset does not clear the respawn integration")
+
+-- No fixed load order: the module resolves Respawn Rewind itself, and no HUD element is hooked.
+check(respawn_rewind_source:find("HudElementWorldMarkers", 1, true) == nil
+    and respawn_rewind_source:find(":hook", 1, true) == nil,
+    "the respawn integration hooks the world marker HUD element instead of reading its list")
+check(respawn_rewind_source:find("_safe_world_markers_list()", 1, true) ~= nil,
+    "the respawn integration does not read the world marker list through the shared helper")
+
+local radar_source = assert(io.open("Radar/scripts/mods/Radar/Radar.lua")):read("*a")
+
+check(radar_source:find('_install("Radar/scripts/mods/Radar/compatibility/Radar_respawn_rewind", shared_env)',
+    1, true) ~= nil, "the respawn integration is not installed")
+
+check(localization_source:find("    tab_respawn = {", 1, true) ~= nil,
+    "the Respawn tab has no name")
+
+for _, setting_id in ipairs({ "show_respawn_runback_offset", "respawn_practice_overview_only" }) do
+    check(localization_source:find("    " .. setting_id .. " = {", 1, true) ~= nil
+        and localization_source:find("    " .. setting_id .. "_tooltip = {", 1, true) ~= nil,
+        setting_id .. ": has no label or tooltip text")
+end
+
+check(localization_source:find("    respawn_icon_scale_tooltip = {", 1, true) ~= nil,
+    "the respawn icon size slider has no tooltip text")
+
+-- The run-back number is the team's offset from the threshold, not anybody's distance to the
+-- marker, so it takes the place of the distance rather than being drawn next to it. Its own
+-- dropdown still decides whether the marker carries text at all.
+check(hud_source:find("local respawn_runback_offset_text = _respawn_runback_offset_text(target, draw_cache)", 1, true)
+    ~= nil, "the run-back offset never reaches the marker text")
+local respawn_offset_at = hud_source:find("local respawn_runback_offset_text =", 1, true)
+local icon_distance_at = hud_source:find("local icon_distance_marker_distance_text =", 1, true)
+check(respawn_offset_at ~= nil and icon_distance_at ~= nil and respawn_offset_at < icon_distance_at,
+    "the ordinary distance text is applied before the run-back offset, so the offset never shows")
+check(hud_source:find('or _cached_icon_distance_marker_display_mode(kind, draw_cache) ~= "icon_distance" then',
+    1, true) ~= nil, "the run-back offset ignores its marker's icon only setting")
+
+-- The respawn markers draw Darktide's own glyphs, paired the way the markers are: both respawn
+-- points share one, both thresholds the other. Their dropdowns preview the same glyph, since a
+-- native option icon is a material and cannot draw one.
+local RESPAWN_GLYPH_BY_KIND = {
+    respawn_active = "\238\128\133", -- U+E005
+    respawn_practice_beacon = "\238\128\133",
+    respawn_runback = "\238\128\135", -- U+E007
+    respawn_practice_line = "\238\128\135",
+}
+
+--- Spells a glyph the way the source does, as Lua decimal escapes of its UTF-8 bytes.
+local function lua_escape_of(glyph)
+    return (glyph:gsub(".", function(byte)
+        return string.char(92) .. string.byte(byte)
+    end))
+end
+
+for kind, glyph in pairs(RESPAWN_GLYPH_BY_KIND) do
+    local escape = lua_escape_of(glyph)
+
+    check(hud_source:find("    " .. kind .. " = {" .. LF .. '        glyph = "' .. escape .. '"', 1, true) ~= nil,
+        kind .. ": does not draw its Darktide glyph")
+    check(data_source:find("    show_" .. kind .. " = {" .. LF .. '        icon_glyph = "' .. escape .. '"', 1, true)
+        ~= nil, kind .. ": its dropdown does not preview the glyph the marker draws")
+end
+
+-- Nothing on the Respawn tab works without Respawn Rewind, and DMF draws no tooltip on a tab or
+-- group header, so its title is the only place a player sees that without hovering. Every
+-- marker tooltip names it as well, in every language.
+local localization = assert(loadfile("Radar/scripts/mods/Radar/Radar_localization.lua"))()
+local LOCALIZATION_LANGUAGES = { "en", "fr", "de", "it", "es", "pl", "pt-br", "ru", "ja", "ko", "zh-cn", "zh-tw" }
+
+for _, key in ipairs({
+    "tab_respawn",
+    "show_respawn_active_tooltip",
+    "show_respawn_runback_tooltip",
+    "show_respawn_runback_offset_tooltip",
+    "show_respawn_practice_beacon_tooltip",
+    "show_respawn_practice_line_tooltip",
+}) do
+    for _, language in ipairs(LOCALIZATION_LANGUAGES) do
+        local text = localization[key] and localization[key][language]
+
+        check(type(text) == "string" and text:find("Respawn Rewind", 1, true) ~= nil,
+            key .. " (" .. language .. "): does not say the Respawn tab needs Respawn Rewind")
+    end
+end
 
 if #problems > 0 then
     for i = 1, #problems do

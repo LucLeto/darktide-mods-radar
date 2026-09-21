@@ -214,6 +214,16 @@ return function(env)
         expedition_objective_arrival = true,
     }
 
+    --- Respawn awareness marker kinds, mirrored from the Respawn Rewind mod's world markers.
+    -- Read by the tracking layer, which treats them as neither items nor enemies: the item tag
+    -- filter must not hide them, but they still get vertical arrows.
+    RESPAWN_MARKER_KINDS = {
+        respawn_active = true,
+        respawn_runback = true,
+        respawn_practice_beacon = true,
+        respawn_practice_line = true,
+    }
+
     EXPEDITION_MARKER_DISPLAY_MODE_KIND_TO_SETTING = {
         expedition_loot_converter = "show_expedition_loot_converter",
         expedition_objective_opportunity = "show_expedition_objective_opportunity",
@@ -242,6 +252,10 @@ return function(env)
         mission_objective_other = "show_mission_objective_other",
         mission_objective_growth = "show_mission_objective_growth",
         mission_objective_destroy = "show_mission_objective_destroy",
+        respawn_active = "show_respawn_active",
+        respawn_runback = "show_respawn_runback",
+        respawn_practice_beacon = "show_respawn_practice_beacon",
+        respawn_practice_line = "show_respawn_practice_line",
     }
 
     local ICON_DISTANCE_MARKER_DISPLAY_MODE_DEFAULT_BY_SETTING = {
@@ -253,6 +267,10 @@ return function(env)
         show_mission_objective_other = "icon_only",
         show_mission_objective_growth = "icon_only",
         show_mission_objective_destroy = "icon_only",
+        show_respawn_active = "icon_distance",
+        show_respawn_runback = "icon_distance",
+        show_respawn_practice_beacon = "off",
+        show_respawn_practice_line = "off",
     }
 
     --- Icon of each Expedition location marker kind when the game provides none.
@@ -370,6 +388,10 @@ return function(env)
         pickup_saints = "event_group",
         pickup_leftover = "event_group",
         pickup_stolen_rations = "event_group",
+        respawn_active = "respawn_group",
+        respawn_runback = "respawn_group",
+        respawn_practice_beacon = "respawn_group",
+        respawn_practice_line = "respawn_group",
         pickup_unknown = "debug_group",
     }
 
@@ -389,6 +411,7 @@ return function(env)
         players_group = "players_icon_scale",
         player_companions_group = "player_companions_icon_scale",
         event_group = "event_icon_scale",
+        respawn_group = "respawn_icon_scale",
         debug_group = "debug_icon_scale",
     }
 
@@ -476,6 +499,14 @@ return function(env)
     local EVENT_MARKER_RENDER_LAYER = 7
     local EXPEDITION_PLAYER_DROP_SELECTION_PRIORITY = 650
     local EXPEDITION_PLAYER_DROP_RENDER_LAYER = 6
+    --- Respawn awareness priorities, above the live event markers.
+    -- The active respawn and the run-back threshold matter most exactly when the radar is at its
+    -- fullest, so they have to outrank the ordinary marker limit. The practice markers are a
+    -- map-learning aid rather than combat information and keep the default priority of 0.
+    local RESPAWN_ACTIVE_SELECTION_PRIORITY = 620
+    local RESPAWN_RUNBACK_SELECTION_PRIORITY = 610
+    local RESPAWN_ACTIVE_RENDER_LAYER = 6
+    local RESPAWN_RUNBACK_RENDER_LAYER = 5
 
     --- Returns the default icon size in pixels of an enemy category.
     -- string: category enemy category
@@ -1490,6 +1521,14 @@ return function(env)
             return EVENT_MARKER_SELECTION_PRIORITY
         end
 
+        if kind == "respawn_active" then
+            return RESPAWN_ACTIVE_SELECTION_PRIORITY
+        end
+
+        if kind == "respawn_runback" then
+            return RESPAWN_RUNBACK_SELECTION_PRIORITY
+        end
+
         if kind == "material_expeditions_loot_player_drop" then
             return EXPEDITION_PLAYER_DROP_SELECTION_PRIORITY
         end
@@ -1520,6 +1559,14 @@ return function(env)
     function mod:get_target_render_layer(kind)
         if self:is_event_marker_kind(kind) then
             return EVENT_MARKER_RENDER_LAYER
+        end
+
+        if kind == "respawn_active" then
+            return RESPAWN_ACTIVE_RENDER_LAYER
+        end
+
+        if kind == "respawn_runback" then
+            return RESPAWN_RUNBACK_RENDER_LAYER
         end
 
         if kind == "player_teammate" then
