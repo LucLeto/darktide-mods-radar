@@ -411,8 +411,8 @@ return function(env)
     end
 
     --- Returns whether a kind is shown beyond the radar's range.
-    -- True for player smart tags, kinds with infinite range and, when enabled, Expedition
-    -- location markers other than loot converters.
+    -- True for player smart tags, the active respawn and the run-back line, kinds with infinite
+    -- range and, when enabled, Expedition location markers other than loot converters.
     -- treturn: bool
     function _ignore_radar_range_for_kind(kind)
         if kind == "expedition_loot_converter" then
@@ -420,6 +420,10 @@ return function(env)
         end
 
         if _is_player_smart_tag_kind(kind) then
+            return true
+        end
+
+        if kind == "respawn_active" or kind == "respawn_runback" then
             return true
         end
 

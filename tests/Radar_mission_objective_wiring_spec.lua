@@ -1312,6 +1312,14 @@ check(tracking_source:find("        if RESPAWN_MARKER_KINDS[kind] then" .. LF
     .. "            return true" .. LF
     .. "        end", 1, true) ~= nil,
     "respawn markers lost their vertical arrows")
+
+-- The active respawn and the run-back line are where a dead teammate comes back and the line the
+-- team has to hold, so beyond the radar range they are pinned to its edge rather than dropped.
+local ignore_range_body = tracking_source:match("function _ignore_radar_range_for_kind%(kind%)(.-)" .. LF .. "    end")
+check(ignore_range_body ~= nil
+    and ignore_range_body:find('if kind == "respawn_active" or kind == "respawn_runback" then' .. LF
+        .. "            return true", 1, true) ~= nil,
+    "the active respawn and the run-back line are dropped beyond the radar range")
 check(tracking_source:find("RESPAWN_MARKER_KINDS[kind] == true" .. LF
     .. "                priority_target_cache[kind] = is_priority_target", 1, true) ~= nil,
     "respawn markers never reach the priority and render layer lookup")
