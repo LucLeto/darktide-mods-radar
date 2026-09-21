@@ -1,13 +1,18 @@
 # Radar
 
-Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide**. It is built to surface the targets that matter most during live missions, nearby pickups, objective items, deployed support tools, environment interactables, expedition points of interest, teammates and their companions, player smart tags, tagged targets, supported ability-outlined enemies, and high-priority enemies, while keeping the presentation configurable from the mod options menu. A centered overview mode can also be toggled during missions when you need a wider tactical read.
+Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide**. It is built to surface the targets that matter most during live missions: nearby pickups, objective items, the world interactions of the active mission objective, Martyr's Skull riddle controls, deployed support tools, environment interactables, expedition points of interest, teammates and their companions, player smart tags, tagged targets, supported ability-outlined enemies, high-priority enemies and, with the optional [Respawn Rewind](#respawn-rewind) mod, respawn locations. Everything is configurable from the mod options menu. A centered overview mode can also be toggled during missions when you need a wider tactical read.
 
-## What's new in 2.6.0
+This README serves two audiences. The first half is a feature and settings reference. The second half, starting at [Architecture](#architecture), explains how the Lua code is organized, how markers flow from the game to the HUD, how the optional integrations and the settings migrations work, and how the regression specs are run.
 
-- Added an optional **Map Geometry** layer that draws the mission's walkable floor plan behind all radar markers, in the normal radar and the centered overview alike.
-- The **Map geometry source** dropdown selects how the floor plan is produced: **Off** (default), a built-in **Live scan** of the mission's navigation mesh, the **Strikemap floor plan** from the [Strikemap](https://www.nexusmods.com/warhammer40kdarktide/mods/1022) mod, or **Auto**, which prefers Strikemap and falls back to the live scan.
-- Geometry is shaded in three height bands relative to your position, current floor, floors above, and floors below, each with its own ARGB color picker. The normal radar uses the shared **Floors Above Range** and **Floors Below Range** windows; centered overview uses 30 m in both directions.
-- Radar keeps full ownership of all markers; only the floor plan comes from the selected geometry source, and exactly one source is drawn at a time.
+## What's new in 3.0.0
+
+- **Mission objective interactables.** Six new marker categories: scanner targets, hacking terminals, servo skull objectives, daemonic growth, targets to destroy, and other objective interactions. They are read from Darktide's objective extension systems rather than from the HUD's marker list, so a step appears as soon as the mission arms it and retires when it is completed. See [Mission objective tracking](#mission-objective-tracking).
+- **Martyr's Skull riddle interactables.** Per-mission riddle data marks the keys, levers, switches and buttons of supported Martyr's Skull puzzles. Each step clears when it is used, and every riddle marker clears once the riddle is solved. See [Martyr's Skull riddle tracking](#martyrs-skull-riddle-tracking).
+- **Respawn Rewind compatibility.** A new, optional **Respawn** tab mirrors the active respawn, the run-back threshold and the practice layout that [Respawn Rewind](#respawn-rewind) publishes. Radar reads that mod's world markers and never re-implements its logic.
+- **Native DMF settings.** The options menu moved to DMF's native API: nine tabs, one ARGB color widget per color, marker-specific settings hidden while the marker is **Off**, and tinted dropdown previews. [Alf's Mod Settings Extensions](https://www.nexusmods.com/warhammer40kdarktide/mods/864) is no longer used. Settings saved by older versions are migrated automatically. See [Settings and Migration](#settings-and-migration).
+- **Feature-module runtime.** Player, pickup, objective and live-event code moved out of `Radar_expeditions.lua` into dedicated installer modules. Every production file now carries LDoc-style file and function documentation. See [Architecture](#architecture).
+- **Marker refinements.** Diamantine and Plasteel icon mode now uses Darktide's official glyphs, and glyph dropdown labels are tinted in the marker color. Stolen Rations gained a real **Artwork** / **Icon** / **Off** mode with per-size artwork. Heretical Artifact artwork now loads its live-event package, so it no longer draws as a white square.
+- **Regression specs.** New standalone LuaJIT specs cover the new subsystems, the settings schema and migrations, and the module wiring. See [Testing](#testing).
 
 ## Feature Overview
 
@@ -24,6 +29,7 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 - Adds optional remaining-charge annotations for Medicae Stations and deployed Ammo Crates, plus a scaled healing-radius ring for deployed Medical Crates.
 - Adds dedicated **Martyr's Skull riddle interactable** markers for supported mission-specific keys, levers, switches, buttons, and related puzzle controls. Markers clear automatically when individual steps are used or the riddle is completed.
 - Adds **Mission Objective Interactable** markers for the world interactions that drive mission progression, split into **Scanner targets**, **Hacking terminals**, **Servo skull objectives**, **Daemonic growth**, **Targets to destroy**, and **Other objective interactions**, each with its own **Icon only**, **Icon + Distance m**, and **Off** display mode and icon. Markers come from the game's own objective systems rather than from what the HUD happens to be drawing, so a step appears as soon as it becomes relevant instead of only once you are close enough for the interaction prompt, and clears again the moment it is completed.
+- Adds optional **Respawn** markers for the active respawn beacon, the run-back threshold and Respawn Rewind's practice layout. They are mirrored from the [Respawn Rewind](#respawn-rewind) mod when it is installed, and nothing is drawn without it.
 - Adds dedicated **Expedition POI** support for numbered **Sites of Interest**, **Deadsider Sanctuaries**, **Data Reliquary Harvesters**, **Main Objective**, **Valkyrie Extraction Zone**, and **Valkyrie Arrival Zone**, with per-category **Icon only**, **Icon + Distance m**, and **Off** display modes. Player-marked navigation POIs show an evenly divided ring containing the slot colors of up to four marking players.
 - Supports tech-remnant loot modes for **Default**, **Scale by value**, and **Merge nearby piles**, plus optional cluster value text and radius tuning.
 - Includes optional distance text for bosses, player tags, nearby marker highlights, and expedition POIs, per-enemy-category vertical arrow toggles, **Infinite** boss and teammate range modes, **debug logs**, and an **unknown pickups** toggle for discovery and troubleshooting.
@@ -32,12 +38,12 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 
 Radar's settings menu uses the native mod options of [DMF](https://www.nexusmods.com/warhammer40kdarktide/mods/8), so no other settings extension is needed:
 
-- The options are split into the **General**, **Layout**, **Pickups**, **Objectives**, **Expeditions**, **Enemies**, **Players**, and **Debug** tabs.
+- The options are split into nine tabs: **General**, **Layout**, **Pickups**, **Objectives**, **Expeditions**, **Enemies**, **Players**, **Respawn (requires Respawn Rewind)**, and **Debug**.
 - Every configurable color is a single ARGB color picker.
 - Settings that only affect one marker, such as its colors, are shown under that marker and hidden while it is **Off**. They reappear as soon as the marker is switched back on, without reopening the menu. In **Artwork** mode, a marker's icon color is hidden because artwork is never tinted.
-- Sliders accept typed values and keep their step sizes, and dropdown options show their marker icons in the configured colors.
+- Sliders accept typed values and keep their step sizes. Dropdown options show their marker icons in the configured colors. Markers drawn as a Darktide glyph, such as Diamantine, Plasteel and the respawn markers, show that glyph in the marker color in the option label.
 
-[Alf's Mod Settings Extensions](https://www.nexusmods.com/warhammer40kdarktide/mods/864) is not required. Radar works the same with or without it installed.
+[Alf's Mod Settings Extensions](https://www.nexusmods.com/warhammer40kdarktide/mods/864) is not required. Radar works the same with or without it installed. How the menu is built and how older settings are migrated is covered in [Settings and Migration](#settings-and-migration).
 
 ## In-Game Radar Examples
 
@@ -76,7 +82,7 @@ The keybind-based **centered overview mode** temporarily expands the radar into 
 
 ### Nearby highlight example
 
-Nearby highlights add small screen-space brackets for supported non-enemy markers when they are close enough to matter. You can tune their thickness, set per-marker highlight colors with ARGB color pickers, and show item distance text on the screen highlight, the radar marker, or both.
+Nearby highlights add small screen-space brackets for supported non-enemy markers when they are close enough to matter. You can tune their thickness, set per-marker highlight colors with ARGB color pickers, and show item distance text on the screen highlight, the radar marker, or both. Objective brackets frame the middle of the device, and hazard barrel brackets sit on the barrel body even when the barrel hangs from a ceiling mount. See [Screen highlight anchoring](#screen-highlight-anchoring).
 
 <p>
   <img src="doc/img/highlight_example.png" width="70%" alt="Nearby highlight example" />
@@ -153,6 +159,7 @@ On the compact radar, the floor plan stays beneath the regular marker presentati
 - The integration fails safely: if Strikemap is missing, disabled, still loading, has no map for the current mission, or exposes an incompatible API version, Radar falls back to its standard background, or to the live scan when the source is **Auto**, and logs the reason once.
 - **Show geometry in overview mode** controls whether the Strikemap floor plan is also drawn in the centered overview.
 - Strikemap's own mission recording and report browser keep working alongside the integration, and its optional geometry-only settings let it hand the live minimap over to Radar entirely.
+- How the integration is loaded and how it fails safe is covered in [Compatibility Integrations](#strikemap).
 
 ## Display and Behavior
 
@@ -212,7 +219,7 @@ Supported artwork-based markers now use dropdowns instead of simple booleans. Ea
 - **Artwork** uses the original item artwork or pickup art.
 - **Icon** uses a simplified HUD icon material with a configurable ARGB tint.
 - **Off** hides that specific marker entirely.
-- Existing saved boolean settings are migrated automatically. Older artwork-capable markers migrate old `true` values to **Artwork** and old `false` values to **Off**; event markers that gained artwork support later preserve old enabled settings as **Icon**.
+- Existing saved boolean settings are migrated automatically: old `true` values become **Artwork** and old `false` values become **Off**.
 
 ### Common pickups and materials
 
@@ -249,6 +256,8 @@ Supported artwork-based markers now use dropdowns instead of simple booleans. Ea
 | Heretical Artifacts, Small | <img src="doc/img/material_leftover_live_event_small.png"  width="80" alt="Small Heretical Artifact artwork mode" /> | <img src="doc/img/pickup_leftover.png"  width="80" alt="Heretical Artifact icon mode" /> | Hidden |
 | Heretical Artifacts, Medium | <img src="doc/img/material_leftover_live_event_medium.png"  width="80" alt="Medium Heretical Artifact artwork mode" /> | <img src="doc/img/pickup_leftover.png"  width="80" alt="Heretical Artifact icon mode" /> | Hidden |
 | Heretical Artifacts, Large | <img src="doc/img/material_leftover_live_event_large.png"  width="80" alt="Large Heretical Artifact artwork mode" /> | <img src="doc/img/pickup_leftover.png"  width="80" alt="Heretical Artifact icon mode" /> | Hidden |
+| Stolen Rations, Small | <img src="doc/img/pickup_stolen_rations_small.png"  width="80" alt="Small Stolen Rations artwork mode" /> | <img src="doc/img/pickup_stolen_rations.png"  width="80" alt="Stolen Rations icon mode" /> | Hidden |
+| Stolen Rations, Medium | <img src="doc/img/pickup_stolen_rations_medium.png"  width="80" alt="Medium Stolen Rations artwork mode" /> | <img src="doc/img/pickup_stolen_rations.png"  width="80" alt="Stolen Rations icon mode" /> | Hidden |
 
 ### Tech-Remnant cluster example
 
@@ -285,10 +294,10 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Radar style | **Square**, **Circle**, or **Auspex**. |
 | Radar outline | **Solid**, **Dotted**, or **Off**. Only used by the **Square** and **Circle** radar styles. |
 | Radar guides | **Crosshair**, **View guides**, **Range rings**, **Auspex**, or **Off**. Only used by the **Square** and **Circle** radar styles. |
-| Radar Colors | ARGB sliders for Radar UI colors such as background, outline, guides, Auspex layers, marker text, vertical arrows, and overview legend indicators. |
+| Radar Colors | ARGB color pickers for Radar UI colors such as background, outline, guides, Auspex layers, marker text, vertical arrows, and overview legend indicators. |
 | Animated radar sweep | Enables or disables the animated sweep used by the **Auspex** radar style and **Auspex** guides. |
 | Map geometry source | **Off**, **Live scan (built-in)**, **Strikemap floor plan**, or **Auto**. Draws the mission's walkable floor plan beneath all radar markers; **Auto** prefers Strikemap and falls back to the live scan. |
-| Map geometry colors | ARGB sliders for the current-floor, floor-above, and floor-below bands. Each band's **A** slider is its opacity; **0** hides that band. |
+| Map geometry colors | ARGB color pickers for the current-floor, floor-above, and floor-below bands. Each band's **A** channel is its opacity; **0** hides that band. |
 | Floors Above Range | Adjustable from **1 m** to **30 m** for the normal radar. Geometry more than this far above you is hidden; centered overview always uses **30 m**. |
 | Floors Below Range | Adjustable from **1 m** to **30 m** for the normal radar. Geometry more than this far below you is hidden; centered overview always uses **30 m**. |
 | Show geometry in overview mode | Also draws the Strikemap floor plan while centered overview mode is active. |
@@ -333,8 +342,11 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Common Pickups | Crates | **Artwork**, **Icon**, **Off** |
 | Collectable Materials | Diamantine, Plasteel | **Artwork**, **Icon**, **Off** |
 | Expeditions-Specific Items | Salvage, Tech-Remnants, Dropped Tech-Remnants, Servo-Triggered Mine, Purgation Snare, Voltaic Snare, Void Shell, Bombing Run Signal Marker, Artillery Locator Beacon, Modified Grenade, Fire-Support Signal Marker | **Artwork**, **Icon**, **Off** |
-| Event-Related Items | Tainted Skulls, Holy Relics, Heretical Artifacts | **Artwork**, **Icon**, **Off** |
+| Event-Related Items | Tainted Skulls, Holy Relics, Heretical Artifacts, Stolen Rations | **Artwork**, **Icon**, **Off** |
 | Expedition POIs | Sites of Interest, Deadsider Sanctuaries, Data Reliquary Harvesters, Main Objective, Valkyrie Extraction Zone, Valkyrie Arrival Zone | **Icon only**, **Icon + Distance m**, **Off** |
+| Mission Objective Interactables | Scanner targets, Hacking terminals, Servo skull objectives, Daemonic growth, Targets to destroy, Other objective interactions | **Icon only**, **Icon + Distance m**, **Off** |
+| Environment | Explosive Barrels, Fire Barrels | **Icon only**, **Icon + Distance m**, **Off** |
+| Respawn | Active respawn, Run-back threshold, Practice respawn points, Practice thresholds | **Icon only**, **Icon + Distance m**, **Off** |
 | Enemy bosses | Daemonhost, Monstrosities, Captains, Karnak Twins | **Icon only**, **Marked icon** |
 | Enemy groups | Common enemies and Shooters | **Icon only**, **Marked icon**, **Off** |
 | Individual enemy toggles | Dreg and Scab Bruisers, Vanguards, Shooters, Elite, Special, and Misc enemies listed below | **Icon only**, **Marked icon**, **Off** |
@@ -349,7 +361,7 @@ Each major option group now includes an **Icon size (%)** slider. These sliders 
 | Collectable Materials | Diamantine and Plasteel |
 | Primary Objective Items | Mission luggables and primary objective pickups |
 | Secondary Objective Items | Grimoires and Scriptures |
-| Mission Objective Interactables | Scanner targets, hacking terminals, servo skull objectives, daemonic growth, and other objective interaction points |
+| Mission Objective Interactables | Scanner targets, hacking terminals, servo skull objectives, daemonic growth, targets to destroy, and other objective interaction points |
 | Expeditions POI | Sites of Interest, sanctuaries, harvesters, main objective, extraction, and arrival markers |
 | Expeditions-Specific Items | Salvage, Tech-Remnants, expedition pocketables, and related expedition pickups |
 | Martyr's Skull Items | Martyr's Skull markers, riddle interactables, and related power cell markers |
@@ -366,6 +378,7 @@ Each major option group now includes an **Icon size (%)** slider. These sliders 
 | Players | Teammate markers |
 | Player Companions | Cyber Mastiffs and Servo Skulls |
 | Event-Related Items | Event pickups and event objectives, including Dark Rites totems and servo skulls |
+| Respawn | Active respawn, run-back threshold, and the practice respawn points and thresholds |
 | Debugging | Unknown pickup markers and debug visuals |
 
 ### Enemy radar controls
@@ -404,7 +417,7 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Option | What it controls |
 | --- | --- |
 | Highlight thickness | Adjusts the line thickness used by nearby screen-space highlight brackets. |
-| Marker highlight color sliders | Set the Opacity, Red, Green, and Blue channels used directly by nearby highlights for a specific supported marker group. |
+| Marker highlight colors | ARGB color pickers used directly by nearby highlights for a specific supported marker. |
 | Show distance above nearby highlights | Shows item distance text above supported nearby screen-space highlights. |
 | Show distance on radar markers | Shows distance text on supported nearby radar markers. |
 
@@ -445,69 +458,25 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 
 ### Mission Objective Interactable Controls
 
-Radar reads these markers from the game's own objective systems. A step appears as soon as the game
-arms it, rather than only once you are close enough for the interaction prompt to be drawn, which is
-what makes objectives visible from across a room. A marker clears when the step reports itself used or
-inactive, when a scan target is scanned, when a puzzle is solved, when a destructible step is broken,
-or when the objective system drops it.
+These markers show the world interactions of the **currently active** objective step:
+- **Appears early.** A step appears as soon as the mission arms it, not only once you are close enough for the interaction prompt, so objectives are visible from across a room.
+- **Clears when done.** A marker clears when its step is used, scanned, solved, broken or completed, and when the objective itself ends.
+- **Unused alternatives stay hidden.** Where a mission places several copies of a device or files several alternatives under one objective, only the one the mission actually uses is shown.
+- **Range.** A step the game is itself pointing at stays on the radar beyond its range, but only while the game draws that marker.
+- **Height.** Objective markers are never hidden for being above or below you, whatever **Hide vertical markers above/below** is set to.
 
-Missions often place several copies of the same device and arm one at a time, so only the armed copy is
-marked. An unarmed copy appears once the mission arms it.
+How these rules are implemented is explained in [Mission objective tracking](#mission-objective-tracking).
 
-Missions often file several alternatives under one objective and use only one of them -- nine possible
-cargo containers where one holds the cargo, several possible spawn sites for an event. When an
-objective says which of its units it will mark at the start, the ones it passes over are left off the
-radar; when it says nothing of the sort, every unit is kept.
-
-Objectives that mix real steps with pure position hints show only the steps. A luggable objective holds
-the items and their sockets, which you can act on, alongside spawn points and waypoints, which you
-cannot, so the bare units in it are left off the radar. An objective made of nothing but bare units is
-read the other way round: there the bare units are the step, as with the train controls destroyed to
-stop the train, and all of them are marked. Those steps carry no state of their own at all, so they are
-cleared one at a time by the game's own world marker for each of them going away. The same rule picks
-the live target of an objective that files several identical candidates, such as the dormant growth
-sites of a purge event: the game marks only the one that is live. It applies to objective targets that
-are not interactables -- an interactable is deliberately shown before the game marks it -- and holds its
-candidates back for a moment when an objective starts, since the game does not assign its markers in the
-same frame and every candidate would otherwise flash up at once. It applies only for an objective the
-game's marker list has been seen to cover, so a list that says nothing about an objective
-never hides it. Once an objective has appeared in that list it stays trusted for the rest of the
-mission, since otherwise its last remaining step finishing would look the same as an objective the list
-never described. This is decided per objective, since missions run several
-at once. Objective units that already have their own marker kind, such as luggables and their sockets,
-keep it instead of gaining a second one.
-
-Only the currently active objective is shown. A mission holds around a hundred objective-bound units
-across all of its stages, so anything the game does not tie to the live objective stays off the radar.
-This holds however a device is recognised: a mission that places three devices and finishes with one of
-them never used drops that one along with the rest. Devices the mission does not attribute to any
-objective at all are exempt, since that is the only way they stay visible.
-
-A step the game is marking stays on the radar beyond its range, but only while the game is actually
-drawing that marker: its objective markers stop at 300 metres. Mortis Trials marks the start of all
-three of its arenas, and the two nobody is in lie far beyond that, so they stay off the radar.
-
-Objective devices that carry a puzzle -- Auspex decoding, bomb defusal, and the like -- say in colour
-whether they need somebody, following the device's own hologram:
+Objective devices that carry a puzzle, such as Auspex decoding or bomb defusal, show in color whether they need somebody, following the device's own hologram:
 
 | Puzzle | Marker |
 | --- | --- |
-| Not started yet | the shared objective tint, like any other objective marker |
-| Running, nobody at it | **red** -- it is asking for a player |
-| A player at the device | **yellow** -- it is being worked on |
-| Solved | the shared objective tint again -- the device stays part of the objective |
+| Not started yet | The shared objective tint, like any other objective marker |
+| Running, nobody at it | **Red**: the device is asking for a player |
+| A player at the device | **Yellow**: the device is being worked on |
+| Solved | The shared objective tint again; the device stays part of the objective |
 
-A device keeps its marker for as long as its objective runs, whether or not its puzzle is solved, so
-nothing blinks out and returns in red when an objective arms the same device for another round. The
-marker goes when the objective itself ends.
-
-The two live colours have their own color pickers under **Hacking terminals**, since that is where every
-puzzle device is configured whichever category it belongs to. The icon, display mode and icon size stay
-those of the device's own category; only the colour follows the puzzle, and the on-screen highlight
-bracket follows it too. Objective devices without a puzzle keep the shared objective tint throughout.
-
-Objective markers are never hidden for being above or below you, whatever **Hide vertical markers
-above/below** is set to: an objective a floor up is exactly what you need to see.
+A device keeps its marker for as long as its objective runs, so nothing blinks out and comes back red when an objective arms the same device for another round. The two live colors have their own color pickers under **Hacking terminals**, because every puzzle device is configured there whichever category it belongs to. The icon, display mode and icon size stay those of the device's own category. Only the color follows the puzzle, and the on-screen highlight bracket follows it too.
 
 | Option | Modes / default | What it controls |
 | --- | --- | --- |
@@ -561,7 +530,23 @@ above/below** is set to: an objective a floor up is exactly what you need to see
 | Tainted Communications Device | Shows corrupted auspex scanner event pickups. |
 | Holy Relics | Shows Holy Relics event pickups as artwork, simplified icon, or hidden. Artwork mode distinguishes small, medium, and large relic pickups. |
 | Heretical Artifacts | Shows Heretical Artifacts event pickups as artwork, simplified icon, or hidden. Artwork mode distinguishes small, medium, and large pickups. |
-| Stolen Rations | Shows Stolen Rations event pickups. |
+| Stolen Rations | Shows Stolen Rations event pickups as artwork, simplified icon, or hidden. Artwork mode distinguishes small and medium pickups. |
+
+### Respawn Controls
+
+The **Respawn (requires Respawn Rewind)** tab controls markers mirrored from the [Respawn Rewind](#respawn-rewind) mod. Without that mod installed and enabled, these settings have no effect. Each marker also needs the matching Respawn Rewind setting switched on, and the tooltips name it. Radar never changes Respawn Rewind's settings itself.
+
+| Option | Modes / default | What it controls |
+| --- | --- | --- |
+| Icon size (%) | Slider, default **100%** | Resizes all respawn markers together. |
+| Active respawn | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon + Distance m**. | The respawn beacon a dead teammate will return to. Shown only while Respawn Rewind shows it, that is while a teammate is dead or awaiting respawn. |
+| Run-back threshold | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon + Distance m**. | The point the team has to stay behind for the earlier beacon to be kept. |
+| Show run-back offset | Checkbox under **Run-back threshold**, default on | Shows Respawn Rewind's team offset from the threshold instead of the distance to the marker. A negative value is the room the team still has. Needs Respawn Rewind's distance text. Without it, or for its `Hold back` fallback, the normal distance is shown. |
+| Practice respawn points | **Icon only**, **Icon + Distance m**, **Off**. Default: **Off**. | Every respawn point of the mission, from Respawn Rewind's map practice mode. |
+| Practice thresholds | **Icon only**, **Icon + Distance m**, **Off**. Default: **Off**. | The threshold of every respawn point, from the same practice mode. |
+| Practice markers in overview only | Checkbox, default on | Keeps the practice markers out of the normal radar and shows them only in the centered overview, where the whole mission fits. |
+
+Each marker has its own icon color picker, which is hidden while the marker is **Off**. The active respawn and the run-back threshold stay on the radar beyond its range, pinned to the edge in their direction the way player tags are. All four respawn markers are never hidden for being above or below you.
 
 ### Positioning and Toggle Use
 
@@ -817,30 +802,26 @@ Player tags intentionally stay flatter and cleaner than supported item markers. 
 
 ### Mission Objective Interactables
 
-| Marker | Source | Notes |
-| --- | --- | --- |
-| Scanner targets | Scan zone selection | The Auspex targets the active scan zone selected for this run, dropped individually as each one is scanned. |
-| Hacking terminals | Decoder device system | Decoder and hacking terminals used for mission progression. A puzzle device is red while it is running unattended, yellow while a player is at it, and the shared objective tint both before it starts and once it is solved. The marker stays until the objective ends. |
-| Servo skull objectives | Servo skull interaction | The mission servo skull while you follow it. |
-| Daemonic growth | Objective target system | Growth steps of a purge event, recognised by the objective's own type (`demolition`) rather than by its name, so every mission running the event is covered. The tentacles, each three destructible eyes of one prefab, get one marker each; the growth's helper targets, which stand under a metre from its centre eye, are not drawn. A tentacle is drawn only while it stands inside the live event, so one left standing from an earlier event does not come back elsewhere, and the tentacles blocking a Martyr's Skull riddle are the riddle's rather than a growth's. Its own category with its own display mode, color and icon. |
-| Targets to destroy | Objective target system | What any other objective marks for destruction, such as ice on machinery, tanks and cogitators. Its own category with its own display mode, icon color, highlight color and icon. |
-| Other objective interactions | Objective target system | The remaining objective-bound interaction points of the active objective, such as switches, buttons, and destructible steps. Destructibles clear one at a time as each is broken, rather than all at once when the objective ends. Where a luggable objective hides its items in a bank of identical containers, only the containers holding one are drawn, at any distance, and the luggable inside is not drawn until its container is opened. A step the game marks more than once, such as the cargo valves that are turned after each delivery, follows the game's own objective marker: shown while the game marks it, hidden in between. The sockets for mission cargo other than power cells -- vacuum capsules, ammunition canisters, cryonic rods, Moebian samples, and the Prismata case -- are drawn here too, with this category's setting and colours; which luggable a socket takes is read from the objective it shares with them. |
+| Preview | Marker | Source | Notes |
+| --- | --- | --- | --- |
+| <img src="doc/img/mission_objective_scanner.png" width="80" alt="Scanner target marker" /> | Scanner targets | Scan zone selection | The Auspex targets the active scan zone selected for this run, dropped individually as each one is scanned. |
+| <img src="doc/img/mission_objective_hacking.png" width="80" alt="Hacking terminal marker" /> | Hacking terminals | Decoder device system | Decoder and hacking terminals used for mission progression. Puzzle devices change color with their puzzle state, as shown below. The marker stays until the objective ends. |
+| <img src="doc/img/mission_objective_servo_skull.png" width="80" alt="Servo skull objective marker" /> | Servo skull objectives | Servo skull interaction | The mission servo skull while you follow it. |
+| <img src="doc/img/mission_objective_growth.png" width="80" alt="Daemonic growth marker" /> | Daemonic growth | Objective target system and growth tentacles | The growth tentacles of a purge event, one marker per tentacle, on every mission that runs the event. Tentacles blocking a Martyr's Skull riddle belong to the riddle instead. Has its own display mode, color and icon. |
+| <img src="doc/img/mission_objective_destroy.png" width="80" alt="Target to destroy marker" /> | Targets to destroy | Objective target system | What any other objective marks for destruction, such as ice on machinery, tanks and cogitators. Has its own display mode, icon color, highlight color and icon. |
+| <img src="doc/img/mission_objective_other.png" width="80" alt="Other objective interaction marker" /> | Other objective interactions | Objective target system | The remaining interaction points of the active objective, such as switches, buttons, valves and destructible steps, each cleared as it is completed. Also covers containers still holding a luggable objective's cargo, and the sockets for mission cargo other than power cells: vacuum capsules, ammunition canisters, cryonic rods, Moebian samples and the Prismata case. |
 
-Each category has its own icon, drawn inside the diamond frame and backplate the game itself uses around
-objective markers, so the whole family is distinguishable at a glance from enemy markers and from standard points
-of interest. All five share one frame size and the vanilla objective marker tint, so the radar reads as
-the same family as the on-screen HUD marker. Each icon is sized as a proportion of the frame, so it
-keeps its fit at any icon scale, and each carries its own size, since the game's icons are not drawn to
-a common visual size. An icon whose own texture already carries the inset is linked to the frame size
-instead, exactly as the game links them, which also keeps it perfectly centered at every scale. Each has its own icon color picker. The frame and its backplate have one shared color each, so the
-frame stays the family's identity while each icon keeps its own color and its own state colors; they
-default to the vanilla objective tint and to the near-black the game uses behind its own objective
-markers.
+Puzzle state colors, shown on a hacking terminal:
 
-Scan targets are the one case where the radar has to reconstruct what the game knows. The zone that
-owns them publishes which targets this run selected, and each target carries its own active flag that
-clears when it is scanned. On a client the selection itself is not replicated, so it is recovered from
-those flags instead, and only used when its size agrees with the zone's own outstanding count.
+<p>
+  <img src="doc/img/mission_objective_hacking.png" width="80" alt="Puzzle device not started or solved, in the shared objective tint" />
+  <img src="doc/img/mission_objective_hacking_inactive.png" width="80" alt="Puzzle device running with nobody at it, in red" />
+  <img src="doc/img/mission_objective_hacking_solving.png" width="80" alt="Puzzle device with a player at it, in yellow" />
+</p>
+
+From left to right: **not started or solved**, **running with nobody at it**, **a player at the device**.
+
+Each category has its own icon, drawn inside the diamond frame and backplate the game itself uses around objective markers. That makes the whole family easy to tell apart from enemy markers and standard points of interest at a glance. All six categories share one frame size and default to the vanilla objective marker tint, so the radar reads as the same family as the on-screen HUD marker. Each icon is sized as a proportion of the frame, so it keeps its fit at any icon scale. Each category has its own icon color picker. The frame and its backplate have one shared color each; they default to the vanilla objective tint and to the near-black the game uses behind its own objective markers.
 
 ### Expedition POIs
 
@@ -915,7 +896,20 @@ These markers are driven by expedition navigation data rather than standard pick
 | <img src="doc/img/material_leftover_live_event_small.png"  width="80" alt="Small Heretical Artifact artwork marker" /> | Heretical Artifacts, Small | Supports **Artwork**, **Icon**, and **Off**. Artwork mode uses the small artifact pickup art. |
 | <img src="doc/img/material_leftover_live_event_medium.png"  width="80" alt="Medium Heretical Artifact artwork marker" /> | Heretical Artifacts, Medium | Supports **Artwork**, **Icon**, and **Off**. Artwork mode uses the medium artifact pickup art. |
 | <img src="doc/img/material_leftover_live_event_large.png"  width="80" alt="Large Heretical Artifact artwork marker" /> | Heretical Artifacts, Large | Supports **Artwork**, **Icon**, and **Off**. Artwork mode uses the large artifact pickup art. |
-| <img src="doc/img/pickup_stolen_rations.png"  width="80" alt="Stolen Rations marker" /> | Stolen Rations | Green crate marker. |
+| <img src="doc/img/pickup_stolen_rations_small.png"  width="80" alt="Small Stolen Rations artwork marker" /> | Stolen Rations, Small | Supports **Artwork**, **Icon**, and **Off**. Artwork mode uses the small rations pickup art. |
+| <img src="doc/img/pickup_stolen_rations_medium.png"  width="80" alt="Medium Stolen Rations artwork marker" /> | Stolen Rations, Medium | Supports **Artwork**, **Icon**, and **Off**. Artwork mode uses the medium rations pickup art. |
+| <img src="doc/img/pickup_stolen_rations.png"  width="80" alt="Stolen Rations icon marker" /> | Stolen Rations, Icon mode | Green crate icon shared by both sizes. |
+
+### Respawn Markers
+
+These markers only appear while the [Respawn Rewind](#respawn-rewind) mod is installed, enabled and publishing the corresponding marker. They use Darktide's respawn point glyph (`U+E005`) and run-back point glyph (`U+E007`). The default colors start from the colors Respawn Rewind uses for its own markers, and from then on they are ordinary Radar color settings.
+
+| Preview | Marker | Notes |
+| --- | --- | --- |
+| <img src="doc/img/respawn_active.png" width="80" alt="Active respawn marker" /> | Active respawn | Where a dead teammate will respawn. Stays on the radar beyond its range, pinned to the edge. Survives the marker limit ahead of event markers, bosses and every other enemy or pickup; only player-dropped Tech-Remnants rank higher. |
+| <img src="doc/img/respawn_runback.png" width="80" alt="Run-back threshold marker" /> | Run-back threshold | The line the team has to stay behind. Can show Respawn Rewind's team offset instead of a distance. Stays on the radar beyond its range and ranks just below the active respawn. |
+| | Practice respawn points | The respawn glyph at a smaller size, in grey-blue. Off by default, and overview-only by default. |
+| | Practice thresholds | The run-back glyph at a smaller size, in grey. Off by default, and overview-only by default. |
 
 ### Debug Marker
 
@@ -954,7 +948,7 @@ Examples:
 - Crates use the pickup artwork tile.
 - Diamantine, Plasteel, Salvage, Tech-Remnants, and Dropped Tech-Remnants keep their resource artwork.
 - Expeditions pocketables such as Void Shell, the landmines, and the strike markers keep their existing item artwork.
-- Tainted Skulls, Holy Relics, and Heretical Artifacts use live-event artwork. Holy Relics and Heretical Artifacts resolve small, medium, and large pickup art from the actual pickup name.
+- Tainted Skulls, Holy Relics, Heretical Artifacts, and Stolen Rations use live-event artwork. Holy Relics and Heretical Artifacts resolve small, medium, and large pickup art from the actual pickup name, and Stolen Rations resolves small and medium.
 
 ### Icon mode
 
@@ -979,6 +973,9 @@ Icon mode swaps supported markers to simplified HUD icon materials with configur
 | Tainted Skulls | `content/ui/materials/hud/interactions/icons/enemy` | `(255, 150, 190, 60)` |
 | Holy Relics | `content/ui/materials/icons/circumstances/live_event_01` | `(255, 192, 160, 0)` |
 | Heretical Artifacts | `content/ui/materials/icons/circumstances/live_event_01` | `(255, 150, 190, 60)` |
+| Stolen Rations | `content/ui/materials/icons/pickups/default` | `(255, 150, 190, 60)` |
+
+The Diamantine and Plasteel glyphs are drawn through the same glyph text pass as the Cyber Mastiff companion marker, so their size, color, scaling and vertical arrows behave exactly as they did with the old texture.
 
 ### Semantic recolors for regular markers
 
@@ -1038,23 +1035,499 @@ Not every radar marker uses a configurable fixed ARGB color:
 - **The radar center dot** also uses the local player's HUD color.
 - **Player smart tags** use their own tag presentations: attention and location tags follow player-slot colors, while threat tags keep their built-in warning color.
 
-## Requirements
+## Architecture
 
-- **[Darktide Mod Framework](https://www.nexusmods.com/warhammer40kdarktide/mods/8)**, a release with native mod options (tabs, color pickers, and `.mod` package loading; August 2026 or later)
-- **[Darktide Mod Loader](https://www.nexusmods.com/warhammer40kdarktide/mods/19)**
+This section is for anyone reading or changing Radar's Lua code. All paths below are relative to `Radar/scripts/mods/Radar/` unless they start with `Radar/` or `tests/`.
+
+### Entry points
+
+| File | Loaded by | Role |
+| --- | --- | --- |
+| `Radar/Radar.mod` | Darktide Mod Loader | Calls DMF's `new_mod("Radar", ...)` with `mod_script`, `mod_data` and `mod_localization`. Its `packages` list names the UI and live-event packages that hold the icon materials Radar draws, which DMF loads and releases. It has no `load_after` list; every optional mod is resolved lazily at runtime. |
+| `Radar/info.json` | DMF | Release metadata (name, description, version, author, homepage, source, funding) shown in the options header. |
+| `Radar_data.lua` | DMF `mod_data` | The whole options menu, plus the migrations that must run before DMF saves option defaults. It is not part of the runtime environment. See [Settings and Migration](#settings-and-migration). |
+| `Radar_localization.lua` | DMF `mod_localization` | Every title, option label and `<setting_id>_tooltip`, in 12 languages. |
+| `Radar.lua` | DMF `mod_script` | Builds the shared runtime environment and installs the runtime modules. |
+
+### The shared installer environment
+
+`Radar.lua` builds one table, `shared_env`, and runs every runtime module inside it. `shared_env` is preloaded with `mod` and four game modules (`Pickups`, `PlayerUnitStatus`, `PlayerUnitVisualLoadout`, `CompanionServoSkullSettings`), and its metatable falls back to `_G`:
+
+```lua
+local shared_env = { mod = mod, Pickups = Pickups, ... }
+setmetatable(shared_env, { __index = _G })
+
+_install("Radar/scripts/mods/Radar/Radar_enemy_definitions", shared_env)
+```
+
+`_install` runs the file through `mod:io_dofile` and raises if the chunk does not return a function. Every installer module has the same shape:
+
+```lua
+return function(env)
+    setfenv(1, env)
+
+    local mod = mod                -- locals cache shared or game values
+
+    SCAN_INTERVAL = 0.25           -- a global assignment lands in shared_env
+    local _scratch_seen = {}       -- a local stays private to this module
+
+    function _track_unit(unit, kind, source, meta)   -- shared with every module
+    end
+
+    local function _helper()                         -- private helper
+    end
+end
+```
+
+What this means in practice:
+
+- **Globals are shared.** Anything an installer assigns without `local` lands in `shared_env`, not in `_G`: upper-case registries such as `KIND_TO_SETTING` and `_`-prefixed functions such as `_track_unit`. Every other installer can see it, and Radar's runtime state never reaches the real global table or collides with other mods.
+- **Locals are private.** A `local` is visible only inside its module. Use locals for anything no other module needs.
+- **Game globals still resolve.** Reads that miss in `shared_env` fall through to `_G`, so engine and game globals (`Unit`, `ScriptUnit`, `Managers`, `CLASS`) and DMF's `get_mod` work unchanged.
+- **Install order matters only at install time.** Code that runs while a module installs can only use what earlier modules defined. For example, `Radar_tracking.lua` computes its scan tiers from `SCAN_INTERVAL` as it installs, so `Radar_enemy_definitions.lua` goes first. Function bodies look shared names up when they are called, so `Radar_tracking.lua` can call `_scan_respawn_rewind_markers`, which is installed later. Call sites that must cope with a function that may not exist guard it with `~= nil`.
+
+Install order in `Radar.lua`:
+
+1. `Radar_enemy_definitions`
+2. `Radar_runtime_helpers`
+3. `Radar_tracking`
+4. `Radar_players`, `Radar_pickups`, `Radar_mission_objectives`, `Radar_expeditions`, `Radar_events`
+5. `Radar_navmesh`
+6. `compatibility/Radar_respawn_rewind`
+
+`compatibility/Radar_strikemap.lua` is loaded last as an explicit module.
+
+The installer mechanism itself is older than 3.0.0. Up to 2.6.x there were five installers, and `Radar_expeditions.lua` also held the player, pickup, mission objective and live-event logic. 3.0.0 moved that logic into dedicated feature modules, installs `Radar_tracking` before them, adds the `compatibility/` installer, and documents every production file.
+
+### Module map
+
+| Module | Loaded as | Responsibility |
+| --- | --- | --- |
+| `Radar_enemy_definitions.lua` | Installer 1 | Marker kind registries (`KIND_TO_SETTING`, `MARKER_SCALE_GROUP_BY_KIND`, `ARTWORK_MODE_KIND_TO_SETTING`, `EXPEDITION_*`, `RESPAWN_MARKER_KINDS`, nearby-highlight tables), per-breed enemy definitions (`ENEMY_RADAR_DEFINITIONS_BY_BREED`), the enemy scan `_scan_minions`, the display-mode, scale, priority and render-layer `mod` getters, and the `mod.on_all_mods_loaded` migrations. Installs the color runtime. |
+| `Radar_runtime_helpers.lua` | Installer 2 | Defensive `_safe_*` access to engine and game state, the rules that decide whether the radar may run at all, radar position constants, the game's world marker list (`_safe_world_markers_list`), HUD projection and occlusion `mod` methods, and nearby-highlight collection. Holds no feature logic. |
+| `Radar_tracking.lua` | Installer 3 | Category-independent tracking: the tracked unit and point stores, scan scheduling, interactee dispatch, target filtering and the marker limit, the radar snapshot, overview, zoom and position, settings getters, the mission reset, the hooks, the DMF callbacks and the HUD element registration. Feature modules decide what a unit is; tracking decides whether and where it is shown. |
+| `Radar_players.lua` | Installer 4 | Teammates and their states, player companions, player smart tags and tag attribution, ability-outlined enemies, and whether a player carries a luggable. |
+| `Radar_pickups.lua` | Installer 4 | `_classify_interactee` and its fixed classifier order, plus chests, hazard barrels, destructibles (Heretic Idols, Dark Rites totems) and tagged medical crates. |
+| `Radar_mission_objectives.lua` | Installer 4 | Objective interactable discovery and lifecycle, luggable containers and cargo sockets, puzzle-state colors, the objective range exemption, and Martyr's Skull riddle data, fallbacks and solve detection. |
+| `Radar_expeditions.lua` | Installer 4 | Expedition sections and sanctuary transitions, Expedition pickups, Tech-Remnant values and clustering, navigation POIs and player-marked rings. Outside an Expedition every rule lets everything pass. |
+| `Radar_events.lua` | Installer 4 | Live-event pickup and interactable classification (Dark Rites skulls, saints, leftovers, stolen rations) and the Dark Rites circumstance gate. |
+| `Radar_navmesh.lua` | Installer 5 | The built-in live geometry source. It reads the `GwNavWorld` navmesh into bucketed triangle arrays and exposes them only through `mod` methods. |
+| `compatibility/Radar_respawn_rewind.lua` | Installer 6 | Optional import of Respawn Rewind's respawn markers. See [Respawn Rewind](#respawn-rewind). |
+| `compatibility/Radar_strikemap.lua` | Explicit, singleton | Optional consumer of Strikemap's geometry API. See [Strikemap](#strikemap). |
+| `Radar_color_settings.lua` | Explicit | The single source of truth for every configurable color: prefix, default ARGB value, the marker kinds that resolve to it and the widget it is anchored under. Also the cached color getters and the color migrations. |
+| `ui/Radar_hud_element.lua` | DMF HUD element `HudElementRadar` | Draws the snapshot: frame, map geometry layer, pooled marker widgets, brackets, texts, center dot, overview legends and on-screen highlights. Owns the static presentation of every marker kind (`PRESENTATIONS`, `ARTWORK_MODE_ICON_PRESENTATIONS`, `LIVE_EVENT_ARTWORK_BY_KIND`). |
+| `ui/Radar_hud_renderer.lua` | Explicit | Immediate-mode primitives for the radar frame, guides and marker brackets. |
+| `ui/Radar_hud_widgets.lua` | Explicit | Widget definitions and the marker widget pool. |
+| `ui/Radar_navmesh_renderer.lua` | Explicit | Draws the live navmesh in floor bands. |
+| `ui/Radar_strikemap_geometry.lua` | Explicit | Draws Strikemap's floor plan and vector details. |
+| `ui/Radar_triangle_clipper.lua` | Explicit | Clips geometry triangles to the radar shape and submits them with `Gui.triangle`. |
+
+### Boundaries and conventions
+
+- **The HUD element is outside `shared_env`.** DMF loads it from the `mod:register_hud_element` call in `Radar_tracking.lua`, and it reaches the runtime only through `mod` methods: `mod:get_radar_snapshot()`, `mod:project_target_to_radar()`, `mod:get_radar_color()` and the settings getters. Anything new the HUD needs should be exposed the same way.
+- **Explicit modules run again on every load.** `mod:io_dofile` re-executes the file each time it is called. `Radar_color_settings.lua` is loaded by `Radar_data.lua`, `Radar_enemy_definitions.lua` and the HUD element; each load builds an identical registry, and `install_runtime` adds the color getters to `mod` only once. `Radar_strikemap.lua` caches its singleton on `mod._strikemap_compatibility`.
+- **DMF callbacks are chained.** `Radar_color_settings.lua`, `Radar_data.lua`, `Radar_tracking.lua` and `Radar_strikemap.lua` all need `mod.on_setting_changed`. Each keeps the previous handler and calls it first. `mod.on_settings_reset` and `mod.on_disabled` follow the same pattern. A new handler must chain too, never assign over an existing one.
+- **Engine calls fail soft.** Engine and extension calls are existence-checked and wrapped in `pcall`, so a game patch that changes an API disables a feature instead of raising inside the update loop.
+- **Hot paths do not allocate.** The update loop reuses pooled target tables, per-pass scratch caches and per-unit meta tables. New scan and filter code should do the same.
+- **Watch the 200-local limit.** LuaJIT allows at most 200 locals per function. Several installer bodies and the HUD element's main chunk are close to it, so new constants belong in existing tables. `tests/Radar_mission_objective_wiring_spec.lua` checks the headroom.
+- **LDoc colon-style documentation.** Every production file starts with a `--- Summary.` header that says what the module contributes to `shared_env` and what it relies on, followed by `module:` (or `classmod:`) and `author:` lines. Documented functions list their parameters as `type: name description` lines, such as `?string: kind marker kind`, and their results as `treturn:` lines.
+
+### Where new code goes
+
+| Change | Where |
+| --- | --- |
+| New pickup or item marker | Classify it in `Radar_pickups.lua` (`PICKUP_KIND_BY_NAME` or `_classify_pickup_like`). Register the kind in `Radar_enemy_definitions.lua`: `KIND_TO_SETTING` and `MARKER_SCALE_GROUP_BY_KIND`, plus `ARTWORK_MODE_KIND_TO_SETTING` or the nearby-highlight list when it has artwork or a highlight. Add its color with `_add_marker` in `Radar_color_settings.lua`, anchored to its widget in `Radar_data.lua`. Add its presentation to `PRESENTATIONS` in `ui/Radar_hud_element.lua` and its strings to `Radar_localization.lua`. |
+| Enemy breed | `ENEMY_RADAR_DEFINITIONS_BY_BREED` in `Radar_enemy_definitions.lua`, with its setting in `Radar_data.lua`. |
+| Player, companion or smart-tag marker | `Radar_players.lua`. |
+| Mission objective interaction | `Radar_mission_objectives.lua`. A new objective kind also joins `MISSION_OBJECTIVE_MARKER_KINDS` and the `KINDS` list of `tests/Radar_mission_objective_wiring_spec.lua`, which checks that it is registered everywhere. |
+| Martyr's Skull riddle on another mission | Data only: `MARTYR_SKULL_RIDDLE_SIGNATURES_BY_MISSION`, and `MARTYR_SKULL_RIDDLE_SOLVE_DOORS_BY_MISSION` where needed, in `Radar_mission_objectives.lua`. See the [debug workflow](#martyrs-skull-riddle-tracking). |
+| Expedition POI or Expedition item | `Radar_expeditions.lua` (`_scan_expedition_objectives` and the item classifiers), plus the `EXPEDITION_*` registries in `Radar_enemy_definitions.lua`. |
+| Live-event item | `Radar_events.lua` maps the pickup name to a kind. Size-specific artwork goes into `LIVE_EVENT_ARTWORK_BY_KIND` in `ui/Radar_hud_element.lua`, and the event's UI package into the `packages` list of `Radar.mod`. |
+| Optional integration with another mod | A new installer under `compatibility/`, installed from `Radar.lua`. Resolve the other mod lazily with `get_mod` and a retry interval, feed results through `_track_point` or `_track_unit`, call the scan from `_update_internal` and the reset from `_reset_runtime_state` in `Radar_tracking.lua`. `compatibility/Radar_respawn_rewind.lua` is the reference implementation. |
+| HUD drawing | `ui/Radar_hud_element.lua` for presentations, per-target visuals and draw order; `ui/Radar_hud_widgets.lua` for widget passes and the pool; `ui/Radar_hud_renderer.lua` for frame and bracket primitives. |
+| Map geometry | `Radar_navmesh.lua` and `ui/Radar_navmesh_renderer.lua` for the live scan; `compatibility/Radar_strikemap.lua` and `ui/Radar_strikemap_geometry.lua` for Strikemap; `ui/Radar_triangle_clipper.lua` for both. |
+| New setting | A widget in `Radar_data.lua`, a title and `_tooltip` in `Radar_localization.lua`, any runtime reaction in a chained `mod.on_setting_changed`, and a migration if it replaces a saved setting. |
+
+`_kind_enabled` decides a kind's visibility through the setting maps above. A kind that appears in none of them is always enabled, so a new kind without a registered setting cannot be switched off.
+
+## Marker Tracking Model
+
+### Pipeline
+
+```text
+game extension systems, world marker list, other mods
+  -> feature scans (players, pickups, objectives, expeditions, events, compatibility)
+  -> _track_unit(unit, kind, source, meta)     -> mod._tracked_units
+     _track_point(id, kind, position, ...)     -> mod._tracked_points
+  -> _prune_units
+  -> _collect_radar_targets                    -> mod._radar_targets
+  -> _collect_screen_highlight_targets         -> mod._screen_highlight_targets
+  -> mod._radar_snapshot                       -> mod:get_radar_snapshot()
+  -> ui/Radar_hud_element.lua                  (mod:project_target_to_radar, presentations, widgets)
+```
+
+`Radar_tracking.lua` drives the loop from `mod:hook_safe("StateGameplay", "update", ...)`, with `mod.update` as a second entry point while `GameplayStateRun` is active. Each gameplay time is processed only once. Before anything is scanned, `_get_runtime_state` in the runtime helpers decides whether the radar may run at all. It does not run in the hub or menus, in a game mode whose **Enable in …** toggle is off, or while the local player is dead, captured or spectating.
+
+Scans run in three tiers:
+
+| Tier | Interval | Work |
+| --- | --- | --- |
+| Every scan | **Marker update rate** (`radar_scan_rate`): 0.25 s, 0.1 s or 0.05 s | Enemies (`_scan_minions`), teammates and companions (`_refresh_player_units`), and the positions of moving units. |
+| Droppable | 0.25 s | Interactees, including mission objectives and riddle steps, the objective passes, smart-tag targets and the riddle solve check. Also rebuilds `mod._tracked_points` from scratch: Expedition POIs, riddle coordinate fallbacks, player tag points and Respawn Rewind markers. Refreshes the stored position of every tracked unit. |
+| Static | 0.5 s | Chests, destructibles (Heretic Idols, Dark Rites totems) and hazard barrels. |
+
+**Tracked units.** `_track_unit` stores `{ kind, source, position, meta, last_seen_t }` per unit. Positions are copied into plain tables, so engine vectors are never kept across frames. A unit that no scan refreshes for 2.5 seconds is pruned. `_clear_tracked_unit_from_source(unit, source)` removes an entry only when the given source owns it, so one scan can never drop a unit another scan claimed. The sources include `interactee_system`, `mission_objective_system`, `destructible_system`, `smart_tag_system`, `unit_data_system` and `player_manager`.
+
+**Tracked points.** `_track_point` stores markers that have a position but no unit. Because points are rebuilt on every droppable tick, a point disappears as soon as its producer stops reporting it.
+
+**Meta.** `meta` carries kind-specific data to the HUD element, for example `marked_by_player_slot`, `minigame_state` or `respawn_offset_text`.
+
+### Target filtering
+
+`_collect_radar_targets` checks each tracked unit and point in this order:
+
+1. **Enabled.** `_kind_enabled(kind)` resolves the kind through the player and companion settings, the enemy dropdown, the icon / distance dropdown, the Expedition dropdown, the artwork dropdown and finally `KIND_TO_SETTING`. Supported ability-marked enemies pass even when their kind is off.
+2. **Visibility filters.** Servo skulls hidden by their owner, **Tagged enemies only** and **Tagged items only**, luggables still shut in a container the radar is drawing (unless a player tagged them), and Heretic Idols that carry no collectible id.
+3. **Range.** Horizontal distance against the collection range, unless the target is exempt (see below).
+4. **Height.** Hidden beyond **Hide vertical markers above/below** unless exempt. A vertical arrow is set within **Show vertical arrows within range (m)** once the height difference passes the kind's deadzone.
+5. **Priority.** Render layer and selection priority are attached.
+
+Survivors are written into pooled target tables. The unclustered list is copied for nearby highlights. Tech-Remnants are then clustered, the list is sorted by selection priority, then horizontal distance, then kind, and cut to the active marker limit (**Max radar markers**, or **Max overview markers** while the overview is open).
+
+### Rule exceptions
+
+| Rule | Exceptions | Decided in |
+| --- | --- | --- |
+| Radar range | Player smart tags. Explicitly tagged targets and supported ability-marked enemies. Dropped Tech-Remnants, and teammates and bosses set to **Infinite**. Expedition POIs other than loot converters while **Ignore range limit for POI** is on. `respawn_active` and `respawn_runback`. Mission objectives the game is currently pointing at (`_objective_ignores_radar_range`). Power sockets while the local player carries a luggable. | `_ignore_radar_range_for_kind`, `_has_infinite_radar_range_for_kind`, `_collect_radar_targets` |
+| Height hiding | Infinite-range kinds. `VERTICAL_HIDE_EXEMPT_KINDS`: the Heretic Idol and all four respawn kinds. Every mission objective kind, matched by predicate so new categories are covered automatically. Sockets while carrying a luggable. | `_is_vertical_hide_exempt` |
+| Tagged items only | Players, companions, smart tags, enemies, Expedition POIs and respawn kinds are not items, so this filter never hides them. | `_is_item_kind` |
+| Marker limit | Sorted by selection priority first: dropped Tech-Remnants 650, active respawn 620, run-back threshold 610, live-event markers 600, bosses 500, specials 400, elites 350, misc enemies 325, player smart tags 300, shooters 200, common enemies 100, horde 50, everything else 0. | `mod:get_target_selection_priority` |
+| Vertical arrow deadzone | 2 m by default and 6 m for the flying mission servo skull, whose position is also refreshed on every scan. | `VERTICAL_ARROW_Z_DEADZONE_BY_KIND`, `MOVING_TRACK_KINDS` |
+
+`mod:project_target_to_radar` pins a range-exempt target that lies beyond the range to the radar edge in its direction, on the circle or the square. In the centered overview, targets outside the zoom range are pinned the same way.
+
+### Screen highlight anchoring
+
+`_collect_screen_highlight_targets` in `Radar_runtime_helpers.lua` builds the list of on-screen brackets. It considers the unclustered targets within **Nearby highlight range** whose settings group has highlights enabled, excluding the kinds in `NEARBY_HIGHLIGHT_EXCLUDED_KINDS`: the mission servo skull, which already carries the game's own marker. Each entry carries two positions:
+
+- **`world_position`:** the unit's `ui_interaction_marker` node, else its origin, else the tracked position, raised by a per-kind offset (+0.8 m for pickups). When the game draws its own interaction marker, the bracket sits on that marker and this position is used for the occlusion test.
+- **`fallback_world_position`:** from `_screen_highlight_projection_fallback_position`, used when the game draws no interaction marker for the unit. The HUD projects it itself and also uses it for the occlusion test, so the bracket's position and its dimming behind geometry always agree.
+
+| Target | Fallback anchor |
+| --- | --- |
+| Mission objective kinds | The center of the unit's bounding box (`Unit.box`). A wall terminal's origin is its mounting point, not the panel. |
+| Explosive and fire barrels | 1. The live `c_explosion` node the game detonates from. 2. The position tracking recorded. 3. The unit origin. |
+| Other kinds, such as pickups | The unit origin. A pickup's `ui_interaction_marker` floats where the prompt goes and looks detached when no prompt is shown. |
+| Targets without a unit | The tracked position. |
+
+The barrel order exists because of hanging barrels. Their unit origin is the ceiling mount, so an origin-anchored bracket sat on the mount and was occlusion-tested there instead of at the barrel. Tracking stores the barrel's radar position the same way: `c_explosion`, then the hazard extension's broadphase position, then the origin. Every engine call is `pcall`-guarded, and a failure falls through to the next step. `tests/Radar_screen_highlight_anchor_spec.lua` pins this order.
+
+### Mission objective tracking
+
+Ordinary pickup markers come from the interactee scan. An interactee that is active, unused and currently offering its prompt (`show_marker`) is classified by its pickup name, interaction type, icon and description. That model does not work for mission objectives, which is why they have their own subsystem in `Radar_mission_objectives.lua`:
+
+- Objective steps must appear before the game offers their prompt, and `show_marker` is only true near the unit.
+- Many objective units are not interactees at all: scan targets, zone trigger volumes, destructible targets, growth tentacles.
+- A level holds around a hundred objective-bound units across its stages. Only the few tied to the live objective matter.
+- The HUD's world marker list only contains what the HUD is drawing right now. Using it as the source made objectives appear late or not at all, so it is only used as a signal.
+
+**Sources.** Each objective unit comes from, and is checked against, these systems:
+
+| Source | Read | Used for |
+| --- | --- | --- |
+| `mission_objective_system` | `_active_objectives`, and each objective's `_name` and `_objective_type` | Which objectives are live. `demolition` objectives are daemonic growth; `luggable` objectives enable the container and socket rules. |
+| `mission_objective_target_system` | `_objective_name`, `_add_marker_on_objective_start`, `_ui_target_type` | Units tied to a named objective, and which alternative the level itself will mark. |
+| `mission_objective_zone_system`, `mission_objective_zone_scannable_system` | The zone's selection and progress, and each scannable's `_is_active` | Scanner targets, cleared one by one as they are scanned. |
+| `decoder_device_system`, `scanning_event_system` | Membership | Hacking terminals and scanner targets. These small dedicated systems are shown without active-objective confirmation. |
+| `minigame_system` | `_minigame._current_state` and the extension's `_active` | Puzzle state colors. |
+| `destructible_system` | Destructible units and their positions | Growth tentacles, found by shape: three destructible eyes of one prefab within half a meter of each other. |
+| World marker list (`request_world_markers_list`) | Units with a marker, objective-type markers, markers within the game's own draw distance | Which unit the game is pointing at, retiring steps that carry no state of their own, and the range exemption. |
+| `interactee_system` | `active`, `used`, `show_marker` | The lifecycle and the early-appearance path. These are query methods, called through `pcall`. |
+
+**Read-only contract.** Objective extensions are read field by field with `rawget`, and their methods are never called. On classes such as `MissionObjectiveZoneExtension` the methods drive live, server-authoritative mission state, such as equipping the Auspex, deactivating zones and completion routines. Calling them from a client mod would change the mission. Missing or unreplicated fields degrade to "no marker", never to an error.
+
+**Per droppable scan:**
+
+1. `_refresh_mission_objective_markers` refreshes the enabled kinds, the world marker unit sets and the puzzle states before the interactee scan.
+2. In `_scan_interactees`, each interactee's `active` and `used` state feeds `_update_mission_objective_lifecycle` before classification. Interactees whose prompt is still hidden are classified anyway when `_hidden_mission_objective_kind` says they are objective-bound. Inactive interactees are dropped, because missions place several copies of a device and arm one at a time.
+3. `_classify_pickup_like` tries the objective classifier last, so a unit that is already a luggable, a socket or a pickup keeps that kind.
+4. `_scan_mission_objective_targets` runs its passes in order: scan zones, dedicated systems, the target system, then growth tentacles. Any `mission_objective_system` entry that no pass claimed this scan is removed.
+
+**Target-system filters.** These are decided per objective, since missions run several objectives at once:
+
+- The unit's objective must be in `_active_objectives`.
+- **Start marker.** When one of an objective's units claims `_add_marker_on_objective_start`, the units that do not are alternatives the mission did not choose, such as the eight empty cargo containers beside the real one.
+- **Steps versus hints.** An objective that mixes actionable units with bare position hints, such as spawn points and waypoints, keeps only the actionable units. An objective made only of bare units keeps all of them.
+- **Targets that are not interactees** are kept only while the game marks them. This applies only to objectives the world marker list has been seen to cover (latched for the mission), and only after a 2-second settle window once the objective starts.
+- **Luggable containers.** In a bank of identical containers, only those holding the objective's luggable are kept. The luggable itself is hidden until its container opens.
+- **Repeated steps.** A generic interactable the game has once marked as an objective follows that marker from then on, such as cargo valves turned after each delivery.
+- **The game's own marker wins.** It overrides the start-marker and hint guesses, except for a daemonic growth's `demolition` helper targets, which would otherwise stack four markers on the center eye.
+
+**Lifecycle and retirement:**
+
+- A unit reported used is retired. A unit seen active and later inactive is retired. A unit never seen active is treated as upcoming.
+- Scan targets retire when their scannable's `_is_active` clears. On a client, the zone's selection is not replicated, so it is recovered from those flags and trusted only when its size matches the zone's own outstanding count.
+- Destructible steps retire one at a time as each is broken. Steps with no state of their own retire when the game's marker on them goes away.
+- Everything tied to an objective leaves when the objective leaves `_active_objectives`. `_reset_mission_objective_marker_state` clears every unit reference on mission reset.
+
+**Presentation-related rules:**
+
+- **Puzzle colors.** `_minigame_marker_meta` writes `meta.minigame_state`:
+  - `waiting` (red) while the puzzle is running with nobody attached **and** the game is marking the device. A solved device that re-enters the same state carries no game marker, so it does not turn red.
+  - `active` (yellow) while a player is at the device.
+  - Unstarted and completed puzzles get no state and keep the shared tint.
+
+  The radar marker and the screen bracket both resolve their color through `mod:get_marker_color_kind`.
+- **Cargo sockets.** `_luggable_socket_display_kind` returns `mission_objective_other` for a socket whose objective carries mission cargo: vacuum capsule, special-issue ammunition, cryonic rod, Moebian sample or Prismata case. The cargo is learned from the objective the socket shares with its luggables. Power-cell sockets stay `luggable_socket`, and the range rule still treats both as sockets.
+- **Range.** `_objective_ignores_radar_range(unit)` is true while the game holds a marker on the unit within that marker's own draw distance, while a container still holds its objective's luggable, or while one of the passes exempts the unit (a selected, unscanned scan target, or a tentacle of a growth the game is marking). The exemptions are rebuilt every scan. Objective markers stop at 300 m, so the far-away arena starts of Mortis Trials stay off the radar.
+- **Growth.** A growth is recognized by the objective's own type, `demolition`, rather than by name, so every mission running the event is covered.
+- **Frame.** All six kinds share the game's diamond objective frame (`point_of_interest_top`, 26 px) and a backplate, with a separate icon per category.
+
+`tests/Radar_mission_objective_interactable_spec.lua` exercises each of these rules against fake objective systems.
+
+### Martyr's Skull riddle tracking
+
+Riddle interactables are world interactables: buttons, levers, valves, candles, cranes, gates and switches. They are not pickups. Nothing in their pickup name or interaction data says "riddle", and the same descriptions are used by unrelated doors and buttons elsewhere. Radar therefore recognizes them from recorded, per-mission data in `Radar_mission_objectives.lua`:
+
+```lua
+MARTYR_SKULL_RIDDLE_SIGNATURES_BY_MISSION = {
+    cm_habs = {
+        ["default|default|loc_interactable_button_01"] = {
+            fallback = true,
+            { x = 143.653, y = -157.591, z = -13.257 },
+        },
+        -- ...
+    },
+    -- 15 missions in total
+}
+```
+
+- **Keys.** Entries are keyed by mission name, then by the signature `interaction_type|ui_interaction_type|description`. Where a description is shared with other interactables, the signature is extended with `|unit_name`.
+- **Matching.** A unit matches only when both its signature matches and it stands within 0.1 m of one of the recorded positions.
+- **Flags.** `fallback = true` enables coordinate fallback points for an entry. `tentacles = true` marks the entry that growth tentacles block.
+
+**Lifecycle:**
+
+- While the current mission has riddle data and its riddle is unsolved, the interactee scan also classifies interactees whose prompt is not shown yet. That way riddle steps appear before you are standing next to them.
+- A used or inactive step is not classified, so completed steps clear one at a time.
+- `MARTYR_SKULL_RIDDLE_SOLVE_DOORS_BY_MISSION` lists the doors that open when a riddle is solved (`require_all` where there are several). Once they report an open state in `door_system`, the mission is latched as solved, and every riddle marker and fallback stops until the mission resets. Missions without solve-door data rely on the per-step lifecycle alone.
+
+**Coordinate fallbacks.** Some riddle units are not always visible to the interactee scan; currently this applies to the three `cm_habs` buttons. For entries with `fallback = true`, each recorded position is tracked as a point (`_track_point`, source `martyr_skull_riddle_coordinate_fallback`), so the marker exists even before the unit is observed. A fallback position then follows this lifecycle:
+
+- A live riddle interactable within about 0.5 m replaces the point.
+- A unit seen at the position feeds its state. Used retires the position, including on a hot join into a riddle that is already used. Seen active and later inactive retires it. Seen active again clears the retirement.
+- A unit that is inactive and unused from the start stays visible, and failed state reads never retire anything.
+- Retirement survives the per-tick point rebuild and toggling Radar. It is cleared by the mission reset.
+
+**Tentacles.** On Smelter Complex (`dm_forge`), growth tentacles within 8 m of the riddle's door button and no more than 3 m above or below it carry the riddle marker rather than the daemonic growth marker. Any other tentacle near the button gets no marker at all, including the one above the skull that is not needed to solve the riddle, and so does every tentacle there once the riddle is solved.
+
+**Presentation.** The kind is `martyr_skull_riddle_interactable`, in the Martyr's Skull settings group (`show_martyr_skull_riddle_interactables`, the group's icon size and highlight settings). It uses the Martyr's Skull marker and highlight color through a color alias. That color is shared and stays visible in the menu while the Skull marker itself is **Off**.
+
+`tests/Radar_martyr_skull_riddle_lifecycle_spec.lua` covers the fallback lifecycle, and the objective spec covers the `dm_forge` tentacle attribution.
+
+**Debug workflow.** Enable **Debug logs** (`debug_mode`) in the Debug tab. Each line below is written to the DMF log once per key per mission, and nothing is logged while debug mode is off:
+
+- `Unclassified interactable: mission=… signature=… unit_signature=… position=…` for every interactable Radar does not classify. The signatures use the table's format, so a new riddle step is added by copying its signature and position into `MARTYR_SKULL_RIDDLE_SIGNATURES_BY_MISSION`.
+- `Classified Martyr's Skull riddle interactable: …` confirms a match.
+- `Door candidate: mission=… state=… nearest_riddle_point=…` lists every door on a riddle mission with its state, to find the solve doors.
+- `Martyr's Skull fallback state: …` and `Martyr's Skull riddle solved: … reason=…` trace the fallback lifecycle and the solve latch.
+
+## Compatibility Integrations
+
+Both integrations are optional. Radar never requires either mod. Each one resolves the other mod lazily, so no load order is needed, and fails safe: when the other mod is missing, disabled or silent, it contributes nothing and the rest of Radar is unaffected. Radar bundles no code, data or assets from either mod.
+
+### Respawn Rewind
+
+The Respawn Rewind mod works out which respawn beacon is active, where the run-back threshold lies and, in its practice mode, the whole respawn layout of the mission. It publishes all of that as ordinary HUD world markers of type `respawn_rewind`. `compatibility/Radar_respawn_rewind.lua` is a read-only consumer of those markers. Radar does not re-implement the beacon selection; the rules stay in the one mod that tracks them.
+
+**Resolution.**
+- The other mod is looked up with `get_mod` under the names `RespawnRewind`, `respawn_rewind` and `Respawn Rewind`.
+- A mod whose `is_enabled()` is not `true` is skipped.
+- While the mod is unavailable, the lookup is retried at most every 5 seconds and nothing else runs: no world marker request and no targets.
+- The whole scan is skipped while every respawn kind is **Off**.
+- The resolved mod is forgotten on mission reset and looked up again for the next mission.
+
+**Import.**
+- On the droppable scan tick the module reads the world marker list through `_safe_world_markers_list` and keeps markers whose `type` is `respawn_rewind`.
+- Unit markers are positioned through their unit. Position markers are read by unboxing their `Vector3Box` inside `pcall` and copying the result; the engine vector is never kept.
+- Each recognized marker becomes a point with the id `respawn_rewind:<role>:<marker id>`. Points are rebuilt on every droppable tick, so a marker that Respawn Rewind removes stops being tracked on the next one.
+
+**Classification.** Each marker is assigned one of four roles:
+
+| Role | Radar kind | Respawn Rewind marker shape | Default display |
+| --- | --- | --- | --- |
+| `active` | `respawn_active` | Unit marker | **Icon + Distance m** |
+| `runback` | `respawn_runback` | Position marker | **Icon + Distance m** |
+| `practice_beacon` | `respawn_practice_beacon` | Unit marker | **Off** |
+| `practice_line` | `respawn_practice_line` | Position marker | **Off** |
+
+The role is resolved in this order:
+
+1. `data.role`, when Respawn Rewind provides a known role. This is the preferred contract, and a future Respawn Rewind that sets it needs no change in Radar.
+2. Respawn Rewind's icon color (`data.color`), accepted only when it agrees with the marker shape.
+3. Respawn Rewind's untranslated label (`Respawn`, `Respawn | 29m`, `Respawn 3`, `Run back`, `Stay behind`, `Hold back`, `3 ends`, `Line`), also checked against the shape.
+
+The color step exists because a numberless practice beacon and the active respawn both read exactly `Respawn` once Respawn Rewind's distance text is off. A marker that none of the three recognizes is ignored, since drawing a practice set as high-priority active respawns would be worse than drawing nothing. Malformed marker data never stops the scan.
+
+**Run-back offset.**
+- `Run back | 29m` and `Stay behind | -12m` report the team's offset from the threshold, not a distance to the marker. The module stores it in the point's meta (`respawn_status`, `respawn_offset_text`), and the HUD shows it in place of Radar's distance while **Show run-back offset** is on.
+- `Hold back` is Respawn Rewind's fallback where no main path exists. Its number is a plain distance, so no offset is taken from it.
+- Meta tables are reused per point id and cleared on every scan, so a stale offset never survives.
+
+**Practice markers.** They cover the whole map. With **Practice markers in overview only** on, they are tracked only while the overview is open. The rule is applied inside the module rather than in the shared target filter, so the hot filter path stays untouched.
+
+**Radar-side rules.**
+- Respawn kinds are not items, so **Tagged items only** never hides them.
+- They keep vertical arrows and are never hidden for height.
+- The active respawn (priority 620) and the run-back threshold (610) outrank the marker limit and draw on higher layers.
+- Both ignore the radar range and are pinned to the edge. The practice markers keep priority 0 and the normal range.
+
+**What Radar never does.** It never hooks Respawn Rewind or any HUD element for this. It never creates, removes or edits Respawn Rewind's markers, never changes its settings, and never runs its beacon code. Radar's respawn colors start from Respawn Rewind's own colors but are ordinary Radar settings from then on.
+
+**Tests.**
+- `tests/Radar_respawn_rewind_spec.lua` covers classification, including the color-against-shape and label-only paths. It also covers position copying, marker removal, a missing or disabled Respawn Rewind, the idle path with every kind off, malformed data, run-back offsets including the stale-offset case, the overview rule and the mission reset.
+- `tests/Radar_mission_objective_wiring_spec.lua` pins the kind registration, the priorities, the glyphs and the "requires Respawn Rewind" text in every language.
+
+### Strikemap
+
+`compatibility/Radar_strikemap.lua` consumes the public geometry API of [Strikemap](https://www.nexusmods.com/warhammer40kdarktide/mods/1022). The player-facing behavior is described in [Strikemap integration notes](#strikemap-integration-notes).
+
+- **Loading.** It is an explicit module, loaded by `Radar.lua` and by `ui/Radar_strikemap_geometry.lua`. `mod:io_dofile` re-runs the file on each load, so the singleton is cached on `mod._strikemap_compatibility`.
+- **Resolution.** Strikemap and its versioned API are resolved lazily, so `Radar.mod` needs no `load_after`. Radar registers as a geometry consumer, validates the map context (walkable triangles and their spatial index) and the optional vector context, and caches both per geometry revision.
+- **Status machine.**
+  - `waiting` and `map_unavailable` retry after an interval.
+  - `active` polls Strikemap for new geometry revisions.
+  - `incompatible` and `error` stay until a reset (a map geometry source change or a mod reload).
+  - Each status change is logged once. Drawing errors in the renderer are reported back to the module instead of being raised.
+- **Callbacks.** The module chains `mod.on_setting_changed` and `mod.on_disabled`, and adds `mod:reset_strikemap_integration`, which the mission reset in `Radar_tracking.lua` calls.
+- **Ownership.** Only the floor plan is imported. Every marker, filter and interaction stays Radar's own.
+
+## Settings and Migration
+
+3.0.0 moves the menu from the Radar-specific integration with Alf's Mod Settings Extensions to DMF's native options API. Radar no longer uses per-widget `tab`, `tab_overrides`, `get` or `change` fields, and `Radar.mod` no longer loads after Alf's extensions.
+
+### Files
+
+| File | Role |
+| --- | --- |
+| `Radar_data.lua` | Returns the DMF mod data: `name`, `description`, `is_togglable` and the `options.widgets` tree. It also defines `mod:migrate_marker_enabled_dropdown_settings`. |
+| `Radar_color_settings.lua` | The color registry that the menu, the runtime and the HUD read, plus the color migrations. |
+| `Radar_localization.lua` | Titles, option labels and `<setting_id>_tooltip` strings. |
+| `Radar/Radar.mod` | The UI packages DMF loads and releases. |
+| `Radar/info.json` | The release metadata DMF shows in the options header. |
+
+### How the menu is built
+
+The widget tree is declared inline in `Radar_data.lua`, with one top-level `group` per tab, which DMF turns into its native tab navigation. Four passes then post-process it:
+
+1. **`_apply_marker_enabled_dropdowns`** turns the marker checkboxes listed in `MARKER_DROPDOWN_PRESENTATIONS` into icon / off dropdowns. The player marker becomes the player style dropdown. Any saved checkbox value is migrated first.
+2. **`_insert_color_settings`** adds the native `color` widgets registered in `Radar_color_settings.lua`:
+   - A color owned by a single marker becomes a sub-widget of that marker's widget.
+   - An icon color under an artwork dropdown gets `show_in_mode = "icon"`, since artwork is never tinted.
+   - Colors marked `shared` are inserted as siblings so they stay visible. These are the boss colors, the Martyr's Skull colors and the puzzle state colors.
+3. **`_apply_sub_widget_visibility`** gives every option of a dropdown that has sub-widgets a `show_widgets` list. `off` shows none; any other option shows the sub-widgets without a `show_in_mode` plus those whose `show_in_mode` matches the option. DMF already hides checkbox sub-widgets while the box is unticked.
+4. **`_apply_missing_tooltips`** gives every widget without a tooltip the id `<setting_id>_tooltip`.
+
+`tests/Radar_settings_menu_spec.lua` builds this tree for a fresh profile and checks:
+- the nine tabs and their group order
+- that no Alf-only fields remain
+- the color widgets and the `show_widgets` lists
+- that building the menu for a fresh profile saves no setting
+
+### Colors
+
+A color with prefix `p` is saved as one native setting, `p_color = { a, r, g, b }`. Each registration in `Radar_color_settings.lua` names:
+- the default value
+- the marker kinds and aliases that resolve to the color
+- the `anchor` widget the color picker appears under
+
+Radar reads colors through `mod:get_radar_color(prefix)` and the marker and highlight getters. They are cached per prefix, and a chained `mod.on_setting_changed` invalidates the cache. Default marker colors are read from this registry by the enemy definitions, the menu and the HUD fallbacks, so each default is written down in exactly one place.
+
+**Dropdown previews.**
+- A dropdown option carries its marker's `icon` and an `icon_style`, one shared style table per color. When a color changes, the options it tints get a fresh style.
+- A native option icon is a material and cannot render a glyph. For glyph markers (Diamantine, Plasteel and the respawn markers), the glyph therefore goes into the option label, wrapped in Darktide color tags (`{#color(r,g,b)}…{#reset()}`) and padded to line up with its icon-bearing siblings. The label is rebuilt when its color changes.
+
+### Runtime reactions
+
+DMF's native options ignore widget `get` and `change` callbacks, which the old extension-based menu relied on. Those reactions now run in chained `mod.on_setting_changed` handlers:
+- clamping the radar offsets to the screen
+- keeping the radar in place when its anchor changes
+- re-clamping when the size changes
+- mirroring the player marker style
+- rebuilding the zoom-key input capture
+- invalidating the color cache
+- re-tinting dropdown icons
+- resetting the Strikemap integration
+
+`mod.on_settings_reset` re-applies the default anchor and offsets after DMF has reset every setting. The value normalization the old widget getters did is done by the runtime getters themselves.
+
+### Migrations
+
+| When | What is migrated | Code |
+| --- | --- | --- |
+| While `Radar_data.lua` builds the menu, before DMF saves the option defaults | Colors saved as the four channel settings `p_opacity`, `p_red`, `p_green` and `p_blue`, plus the pre-color `background_opacity`, are folded into `p_color`. Missing channels take the default, and an existing native setting is never overwritten. The channel keys are deleted afterwards. | `ColorSettings.migrate_channel_settings` |
+| Same | `map_geometry_source` is derived from the old `use_strikemap_geometry` and `show_navmesh` toggles, while it has never been saved. | `_migrate_map_geometry_source_setting` |
+| Same | Dropdowns that still hold a saved checkbox value: `true` becomes the enabled mode, `false` becomes `off`. | `_migrate_marker_enabled_dropdown_setting`, `_migrate_checkbox_display_mode_setting` |
+| `mod.on_all_mods_loaded` | Marker checkboxes to dropdowns; artwork and Expedition POI booleans to dropdown values; the per-breed enemy settings split out of the old common and shooter settings (seeded only while unset); the old teammate checkbox and player style into `show_players`. | `Radar_enemy_definitions.lua` |
+| `mod.on_all_mods_loaded` | The old global nearby-highlight opacity and custom color are copied into every per-marker highlight color still at its default, then deleted. Once per profile, the enemy bracket color takes the RGB of a customized enemy background color, latched by `enemy_bracket_color_migrated`. | `mod:migrate_radar_color_settings` |
+
+**Idempotency.** Each migration runs once:
+- Retired keys are deleted with `mod:set(setting_id, nil)` rather than reset, so a later start finds nothing to migrate and never overrides a value the player has since set back to its default.
+- One-time migrations that cannot be detected from the data are latched with a saved flag instead.
+- The channel migration must run before DMF initializes the options, because DMF saves the default of every native color setting that is still unset. That is why it lives in `Radar_data.lua` rather than in `on_all_mods_loaded`.
+
+## Testing
+
+`tests/` holds standalone LuaJIT specs that need no Darktide session. Each spec:
+- loads the production files by repository-relative path with `loadfile`
+- runs them against a fake `mod`, fake engine APIs and fake extension systems, or installs the real installer modules into a fake shared environment
+- asserts on the result, prints a summary, and exits with status `1` if anything fails
+
+There is no test runner or CI configuration. Run a spec from the repository root, for example:
+
+```bash
+luajit tests/Radar_settings_menu_spec.lua
+```
+
+| Spec | Contracts it protects |
+| --- | --- |
+| `Radar_martyr_skull_riddle_lifecycle_spec.lua` | The riddle coordinate-fallback lifecycle on `cm_habs`: fallbacks for buttons not yet observed, replacement by a live unit, retirement on use or on an active-to-inactive transition (including hot joins), conservative visibility when state is unknown or unreadable, persistence across point rebuilds and toggles, clearing on the runtime reset, and the solved latch suppressing every fallback. |
+| `Radar_mission_objective_interactable_spec.lua` | Objective discovery and lifecycle against fake objective systems: dedicated systems, scan zones and the client-side recovery, active-objective confirmation, appearance before the prompt, armed copies only, used and inactive retirement, category toggles, existing classifications preserved, puzzle colors, the start-marker, hint, world-marker, container and socket rules, growth recognition and tentacles, the range exemption, and the debug lines. |
+| `Radar_mission_objective_wiring_spec.lua` | Module wiring. Installs the real definition and helper modules and checks that every objective kind is registered everywhere a kind must be (settings, scale groups, colors, highlights, presentations). Also checks the shared presentation rules, the respawn registration and priorities, localization requirements, declaration order of shared locals, and headroom under LuaJIT's 200-local limit. |
+| `Radar_respawn_rewind_spec.lua` | Compatibility behavior: role classification and its fallbacks, position copying, removed markers, a missing or disabled Respawn Rewind, malformed data, run-back offsets, the overview rule and the mission reset. |
+| `Radar_screen_highlight_anchor_spec.lua` | Screen highlight placement with the real runtime helpers: objective box centers, pickups on their origin, the barrel `c_explosion` → tracked position → origin order, every engine failure path, and which world markers count as the game marking an objective. |
+| `Radar_settings_menu_spec.lua` | The settings schema and migrations: `Radar.mod` packages and no Alf dependency, the nine tabs and their order, native color widgets and their placement, `show_widgets`, a fresh profile saving nothing, a profile saved by the previous release migrating its channel colors, teammate, map geometry and checkbox settings (old keys deleted, unrelated settings untouched, a second build changing nothing), live dropdown tinting, and the runtime highlight and bracket color migrations. |
+
+Some checks in the wiring spec read the production source as text, for example to pin a condition, an upvalue name or the declaration order of a local. A refactor that moves such code has to update the spec deliberately.
 
 ## Contributing
+
+- Follow the module boundaries in [Where new code goes](#where-new-code-goes) and the conventions in [Boundaries and conventions](#boundaries-and-conventions).
+- Keep new marker kinds registered in every table the wiring spec checks, and add a localized title and tooltip for every new setting in all 12 languages.
+- Run the specs in `tests/` before submitting a change.
 
 ### Traditional Chinese localization
 
 When editing Traditional Chinese (`zh-tw`) strings, consult the [Darktide translation glossary](https://github.com/SyuanTsai/Warhammer-40-000-DARKTIDE-Mods/blob/main/Referneces/Translation.md).
 When the glossary lists multiple translations, preserve the existing context-specific terminology unless there is a clear reason to change it.
 
+## Requirements
+
+- **[Darktide Mod Framework](https://www.nexusmods.com/warhammer40kdarktide/mods/8)**, a release with native mod options (tabs, color pickers, and `.mod` package loading; version 26.08.19 or later)
+- **[Darktide Mod Loader](https://www.nexusmods.com/warhammer40kdarktide/mods/19)**
+
+Optional, never required:
+
+- **[Strikemap](https://www.nexusmods.com/warhammer40kdarktide/mods/1022)**, for the **Strikemap floor plan** and **Auto** map geometry sources.
+- **[Respawn Rewind](https://www.nexusmods.com/warhammer40kdarktide/mods/1214)**, for the markers of the **Respawn** tab.
+
+[Alf's Mod Settings Extensions](https://www.nexusmods.com/warhammer40kdarktide/mods/864) is not required and not used.
+
 ## Notes
 
 - The radar is intended for active gameplay and suppresses itself outside valid runtime states such as hub and menu contexts.
 - The radar now remains visible while the comms wheel is open, which makes live callouts and tag placement easier to track.
-- The DMF options view remembers the last scroll position inside the **Radar** category while the options view remains open.
+- Radar no longer hooks the DMF options view to restore its scroll position; DMF now remembers the position itself.
 - Centered overview mode is intended as a temporary tactical view. It has separate zoom, scale-legend, and marker-cap controls and automatically exits when the radar runtime state is no longer valid.
 - Normal radar range now supports **10 m** to **200 m**, and the zoom keybinds can temporarily control that range while the radar zoom modifier is held.
 - **Auspex** is a full radar style with an optional animated sweep, and the same Auspex scanner background can also be selected as a guide option for Square and Circle radar styles.
@@ -1065,5 +1538,5 @@ When the glossary lists multiple translations, preserve the existing context-spe
 - Standard marked-enemy brackets remain one pixel thick at every marker size, avoiding abrupt visual weight changes when category scaling crosses a size threshold. The separate nearby-highlight thickness setting is unaffected.
 - **Tagged enemies only** and **Tagged items only** are filters, not new marker families. They reuse the game's active tag state and let tagged targets ignore the normal radar range limit while tagged.
 - Expedition POIs and section-scoped expedition items are filtered to the active expedition section. POI categories can independently show icon-only markers, include meter distance text, or be hidden. Sanctuary-state transitions trigger cleanup so stale safe-zone markers do not leak into open zones, while active player-dropped Tech-Remnants can still be shown.
-- Darktide 1.12.0 compatibility uses the current `packages/ui/views/expedition_view/expedition_view` package instead of the removed `expedition_play_view` package.
+- Darktide 1.12.0 compatibility uses the current `packages/ui/views/expedition_view/expedition_view` package instead of the removed `expedition_play_view` package. Like every package Radar draws from, it is declared in `Radar.mod`.
 - Marker previews in this readme were generated from the included template assets and documentation images so the legend matches the mod's configured presentations as closely as possible.
