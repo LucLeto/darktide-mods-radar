@@ -130,7 +130,7 @@ local function _enemy_marker_display_tooltip(localization_key)
         ja = enemy_name .. " のマーカーをレーダー上でどう表示するかを選択します: アイコンのみ、マーク付きアイコン、または無効。",
         ko = "레이더에서 " .. enemy_name .. " 마커를 어떻게 표시할지 선택합니다: 아이콘만, 표시된 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择雷达上 " .. enemy_name .. " 标记的显示方式: 仅图标、已标记图标或禁用。",
-        ["zh-tw"] = "選擇雷達上 " .. enemy_name .. " 標記的顯示方式: 僅圖示、已標記圖示或停用。",
+        ["zh-tw"] = "選擇雷達上 " .. enemy_name .. " 標記的顯示方式：僅圖示、已標記圖示或停用。",
     }
 end
 
@@ -351,7 +351,7 @@ local _color_label_texts = {
         ja = "ハイライト色",
         ko = "강조 색상",
         ["zh-cn"] = "高亮颜色",
-        ["zh-tw"] = "高亮顏色",
+        ["zh-tw"] = "醒目標示顏色",
     },
     icon_marker = {
         en = "Icon marker color",
@@ -729,7 +729,7 @@ local _color_label_texts = {
         ja = "Tox 敵の色",
         ko = "Tox 적 색상",
         ["zh-cn"] = "Tox 敌人颜色",
-        ["zh-tw"] = "Tox 敵人顏色",
+        ["zh-tw"] = "毒氣敵人顏色",
     },
     enemy_mutator = {
         en = "Mutator enemy color",
@@ -743,7 +743,7 @@ local _color_label_texts = {
         ja = "変異敵の色",
         ko = "변이 적 색상",
         ["zh-cn"] = "变异敌人颜色",
-        ["zh-tw"] = "變異敵人顏色",
+        ["zh-tw"] = "變種人顏色",
     },
     enemy_armored_hound = {
         en = "Armored hound color",
@@ -844,7 +844,7 @@ local _color_tooltip_texts = {
         ja = "設定された ARGB 近距離ハイライト色を調整します。不透明度はアルファチャンネルです。",
         ko = "설정된 ARGB 근처 강조 색상을 조정합니다. 불투명도는 알파 채널입니다.",
         ["zh-cn"] = "调整已配置的 ARGB 附近高亮颜色。不透明度是 Alpha 通道。",
-        ["zh-tw"] = "調整已設定的 ARGB 附近高亮顏色。不透明度是 Alpha 通道。",
+        ["zh-tw"] = "調整已設定的 ARGB 附近醒目標示顏色。不透明度是 Alpha 通道。",
     },
     icon_marker = {
         en = "Adjust the configured ARGB color used by the simplified icon display mode.",
@@ -872,7 +872,7 @@ local _color_tooltip_texts = {
         ja = "マーク済みマーカーの背景とブラケットに使う ARGB 色を調整します。",
         ko = "표시된 마커의 배경과 괄호에 사용하는 ARGB 색상을 조정합니다.",
         ["zh-cn"] = "调整已标记标记背景和括号使用的 ARGB 颜色。",
-        ["zh-tw"] = "調整已標記標記背景與括號使用的 ARGB 顏色。",
+        ["zh-tw"] = "調整已標記圖示的背景與括號所使用的 ARGB 顏色。",
     },
     enemy_marker = {
         en = "Adjust the configured ARGB enemy marker color. Opacity is the alpha channel.",
@@ -942,7 +942,7 @@ local _color_tooltip_texts = {
         ja = "パズルがプレイヤーを待っている間、または解答中の間、すべてのミッション目標カテゴリーのパズル装置のマーカーと近距離ハイライトを、カテゴリーの色の代わりにこの色で表示します。不透明度はアルファチャンネルです。",
         ko = "퍼즐이 플레이어를 기다리거나 해결 중인 동안, 모든 임무 목표 분류의 퍼즐 장치 마커와 근처 강조에 분류 색상 대신 이 색상을 사용합니다. 불투명도는 알파 채널입니다.",
         ["zh-cn"] = "谜题等待玩家或正在解谜时，所有任务目标类别的谜题装置的标记及其附近高亮改用此颜色，替代类别颜色。不透明度是 Alpha 通道。",
-        ["zh-tw"] = "謎題等待玩家或正在解謎時，所有任務目標類別的謎題裝置標記及其附近高亮改用此顏色，取代類別顏色。不透明度是 Alpha 通道。",
+        ["zh-tw"] = "謎題等待玩家或正在解謎時，所有任務目標類別的謎題裝置標記及其附近醒目標示改用此顏色，取代類別顏色。不透明度是 Alpha 通道。",
     },
     expedition_location = {
         en = "Used until a player marks it. After that, the color of the player who marked it is used. Opacity is the alpha channel.",
@@ -1028,7 +1028,7 @@ return {
         ja = "設定可能なレーダーにアイテム、味方、優先度の高い敵を表示します。",
         ko = "설정 가능한 레이더에 아이템, 팀원, 우선순위가 높은 적을 표시합니다.",
         ["zh-cn"] = "在一个可配置的雷达上显示物品、队友和高优先级的敌人。  翻译 by Caimao",
-        ["zh-tw"] = "在可自訂的雷達上顯示物品、隊友與高優先敵人。",
+        ["zh-tw"] = "在可自訂的雷達上顯示物品、隊友與需要優先注意的敵人。",
     },
     marker_color = _color_label_text("marker"),
     highlight_color = _color_label_text("highlight"),
@@ -1089,7 +1089,7 @@ return {
         ja = " ハイライト色",
         ko = " 강조 색상",
         ["zh-cn"] = " 高亮颜色",
-        ["zh-tw"] = " 高亮顏色",
+        ["zh-tw"] = " 醒目標示顏色",
     },
     color_option_background_suffix = {
         en = " background color",
@@ -1243,7 +1243,7 @@ return {
         ja = "デバッグ",
         ko = "디버그",
         ["zh-cn"] = "调试",
-        ["zh-tw"] = "偵錯",
+        ["zh-tw"] = "除錯",
     },
 
     general_availability_group = {
@@ -1315,7 +1315,7 @@ return {
         ja = "Radar フレーム",
         ko = "Radar 프레임",
         ["zh-cn"] = "Radar 边框",
-        ["zh-tw"] = "Radar 框架",
+        ["zh-tw"] = "雷達外框",
     },
     radar_colors_group = {
         en = "Radar Colors",
@@ -1329,7 +1329,7 @@ return {
         ja = "Radar の色",
         ko = "Radar 색상",
         ["zh-cn"] = "Radar 颜色",
-        ["zh-tw"] = "Radar 顏色",
+        ["zh-tw"] = "雷達顏色",
     },
     radar_map_geometry_group = {
         en = "Map Geometry",
@@ -1371,7 +1371,7 @@ return {
         ja = "レーダーマーカーの背後に描画されるミッションの歩行可能ジオメトリの描画方法です。ライブスキャンはミッションのナビゲーションメッシュを直接読み取り、常に動作します。StrikemapはStrikemapモッドの事前生成されたフロアプランを描画し、Strikemapのインストールと有効化が必要です。自動はStrikemapを優先し、Strikemapのジオメトリが利用できない場合はライブスキャンに切り替えます。同時に描画されるソースは常に1つだけです。",
         ko = "레이더 마커 뒤에 그려지는 임무의 이동 가능 지형을 그리는 방식입니다. 라이브 스캔은 임무의 내비게이션 메시를 직접 읽으며 항상 작동합니다. Strikemap은 Strikemap 모드의 사전 제작된 평면도를 그리며 Strikemap이 설치되어 활성화되어 있어야 합니다. 자동은 Strikemap을 우선하고 Strikemap 지형을 사용할 수 없으면 라이브 스캔으로 전환합니다. 한 번에 하나의 소스만 그려집니다.",
         ["zh-cn"] = "决定雷达标记后方的任务可行走几何体如何绘制。实时扫描直接读取任务的导航网格，始终可用。Strikemap 绘制 Strikemap 模组预生成的平面图，需要安装并启用 Strikemap。自动优先使用 Strikemap，当 Strikemap 几何体不可用时回退到实时扫描。同一时间只会绘制一个来源。",
-        ["zh-tw"] = "決定雷達標記後方的任務可行走幾何如何繪製。即時掃描直接讀取任務的導航網格，永遠可用。Strikemap 繪製 Strikemap 模組預先產生的平面圖，需要安裝並啟用 Strikemap。自動優先使用 Strikemap，當 Strikemap 幾何無法使用時回退到即時掃描。同一時間只會繪製一個來源。",
+        ["zh-tw"] = "設定雷達標記後方的可行走區域如何繪製。即時掃描直接讀取任務的導航網格，隨時可用。Strikemap 則繪製該模組預先建立的平面圖，必須安裝並啟用 Strikemap。自動模式會優先使用 Strikemap；若沒有可用的平面圖，就改用即時掃描。同一時間只會繪製其中一種。",
     },
     map_geometry_source_live = {
         en = "Live scan (built-in)",
@@ -1441,7 +1441,7 @@ return {
         ja = "レーダーマーカーの下に、近くの歩行可能なミッションジオメトリを表示します。現在のミッションのナビゲーションデータからリアルタイムで生成されます。利用可能なデータがないミッションでは、単にジオメトリが表示されません。",
         ko = "레이더 마커 아래에 근처의 이동 가능한 임무 지형을 표시합니다. 현재 임무의 내비게이션 데이터에서 실시간으로 생성되며, 사용 가능한 데이터가 없는 임무에서는 지형이 표시되지 않습니다.",
         ["zh-cn"] = "在雷达标记下方显示附近可行走的任务几何。基于当前任务的导航数据实时生成；没有可用数据的任务将不显示几何。",
-        ["zh-tw"] = "在雷達標記下方顯示附近可行走的任務幾何。根據目前任務的導航資料即時產生；沒有可用資料的任務將不顯示幾何。",
+        ["zh-tw"] = "在雷達標記下方顯示附近的可行走區域。系統會根據目前任務的導航資料即時產生；若任務沒有可用資料，就不會顯示。",
     },
     navmesh_range_above = {
         en = "Floors Above Range",
@@ -1511,7 +1511,7 @@ return {
         ja = "Tech-Remnants",
         ko = "Tech-Remnants",
         ["zh-cn"] = "Tech-Remnants",
-        ["zh-tw"] = "Tech-Remnants",
+        ["zh-tw"] = "科技殘骸",
     },
     expedition_items_group = {
         en = "Expedition items",
@@ -1568,7 +1568,7 @@ return {
         ja = "ボス",
         ko = "보스",
         ["zh-cn"] = "Boss",
-        ["zh-tw"] = "Boss",
+        ["zh-tw"] = "首領",
     },
     enemy_horde_group = {
         en = "Horde",
@@ -1723,7 +1723,7 @@ return {
         ja = "アービトレーターのサイバー・マスティフのコンパニオンマーカーを表示します。",
         ko = "아비트레이터 사이버 마스티프 동료 마커를 표시합니다.",
         ["zh-cn"] = "显示仲裁者电子獒犬伙伴标记。",
-        ["zh-tw"] = "顯示法務官電子獒犬友軍標記。",
+        ["zh-tw"] = "顯示法務官電子獒犬的支援單位標記。",
     },
     show_servo_skulls_tooltip = {
         en = "Show Skitarii Servo Skull companion markers.",
@@ -1737,7 +1737,7 @@ return {
         ja = "スキタリのサーボスカルのコンパニオンマーカーを表示します。",
         ko = "스키타리 서보 스컬 동료 마커를 표시합니다.",
         ["zh-cn"] = "显示护教军伺服颅骨伙伴标记。",
-        ["zh-tw"] = "顯示護教軍伺服頭骨友軍標記。",
+        ["zh-tw"] = "顯示護教軍伺服頭骨的支援單位標記。",
     },
     player_tags_group = {
         en = "Player tags",
@@ -1821,7 +1821,7 @@ return {
         ja = "モーティス試練で有効化",
         ko = "모티스 시련에서 활성화",
         ["zh-cn"] = "在莫提斯试炼中启用",
-        ["zh-tw"] = "在莫提斯試煉中啟用",
+        ["zh-tw"] = "在死神試煉中啟用",
     },
     enable_in_expeditions = {
         en = "Enable in Expeditions",
@@ -1975,7 +1975,7 @@ return {
         ja = "近接ハイライトの距離 (m)",
         ko = "근처 강조 표시 범위 (m)",
         ["zh-cn"] = "附近高亮范围（米）",
-        ["zh-tw"] = "附近高亮範圍（公尺）",
+        ["zh-tw"] = "附近醒目標示範圍（公尺）",
     },
     nearby_highlight_distance_text = {
         en = "Show distance above nearby highlights",
@@ -1989,7 +1989,7 @@ return {
         ja = "近くのハイライトの上に距離を表示",
         ko = "근처 강조 표시 위에 거리 표시",
         ["zh-cn"] = "在附近高亮上方显示距离",
-        ["zh-tw"] = "在附近高亮上方顯示距離",
+        ["zh-tw"] = "在附近醒目標示上方顯示距離",
     },
     nearby_highlight_radar_distance_text = {
         en = "Show distance on radar markers",
@@ -2017,7 +2017,7 @@ return {
         ja = "近くのハイライトの太さ",
         ko = "근처 강조 표시 두께",
         ["zh-cn"] = "附近高亮粗细",
-        ["zh-tw"] = "附近高亮粗細",
+        ["zh-tw"] = "附近醒目標示粗細",
     },
     item_vertical_arrow_threshold = {
         en = "Show vertical arrows within range (m)",
@@ -2073,7 +2073,7 @@ return {
         ja = "敵、味方、コンパニオンなど、自ら移動するターゲットをレーダーが再スキャンする頻度です。レートを上げるとそれらのマーカーが目に見えて滑らかになりますが、追跡ユニット数に応じてCPU負荷がわずかに増えます。ポケットアイテムや設置装備などのドロップ可能なアイテムは常に「低」レートで更新され、完全に静的なオブジェクトはさらに少ない頻度で更新されます。レーダー自体の回転は毎フレーム更新されます。",
         ko = "적, 아군, 동반자처럼 스스로 움직이는 목표를 레이더가 다시 스캔하는 빈도입니다. 빈도가 높을수록 해당 마커가 눈에 띄게 부드러워지며, 추적 유닛 수에 따라 CPU 부담이 약간 늘어납니다. 소지품과 설치 장비 같은 떨어뜨릴 수 있는 아이템은 항상 낮음 빈도로 갱신되고, 완전히 고정된 물체는 그보다 더 드물게 갱신되며, 레이더 자체의 회전은 매 프레임 갱신됩니다.",
         ["zh-cn"] = "雷达重新扫描自主移动目标（敌人、队友和同伴）的频率。频率越高，这些标记越流畅，CPU 开销略有增加，且随追踪单位数量增长。可丢弃物品（如口袋物品和可部署装备）始终以“低”频率更新，完全静态的物体更新得更少，而雷达自身的旋转每帧更新。",
-        ["zh-tw"] = "雷達重新掃描自主移動目標（敵人、隊友和同伴）的頻率。頻率越高，這些標記越流暢，CPU 開銷略微增加，且隨追蹤單位數量增長。可丟棄物品（如口袋物品和可部署裝備）始終以「低」頻率更新，完全靜態的物體更新得更少，而雷達自身的旋轉每幀更新。",
+        ["zh-tw"] = "設定雷達重新掃描會自行移動的目標（敵人、隊友與支援單位）的頻率。頻率越高，標記移動越流暢，但追蹤單位越多，CPU 負擔也會略增。可丟下的隨身物品和部署物固定以「低」頻率更新；不會移動的物件更新得更少。雷達本身的旋轉則每一影格都會更新。",
     },
     radar_scan_rate_low = {
         en = "Low (4 per second)",
@@ -2143,7 +2143,7 @@ return {
         ja = "概要マーカー上限",
         ko = "최대 개요 마커 수",
         ["zh-cn"] = "最大概览标记数",
-        ["zh-tw"] = "最大概覽標記數",
+        ["zh-tw"] = "概覽標記數量上限",
     },
     scale_icons_with_radar_size = {
         en = "Scale icons with radar size",
@@ -2227,7 +2227,7 @@ return {
         ja = "アニメーション付きレーダースイープ",
         ko = "애니메이션 레이더 스윕",
         ["zh-cn"] = "动画雷达扫描",
-        ["zh-tw"] = "動畫雷達掃描",
+        ["zh-tw"] = "動態雷達掃描",
     },
     auspex_animated_sweep_tooltip = {
         en = "Affects the Auspex radar style and if selected Auspex guides.",
@@ -2241,7 +2241,7 @@ return {
         ja = "Auspex レーダースタイルと、選択されている場合は Auspex ガイドに適用されます。",
         ko = "Auspex 레이더 스타일과, 선택된 경우 Auspex 가이드에 적용됩니다.",
         ["zh-cn"] = "影响 Auspex 雷达样式，并在选中时影响 Auspex 引导线。",
-        ["zh-tw"] = "影響占卜儀雷達樣式，並在選取時影響占卜儀引導線。",
+        ["zh-tw"] = "影響占卜儀雷達樣式；若選用占卜儀輔助線，也會影響該輔助線。",
     },
     radar_outline = {
         en = "Radar outline",
@@ -2357,7 +2357,7 @@ return {
         ja = "ボスマーカーのスタイル",
         ko = "보스 마커 스타일",
         ["zh-cn"] = "Boss 标记样式",
-        ["zh-tw"] = "Boss 標記樣式",
+        ["zh-tw"] = "首領標記樣式",
     },
     show_boss_distance_text = {
         en = "Show boss distance text",
@@ -2371,7 +2371,7 @@ return {
         ja = "ボスまでの距離を表示",
         ko = "보스까지의 거리 표시",
         ["zh-cn"] = "显示 Boss 距离文本",
-        ["zh-tw"] = "顯示 Boss 距離文字",
+        ["zh-tw"] = "顯示首領距離文字",
     },
     enemies_icon_scale = {
         en = "All enemy icon size",
@@ -2399,7 +2399,7 @@ return {
         ja = "ボスの垂直矢印を表示",
         ko = "보스 수직 화살표 표시",
         ["zh-cn"] = "显示 Boss 垂直箭头",
-        ["zh-tw"] = "顯示 Boss 垂直箭頭",
+        ["zh-tw"] = "顯示首領垂直箭頭",
     },
     show_enemy_horde_vertical_arrows = {
         en = "Show horde vertical arrows",
@@ -2653,7 +2653,7 @@ return {
         ja = "近くのハイライト",
         ko = "근처 강조 표시",
         ["zh-cn"] = "附近高亮",
-        ["zh-tw"] = "附近高亮",
+        ["zh-tw"] = "附近醒目標示",
     },
     radar_anchor = {
         en = "Radar anchor",
@@ -2779,7 +2779,7 @@ return {
         ja = "1回の入力あたりの移動量",
         ko = "입력당 이동량",
         ["zh-cn"] = "每次按键的移动步长",
-        ["zh-tw"] = "每次輸入的移動步長",
+        ["zh-tw"] = "每次按鍵的移動距離",
     },
     move_radar_left_key = {
         en = "Move radar left",
@@ -2863,7 +2863,7 @@ return {
         ja = "近くの一般アイテムを強調表示",
         ko = "근처 일반 아이템 강조 표시",
         ["zh-cn"] = "高亮附近普通拾取物",
-        ["zh-tw"] = "高亮附近一般拾取物",
+        ["zh-tw"] = "醒目標示附近常見拾取物",
     },
     show_crates = {
         en = "Crates",
@@ -3032,7 +3032,7 @@ return {
         ja = "近くの素材を強調表示",
         ko = "근처 재료 강조 표시",
         ["zh-cn"] = "高亮附近材料",
-        ["zh-tw"] = "高亮附近材料",
+        ["zh-tw"] = "醒目標示附近材料",
     },
     show_diamantine = {
         en = "Diamantine",
@@ -3089,7 +3089,7 @@ return {
         ja = "近くの主要目標アイテムを強調表示",
         ko = "근처 주요 목표 아이템 강조 표시",
         ["zh-cn"] = "高亮附近主要目标物品",
-        ["zh-tw"] = "高亮附近主要目標物品",
+        ["zh-tw"] = "醒目標示附近主要目標物品",
     },
     show_power_cell_teal = {
         en = "Power Cell",
@@ -3131,7 +3131,7 @@ return {
         ja = "モエビアン痘ゼータファイト-13サンプル",
         ko = "모에비안 폭스 제타파이트-13 표본",
         ["zh-cn"] = "莫比亚PZ-13样本",
-        ["zh-tw"] = "莫比亞瘟疫澤塔菲特-13樣本",
+        ["zh-tw"] = "莫比亞瘟疫澤塔菲特-13 樣本",
     },
     show_vacuum_capsule = {
         en = "Vacuum Capsule",
@@ -3187,7 +3187,7 @@ return {
         ja = "モーティスの遺物",
         ko = "모르티스 유물",
         ["zh-cn"] = "死灵遗物",
-        ["zh-tw"] = "莫提斯遺物",
+        ["zh-tw"] = "死神遺物",
     },
     show_coordinates_paper = {
         en = "Coordinates",
@@ -3230,7 +3230,7 @@ return {
         ja = "近くの副次目標アイテムを強調表示",
         ko = "근처 보조 목표 아이템 강조 표시",
         ["zh-cn"] = "高亮附近次要目标物品",
-        ["zh-tw"] = "高亮附近次要目標物品",
+        ["zh-tw"] = "醒目標示附近次要目標物品",
     },
     show_pocketable_grimoire = {
         en = "Grimoire",
@@ -3287,7 +3287,7 @@ return {
         ja = "近くの任務目標インタラクト対象を強調表示",
         ko = "근처 임무 목표 상호작용 요소 강조 표시",
         ["zh-cn"] = "高亮附近任务目标可交互物",
-        ["zh-tw"] = "高亮附近任務目標可互動物件",
+        ["zh-tw"] = "醒目標示附近任務目標可互動物件",
     },
     show_mission_objective_scanner = {
         en = "Scanner targets",
@@ -3357,7 +3357,7 @@ return {
         ja = "サーヴォスカルの目標",
         ko = "서보 해골 목표",
         ["zh-cn"] = "机仆头骨目标",
-        ["zh-tw"] = "機僕頭骨目標",
+        ["zh-tw"] = "伺服頭骨目標",
     },
     show_mission_objective_growth = {
         en = "Daemonic growth",
@@ -3428,7 +3428,7 @@ return {
         ja = "近くの遠征アイテムを強調表示",
         ko = "근처 원정 아이템 강조 표시",
         ["zh-cn"] = "高亮附近远征物品",
-        ["zh-tw"] = "高亮附近遠征物品",
+        ["zh-tw"] = "醒目標示附近遠征物品",
     },
     show_expeditions_currency = {
         en = "Salvage",
@@ -3526,7 +3526,7 @@ return {
         ja = "近くの山を統合",
         ko = "가까운 더미 합치기",
         ["zh-cn"] = "合并附近堆叠",
-        ["zh-tw"] = "合併附近堆疊",
+        ["zh-tw"] = "合併附近的殘骸堆",
     },
     show_expedition_loot_cluster_value = {
         en = "Show tech-remnant value text",
@@ -3554,7 +3554,7 @@ return {
         ja = "クラスタリングの水平半径 (m)",
         ko = "클러스터 수평 반경 (m)",
         ["zh-cn"] = "聚类水平半径（米）",
-        ["zh-tw"] = "聚類水平半徑（公尺）",
+        ["zh-tw"] = "群聚水平半徑（公尺）",
     },
     expedition_loot_cluster_vertical_radius = {
         en = "Cluster vertical range radius (m)",
@@ -3568,7 +3568,7 @@ return {
         ja = "クラスタリングの垂直半径 (m)",
         ko = "클러스터 수직 반경 (m)",
         ["zh-cn"] = "聚类垂直半径（米）",
-        ["zh-tw"] = "聚類垂直半徑（公尺）",
+        ["zh-tw"] = "群聚垂直半徑（公尺）",
     },
     expeditions_location_group = {
         en = "Expeditions POI",
@@ -3582,7 +3582,7 @@ return {
         ja = "遠征の注目地点",
         ko = "원정 관심 지점",
         ["zh-cn"] = "远征兴趣点",
-        ["zh-tw"] = "遠征興趣點",
+        ["zh-tw"] = "遠征重要地點",
     },
     ignore_radar_range_for_expedition_markers = {
         en = "Ignore range limit for POI",
@@ -3596,7 +3596,7 @@ return {
         ja = "注目地点の距離制限を無視",
         ko = "관심 지점 거리 제한 무시",
         ["zh-cn"] = "忽略兴趣点的距离限制",
-        ["zh-tw"] = "忽略興趣點距離限制",
+        ["zh-tw"] = "忽略重要地點距離限制",
     },
     show_expedition_objective_opportunity = {
         en = "Sites of Interest",
@@ -3610,7 +3610,7 @@ return {
         ja = "注目地点",
         ko = "관심 지점",
         ["zh-cn"] = "兴趣地点",
-        ["zh-tw"] = "興趣點",
+        ["zh-tw"] = "重要地點",
     },
     show_expedition_objective_transition = {
         en = "Deadsider Sanctuaries",
@@ -3624,7 +3624,7 @@ return {
         ja = "デッドサイダーの聖域",
         ko = "데드사이더 성소",
         ["zh-cn"] = "亡行者圣所",
-        ["zh-tw"] = "亡行者聖所",
+        ["zh-tw"] = "死區避難所",
     },
     show_expedition_loot_converter = {
         en = "Data Reliquary Harvesters",
@@ -3638,7 +3638,7 @@ return {
         ja = "データ聖骨匣ハーベスター",
         ko = "데이터 유물함 수확기",
         ["zh-cn"] = "数据圣骨匣采集器",
-        ["zh-tw"] = "資料聖骨匣採集器",
+        ["zh-tw"] = "資料聖物箱",
     },
     show_expedition_objective_main_objective = {
         en = "Main Objective",
@@ -3666,7 +3666,7 @@ return {
         ja = "ヴァルキリー脱出ゾーン",
         ko = "발키리 탈출 구역",
         ["zh-cn"] = "瓦尔基里撤离区",
-        ["zh-tw"] = "瓦爾基里撤離區",
+        ["zh-tw"] = "女武神撤離區",
     },
     show_expedition_objective_arrival = {
         en = "Valkyrie Arrival Zone",
@@ -3680,7 +3680,7 @@ return {
         ja = "ヴァルキリー到着ゾーン",
         ko = "발키리 도착 구역",
         ["zh-cn"] = "瓦尔基里抵达区",
-        ["zh-tw"] = "瓦爾基里抵達區",
+        ["zh-tw"] = "女武神抵達區",
     },
     show_data_reliquaries = {
         en = "Data Reliquaries",
@@ -3694,7 +3694,7 @@ return {
         ja = "データ聖骨匣",
         ko = "데이터 유물함",
         ["zh-cn"] = "数据圣骨匣",
-        ["zh-tw"] = "資料聖骨匣",
+        ["zh-tw"] = "資料聖物箱",
     },
     show_pocketable_landmine_explosive = {
         en = "Servo-Triggered Mine",
@@ -3764,7 +3764,7 @@ return {
         ja = "爆撃支援信号マーカー",
         ko = "폭격 지원 신호 표지기",
         ["zh-cn"] = "空袭信号标记",
-        ["zh-tw"] = "轟炸信號標記",
+        ["zh-tw"] = "轟炸訊號標記",
     },
     show_pocketable_artillery_strike = {
         en = "Artillery Locator Beacon",
@@ -3806,7 +3806,7 @@ return {
         ja = "火力支援信号マーカー",
         ko = "화력 지원 신호 표지기",
         ["zh-cn"] = "火力支援信号标记",
-        ["zh-tw"] = "火力支援信號標記",
+        ["zh-tw"] = "火力支援訊號標記",
     },
     show_promethium_barrel = {
         en = "Promethium Barrel",
@@ -3820,7 +3820,7 @@ return {
         ja = "プロメチウム樽",
         ko = "프로메튬 통",
         ["zh-cn"] = "钷桶",
-        ["zh-tw"] = "普羅米修姆桶",
+        ["zh-tw"] = "普羅米修姆燃料桶",
     },
     show_explosive_barrels = {
         en = "Explosive Barrels",
@@ -3848,7 +3848,7 @@ return {
         ja = "炎上バレル",
         ko = "화염 배럴",
         ["zh-cn"] = "火焰桶",
-        ["zh-tw"] = "火焰桶",
+        ["zh-tw"] = "燃燒桶",
     },
     show_large_ammunition_crate = {
         en = "Large Ammunition Crate",
@@ -3905,7 +3905,7 @@ return {
         ja = "近くの殉教者/頭蓋骨アイテムを強調表示",
         ko = "근처 순교자/해골 아이템 강조 표시",
         ["zh-cn"] = "高亮附近殉道者/头骨物品",
-        ["zh-tw"] = "高亮附近殉道者之顱物品",
+        ["zh-tw"] = "醒目標示附近殉道者之顱物品",
     },
     show_martyr_skull = {
         en = "Martyr's Skull",
@@ -3947,7 +3947,7 @@ return {
         ja = "パワーセル",
         ko = "파워 셀",
         ["zh-cn"] = "能量电池 (橙色)",
-        ["zh-tw"] = "能量電池 (橙色)",
+        ["zh-tw"] = "能量電池（橘色）",
     },
     environment_group = {
         en = "Environment",
@@ -3975,7 +3975,7 @@ return {
         ja = "近くの環境アイテムを強調表示",
         ko = "근처 환경 아이템 강조 표시",
         ["zh-cn"] = "高亮附近环境物品",
-        ["zh-tw"] = "高亮附近環境物品",
+        ["zh-tw"] = "醒目標示附近環境物品",
     },
     show_medicae_station = {
         en = "Medicae Station",
@@ -4159,7 +4159,7 @@ return {
         ja = "ボスマーカーの距離設定",
         ko = "보스 마커 범위",
         ["zh-cn"] = "Boss 标记距离模式",
-        ["zh-tw"] = "Boss 標記距離模式",
+        ["zh-tw"] = "首領標記距離模式",
     },
     boss_marker_range_mode_normal = _text_normal,
     boss_marker_range_mode_infinite = _text_infinite,
@@ -4219,7 +4219,7 @@ return {
         ja = "チームメイトの状態アイコン",
         ko = "팀원 상태 아이콘",
         ["zh-cn"] = "显示队友状态图标",
-        ["zh-tw"] = "顯示隊友狀態圖示",
+        ["zh-tw"] = "隊友狀態圖示",
     },
     show_player_tags = {
         en = "Player Tags",
@@ -4261,7 +4261,7 @@ return {
         ja = "中央のプレイヤー位置マーカー",
         ko = "중앙 플레이어 점",
         ["zh-cn"] = "中心玩家点",
-        ["zh-tw"] = "中心玩家點",
+        ["zh-tw"] = "玩家位置中心點",
     },
 
     event_group = {
@@ -4290,7 +4290,7 @@ return {
         ja = "近くのイベントアイテムを強調表示",
         ko = "근처 이벤트 아이템 강조 표시",
         ["zh-cn"] = "高亮附近活动物品",
-        ["zh-tw"] = "高亮附近活動物品",
+        ["zh-tw"] = "醒目標示附近活動物品",
     },
     show_tainted_skull = {
         en = "Tainted Skulls",
@@ -4346,7 +4346,7 @@ return {
         ja = "汚染された通信装置",
         ko = "오염된 통신 장치",
         ["zh-cn"] = "受污染的通讯设备",
-        ["zh-tw"] = "受污染的通訊裝置",
+        ["zh-tw"] = "腐化通訊裝置",
     },
     show_saints = {
         en = "Holy Relics",
@@ -4486,7 +4486,7 @@ return {
         ja = "練習マーカーはオーバービューのみ",
         ko = "연습 마커는 오버뷰에서만 표시",
         ["zh-cn"] = "练习标记仅在总览中显示",
-        ["zh-tw"] = "練習標記僅在總覽中顯示",
+        ["zh-tw"] = "練習標記僅在概覽模式中顯示",
     },
     show_respawn_active_tooltip = {
         en = "Shows the respawn beacon a dead teammate will return to, mirrored from the Respawn Rewind mod's own marker. It only appears while a teammate is dead or awaiting respawn. Requires Respawn Rewind to be installed and active.",
@@ -4542,7 +4542,7 @@ return {
         ja = "Respawn Rewind モッドの練習用マーカーから、任務のすべてのリスポーン地点を表示します。Respawn Rewind がインストールされ有効で、\"Show the respawn layout\" と \"Show respawn points\" 設定がオンになっている必要があります。Radar がそれらを自分でオンにすることはありません。",
         ko = "Respawn Rewind 모드의 연습 마커에서 임무의 모든 리스폰 지점을 가져와 표시합니다. Respawn Rewind가 설치되어 활성화되어 있고 \"Show the respawn layout\" 및 \"Show respawn points\" 설정이 켜져 있어야 합니다. Radar가 이를 직접 켜는 일은 없습니다.",
         ["zh-cn"] = "显示任务的所有重生点，取自 Respawn Rewind 模组的练习标记。需要安装并启用 Respawn Rewind，且开启其 \"Show the respawn layout\" 和 \"Show respawn points\" 设置。Radar 绝不会自行开启它们。",
-        ["zh-tw"] = "顯示任務的所有重生點，取自 Respawn Rewind 模組的練習標記。需要安裝並啟用 Respawn Rewind，且開啟其 \"Show the respawn layout\" 與 \"Show respawn points\" 設定。Radar 絕不會自行開啟它們。",
+        ["zh-tw"] = "顯示任務的所有重生點，取自 Respawn Rewind 模組的練習標記。需要安裝並啟用 Respawn Rewind，且開啟其 \"Show the respawn layout\" 與 \"Show respawn points\" 設定。雷達模組不會自行開啟它們。",
     },
     show_respawn_practice_line_tooltip = {
         en = "Shows the threshold of every respawn point, mirrored from the Respawn Rewind mod's map practice markers. Requires Respawn Rewind to be installed and active, with its \"Show the respawn layout\" and \"Show the lines between them\" settings on. Radar never switches them on itself.",
@@ -4556,7 +4556,7 @@ return {
         ja = "Respawn Rewind モッドの練習用マーカーから、各リスポーン地点のラインを表示します。Respawn Rewind がインストールされ有効で、\"Show the respawn layout\" と \"Show the lines between them\" 設定がオンになっている必要があります。Radar がそれらを自分でオンにすることはありません。",
         ko = "Respawn Rewind 모드의 연습 마커에서 각 리스폰 지점의 기준선을 가져와 표시합니다. Respawn Rewind가 설치되어 활성화되어 있고 \"Show the respawn layout\" 및 \"Show the lines between them\" 설정이 켜져 있어야 합니다. Radar가 이를 직접 켜는 일은 없습니다.",
         ["zh-cn"] = "显示每个重生点的界线，取自 Respawn Rewind 模组的练习标记。需要安装并启用 Respawn Rewind，且开启其 \"Show the respawn layout\" 和 \"Show the lines between them\" 设置。Radar 绝不会自行开启它们。",
-        ["zh-tw"] = "顯示每個重生點的界線，取自 Respawn Rewind 模組的練習標記。需要安裝並啟用 Respawn Rewind，且開啟其 \"Show the respawn layout\" 與 \"Show the lines between them\" 設定。Radar 絕不會自行開啟它們。",
+        ["zh-tw"] = "顯示每個重生點的界線，取自 Respawn Rewind 模組的練習標記。需要安裝並啟用 Respawn Rewind，且開啟其 \"Show the respawn layout\" 與 \"Show the lines between them\" 設定。雷達模組不會自行開啟它們。",
     },
     respawn_practice_overview_only_tooltip = {
         en = "Keeps the practice markers out of the normal radar and shows them only in overview mode, where the whole mission fits.",
@@ -4740,7 +4740,7 @@ return {
         ja = "モーティス・トライアルでレーダーを表示します。",
         ko = "모티스 시련에서 레이더를 표시합니다.",
         ["zh-cn"] = "在莫提斯试炼中显示雷达。",
-        ["zh-tw"] = "在莫提斯試煉中顯示雷達。",
+        ["zh-tw"] = "在死神試煉中顯示雷達。",
     },
     enable_in_expeditions_tooltip = {
         en = "Show the radar in Expeditions.",
@@ -4964,7 +4964,7 @@ return {
         ja = "概要モードでは、現在描画されている通常範囲内のマーカーにズーム倍率を合わせます。通常のレーダーでは、レーダーズーム修飾キーを押しながらこのキーを押すと 10 m / 2.0x にリセットします。",
         ko = "개요 모드에서는 현재 렌더링된 일반 범위 마커에 맞게 확대/축소 배율을 조정합니다. 일반 레이더에서는 레이더 확대/축소 보조 키를 누른 채 이 키를 눌러 10 m / 2.0x로 초기화합니다.",
         ["zh-cn"] = "在概览模式中，将缩放比例适配到当前渲染的普通范围标记。在普通雷达上，按住雷达缩放修饰键并按下此键可重置为 10 m / 2.0x。",
-        ["zh-tw"] = "在概覽模式中，將縮放比例適配到目前渲染的一般範圍標記。在一般雷達上，按住雷達縮放修飾鍵並按下此鍵可重設為 10 m / 2.0x。",
+        ["zh-tw"] = "在概覽模式中，調整縮放比例以容納目前繪製的一般範圍標記。在一般雷達上，按住雷達縮放修飾鍵並按下此鍵，可重設為 10 公尺／2.0 倍。",
     },
     show_scale_legends_tooltip = {
         en = "Show the overview scale legends next to the radar while overview mode is active.",
@@ -5006,7 +5006,7 @@ return {
         ja = "レーダーにマーカーを表示できる最大距離をメートル単位で設定します。",
         ko = "레이더에 마커를 표시할 수 있는 최대 월드 거리(미터)를 설정합니다.",
         ["zh-cn"] = "标记可在雷达上显示的最大世界距离，单位为米。",
-        ["zh-tw"] = "標記可在雷達上顯示的最大世界距離，單位為公尺。",
+        ["zh-tw"] = "設定一般雷達可顯示標記的最遠距離，範圍為 10 至 200 公尺。",
     },
     item_vertical_arrow_threshold_tooltip = {
         en = "Show an up or down arrow for supported markers that are above or below you when they are within this horizontal distance.",
@@ -5132,7 +5132,7 @@ return {
         ja = "レーダー外に描画される近距離ワールドハイライトの最大距離をメートル単位で設定します。",
         ko = "레이더 바깥에 그려지는 근처 월드 하이라이트의 최대 거리(미터)를 설정합니다.",
         ["zh-cn"] = "设置在雷达外绘制的附近世界高亮的最大距离，单位为米。",
-        ["zh-tw"] = "設定在雷達外繪製的附近世界高亮的最大距離，單位為公尺。",
+        ["zh-tw"] = "設定雷達外的附近物件醒目標示最遠可顯示的距離，單位為公尺。",
     },
     nearby_highlight_screen_distance_text_tooltip = {
         en = "Show the current distance in meters above the world-space nearby highlight brackets.",
@@ -5146,7 +5146,7 @@ return {
         ja = "ワールド空間内の近距離ハイライト括弧の上に、現在の距離をメートルで表示します。",
         ko = "월드 공간의 근처 강조 표시 브래킷 위에 현재 거리를 미터 단위로 표시합니다.",
         ["zh-cn"] = "在世界空间中的附近高亮括号上方显示当前距离（米）。",
-        ["zh-tw"] = "在世界空間中的附近高亮括號上方顯示目前距離（公尺）。",
+        ["zh-tw"] = "在遊戲場景中的附近醒目標示括號上方顯示目前距離（公尺）。",
     },
     nearby_highlight_radar_distance_text_tooltip = {
         en = "Show the current distance in meters on radar markers in this item group.",
@@ -5174,7 +5174,7 @@ return {
         ja = "ワールド空間での近距離ハイライト括弧の太さを調整します。0 にすると、標準の自動調整される太さを維持します。",
         ko = "월드 공간의 근처 강조 표시 브래킷 두께를 조정합니다. 0으로 설정하면 기본 적응형 두께를 유지합니다.",
         ["zh-cn"] = "调整世界空间中附近高亮括号的粗细。设为 0 可保持默认的自适应粗细。",
-        ["zh-tw"] = "調整世界空間中附近高亮括號的粗細。設為 0 可保留預設的自適應粗細。",
+        ["zh-tw"] = "調整遊戲場景中附近醒目標示括號的粗細。設為 0 可保留預設的自動調整粗細。",
     },
     radar_anchor_tooltip = {
         en = "Choose which screen corner the radar position is anchored to.",
@@ -5314,7 +5314,7 @@ return {
         ja = "一般的な取得アイテムのマーカーのアイコンサイズを百分率で調整します。",
         ko = "일반 획득 아이템 마커의 아이콘 크기를 백분율로 조정합니다.",
         ["zh-cn"] = "按百分比调整普通拾取物标记的图标大小。",
-        ["zh-tw"] = "以百分比調整一般拾取物標記的圖示大小。",
+        ["zh-tw"] = "以百分比調整常見拾取物標記的圖示大小。",
     },
     nearby_highlight_common_pickups_tooltip = {
         en = "Also highlight nearby common pickups in the world when they are within the highlight distance.",
@@ -5328,7 +5328,7 @@ return {
         ja = "ハイライト距離内にある場合、近くの一般的な取得アイテムもワールド内で強調表示します。",
         ko = "강조 거리 내에 있을 때 근처의 일반 획득 아이템도 월드에서 함께 강조합니다.",
         ["zh-cn"] = "当附近的普通拾取物位于高亮距离内时，也会在场景中高亮显示它们。",
-        ["zh-tw"] = "當附近的一般拾取物位於高亮距離內時，也會在場景中高亮顯示它們。",
+        ["zh-tw"] = "當附近的常見拾取物位於醒目標示範圍內時，也會在場景中醒目標示它們。",
     },
     show_ammo_small_tooltip = {
         en = "Show Ammo Tin on the radar.",
@@ -5468,7 +5468,7 @@ return {
         ja = "クレートをレーダーにどう表示するかを選択します: アートワーク、簡易アイコン、または無効。",
         ko = "상자를 레이더에 어떻게 표시할지 선택합니다: 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择板条箱在雷达上的显示方式：完整图标、简化图标或禁用。",
-        ["zh-tw"] = "選擇板條箱在雷達上的顯示方式：完整圖示、簡化圖示或停用。",
+        ["zh-tw"] = "選擇箱子在雷達上的顯示方式：原始圖樣、簡化圖示或停用。",
     },
     materials_icon_scale_tooltip = {
         en = "Adjust the icon size for material markers as a percentage.",
@@ -5496,7 +5496,7 @@ return {
         ja = "ハイライト距離内にある場合、近くの資材もワールド内で強調表示します。",
         ko = "강조 거리 내에 있을 때 근처의 재료도 월드에서 함께 강조합니다.",
         ["zh-cn"] = "当附近的材料位于高亮距离内时，也会在场景中高亮显示它们。",
-        ["zh-tw"] = "當附近的材料位於高亮距離內時，也會在場景中高亮顯示它們。",
+        ["zh-tw"] = "當附近的材料位於醒目標示範圍內時，也會在場景中醒目標示它們。",
     },
     show_diamantine_tooltip = {
         en = "Choose how Diamantine is shown on the radar: artwork, simplified icon, or disabled.",
@@ -5510,7 +5510,7 @@ return {
         ja = "ダイアマンティンをレーダーにどう表示するかを選択します: アートワーク、簡易アイコン、または無効。",
         ko = "디아만틴을 레이더에 어떻게 표시할지 선택합니다: 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择精金在雷达上的显示方式：完整图标、简化图标或禁用。",
-        ["zh-tw"] = "選擇金剛晶石在雷達上的顯示方式：完整圖示、簡化圖示或停用。",
+        ["zh-tw"] = "選擇金剛晶石在雷達上的顯示方式：原始圖樣、簡化圖示或停用。",
     },
     show_plasteel_tooltip = {
         en = "Choose how Plasteel is shown on the radar: artwork, simplified icon, or disabled.",
@@ -5524,7 +5524,7 @@ return {
         ja = "プラスチールをレーダーにどう表示するかを選択します: アートワーク、簡易アイコン、または無効。",
         ko = "플라스틸을 레이더에 어떻게 표시할지 선택합니다: 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择塑钢在雷达上的显示方式：完整图标、简化图标或禁用。",
-        ["zh-tw"] = "選擇塑鋼在雷達上的顯示方式：完整圖示、簡化圖示或停用。",
+        ["zh-tw"] = "選擇塑鋼在雷達上的顯示方式：原始圖樣、簡化圖示或停用。",
     },
     primary_objective_icon_scale_tooltip = {
         en = "Adjust the icon size for primary objective item markers as a percentage.",
@@ -5552,7 +5552,7 @@ return {
         ja = "ハイライト距離内にある場合、近くの主要目標アイテムもワールド内で強調表示します。",
         ko = "강조 거리 내에 있을 때 근처의 주요 목표 아이템도 월드에서 함께 강조합니다.",
         ["zh-cn"] = "当附近的主要目标物品位于高亮距离内时，也会在场景中高亮显示它们。",
-        ["zh-tw"] = "當附近的主要目標物品位於高亮距離內時，也會在場景中高亮顯示它們。",
+        ["zh-tw"] = "當附近的主要目標物品位於醒目標示範圍內時，也會在場景中醒目標示它們。",
     },
     show_power_cell_teal_tooltip = {
         en = "Show Power Cell on the radar.",
@@ -5566,7 +5566,7 @@ return {
         ja = "パワーセルをレーダーに表示します。",
         ko = "동력 셀을 레이더에 표시합니다.",
         ["zh-cn"] = "在雷达上显示动力电池。",
-        ["zh-tw"] = "在雷達上顯示動力電池。",
+        ["zh-tw"] = "在雷達上顯示能量電池。",
     },
     show_cryonic_rod_tooltip = {
         en = "Show Cryonic Rod on the radar.",
@@ -5594,7 +5594,7 @@ return {
         ja = "メビアン痘ゼータファイト13標本をレーダーに表示します。",
         ko = "모에비안 폭스 제타파이트-13 표본을 레이더에 표시합니다.",
         ["zh-cn"] = "在雷达上显示莫比亚瘟疫泽塔菲特-13样本。",
-        ["zh-tw"] = "在雷達上顯示莫比亞瘟疫澤塔菲特-13樣本。",
+        ["zh-tw"] = "在雷達上顯示莫比亞瘟疫澤塔菲特-13 樣本。",
     },
     show_vacuum_capsule_tooltip = {
         en = "Show Vacuum Capsule on the radar.",
@@ -5608,7 +5608,7 @@ return {
         ja = "真空カプセルをレーダーに表示します。",
         ko = "진공 캡슐을 레이더에 표시합니다.",
         ["zh-cn"] = "在雷达上显示真空胶囊。",
-        ["zh-tw"] = "在雷達上顯示真空膠囊。",
+        ["zh-tw"] = "在雷達上顯示真空艙。",
     },
     show_special_issue_ammo_tooltip = {
         en = "Show Special Issue Ammo on the radar.",
@@ -5622,7 +5622,7 @@ return {
         ja = "特殊弾薬をレーダーに表示します。",
         ko = "특수 탄약을 레이더에 표시합니다.",
         ["zh-cn"] = "在雷达上显示特种弹药。",
-        ["zh-tw"] = "在雷達上顯示特種彈藥。",
+        ["zh-tw"] = "在雷達上顯示特製彈藥。",
     },
     show_prismata_crystal_repository_tooltip = {
         en = "Show Prismata Crystal Repository on the radar.",
@@ -5650,7 +5650,7 @@ return {
         ja = "モーティスの遺物をレーダーに表示します。",
         ko = "모르티스 유물을 레이더에 표시합니다.",
         ["zh-cn"] = "在雷达上显示莫提斯遗物。",
-        ["zh-tw"] = "在雷達上顯示莫提斯遺物。",
+        ["zh-tw"] = "在雷達上顯示死神遺物。",
     },
     show_coordinates_paper_tooltip = {
         en = "Show Coordinates on the radar.",
@@ -5692,7 +5692,7 @@ return {
         ja = "ハイライト距離内にある場合、近くの副次目標アイテムもワールド内で強調表示します。",
         ko = "강조 거리 내에 있을 때 근처의 보조 목표 아이템도 월드에서 함께 강조합니다.",
         ["zh-cn"] = "当附近的次要目标物品位于高亮距离内时，也会在场景中高亮显示它们。",
-        ["zh-tw"] = "當附近的次要目標物品位於高亮距離內時，也會在場景中高亮顯示它們。",
+        ["zh-tw"] = "當附近的次要目標物品位於醒目標示範圍內時，也會在場景中醒目標示它們。",
     },
     show_pocketable_grimoire_tooltip = {
         en = "Show Grimoire on the radar.",
@@ -5748,7 +5748,7 @@ return {
         ja = "ハイライト距離内にある場合、近くの任務目標インタラクト対象もワールド内で強調表示します。",
         ko = "강조 거리 내에 있을 때 근처의 임무 목표 상호작용 요소도 월드에서 함께 강조합니다.",
         ["zh-cn"] = "当附近的任务目标可交互物位于高亮距离内时，也会在场景中高亮显示它们。",
-        ["zh-tw"] = "當附近的任務目標可互動物件位於高亮距離內時，也會在場景中高亮顯示它們。",
+        ["zh-tw"] = "當附近的任務目標可互動物件位於醒目標示範圍內時，也會在場景中醒目標示它們。",
     },
     show_mission_objective_scanner_tooltip = {
         en = "Show active scanning targets for the current mission objective on the radar.",
@@ -5762,7 +5762,7 @@ return {
         ja = "現在の任務目標で有効なスキャン対象をレーダーに表示します。",
         ko = "현재 임무 목표에서 활성화된 스캔 대상을 레이더에 표시합니다.",
         ["zh-cn"] = "在雷达上显示当前任务目标的激活扫描目标。",
-        ["zh-tw"] = "在雷達上顯示目前任務目標的啟用掃描目標。",
+        ["zh-tw"] = "在雷達上顯示目前任務目標中可掃描的目標。",
     },
     show_mission_objective_hacking_tooltip = {
         en = "Show active hacking terminals and decoding spots for the current mission objective on the radar.",
@@ -5776,7 +5776,7 @@ return {
         ja = "現在の任務目標で有効なハッキング端末とデコード地点をレーダーに表示します。",
         ko = "현재 임무 목표에서 활성화된 해킹 단말기와 해독 지점을 레이더에 표시합니다.",
         ["zh-cn"] = "在雷达上显示当前任务目标的激活入侵终端和解码点。",
-        ["zh-tw"] = "在雷達上顯示目前任務目標的啟用入侵終端機與解碼點。",
+        ["zh-tw"] = "在雷達上顯示目前任務目標中可使用的入侵終端機與解碼點。",
     },
     show_mission_objective_servo_skull_tooltip = {
         en = "Show servo skull objective activators and their scanner points on the radar.",
@@ -5790,7 +5790,7 @@ return {
         ja = "サーヴォスカル目標の起動装置とそのスキャン地点をレーダーに表示します。",
         ko = "서보 해골 목표의 활성화 장치와 스캔 지점을 레이더에 표시합니다.",
         ["zh-cn"] = "在雷达上显示机仆头骨目标的启动装置及其扫描点。",
-        ["zh-tw"] = "在雷達上顯示機僕頭骨目標的啟動裝置與其掃描點。",
+        ["zh-tw"] = "在雷達上顯示伺服頭骨目標的啟動裝置與其掃描點。",
     },
     show_mission_objective_growth_tooltip = {
         en = "Shows the daemonic growth targets of a purge event.",
@@ -5818,7 +5818,7 @@ return {
         ja = "機械に張り付いた氷、タンク、コギテーターなど、破壊が必要な目標を表示します。",
         ko = "기계의 얼음, 탱크, 코기테이터 등 파괴해야 하는 목표를 표시합니다.",
         ["zh-cn"] = "显示需要摧毁的目标，例如机械上的冰、储罐和思考机。",
-        ["zh-tw"] = "顯示需要摧毀的目標，例如機械上的冰、儲槽與思考機。",
+        ["zh-tw"] = "顯示必須摧毀的任務目標，例如機械上的冰、儲槽與沉思機。",
     },
     show_mission_objective_other_tooltip = {
         en = "Show the remaining active objective interactions, such as switches, buttons, and other mission-bound interaction points, on the radar.",
@@ -5846,7 +5846,7 @@ return {
         ja = "遠征の注目地点マーカーのアイコンサイズを百分率で調整します。",
         ko = "원정 관심 지점 마커의 아이콘 크기를 백분율로 조정합니다.",
         ["zh-cn"] = "按百分比调整远征兴趣点标记的图标大小。",
-        ["zh-tw"] = "以百分比調整遠征興趣點標記的圖示大小。",
+        ["zh-tw"] = "以百分比調整遠征重要地點標記的圖示大小。",
     },
     ignore_radar_range_for_expedition_markers_tooltip = {
         en = "Show expedition points of interest even when they are outside the normal radar range.",
@@ -5860,7 +5860,7 @@ return {
         ja = "通常のレーダー範囲外にある場合でも、遠征の注目地点を表示します。",
         ko = "원정 관심 지점이 일반 레이더 범위 밖에 있어도 표시합니다.",
         ["zh-cn"] = "即使远征兴趣点位于正常雷达范围之外，也会显示它们。",
-        ["zh-tw"] = "即使遠征興趣點位於正常雷達範圍之外，也會顯示它們。",
+        ["zh-tw"] = "即使遠征重要地點位於正常雷達範圍之外，也會顯示它們。",
     },
     show_expedition_objective_opportunity_tooltip = {
         en = "Show Sites of Interest on the radar.",
@@ -5874,7 +5874,7 @@ return {
         ja = "注目地点をレーダーに表示します。",
         ko = "관심 지점을 레이더에 표시합니다.",
         ["zh-cn"] = "在雷达上显示兴趣地点。",
-        ["zh-tw"] = "在雷達上顯示興趣地點。",
+        ["zh-tw"] = "在雷達上顯示重要地點。",
     },
     show_expedition_objective_transition_tooltip = {
         en = "Show Deadsider Sanctuaries on the radar.",
@@ -5888,7 +5888,7 @@ return {
         ja = "レーダーにデッドサイダーの聖域を表示します。",
         ko = "레이더에 데드사이더 성역을 표시합니다.",
         ["zh-cn"] = "在雷达上显示亡域者圣所。",
-        ["zh-tw"] = "在雷達上顯示亡行者聖所。",
+        ["zh-tw"] = "在雷達上顯示死區避難所。",
     },
     show_expedition_objective_main_objective_tooltip = {
         en = "Show Main Objective on the radar.",
@@ -5944,7 +5944,7 @@ return {
         ja = "レーダーにデータ聖遺物庫ハーベスターを表示します。",
         ko = "레이더에 데이터 성유물 수확기를 표시합니다.",
         ["zh-cn"] = "在雷达上显示数据圣匣采集器。",
-        ["zh-tw"] = "在雷達上顯示資料聖骨匣採集器。",
+        ["zh-tw"] = "在雷達上顯示資料聖物箱。",
     },
     expeditions_specific_icon_scale_tooltip = {
         en = "Adjust the icon size for expedition item markers as a percentage.",
@@ -5972,7 +5972,7 @@ return {
         ja = "ハイライト距離内にある近くの遠征アイテムもワールド上で強調表示します。",
         ko = "강조 표시 거리 내에 있는 근처 원정 아이템도 월드에서 함께 강조 표시합니다.",
         ["zh-cn"] = "当附近远征物品进入高亮距离时，也会在场景中高亮显示它们。",
-        ["zh-tw"] = "當附近遠征物品進入高亮距離時，也會在場景中高亮顯示它們。",
+        ["zh-tw"] = "當附近遠征物品進入醒目標示範圍時，也會在場景中醒目標示它們。",
     },
     show_expeditions_currency_tooltip = {
         en = "Choose how Salvage is shown on the radar: artwork, simplified icon, or disabled.",
@@ -5986,7 +5986,7 @@ return {
         ja = "レーダー上でサルベージをどう表示するかを選びます, アートワーク、簡易アイコン、または無効。",
         ko = "레이더에 고철을 표시하는 방식을 선택합니다. 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择在雷达上如何显示废料：原图、简化图标或禁用。",
-        ["zh-tw"] = "選擇在雷達上如何顯示廢料：原圖、簡化圖示或停用。",
+        ["zh-tw"] = "選擇在雷達上如何顯示回收物：原始圖樣、簡化圖示或停用。",
     },
     show_expeditions_loot_tooltip = {
         en = "Choose how Tech-Remnants is shown on the radar: artwork, simplified icon, or disabled.",
@@ -6000,7 +6000,7 @@ return {
         ja = "レーダー上でテックレムナントをどう表示するかを選びます, アートワーク、簡易アイコン、または無効。",
         ko = "레이더에 테크 잔재를 표시하는 방식을 선택합니다. 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择在雷达上如何显示科技残骸：原图、简化图标或禁用。",
-        ["zh-tw"] = "選擇在雷達上如何顯示科技殘骸：原圖、簡化圖示或停用。",
+        ["zh-tw"] = "選擇在雷達上如何顯示科技殘骸：原始圖樣、簡化圖示或停用。",
     },
     show_expeditions_dropped_loot_tooltip = {
         en = "Choose how Dropped Tech-Remnants is shown on the radar: artwork, simplified icon, or disabled.",
@@ -6014,7 +6014,7 @@ return {
         ja = "レーダー上でドロップされたテックレムナントをどう表示するかを選びます, アートワーク、簡易アイコン、または無効。",
         ko = "레이더에 떨어진 테크 잔재를 표시하는 방식을 선택합니다. 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择在雷达上如何显示掉落的科技残骸：原图、简化图标或禁用。",
-        ["zh-tw"] = "選擇在雷達上如何顯示掉落的科技殘骸：原圖、簡化圖示或停用。",
+        ["zh-tw"] = "選擇在雷達上如何顯示掉落的科技殘骸：原始圖樣、簡化圖示或停用。",
     },
     expedition_loot_marker_mode_tooltip = {
         en = "Choose how Tech-Remnants are grouped and displayed on the radar.",
@@ -6084,7 +6084,7 @@ return {
         ja = "レーダーにデータ聖遺物庫を表示します。",
         ko = "레이더에 데이터 성유물을 표시합니다.",
         ["zh-cn"] = "在雷达上显示数据圣匣。",
-        ["zh-tw"] = "在雷達上顯示資料聖骨匣。",
+        ["zh-tw"] = "在雷達上顯示資料聖物箱。",
     },
     show_promethium_barrel_tooltip = {
         en = "Show Promethium Barrel on the radar.",
@@ -6098,7 +6098,7 @@ return {
         ja = "レーダーにプロメシウム樽を表示します。",
         ko = "레이더에 프로메튬 통을 표시합니다.",
         ["zh-cn"] = "在雷达上显示普罗米修姆桶。",
-        ["zh-tw"] = "在雷達上顯示普羅米修姆桶。",
+        ["zh-tw"] = "在雷達上顯示普羅米修姆燃料桶。",
     },
     show_explosive_barrels_tooltip = {
         en = "Show static explosive barrel hazards on the radar.",
@@ -6112,7 +6112,7 @@ return {
         ja = "固定配置された爆発バレルをレーダーに表示します。",
         ko = "고정된 폭발 배럴 위험 요소를 레이더에 표시합니다.",
         ["zh-cn"] = "在雷达上显示固定的爆炸桶危险物。",
-        ["zh-tw"] = "在雷達上持續標示爆炸桶的位置。",
+        ["zh-tw"] = "在雷達上顯示固定位置的爆炸桶危險物。",
     },
     show_fire_barrels_tooltip = {
         en = "Show static fire barrel hazards on the radar.",
@@ -6126,7 +6126,7 @@ return {
         ja = "固定配置された炎上バレルをレーダーに表示します。",
         ko = "고정된 화염 배럴 위험 요소를 레이더에 표시합니다.",
         ["zh-cn"] = "在雷达上显示固定的火焰桶危险物。",
-        ["zh-tw"] = "在雷達上持續標示火焰桶的位置。",
+        ["zh-tw"] = "在雷達上顯示固定位置的燃燒桶危險物。",
     },
     show_large_ammunition_crate_tooltip = {
         en = "Show Large Ammunition Crate on the radar.",
@@ -6168,7 +6168,7 @@ return {
         ja = "レーダー上でサーボ起爆地雷をどう表示するかを選びます, アートワーク、簡易アイコン、または無効。",
         ko = "레이더에 서보 기폭 지뢰를 표시하는 방식을 선택합니다. 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择在雷达上如何显示伺服触发地雷：原图、简化图标或禁用。",
-        ["zh-tw"] = "選擇在雷達上如何顯示伺服觸發地雷：原圖、簡化圖示或停用。",
+        ["zh-tw"] = "選擇在雷達上如何顯示伺服觸發地雷：原始圖樣、簡化圖示或停用。",
     },
     show_pocketable_landmine_fire_tooltip = {
         en = "Choose how Purgation Snare is shown on the radar: artwork, simplified icon, or disabled.",
@@ -6182,7 +6182,7 @@ return {
         ja = "レーダー上でパージスネアをどう表示するかを選びます, アートワーク、簡易アイコン、または無効。",
         ko = "레이더에 정화 올가미를 표시하는 방식을 선택합니다. 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择在雷达上如何显示净灭陷索：原图、简化图标或禁用。",
-        ["zh-tw"] = "選擇在雷達上如何顯示淨化陷阱：原圖、簡化圖示或停用。",
+        ["zh-tw"] = "選擇在雷達上如何顯示淨化陷阱：原始圖樣、簡化圖示或停用。",
     },
     show_pocketable_landmine_shock_tooltip = {
         en = "Choose how Voltaic Snare is shown on the radar: artwork, simplified icon, or disabled.",
@@ -6196,7 +6196,7 @@ return {
         ja = "レーダー上でボルタイクスネアをどう表示するかを選びます, アートワーク、簡易アイコン、または無効。",
         ko = "레이더에 볼타익 올가미를 표시하는 방식을 선택합니다. 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择在雷达上如何显示电击陷索：原图、简化图标或禁用。",
-        ["zh-tw"] = "選擇在雷達上如何顯示電能陷阱：原圖、簡化圖示或停用。",
+        ["zh-tw"] = "選擇在雷達上如何顯示電能陷阱：原始圖樣、簡化圖示或停用。",
     },
     show_pocketable_void_shield_tooltip = {
         en = "Choose how Void Shell is shown on the radar: artwork, simplified icon, or disabled.",
@@ -6210,7 +6210,7 @@ return {
         ja = "レーダー上でヴォイドシェルをどう表示するかを選びます, アートワーク、簡易アイコン、または無効。",
         ko = "레이더에 보이드 셸을 표시하는 방식을 선택합니다. 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择在雷达上如何显示虚空壳：原图、简化图标或禁用。",
-        ["zh-tw"] = "選擇在雷達上如何顯示虛空盾：原圖、簡化圖示或停用。",
+        ["zh-tw"] = "選擇在雷達上如何顯示虛空盾：原始圖樣、簡化圖示或停用。",
     },
     show_pocketable_airstrike_tooltip = {
         en = "Choose how Bombing Run Signal Marker is shown on the radar: artwork, simplified icon, or disabled.",
@@ -6224,7 +6224,7 @@ return {
         ja = "レーダー上で爆撃要請シグナルマーカーをどう表示するかを選びます, アートワーク、簡易アイコン、または無効。",
         ko = "레이더에 폭격 신호 표식을 표시하는 방식을 선택합니다. 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择在雷达上如何显示轰炸信号标记：原图、简化图标或禁用。",
-        ["zh-tw"] = "選擇在雷達上如何顯示轟炸信號標記：原圖、簡化圖示或停用。",
+        ["zh-tw"] = "選擇在雷達上如何顯示轟炸訊號標記：原始圖樣、簡化圖示或停用。",
     },
     show_pocketable_artillery_strike_tooltip = {
         en = "Choose how Artillery Locator Beacon is shown on the radar: artwork, simplified icon, or disabled.",
@@ -6238,7 +6238,7 @@ return {
         ja = "レーダー上で砲撃誘導ビーコンをどう表示するかを選びます, アートワーク、簡易アイコン、または無効。",
         ko = "레이더에 포격 유도 비콘을 표시하는 방식을 선택합니다. 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择在雷达上如何显示炮击定位信标：原图、简化图标或禁用。",
-        ["zh-tw"] = "選擇在雷達上如何顯示炮擊定位信標：原圖、簡化圖示或停用。",
+        ["zh-tw"] = "選擇在雷達上如何顯示砲擊定位信標：原始圖樣、簡化圖示或停用。",
     },
     show_pocketable_big_grenade_tooltip = {
         en = "Choose how Modified Grenade is shown on the radar: artwork, simplified icon, or disabled.",
@@ -6252,7 +6252,7 @@ return {
         ja = "レーダー上で改造グレネードをどう表示するかを選びます, アートワーク、簡易アイコン、または無効。",
         ko = "레이더에 개조 수류탄을 표시하는 방식을 선택합니다. 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择在雷达上如何显示改装手雷：原图、简化图标或禁用。",
-        ["zh-tw"] = "選擇在雷達上如何顯示改裝手雷：原圖、簡化圖示或停用。",
+        ["zh-tw"] = "選擇在雷達上如何顯示改裝手榴彈：原始圖樣、簡化圖示或停用。",
     },
     show_pocketable_valkyrie_hover_tooltip = {
         en = "Choose how Fire-Support Signal Marker is shown on the radar: artwork, simplified icon, or disabled.",
@@ -6266,7 +6266,7 @@ return {
         ja = "レーダー上で火力支援シグナルマーカーをどう表示するかを選びます, アートワーク、簡易アイコン、または無効。",
         ko = "레이더에 화력 지원 신호 표식을 표시하는 방식을 선택합니다. 아트워크, 단순 아이콘 또는 비활성화.",
         ["zh-cn"] = "选择在雷达上如何显示火力支援信号标记：原图、简化图标或禁用。",
-        ["zh-tw"] = "選擇在雷達上如何顯示火力支援信號標記：原圖、簡化圖示或停用。",
+        ["zh-tw"] = "選擇在雷達上如何顯示火力支援訊號標記：原始圖樣、簡化圖示或停用。",
     },
     martyr_s_skull_icon_scale_tooltip = {
         en = "Adjust the icon size for Martyr's Skull item markers as a percentage.",
@@ -6294,7 +6294,7 @@ return {
         ja = "ハイライト距離内にある近くの殉教者の頭蓋骨アイテムもワールド上で強調表示します。",
         ko = "강조 표시 거리 내에 있는 근처 순교자의 해골 아이템도 월드에서 함께 강조 표시합니다.",
         ["zh-cn"] = "当附近殉道者头骨物品进入高亮距离时，也会在场景中高亮显示它们。",
-        ["zh-tw"] = "當附近殉道者之顱物品進入高亮距離時，也會在場景中高亮顯示它們。",
+        ["zh-tw"] = "當附近殉道者之顱物品進入醒目標示範圍時，也會在場景中醒目標示它們。",
     },
     show_martyr_skull_tooltip = {
         en = "Show Martyr's Skull on the radar.",
@@ -6322,7 +6322,7 @@ return {
     	ja = "殉教者の頭蓋骨の謎解きで使う有効な鍵、レバー、スイッチ、ボタンをレーダーに表示します。",
     	ko = "순교자의 해골 수수께끼에서 활성화된 열쇠, 레버, 스위치, 버튼을 레이더에 표시합니다.",
     	["zh-cn"] = "在雷达上显示烈士头骨谜题中激活的钥匙、拉杆、开关和按钮。",
-    	["zh-tw"] = "在雷達上顯示烈士頭骨謎題中啟用的鑰匙、拉桿、開關和按鈕。",
+        ["zh-tw"] = "在雷達上顯示殉道者之顱謎題中可使用的鑰匙、拉桿、開關與按鈕。",
     },
     show_power_cell_orange_tooltip = {
         en = "Show Power Cell on the radar.",
@@ -6336,7 +6336,7 @@ return {
         ja = "レーダーにパワーセルを表示します。",
         ko = "레이더에 파워 셀을 표시합니다.",
         ["zh-cn"] = "在雷达上显示动力电池。",
-        ["zh-tw"] = "在雷達上顯示動力電池。",
+        ["zh-tw"] = "在雷達上顯示能量電池。",
     },
     environment_icon_scale_tooltip = {
         en = "Adjust the icon size for environment item markers as a percentage.",
@@ -6364,7 +6364,7 @@ return {
         ja = "ハイライト距離内にある近くの環境アイテムもワールド上で強調表示します。",
         ko = "강조 표시 거리 내에 있는 근처 환경 아이템도 월드에서 함께 강조 표시합니다.",
         ["zh-cn"] = "当附近环境物品进入高亮距离时，也会在场景中高亮显示它们。",
-        ["zh-tw"] = "當附近環境物品進入高亮距離時，也會在場景中高亮顯示它們。",
+        ["zh-tw"] = "當附近環境物品進入醒目標示範圍時，也會在場景中醒目標示它們。",
     },
     show_medicae_station_tooltip = {
         en = "Show Medicae Station on the radar.",
@@ -6785,7 +6785,7 @@ return {
         ja = "レーダーにプレイヤーのタグとピングを表示します。",
         ko = "레이더에 플레이어 태그와 핑을 표시합니다.",
         ["zh-cn"] = "在雷达上显示玩家标记和标点。",
-        ["zh-tw"] = "在雷達上顯示玩家標記和標點。",
+        ["zh-tw"] = "在雷達上顯示玩家的提示標籤與位置標記。",
     },
     show_player_tag_distance_text_tooltip = {
         en = "Show the current distance in meters next to player tag markers.",
@@ -6855,7 +6855,7 @@ return {
         ja = "ハイライト距離内にある近くのイベントアイテムもワールド上で強調表示します。",
         ko = "강조 표시 거리 내에 있는 근처 이벤트 아이템도 월드에서 함께 강조 표시합니다.",
         ["zh-cn"] = "当附近的事件物品进入高亮距离时，也会在世界中高亮显示它们。",
-        ["zh-tw"] = "當附近的事件物品進入高亮距離時，也會在世界中高亮顯示它們。",
+        ["zh-tw"] = "當附近的事件物品進入醒目標示範圍時，也會在場景中醒目標示它們。",
     },
     show_tainted_skull_tooltip = {
         en = "Show Tainted Skulls on the radar.",
@@ -6883,7 +6883,7 @@ return {
         ja = "暗黒儀式の儀式トーテムをレーダーに表示します。",
         ko = "어둠의 의식 의식 토템을 레이더에 표시합니다.",
         ["zh-cn"] = "在雷达上显示黑暗仪式的仪式图腾。",
-        ["zh-tw"] = "在雷達上顯示黑暗儀式的儀式圖騰。",
+        ["zh-tw"] = "在雷達上顯示黑暗儀式圖騰。",
     },
     show_dark_rites_servo_skull_tooltip = {
         en = "Show Dark Rites servo skulls on the radar.",
@@ -6939,7 +6939,7 @@ return {
         ja = "異端の遺物ライブイベントのピックアップをレーダーに表示します。",
         ko = "이단 유물 라이브 이벤트 획득물을 레이더에 표시합니다.",
         ["zh-cn"] = "在雷达上显示异端圣物现场活动拾取物。",
-        ["zh-tw"] = "在雷達上顯示異端聖物現場活動拾取物。",
+        ["zh-tw"] = "在雷達上顯示活動中的異端聖物拾取物。",
     },
     show_stolen_rations_tooltip = {
         en = "Show Stolen Rations on the radar.",
@@ -6981,7 +6981,7 @@ return {
         ja = "問題切り分けのために追加のデバッグログと代替表示を有効にします。",
         ko = "문제 해결을 위해 추가 디버그 로그와 대체 시각 요소를 활성화합니다.",
         ["zh-cn"] = "启用额外的调试日志和后备视觉效果以便排查问题。",
-        ["zh-tw"] = "啟用額外的除錯日誌和後備視覺效果以便疑難排解。",
+        ["zh-tw"] = "啟用額外的除錯紀錄與備用視覺效果，協助排查問題。",
     },
     show_unknown_pickups_tooltip = {
         en = "Show pickups with unknown or unmapped types. Mainly useful for debugging new content.",
@@ -7051,7 +7051,7 @@ return {
         ja = "敵にゲーム内で有効なタグが付いている間だけ、敵のレーダーマーカーを表示します。タグ付きの敵は、タグが付いている間はレーダーの距離制限も無視します。既存の敵表示設定は引き続き適用されます。",
         ko = "적에게 게임 내 활성 태그가 있을 때만 적 레이더 마커를 표시합니다. 태그된 적은 태그가 유지되는 동안 레이더 거리 제한도 무시합니다. 기존 적 표시 설정은 그대로 적용됩니다.",
         ["zh-cn"] = "仅当敌人在游戏中具有有效标记时才显示敌人雷达标记。被标记的敌人在被标记期间也会无视雷达距离限制。现有的敌人可见性设置仍然适用。",
-        ["zh-tw"] = "僅當敵人在遊戲中具有有效標記時才顯示敵人雷達標記。被標記的敵人在被標記期間也會無視雷達距離限制。現有的敵人可見性設定仍然適用。",
+        ["zh-tw"] = "只有敵人受到遊戲內標記時，才在雷達上顯示該敵人。標記生效期間，該敵人不受雷達距離限制；其他敵人顯示設定仍會生效。",
     },
     show_ability_marked_enemies_tooltip = _ability_marked_enemies_tooltip(),
     show_only_tagged_items_tooltip = {
@@ -7066,6 +7066,6 @@ return {
         ja = "アイテムにゲーム内で有効なタグが付いている間だけ、アイテムのレーダーマーカーを表示します。タグ付きのアイテムは、タグが付いている間はレーダーの距離制限も無視します。これは拾得物、素材、クレート、設置物、運搬物などの類似アイテムマーカーに適用されますが、プレイヤーや遠征目標の位置には適用されません。",
         ko = "아이템에 게임 내 활성 태그가 있을 때만 아이템 레이더 마커를 표시합니다. 태그된 아이템은 태그가 유지되는 동안 레이더 거리 제한도 무시합니다. 이는 픽업 아이템, 재료, 상자, 설치물, 운반물 및 유사한 아이템 마커에 적용되지만, 플레이어나 원정 목표 위치에는 적용되지 않습니다.",
         ["zh-cn"] = "仅当物品在游戏中具有有效标记时才显示物品雷达标记。被标记的物品在被标记期间也会无视雷达距离限制。这会影响拾取物、材料、箱子、可部署物、搬运物以及类似的物品标记，但不影响玩家或远征目标位置。",
-        ["zh-tw"] = "僅當物品在遊戲中具有有效標記時才顯示物品雷達標記。被標記的物品在被標記期間也會無視雷達距離限制。這會影響拾取物、材料、箱子、可部署物、搬運物以及類似的物品標記，但不影響玩家或遠征目標位置。",
+        ["zh-tw"] = "只有物品受到遊戲內標記時，才在雷達上顯示該物品。標記生效期間，該物品不受雷達距離限制。此設定適用於拾取物、材料、箱子、部署物、可搬運物與類似物品，但不影響玩家或遠征目標地點。",
     }
 }
