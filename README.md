@@ -599,7 +599,7 @@ These examples show supported outline states that can optionally count as radar-
 | Preview | Marker | Notes |
 | --- | --- | --- |
 | <img src="doc/img/enemy_daemonhost.png"  width="80" alt="Daemonhost marker" /> | Daemonhost | Separate presentation under the **Monstrosities** toggle. It uses the boss marker style settings, but does **not** show boss distance text. |
-| <img src="doc/img/enemy_monstrosity.png"  width="80" alt="Monstrosity marker" /> | Monstrosities | Covers the generic monstrosity presentation used for Beast of Nurgle, Plague Ogryn, Chaos Spawn, and Ogryn Houndmaster. **Boss marker range** can be set to **Normal** or **Infinite**, and optional boss distance text is supported. |
+| <img src="doc/img/enemy_monstrosity.png"  width="80" alt="Monstrosity marker" /> | Monstrosities | Covers the generic monstrosity presentation used for Beast of Nurgle, Plague Ogryn, Chaos Spawn, Ogryn Houndmaster, and the Wizard. **Boss marker range** can be set to **Normal** or **Infinite**, and optional boss distance text is supported. |
 | <img src="doc/img/enemy_captain.png"  width="80" alt="Captain marker" /> | Captains | Red danger marker with bracket accent in marked mode. |
 | <img src="doc/img/enemy_karnak_twin.png"  width="80" alt="Karnak Twins marker" /> | Karnak Twins | Dedicated presentation for the twins. |
 

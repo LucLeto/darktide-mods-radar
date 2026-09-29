@@ -126,6 +126,7 @@ return function(env)
         chaos_plague_ogryn = true,
         chaos_spawn = true,
         chaos_ogryn_houndmaster = true,
+        renegade_wizard = true,
     }
 
     CAPTAIN_BREEDS = {
