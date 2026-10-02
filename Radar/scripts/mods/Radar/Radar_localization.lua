@@ -743,7 +743,7 @@ local _color_label_texts = {
         ja = "変異敵の色",
         ko = "변이 적 색상",
         ["zh-cn"] = "变异敌人颜色",
-        ["zh-tw"] = "變種人顏色",
+        ["zh-tw"] = "變種敵人顏色",
     },
     enemy_armored_hound = {
         en = "Armored hound color",
@@ -3638,7 +3638,7 @@ return {
         ja = "データ聖骨匣ハーベスター",
         ko = "데이터 유물함 수확기",
         ["zh-cn"] = "数据圣骨匣采集器",
-        ["zh-tw"] = "資料聖物箱",
+        ["zh-tw"] = "採集資料聖物箱",
     },
     show_expedition_objective_main_objective = {
         en = "Main Objective",
