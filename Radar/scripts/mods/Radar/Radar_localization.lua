@@ -5944,7 +5944,7 @@ return {
         ja = "レーダーにデータ聖遺物庫ハーベスターを表示します。",
         ko = "레이더에 데이터 성유물 수확기를 표시합니다.",
         ["zh-cn"] = "在雷达上显示数据圣匣采集器。",
-        ["zh-tw"] = "在雷達上顯示資料聖物箱。",
+        ["zh-tw"] = "在雷達上顯示能從資料聖物箱中提取科技殘骸的機器。",
     },
     expeditions_specific_icon_scale_tooltip = {
         en = "Adjust the icon size for expedition item markers as a percentage.",
