@@ -26,7 +26,7 @@ This README serves two audiences. The first half is a feature and settings refer
 - Supports anchor-based **radar positioning** with offsets, movement keybinds, configurable movement step size, and an optional unrestricted positioning fallback for ultrawide or advanced layouts.
 - Supports **Artwork**, **Icon**, and **Off** display modes for the supported artwork-based pickup families, with automatic migration from older boolean settings.
 - Adds optional nearby screen-space highlight brackets for supported non-enemy marker groups, with configurable thickness, per-marker highlight colors, and optional distance labels on the screen highlight, the radar marker, or both.
-- Adds optional remaining-charge annotations for Medicae Stations and deployed Ammo Crates, plus a scaled healing-radius ring for deployed Medical Crates.
+- Adds optional remaining-charge annotations for Medicae Stations and deployed Ammo Crates, plus scaled effect-radius rings for deployed Medical Crates and the Hive Scum's Stimm Supply.
 - Adds dedicated **Martyr's Skull riddle interactable** markers for supported mission-specific keys, levers, switches, buttons, and related puzzle controls. Markers clear automatically when individual steps are used or the riddle is completed.
 - Adds **Mission Objective Interactable** markers for the world interactions that drive mission progression, split into **Scanner targets**, **Hacking terminals**, **Servo skull objectives**, **Daemonic growth**, **Targets to destroy**, and **Other objective interactions**, each with its own **Icon only**, **Icon + Distance m**, and **Off** display mode and icon. Markers come from the game's own objective systems rather than from what the HUD happens to be drawing, so a step appears as soon as it becomes relevant instead of only once you are close enough for the interaction prompt, and clears again the moment it is completed.
 - Adds optional **Respawn** markers for the active respawn beacon, the run-back threshold and Respawn Rewind's practice layout. They are mirrored from the [Respawn Rewind](#respawn-rewind) mod when it is installed, and nothing is drawn without it.
@@ -99,7 +99,7 @@ Medicae Stations and deployed Ammo Crates can show their remaining team-resource
   <img src="doc/img/pickup_medkit_radius.png" width="80" alt="Deployed Medical Crate marker with healing-radius ring" />
 </p>
 
-Deployed Medical Crates add a circular healing-radius indicator behind the marker. The ring scales with the current radar range so the radar area reflects the in-game healing radius, and it is hidden when the full ring would extend outside the radar bounds.
+Deployed Medical Crates add a circular healing-radius indicator behind the marker. The ring scales with the current radar range so the radar area reflects the in-game healing radius, and it is hidden when the full ring would extend outside the radar bounds. The Hive Scum's Stimm Supply has its own purple marker and draws its 4 m effect radius the same way.
 
 ### Vertical item and enemy arrows
 
@@ -369,7 +369,7 @@ Each major option group now includes an **Icon size (%)** slider. These sliders 
 | Expeditions-Specific Items | Salvage, Tech-Remnants, expedition pocketables, and related expedition pickups |
 | Martyr's Skull Items | Martyr's Skull markers, riddle interactables, and related power cell markers |
 | Environment | Medicae Station, Power Socket, Heretic Idol, Explosive Barrels, and Fire Barrels |
-| Deployed Items | Ammo Crate and Medical Crate deployables |
+| Deployed Items | Ammo Crate, Medical Crate, and Stimm Supply deployables |
 | All enemy icon size | Every enemy marker, combined with the category slider below |
 | Monstrosity/Captain/Twins icon size | Daemonhost, Monstrosities, Captains, Karnak Twins |
 | Horde enemy icon size | Horde enemies |
@@ -434,7 +434,7 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Expeditions-Specific Items | Highlights nearby salvage, tech-remnants, expedition pocketables, and related expedition pickups. |
 | Martyr's Skull Items | Highlights nearby Martyr's Skull items, riddle interactables, and orange power cell markers. |
 | Environment | Highlights nearby medicae stations, power sockets, heretic idols, and hazard barrels. |
-| Deployed Items | Has no nearby highlight; only the radar-marker distance text for deployed ammo and medical crates. |
+| Deployed Items | Has no nearby highlight; only the radar-marker distance text for deployed ammo crates, medical crates, and Stimm Supply. |
 | Event-Related Items | Highlights nearby event pickups and event objectives, including Dark Rites totems and servo skulls. |
 
 ### Tech-Remnant controls
@@ -517,10 +517,11 @@ A device keeps its marker for as long as its objective runs, so nothing blinks o
 | Option | What it controls |
 | --- | --- |
 | Deployed Items | Group of controls for player-deployed team support tools. |
-| Show distance on radar markers | Shows distance text below deployed Ammo Crate and Medical Crate radar markers. |
+| Show distance on radar markers | Shows distance text below deployed Ammo Crate, Medical Crate, and Stimm Supply radar markers. |
 | Ammo Crate | Shows deployed Ammo Crate markers. |
 | Ammo Crate Charges | Shows remaining resupply charges on visible deployed Ammo Crate markers. |
 | Medical Crate | Shows deployed Medical Crate markers with a radar-scaled healing-radius ring. |
+| Stimm Supply | Shows the Hive Scum's deployed Stimm Supply with a radar-scaled 4 m effect-radius ring, independently of Medical Crate. |
 
 ### Event Controls
 
@@ -571,6 +572,7 @@ Each marker has its own icon color picker, which is hidden while the marker is *
 - Medicae Stations and deployed Ammo Crates can show their remaining team-resource charges as a small top-right number. If **Show distance on radar markers** is enabled for the same marker group, the distance remains below the icon.
 - Medicae Stations use the normal green marker while powered and usable. Unpowered stations with a missing battery use a light grey marker. Depleted stations without remaining charges follow the game's normal marker visibility.
 - Deployed Medical Crates include a circular healing-radius indicator that scales with the configured radar range. The ring is hidden when the full radius would extend outside the radar bounds.
+- The Hive Scum's Stimm Supply is tagged by the game like a Medical Crate but gets its own marker, setting, and color, with a 4 m effect-radius ring drawn the same way.
 - Event-related markers use elevated marker priority so event objectives stay visible when dense enemy markers are nearby.
 - **Expedition POIs**, **environment markers**, and **tech-remnant clusters** follow their own category-specific rules so outdated markers clear correctly and context-sensitive markers only appear when relevant.
 - Expedition POIs can be shown as **Icon only**, **Icon + Distance m**, or **Off** per category. Existing boolean settings migrate to **Icon only** for enabled markers and **Off** for disabled markers.
@@ -884,6 +886,7 @@ These markers are driven by expedition navigation data rather than standard pick
 | --- | --- | --- |
 | <img src="doc/img/pickup_ammo_cache_deployable.png"  width="80" alt="Deployable ammo crate marker" /> | Ammo Crate | Ammo-yellow deployable ammo crate marker. Can show remaining resupply charges as a top-right number. |
 | <img src="doc/img/pickup_medkit.png"  width="80" alt="Deployable medical crate marker" /> | Medical Crate | Green deployable medical crate marker with a circular healing-radius indicator that scales with radar range. |
+| <img src="doc/img/broker_stimm_field_crate_deployable.png"  width="80" alt="Deployed Stimm Supply marker" /> | Stimm Supply | Purple Hive Scum Stimm Supply marker with a circular 4 m effect-radius indicator that scales with radar range. |
 
 ### Event-Related Items
 
@@ -992,6 +995,8 @@ The remaining formerly white pickup icons were recolored so marker families read
 | Deployable Ammo Crate | `(255, 240, 210, 80)` | Team deployable ammo |
 | Deployed Medical Crate | `(255, 38, 205, 26)` | Team deployable healing |
 | Deployed Medical Crate Radius Ring | `(140, 38, 205, 26)` | Healing area indicator |
+| Deployed Stimm Supply | `(255, 160, 80, 220)` | Hive Scum stimm field |
+| Deployed Stimm Supply Radius Ring | `(140, 160, 80, 220)` | Stimm field area indicator |
 | Grenade | `(255, 205, 156, 77)` | Grenade pickup |
 | Pocketable Ammo Crate | `(255, 240, 210, 80)` | Ammo pickup family tint |
 | Pocketable Medical Crate | `(255, 38, 205, 26)` | Medical supply tint |
@@ -1110,7 +1115,7 @@ The installer mechanism itself is older than 3.0.0. Up to 2.6.x there were five 
 | `Radar_runtime_helpers.lua` | Installer 2 | Defensive `_safe_*` access to engine and game state, the rules that decide whether the radar may run at all, radar position constants, the game's world marker list (`_safe_world_markers_list`), HUD projection and occlusion `mod` methods, and nearby-highlight collection. Holds no feature logic. |
 | `Radar_tracking.lua` | Installer 3 | Category-independent tracking: the tracked unit and point stores, scan scheduling, interactee dispatch, target filtering and the marker limit, the radar snapshot, overview, zoom and position, settings getters, the mission reset, the hooks, the DMF callbacks and the HUD element registration. Feature modules decide what a unit is; tracking decides whether and where it is shown. |
 | `Radar_players.lua` | Installer 4 | Teammates and their states, player companions, player smart tags and tag attribution, ability-outlined enemies, and whether a player carries a luggable. |
-| `Radar_pickups.lua` | Installer 4 | `_classify_interactee` and its fixed classifier order, plus chests, hazard barrels, destructibles (Heretic Idols, Dark Rites totems) and tagged medical crates. |
+| `Radar_pickups.lua` | Installer 4 | `_classify_interactee` and its fixed classifier order, plus chests, hazard barrels, destructibles (Heretic Idols, Dark Rites totems) and tagged medical crates and Stimm Supply crates. |
 | `Radar_mission_objectives.lua` | Installer 4 | Objective interactable discovery and lifecycle, luggable containers and cargo sockets, puzzle-state colors, the objective range exemption, and Martyr's Skull riddle data, fallbacks and solve detection. |
 | `Radar_expeditions.lua` | Installer 4 | Expedition sections and sanctuary transitions, Expedition pickups, Tech-Remnant values and clustering, navigation POIs and player-marked rings. Outside an Expedition every rule lets everything pass. |
 | `Radar_events.lua` | Installer 4 | Live-event pickup and interactable classification (Dark Rites skulls, saints, leftovers, stolen rations) and the Dark Rites circumstance gate. |

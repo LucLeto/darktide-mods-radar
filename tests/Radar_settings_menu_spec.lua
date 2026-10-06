@@ -370,6 +370,12 @@ check(parent_id("show_medicae_station_charges") == "show_medicae_station"
     "the Medicae charges setting does not follow the Medicae marker")
 check(parent_id("show_ammo_crate_deployable_charges") == "show_ammo_crate_deployable",
     "the ammo crate charges setting does not follow the ammo crate marker")
+check(parent_id("show_stimm_supply_deployable") == "deployables_group"
+    and widget_by_id.show_stimm_supply_deployable.default_value == "icon",
+    "the Stimm Supply is not a deployed item shown by default")
+check(parent_id("broker_stimm_field_crate_deployable_marker_color") == "show_stimm_supply_deployable"
+    and parent_id("medical_crate_deployable_marker_color") == "show_medical_crate_deployable",
+    "the Stimm Supply and the Medical Crate do not have a colour each")
 check(shows("show_players", "dot_only", "show_player_state_icons")
     and shows("show_players", "marked_icon", "player_marker_range_mode")
     and option_of("show_players", "off").show_widgets == nil,
@@ -412,6 +418,7 @@ local legacy_store = {
     use_strikemap_geometry = true,
     show_crates = false,
     show_explosive_barrels = true,
+    show_medical_crate_deployable = false,
     unrelated_setting = "kept",
 }
 local legacy_data, legacy_mod = load_data(legacy_store)
@@ -438,6 +445,9 @@ check(legacy_store.show_players == "off", "the old hidden teammates setting was 
 check(legacy_store.map_geometry_source == "strikemap", "the old Strikemap geometry toggle was lost")
 check(legacy_store.show_crates == "off" and legacy_store.show_explosive_barrels == "icon_only",
     "display mode dropdowns kept checkbox values")
+-- Stimm Supply crates used to be drawn as Medical Crates, so hiding those hid both.
+check(legacy_store.show_medical_crate_deployable == "off" and legacy_store.show_stimm_supply_deployable == "off",
+    "the Stimm Supply appeared on a profile that hid Medical Crates")
 check(legacy_store.unrelated_setting == "kept", "an unrelated setting was touched")
 
 local before_reload = copy(legacy_store)
@@ -453,6 +463,16 @@ end
 for key in pairs(legacy_store) do
     check(before_reload[key] ~= nil, "building the menu again saved " .. key)
 end
+
+-- Only a never saved Stimm Supply follows a hidden Medical Crate, and only once.
+local stimm_saved_store = { show_medical_crate_deployable = "off", show_stimm_supply_deployable = "icon" }
+local medical_crate_shown_store = { show_medical_crate_deployable = "icon" }
+
+load_data(stimm_saved_store)
+load_data(medical_crate_shown_store)
+check(stimm_saved_store.show_stimm_supply_deployable == "icon", "hiding Medical Crates hid a saved Stimm Supply")
+check(medical_crate_shown_store.show_stimm_supply_deployable == nil,
+    "a shown Medical Crate saved the Stimm Supply setting")
 
 -- Dropdown icons follow a colour change without the menu being rebuilt.
 local function find_widget(list, setting_id)

@@ -859,6 +859,11 @@ _add_marker({
     anchor = "show_medical_crate_deployable",
     default = _color(255, 38, 205, 26),
 })
+_add_marker({
+    kind = "broker_stimm_field_crate_deployable",
+    anchor = "show_stimm_supply_deployable",
+    default = _color(255, 160, 80, 220),
+})
 
 _add_marker({
     kind = "pickup_tainted_skull",

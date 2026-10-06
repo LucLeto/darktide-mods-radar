@@ -3,8 +3,8 @@
 -- pickup rules, then the mission objective, Expedition and live event item names, the live
 -- event and Martyr's Skull riddle interactables, and finally the mission objective
 -- interactables. It also scans chests, hazard barrels, destructible collectibles (Heretic
--- Idols and Dark Rites totems) and tagged medical crates, and retires destroyed idols as
--- soon as the game reports them.
+-- Idols and Dark Rites totems) and tagged medical crates and Stimm Supply crates, and retires
+-- destroyed idols as soon as the game reports them.
 --
 -- Installer module, installed after `Radar_players.lua` into Radar's shared runtime
 -- environment (see `Radar.lua`). Contributes `_classify_interactee` (used by the tracking
@@ -55,6 +55,10 @@ return function(env)
         ammo_cache_deployable = "pickup_ammo_cache_deployable",
         medical_crate_deployable = "medical_crate_deployable",
     }
+
+    --- Resource of the Hive Scum's Stimm Supply crate, which shares the medical crate's tag target type.
+    local BROKER_STIMM_SUPPLY_UNIT_NAME =
+        "content/pickups/pocketables/broker_medical_crate/broker_deployable_medical_crate"
 
     -- ----------------------------------------------------------------------------
     -- Mutable runtime state
@@ -667,7 +671,10 @@ return function(env)
         _prune_destroyed_idol_state()
     end
 
-    --- Tracks deployed medical crates, found among the smart tag system's units by their tag target type.
+    --- Tracks deployed medical crates and Stimm Supply crates, found among the smart tag system's units by their tag target type.
+    -- Both share the `medical_crate_deployable` tag target type, so the Stimm Supply crate is told
+    -- apart by the resource it was spawned from. A crate whose resource cannot be read stays a
+    -- medical crate.
     function _scan_smart_tag_targets()
         local smart_tag_map = _safe_unit_to_extension_map("smart_tag_system")
         if not smart_tag_map then
@@ -679,7 +686,11 @@ return function(env)
                 local smart_tag_target_type = _safe_unit_smart_tag_target_type(unit)
 
                 if smart_tag_target_type == "medical_crate_deployable" then
-                    _track_unit(unit, "medical_crate_deployable", "smart_tag_system", {
+                    local kind = _safe_unit_resource_name(unit) == BROKER_STIMM_SUPPLY_UNIT_NAME
+                        and "broker_stimm_field_crate_deployable"
+                        or "medical_crate_deployable"
+
+                    _track_unit(unit, kind, "smart_tag_system", {
                         smart_tag_target_type = smart_tag_target_type,
                         deployable_type = _safe_unit_deployable_type(unit),
                         unit_name = _safe_lower_string(_safe_unit_name(unit)),

@@ -357,6 +357,14 @@ return function(env)
         return _safe_unit_data_string(unit, "deployable_type")
     end
 
+    --- Returns a unit's `unit_name` data, the resource the unit spawner spawned it from.
+    -- The spawner stores it on local units and husks alike, and unlike `_safe_unit_prefab_name`
+    -- it is the readable resource path even in a shipping build.
+    -- treturn: ?string
+    function _safe_unit_resource_name(unit)
+        return _safe_unit_data_string(unit, "unit_name")
+    end
+
     --- Returns a unit's `smart_tag_target_type` data.
     -- treturn: ?string
     function _safe_unit_smart_tag_target_type(unit)

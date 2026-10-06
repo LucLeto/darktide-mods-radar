@@ -463,6 +463,14 @@ local PRESENTATIONS = {
         radius_meters = MEDICAL_CRATE_HEALING_RADIUS,
         size = 18,
     },
+    broker_stimm_field_crate_deployable = {
+        icon = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_stimmed_minions",
+        color = _widget_color(255, 160, 80, 220),
+        radius_icon = MEDICAL_CRATE_RADIUS_MATERIAL,
+        radius_color = _widget_color(140, 160, 80, 220),
+        radius_meters = 4,
+        size = 18,
+    },
     pickup_coordinates_paper = {
         icon = "content/ui/materials/icons/system/escape/credits",
         color = WHITE_WIDGET_COLOR,
