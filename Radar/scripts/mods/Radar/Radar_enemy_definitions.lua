@@ -203,6 +203,7 @@ return function(env)
         pocketable_void_shield = "show_pocketable_void_shield",
         pickup_ammo_cache_deployable = "show_ammo_crate_deployable",
         medical_crate_deployable = "show_medical_crate_deployable",
+        broker_stimm_field_crate_deployable = "show_stimm_supply_deployable",
     }
 
     --- Expedition location marker kinds, the icon / icon and distance / off dropdown of each, and the dropdown defaults.
@@ -376,6 +377,7 @@ return function(env)
         hazard_fire_barrel = "environment_group",
         pickup_ammo_cache_deployable = "deployables_group",
         medical_crate_deployable = "deployables_group",
+        broker_stimm_field_crate_deployable = "deployables_group",
         player_teammate = "players_group",
         player_companion_dog = "player_companions_group",
         player_companion_servo_skull = "player_companions_group",

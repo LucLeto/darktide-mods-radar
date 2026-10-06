@@ -466,6 +466,10 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
         icon = "content/ui/materials/hud/interactions/icons/pocketable_medkit",
         icon_colour = RadarColorSettings.default_marker_color("medical_crate_deployable"),
     },
+    show_stimm_supply_deployable = {
+        icon = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_stimmed_minions",
+        icon_colour = RadarColorSettings.default_marker_color("broker_stimm_field_crate_deployable"),
+    },
     show_monstrosities = {
         icon = "content/ui/materials/icons/presets/preset_05",
         icon_colour = DROPDOWN_ICON_COLOUR_RED,
@@ -1434,9 +1438,25 @@ local function _migrate_map_geometry_source_setting()
     end
 end
 
+--- Hides the Stimm Supply marker while it was never saved and the Medical Crate marker is hidden.
+-- Stimm Supply crates used to be drawn as Medical Crates, so a profile that hid those keeps not
+-- seeing them. Runs before DMF saves the dropdown's default over the unset setting.
+local function _migrate_stimm_supply_deployable_setting()
+    if mod:get("show_stimm_supply_deployable") ~= nil then
+        return
+    end
+
+    local medical_crate_value = mod:get("show_medical_crate_deployable")
+
+    if medical_crate_value == false or medical_crate_value == "off" then
+        mod:set("show_stimm_supply_deployable", "off")
+    end
+end
+
 -- Settings DMF would otherwise initialise with their defaults take their saved older form first.
 RadarColorSettings.migrate_channel_settings(mod)
 _migrate_map_geometry_source_setting()
+_migrate_stimm_supply_deployable_setting()
 
 --- The DMF mod data table.
 return {
@@ -2025,6 +2045,11 @@ return {
                                 },
                                 {
                                     setting_id = "show_medical_crate_deployable",
+                                    type = "checkbox",
+                                    default_value = true,
+                                },
+                                {
+                                    setting_id = "show_stimm_supply_deployable",
                                     type = "checkbox",
                                     default_value = true,
                                 },

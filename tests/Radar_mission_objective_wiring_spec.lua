@@ -1423,6 +1423,96 @@ for _, key in ipairs({
     end
 end
 
+-- --------------------------------------------------------------------------------------------
+-- The Hive Scum's Stimm Supply, tagged like a medical crate but drawn as a marker of its own.
+-- --------------------------------------------------------------------------------------------
+
+local STIMM_KIND = "broker_stimm_field_crate_deployable"
+local STIMM_SETTING_ID = "show_stimm_supply_deployable"
+local STIMM_UNIT_NAME = "content/pickups/pocketables/broker_medical_crate/broker_deployable_medical_crate"
+local MEDICAL_CRATE_UNIT_NAME = "content/pickups/pocketables/medical_crate/deployable_medical_crate"
+
+check(env.KIND_TO_SETTING[STIMM_KIND] == STIMM_SETTING_ID,
+    STIMM_KIND .. ": is shown by " .. tostring(env.KIND_TO_SETTING[STIMM_KIND]))
+check(env.KIND_TO_SETTING.medical_crate_deployable == "show_medical_crate_deployable",
+    "the Medical Crate no longer follows its own setting")
+check(mod:get_marker_scale_group(STIMM_KIND) == "deployables_group",
+    STIMM_KIND .. ": is in the " .. tostring(mod:get_marker_scale_group(STIMM_KIND)) .. " scale group")
+
+local stimm_color = mod:get_marker_color(STIMM_KIND)
+
+check(color_settings.marker_prefix_by_kind[STIMM_KIND] ~= nil
+    and color_settings.marker_prefix_by_kind[STIMM_KIND] ~= color_settings.marker_prefix_by_kind.medical_crate_deployable,
+    STIMM_KIND .. ": has no marker colour of its own")
+check(#stimm_color == 4 and stimm_color[2] > stimm_color[3] and stimm_color[4] > stimm_color[3],
+    STIMM_KIND .. ": does not default to purple")
+
+local stimm_presentation_start = hud_source:find("    " .. STIMM_KIND .. " = {" .. LF, 1, true)
+local stimm_presentation_end = stimm_presentation_start and hud_source:find(LF .. "    },", stimm_presentation_start, true)
+local stimm_presentation = stimm_presentation_end and hud_source:sub(stimm_presentation_start, stimm_presentation_end)
+    or ""
+
+check(stimm_presentation:find("/havoc_mutator_stimmed_minions\"", 1, true) ~= nil,
+    STIMM_KIND .. ": does not draw the stimmed minions icon")
+check(stimm_presentation:find("radius_icon = ", 1, true) ~= nil
+    and stimm_presentation:find("radius_meters = 4,", 1, true) ~= nil,
+    STIMM_KIND .. ": does not draw its 4 m effect radius")
+check(data_source:find("    " .. STIMM_SETTING_ID .. " = {", 1, true) ~= nil,
+    STIMM_KIND .. ": missing MARKER_DROPDOWN_PRESENTATIONS entry")
+
+for _, key in ipairs({ STIMM_SETTING_ID, STIMM_SETTING_ID .. "_tooltip" }) do
+    for _, language in ipairs(LOCALIZATION_LANGUAGES) do
+        check(type(localization[key] and localization[key][language]) == "string",
+            key .. " (" .. language .. "): has no text")
+    end
+end
+
+-- Every crate carries the medical crate tag target type; only the resource it was spawned from
+-- tells a Stimm Supply apart, and a crate whose resource cannot be read stays a medical crate.
+local stimm_unit_data_by_unit = {
+    stimm_supply = { smart_tag_target_type = "medical_crate_deployable", unit_name = STIMM_UNIT_NAME },
+    medical_crate = { smart_tag_target_type = "medical_crate_deployable", unit_name = MEDICAL_CRATE_UNIT_NAME },
+    unnamed_crate = { smart_tag_target_type = "medical_crate_deployable" },
+    tagged_enemy = { smart_tag_target_type = "breed", unit_name = STIMM_UNIT_NAME },
+}
+local stimm_tracked_kind_by_unit = {}
+local pickups_env = setmetatable({ mod = mod }, { __index = env })
+
+assert(loadfile("Radar/scripts/mods/Radar/Radar_pickups.lua"))()(pickups_env)
+
+pickups_env._safe_unit_to_extension_map = function(system_name)
+    if system_name ~= "smart_tag_system" then
+        return nil
+    end
+
+    return { stimm_supply = {}, medical_crate = {}, unnamed_crate = {}, tagged_enemy = {} }
+end
+pickups_env._safe_unit_alive = function()
+    return true
+end
+pickups_env._track_unit = function(unit, kind)
+    stimm_tracked_kind_by_unit[unit] = kind
+end
+env.Unit = {
+    has_data = function(unit, field_name)
+        return stimm_unit_data_by_unit[unit][field_name] ~= nil
+    end,
+    get_data = function(unit, field_name)
+        return stimm_unit_data_by_unit[unit][field_name]
+    end,
+}
+
+pickups_env._scan_smart_tag_targets()
+env.Unit = nil
+
+check(stimm_tracked_kind_by_unit.stimm_supply == STIMM_KIND,
+    "a Stimm Supply crate is tracked as " .. tostring(stimm_tracked_kind_by_unit.stimm_supply))
+check(stimm_tracked_kind_by_unit.medical_crate == "medical_crate_deployable",
+    "a Medical Crate is tracked as " .. tostring(stimm_tracked_kind_by_unit.medical_crate))
+check(stimm_tracked_kind_by_unit.unnamed_crate == "medical_crate_deployable",
+    "a crate without a readable resource is tracked as " .. tostring(stimm_tracked_kind_by_unit.unnamed_crate))
+check(stimm_tracked_kind_by_unit.tagged_enemy == nil, "a unit with another tag target type is tracked as a crate")
+
 if #problems > 0 then
     for i = 1, #problems do
         io.write("FAIL ", problems[i], "\n")
