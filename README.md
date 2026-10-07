@@ -537,7 +537,7 @@ A device keeps its marker for as long as its objective runs, so nothing blinks o
 | Tainted Communications Device | Shows corrupted auspex scanner event pickups. |
 | Holy Relics | Shows Holy Relics event pickups as artwork, simplified icon, or hidden. Artwork mode distinguishes small, medium, and large relic pickups. |
 | Heretical Artifacts | Shows Heretical Artifacts event pickups as artwork, simplified icon, or hidden. Artwork mode distinguishes small, medium, and large pickups. |
-| Stolen Rations | Shows Stolen Rations event pickups as artwork, simplified icon, or hidden. Artwork mode distinguishes small and medium pickups. |
+| Stolen Rations | Shows Stolen Rations event pickups as artwork, simplified icon, or hidden. Artwork mode distinguishes small and medium pickups, but its art is currently missing from the game (see [Notes](#notes)). |
 
 ### Respawn Controls
 
@@ -978,7 +978,7 @@ Examples:
 - Crates use the pickup artwork tile.
 - Diamantine, Plasteel, Salvage, Tech-Remnants, and Dropped Tech-Remnants keep their resource artwork.
 - Expeditions pocketables such as Void Shell, the landmines, and the strike markers keep their existing item artwork.
-- Tainted Skulls, Holy Relics, Heretical Artifacts, and Stolen Rations use live-event artwork. Holy Relics and Heretical Artifacts resolve small, medium, and large pickup art from the actual pickup name, and Stolen Rations resolves small and medium.
+- Tainted Skulls, Holy Relics, Heretical Artifacts, and Stolen Rations use live-event artwork. Holy Relics and Heretical Artifacts resolve small, medium, and large pickup art from the actual pickup name, and Stolen Rations resolves small and medium. The Stolen Rations art is currently missing from the game (see [Notes](#notes)).
 
 ### Icon mode
 
@@ -1624,4 +1624,5 @@ Optional, never required:
 - **Tagged enemies only** and **Tagged items only** are filters, not new marker families. They reuse the game's active tag state and let tagged targets ignore the normal radar range limit while tagged.
 - Expedition POIs and section-scoped expedition items are filtered to the active expedition section. POI categories can independently show icon-only markers, include meter distance text, or be hidden. Sanctuary-state transitions trigger cleanup so stale safe-zone markers do not leak into open zones, while active player-dropped Tech-Remnants can still be shown.
 - Darktide 1.12.0 compatibility uses the current `packages/ui/views/expedition_view/expedition_view` package instead of the removed `expedition_play_view` package. Like every package Radar draws from, it is declared in `Radar.mod`.
+- Darktide 1.13.0 no longer ships the Stolen Rations pickup artwork, so **Artwork** mode currently draws a white square, both in the settings dropdown and on the radar. Switch Stolen Rations to **Icon** until the art returns with the event.
 - Marker previews in this readme were generated from the included template assets and documentation images so the legend matches the mod's configured presentations as closely as possible.
