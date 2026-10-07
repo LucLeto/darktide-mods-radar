@@ -102,7 +102,8 @@ check(type(packages) == "table" and #packages > 0, "Radar.mod declares no icon p
 for i = 1, #(packages or {}) do
     local package_name = packages[i]
 
-    check(type(package_name) == "string" and package_name:sub(1, 9) == "packages/",
+    check(type(package_name) == "string" and
+        (package_name:sub(1, 9) == "packages/" or package_name:sub(1, 21) == "content/ui/materials/"),
         "Radar.mod package " .. i .. " is not a package path")
     check(seen_packages[package_name] == nil, "Radar.mod lists " .. tostring(package_name) .. " twice")
     seen_packages[package_name] = true
@@ -114,6 +115,7 @@ local REQUIRED_PACKAGES = {
     "packages/ui/material_sets/circumstances",
     "packages/ui/views/expedition_view/expedition_view",
     "packages/content/live_events/saints/live_event_saints_ui_assets",
+    "content/ui/materials/icons/notifications/tech_dropped",
 }
 
 for i = 1, #REQUIRED_PACKAGES do

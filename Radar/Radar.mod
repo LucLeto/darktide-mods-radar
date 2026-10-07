@@ -31,5 +31,6 @@ return {
 		"packages/ui/views/end_player_view/end_player_view",
 		"packages/content/live_events/leftover/leftover_ui_assets",
 		"packages/content/live_events/stolen_rations/stolen_rations_ui_assets",
+		"content/ui/materials/icons/notifications/tech_dropped",
 	},
 }
