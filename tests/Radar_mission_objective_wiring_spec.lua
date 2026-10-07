@@ -85,6 +85,8 @@ local pickups_source = assert(io.open("Radar/scripts/mods/Radar/Radar_pickups.lu
 local events_source = assert(io.open("Radar/scripts/mods/Radar/Radar_events.lua")):read("*a")
 local respawn_rewind_source =
     assert(io.open("Radar/scripts/mods/Radar/compatibility/Radar_respawn_rewind.lua")):read("*a")
+local safe_route_source =
+    assert(io.open("Radar/scripts/mods/Radar/compatibility/Radar_safe_route.lua")):read("*a")
 local definitions_source = assert(io.open("Radar/scripts/mods/Radar/Radar_enemy_definitions.lua")):read("*a")
 
 local problems = {}
@@ -305,7 +307,7 @@ local ICON_SIZE_BLOCK = hud_source:match("local OBJECTIVE_ICON_SIZE_BY_KIND = {(
 local ICON_SIZE_BY_KIND = {}
 
 if ICON_SIZE_BLOCK ~= nil then
-    for kind, size in ICON_SIZE_BLOCK:gmatch("(mission_objective_[%a_]+) = (%d+),") do
+    for kind, size in ICON_SIZE_BLOCK:gmatch("([%a_]+) = (%d+),") do
         ICON_SIZE_BY_KIND[kind] = tonumber(size)
     end
 end
@@ -539,6 +541,7 @@ for label, source in pairs({
     ["Radar_pickups.lua"] = pickups_source,
     ["Radar_events.lua"] = events_source,
     ["compatibility/Radar_respawn_rewind.lua"] = respawn_rewind_source,
+    ["compatibility/Radar_safe_route.lua"] = safe_route_source,
 }) do
     local count = 0
 
@@ -1133,6 +1136,7 @@ check_declared_aliases(players_source, "Radar_players.lua")
 check_declared_aliases(pickups_source, "Radar_pickups.lua")
 check_declared_aliases(events_source, "Radar_events.lua")
 check_declared_aliases(respawn_rewind_source, "compatibility/Radar_respawn_rewind.lua")
+check_declared_aliases(safe_route_source, "compatibility/Radar_safe_route.lua")
 check_declared_aliases(definitions_source, "Radar_enemy_definitions.lua")
 
 -- With no interaction marker from the game -- always the case for a scan target
@@ -1227,6 +1231,7 @@ check_local_use_before_declaration(players_source, "Radar_players.lua")
 check_local_use_before_declaration(pickups_source, "Radar_pickups.lua")
 check_local_use_before_declaration(events_source, "Radar_events.lua")
 check_local_use_before_declaration(respawn_rewind_source, "compatibility/Radar_respawn_rewind.lua")
+check_local_use_before_declaration(safe_route_source, "compatibility/Radar_safe_route.lua")
 
 -- --------------------------------------------------------------------------------------------
 -- Respawn awareness, mirrored from the Respawn Rewind mod's world markers.
@@ -1420,6 +1425,270 @@ for _, key in ipairs({
 
         check(type(text) == "string" and text:find("Respawn Rewind", 1, true) ~= nil,
             key .. " (" .. language .. "): does not say the Respawn tab needs Respawn Rewind")
+    end
+end
+
+-- --------------------------------------------------------------------------------------------
+-- SafeRoute route markers, mirrored from the SafeRoute mod's world markers.
+-- --------------------------------------------------------------------------------------------
+
+local SAFEROUTE_KINDS = { "saferoute_safe", "saferoute_wrong" }
+
+-- SafeRoute's own icons and colours, so a player who knows its markers recognises them.
+local SAFEROUTE_ICON_BY_KIND = {
+    saferoute_safe = "content/ui/materials/hud/interactions/icons/location",
+    saferoute_wrong = "content/ui/materials/hud/interactions/icons/attention",
+}
+local SAFEROUTE_COLOR_BY_KIND = {
+    saferoute_safe = { 255, 90, 230, 110 },
+    saferoute_wrong = { 255, 235, 80, 60 },
+}
+
+for i = 1, #SAFEROUTE_KINDS do
+    local kind = SAFEROUTE_KINDS[i]
+    local setting_id = "show_" .. kind
+    local icon = SAFEROUTE_ICON_BY_KIND[kind]
+
+    check(env.SAFEROUTE_MARKER_KINDS[kind] == true, kind .. ": missing from SAFEROUTE_MARKER_KINDS")
+    check(env.RESPAWN_MARKER_KINDS[kind] == nil, kind .. ": is registered as a respawn kind")
+    check(mod:get_marker_scale_group(kind) == "saferoute_group",
+        kind .. ": is in the " .. tostring(mod:get_marker_scale_group(kind)) .. " scale group")
+    check(mod:get_icon_distance_marker_display_mode(kind) == "icon_only",
+        kind .. ": defaults to " .. tostring(mod:get_icon_distance_marker_display_mode(kind)))
+
+    -- Each dropdown drives its own kind and no other.
+    mod:set(setting_id, "icon_distance")
+    check(mod:get_icon_distance_marker_display_mode(kind) == "icon_distance",
+        kind .. ": does not follow its own dropdown")
+
+    for j = 1, #SAFEROUTE_KINDS do
+        if j ~= i then
+            check(mod:get_icon_distance_marker_display_mode(SAFEROUTE_KINDS[j]) == "icon_only",
+                kind .. ": its dropdown also changed " .. SAFEROUTE_KINDS[j])
+        end
+    end
+
+    mod:set(setting_id, nil)
+
+    local color = mod:get_marker_color(kind)
+    local expected_color = SAFEROUTE_COLOR_BY_KIND[kind]
+
+    check(#color == 4 and color[1] == expected_color[1] and color[2] == expected_color[2]
+        and color[3] == expected_color[3] and color[4] == expected_color[4],
+        kind .. ": does not default to SafeRoute's own colour")
+
+    local presentation = hud_source:match(LF .. "    " .. kind .. " = {(.-)" .. LF .. "    },") or ""
+
+    -- SafeRoute's own marker in the world: its icon inside the objective frame, on the plate.
+    check(presentation:find('overlay_icon = "' .. icon .. '"', 1, true) ~= nil,
+        kind .. ": does not draw SafeRoute's own icon inside the frame")
+    check(presentation:find("        icon = OBJECTIVE_FRAME_ICON,", 1, true) ~= nil
+        and presentation:find("plate_icon = OBJECTIVE_PLATE_ICON,", 1, true) ~= nil,
+        kind .. ": does not wear the objective frame on its backplate")
+    check(presentation:find("        size = OBJECTIVE_FRAME_SIZE,", 1, true) ~= nil
+        and presentation:find("background_base_size = OBJECTIVE_FRAME_SIZE,", 1, true) ~= nil,
+        kind .. ": does not share the objective frame size")
+    check(presentation:find("overlay_base_size = OBJECTIVE_ICON_SIZE_BY_KIND." .. kind .. ",", 1, true) ~= nil
+        and ICON_SIZE_BY_KIND[kind] ~= nil and ICON_SIZE_BY_KIND[kind] >= 4
+        and ICON_SIZE_BY_KIND[kind] < OBJECTIVE_FRAME_SIZE,
+        kind .. ": has no icon size of its own inside the frame")
+
+    -- A frame and a backplate colour of its own, under its own dropdown. The frame starts in the
+    -- marker colour, as SafeRoute draws it, and the backplate in the objective backplate's default.
+    local frame_color = mod:get_marker_frame_color(kind)
+    local plate_color = mod:get_marker_plate_color(kind)
+    local objective_plate_default = color_settings.default_color("mission_objective_background_marker")
+
+    check(color_settings.marker_frame_prefix_by_kind[kind] == kind .. "_frame"
+        and color_settings.marker_plate_prefix_by_kind[kind] == kind .. "_plate",
+        kind .. ": has no frame and backplate colour of its own")
+    check(type(frame_color) == "table" and frame_color[1] == expected_color[1] and frame_color[2] == expected_color[2]
+        and frame_color[3] == expected_color[3] and frame_color[4] == expected_color[4],
+        kind .. ": its frame does not default to the marker colour")
+    check(type(plate_color) == "table" and type(objective_plate_default) == "table"
+        and plate_color[1] == objective_plate_default[1] and plate_color[2] == objective_plate_default[2]
+        and plate_color[3] == objective_plate_default[3] and plate_color[4] == objective_plate_default[4],
+        kind .. ": its backplate does not default to the objective backplate colour")
+
+    local frame_widget_found = false
+    local plate_widget_found = false
+
+    for _, descriptor in ipairs(color_settings.anchored_color_settings[setting_id] or {}) do
+        frame_widget_found = frame_widget_found or (descriptor.prefix == kind .. "_frame"
+            and descriptor.label_role == "frame")
+        plate_widget_found = plate_widget_found or (descriptor.prefix == kind .. "_plate"
+            and descriptor.label_role == "plate")
+    end
+
+    check(frame_widget_found and plate_widget_found,
+        kind .. ": its frame and backplate colours are not under its own dropdown")
+    check(data_source:find("    " .. setting_id .. " = {" .. LF .. '        icon = "' .. icon .. '"', 1, true) ~= nil,
+        kind .. ": its dropdown does not preview the icon the marker draws")
+    check(localization_source:find("    " .. setting_id .. " = {", 1, true) ~= nil
+        and localization_source:find("    " .. setting_id .. "_tooltip = {", 1, true) ~= nil,
+        kind .. ": its dropdown has no label or tooltip text")
+    check(tracking_source:find("        " .. kind .. " = true,", 1, true) ~= nil,
+        kind .. ": is not exempt from the vertical hide threshold")
+end
+
+settings_store.saferoute_icon_scale = 150
+check(mod:get_marker_scale_factor("saferoute_group") == 1.5, "the SafeRoute icon size slider is not read")
+settings_store.saferoute_icon_scale = nil
+
+-- A framed kind with colours of its own wears them; every other framed kind keeps the objective
+-- family's shared frame and backplate colours, so the family still reads as one group.
+check(hud_source:find("                if frame_color ~= nil then" .. LF
+    .. "                    presentation.color = frame_color" .. LF
+    .. "                else" .. LF
+    .. "                    presentation.color = _configured_objective_frame_color(marker_color)", 1, true) ~= nil,
+    "a framed marker cannot wear a frame colour of its own")
+check(hud_source:find("                if plate_color ~= nil then" .. LF
+    .. "                    presentation.plate_color = plate_color" .. LF
+    .. "                else" .. LF
+    .. "                    presentation.plate_color = _configured_objective_background_color(presentation.plate_color)",
+    1, true) ~= nil,
+    "a framed marker cannot wear a backplate colour of its own")
+check(hud_source:find("get_marker_frame_color(mod, target_kind)", 1, true) ~= nil
+    and hud_source:find("get_marker_plate_color(mod, target_kind)", 1, true) ~= nil,
+    "the frame and backplate colours are not looked up by the target's kind")
+
+for i = 1, #KINDS do
+    check(color_settings.marker_frame_prefix_by_kind[KINDS[i]] == nil
+        and color_settings.marker_plate_prefix_by_kind[KINDS[i]] == nil,
+        KINDS[i] .. ": its frame or backplate left the objective family's shared colour")
+    check(mod:get_marker_frame_color(KINDS[i]) == nil and mod:get_marker_plate_color(KINDS[i]) == nil,
+        KINDS[i] .. ": has a frame or backplate colour of its own")
+end
+
+-- Each colour is its own setting: retinting a SafeRoute frame or backplate leaves the objective
+-- family and the other SafeRoute marker alone.
+settings_store.saferoute_safe_frame_color = { 255, 1, 2, 3 }
+settings_store.saferoute_safe_plate_color = { 128, 4, 5, 6 }
+mod:invalidate_radar_color_cache()
+
+check(mod:get_marker_frame_color("saferoute_safe")[2] == 1 and mod:get_marker_plate_color("saferoute_safe")[2] == 4,
+    "the SafeRoute frame and backplate do not follow their own settings")
+check(mod:get_marker_frame_color("saferoute_wrong")[2] == 235
+    and mod:get_mission_objective_frame_color()[2] ~= 1
+    and mod:get_mission_objective_background_color()[2] ~= 4,
+    "a SafeRoute frame or backplate setting changed another marker's colour")
+
+settings_store.saferoute_safe_frame_color = nil
+settings_store.saferoute_safe_plate_color = nil
+mod:invalidate_radar_color_cache()
+
+for _, key in ipairs({
+    "color_option_frame_suffix",
+    "color_option_plate_suffix",
+    "marker_frame_color",
+    "marker_plate_color",
+    "marker_frame_color_slider_tooltip",
+    "marker_plate_color_slider_tooltip",
+}) do
+    for _, language in ipairs(LOCALIZATION_LANGUAGES) do
+        check(type(localization[key] and localization[key][language]) == "string",
+            key .. " (" .. language .. "): has no text")
+    end
+end
+
+-- The route markers outrank enemies and pickups under the marker limit, so a horde at a fork
+-- cannot push them off, but stay below the live event and respawn markers. The kept road ranks
+-- and draws above the roads to avoid.
+local saferoute_safe_priority = mod:get_target_selection_priority("saferoute_safe")
+local saferoute_wrong_priority = mod:get_target_selection_priority("saferoute_wrong")
+
+check(saferoute_safe_priority == 590 and saferoute_wrong_priority == 580,
+    "the SafeRoute priorities are " .. tostring(saferoute_safe_priority) .. " and "
+    .. tostring(saferoute_wrong_priority))
+check(saferoute_safe_priority < mod:get_target_selection_priority("pickup_saints")
+    and saferoute_safe_priority < mod:get_target_selection_priority("respawn_runback"),
+    "a SafeRoute marker outranks the live event or respawn markers")
+check(saferoute_wrong_priority > mod:get_target_selection_priority("enemy_monstrosity"),
+    "a boss pushes the SafeRoute markers off the radar under the marker limit")
+check(mod:get_target_render_layer("saferoute_safe") > mod:get_target_render_layer("saferoute_wrong")
+    and mod:get_target_render_layer("saferoute_wrong") > 0,
+    "the SafeRoute markers do not draw above ordinary markers, the kept road on top")
+
+-- A route marker is neither an item nor an enemy. The item tag filter must not hide it, but a
+-- road on another floor is still worth an arrow.
+local item_kind_body = tracking_source:match("local function _is_item_kind%(kind%)(.-)" .. LF .. "    end")
+local vertical_marker_body =
+    tracking_source:match("local function _supports_vertical_marker%(kind%)(.-)" .. LF .. "    end")
+
+check(item_kind_body ~= nil
+    and item_kind_body:find("        if SAFEROUTE_MARKER_KINDS[kind] then" .. LF
+        .. "            return false", 1, true) ~= nil,
+    "a SafeRoute marker is still treated as an item by the tag filter")
+check(vertical_marker_body ~= nil
+    and vertical_marker_body:find("        if SAFEROUTE_MARKER_KINDS[kind] then" .. LF
+        .. "            return true", 1, true) ~= nil,
+    "SafeRoute markers lost their vertical arrows")
+check(tracking_source:find("SAFEROUTE_MARKER_KINDS[kind] == true or" .. LF
+    .. "                    RESPAWN_MARKER_KINDS[kind] == true", 1, true) ~= nil,
+    "SafeRoute markers never reach the priority and render layer lookup")
+
+-- Both kinds follow the normal radar range.
+check(ignore_range_body ~= nil and ignore_range_body:find("saferoute", 1, true) == nil
+    and ignore_range_body:find("SAFEROUTE", 1, true) == nil,
+    "a SafeRoute marker ignores the radar range")
+
+check(respawn_droppable_block ~= nil
+    and respawn_droppable_block:find("_scan_safe_route_markers()", 1, true) ~= nil,
+    "the SafeRoute scan does not run in the droppable block that rebuilds the tracked points")
+check(tracking_source:find("_reset_safe_route_state()", 1, true) ~= nil,
+    "the mission reset does not clear the SafeRoute integration")
+
+-- A consumer only: no hook, no marker of its own, none of SafeRoute's files or state.
+check(safe_route_source:find("HudElementWorldMarkers", 1, true) == nil
+    and safe_route_source:find(":hook", 1, true) == nil,
+    "the SafeRoute integration hooks the world marker HUD element instead of reading its list")
+check(safe_route_source:find("_safe_world_markers_list()", 1, true) ~= nil,
+    "the SafeRoute integration does not read the world marker list through the shared helper")
+
+-- SafeRoute marks only missions whose main path has branching roads, so on every other mission the
+-- scan stops before it requests the world marker list. The gate is the game's crossroads, not a
+-- list of mission names, so a mission with forks other than Spillway is still covered.
+local safe_route_scan_body =
+    safe_route_source:match("function _scan_safe_route_markers%(%)(.-)" .. LF .. "    end") or ""
+local branching_gate_at = safe_route_scan_body:find("_mission_has_branching_roads()", 1, true)
+local marker_list_at = safe_route_scan_body:find("_safe_world_markers_list()", 1, true)
+
+check(branching_gate_at ~= nil and marker_list_at ~= nil and branching_gate_at < marker_list_at,
+    "the SafeRoute scan requests the world marker list on missions without branching roads")
+check(safe_route_source:find('rawget(main_path, "_chosen_crossroads")', 1, true) ~= nil,
+    "the SafeRoute gate is not the game's crossroads")
+check(safe_route_source:find("        _branching_roads_main_path = nil", 1, true) ~= nil,
+    "the mission reset keeps the last mission's main path manager")
+check(safe_route_source:find("add_world_marker", 1, true) == nil
+    and safe_route_source:find("remove_world_marker", 1, true) == nil
+    and safe_route_source:find("io_dofile", 1, true) == nil
+    and safe_route_source:find("recorded_routes", 1, true) == nil,
+    "the SafeRoute integration changes SafeRoute's markers or loads its files")
+
+local safe_route_install_at =
+    radar_source:find('_install("Radar/scripts/mods/Radar/compatibility/Radar_safe_route", shared_env)', 1, true)
+local respawn_rewind_install_at =
+    radar_source:find('_install("Radar/scripts/mods/Radar/compatibility/Radar_respawn_rewind", shared_env)', 1, true)
+
+check(safe_route_install_at ~= nil and respawn_rewind_install_at ~= nil
+    and safe_route_install_at > respawn_rewind_install_at,
+    "the SafeRoute integration is not installed after the Respawn Rewind integration")
+
+-- Nothing on the SafeRoute tab works without SafeRoute, and the tab title is the only place a
+-- player sees that without hovering.
+for _, key in ipairs({ "tab_saferoute", "show_saferoute_safe_tooltip", "show_saferoute_wrong_tooltip" }) do
+    for _, language in ipairs(LOCALIZATION_LANGUAGES) do
+        local text = localization[key] and localization[key][language]
+
+        check(type(text) == "string" and text:find("SafeRoute", 1, true) ~= nil,
+            key .. " (" .. language .. "): does not say the SafeRoute tab needs SafeRoute")
+    end
+end
+
+for _, key in ipairs({ "show_saferoute_safe", "show_saferoute_wrong", "saferoute_icon_scale_tooltip" }) do
+    for _, language in ipairs(LOCALIZATION_LANGUAGES) do
+        check(type(localization[key] and localization[key][language]) == "string",
+            key .. " (" .. language .. "): has no text")
     end
 end
 

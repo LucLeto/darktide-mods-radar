@@ -1,6 +1,6 @@
 # Radar
 
-Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide**. It is built to surface the targets that matter most during live missions: nearby pickups, objective items, the world interactions of the active mission objective, Martyr's Skull riddle controls, deployed support tools, environment interactables, expedition points of interest, teammates and their companions, player smart tags, tagged targets, supported ability-outlined enemies, high-priority enemies and, with the optional [Respawn Rewind](#respawn-rewind) mod, respawn locations. Everything is configurable from the mod options menu. A centered overview mode can also be toggled during missions when you need a wider tactical read.
+Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide**. It is built to surface the targets that matter most during live missions: nearby pickups, objective items, the world interactions of the active mission objective, Martyr's Skull riddle controls, deployed support tools, environment interactables, expedition points of interest, teammates and their companions, player smart tags, tagged targets, supported ability-outlined enemies, high-priority enemies and, with the optional [Respawn Rewind](#respawn-rewind) and [SafeRoute](#saferoute) mods, respawn locations and the safe road at branching paths. Everything is configurable from the mod options menu. A centered overview mode can also be toggled during missions when you need a wider tactical read.
 
 This README serves two audiences. The first half is a feature and settings reference. The second half, starting at [Architecture](#architecture), explains how the Lua code is organized, how markers flow from the game to the HUD, how the optional integrations and the settings migrations work, and how the regression specs are run.
 
@@ -30,6 +30,7 @@ This README serves two audiences. The first half is a feature and settings refer
 - Adds dedicated **Martyr's Skull riddle interactable** markers for supported mission-specific keys, levers, switches, buttons, and related puzzle controls. Markers clear automatically when individual steps are used or the riddle is completed.
 - Adds **Mission Objective Interactable** markers for the world interactions that drive mission progression, split into **Scanner targets**, **Hacking terminals**, **Servo skull objectives**, **Daemonic growth**, **Targets to destroy**, and **Other objective interactions**, each with its own **Icon only**, **Icon + Distance m**, and **Off** display mode and icon. Markers come from the game's own objective systems rather than from what the HUD happens to be drawing, so a step appears as soon as it becomes relevant instead of only once you are close enough for the interaction prompt, and clears again the moment it is completed.
 - Adds optional **Respawn** markers for the active respawn beacon, the run-back threshold and Respawn Rewind's practice layout. They are mirrored from the [Respawn Rewind](#respawn-rewind) mod when it is installed, and nothing is drawn without it.
+- Adds optional **Safe route** markers for the road a mission keeps at each branching path and **Wrong way** markers for the roads it does not. They are mirrored from the [SafeRoute](#saferoute) mod when it is installed, and nothing is drawn without it.
 - Adds dedicated **Expedition POI** support for numbered **Sites of Interest**, **Deadsider Sanctuaries**, **Data Reliquary Harvesters**, **Main Objective**, **Valkyrie Extraction Zone**, and **Valkyrie Arrival Zone**, with per-category **Icon only**, **Icon + Distance m**, and **Off** display modes. Player-marked navigation POIs show an evenly divided ring containing the slot colors of up to four marking players.
 - Supports tech-remnant loot modes for **Default**, **Scale by value**, and **Merge nearby piles**, plus optional cluster value text and radius tuning.
 - Includes optional distance text for bosses, player tags, nearby marker highlights, and expedition POIs, per-enemy-category vertical arrow toggles, **Infinite** boss and teammate range modes, **debug logs**, and an **unknown pickups** toggle for discovery and troubleshooting.
@@ -38,7 +39,7 @@ This README serves two audiences. The first half is a feature and settings refer
 
 Radar's settings menu uses the native mod options of [DMF](https://www.nexusmods.com/warhammer40kdarktide/mods/8), so no other settings extension is needed:
 
-- The options are split into nine tabs: **General**, **Layout**, **Pickups**, **Objectives**, **Expeditions**, **Enemies**, **Players**, **Respawn (requires Respawn Rewind)**, and **Debug**.
+- The options are split into ten tabs: **General**, **Layout**, **Pickups**, **Objectives**, **Expeditions**, **Enemies**, **Players**, **Respawn (requires Respawn Rewind)**, **Safe route (requires SafeRoute)**, and **Debug**.
 - Every configurable color is a single ARGB color picker.
 - Settings that only affect one marker, such as its colors, are shown under that marker and hidden while it is **Off**. They reappear as soon as the marker is switched back on, without reopening the menu. In **Artwork** mode, a marker's icon color is hidden because artwork is never tinted.
 - Sliders accept typed values and keep their step sizes. Dropdown options show their marker icons in the configured colors. Markers drawn as a Darktide glyph, such as Diamantine, Plasteel and the respawn markers, show that glyph in the marker color in the option label.
@@ -347,6 +348,7 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Mission Objective Interactables | Scanner targets, Hacking terminals, Servo skull objectives, Daemonic growth, Targets to destroy, Other objective interactions | **Icon only**, **Icon + Distance m**, **Off** |
 | Environment | Explosive Barrels, Fire Barrels | **Icon only**, **Icon + Distance m**, **Off** |
 | Respawn | Active respawn, Run-back threshold, Practice respawn points, Practice thresholds | **Icon only**, **Icon + Distance m**, **Off** |
+| Safe route | Safe route, Wrong way | **Icon only**, **Icon + Distance m**, **Off** |
 | Enemy bosses (Boss marker style) | Daemonhost, Monstrosities, Captains, Karnak Twins | **Icon only**, **Marked icon** |
 | Individual enemies | Dreg and Scab Bruisers and Vanguards, Dreg and Scab Stalkers, Scab Shooters, and the Elite, Special, and Misc enemies listed below | **Icon only**, **Marked icon**, **Off** |
 | Teammates | Teammate marker style | **Icon only**, **Marked icon**, **Dot only**, **Marked Dot**, **Off** |
@@ -382,6 +384,7 @@ Each major option group now includes an **Icon size (%)** slider. These sliders 
 | Player Companions | Cyber Mastiffs and Servo Skulls |
 | Event-Related Items | Event pickups and event objectives, including Dark Rites totems and servo skulls |
 | Respawn | Active respawn, run-back threshold, and the practice respawn points and thresholds |
+| Safe route | Safe route and wrong way markers |
 | Debugging | Unknown pickup markers and debug visuals |
 
 ### Enemy radar controls
@@ -551,6 +554,18 @@ The **Respawn (requires Respawn Rewind)** tab controls markers mirrored from the
 | Practice markers in overview only | Checkbox, default on | Keeps the practice markers out of the normal radar and shows them only in the centered overview, where the whole mission fits. |
 
 Each marker has its own icon color picker, which is hidden while the marker is **Off**. The active respawn and the run-back threshold stay on the radar beyond its range, pinned to the edge in their direction the way player tags are. All four respawn markers are never hidden for being above or below you.
+
+### Safe Route Controls
+
+The **Safe route (requires SafeRoute)** tab controls markers mirrored from the [SafeRoute](#saferoute) mod. Without that mod installed and enabled, these settings have no effect. Radar never changes SafeRoute's settings itself.
+
+| Option | Modes / default | What it controls |
+| --- | --- | --- |
+| Icon size (%) | Slider, default **100%** | Resizes both route markers together. |
+| Safe route | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | The road the mission keeps at a branching path, from SafeRoute's **SAFE ROUTE** marker. |
+| Wrong way | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | The roads the mission does not keep, from SafeRoute's **WRONG WAY** markers. Needs SafeRoute's **Mark wrong roads** setting. |
+
+Each marker has its own icon, frame and backplate color pickers, which are hidden while the marker is **Off**. The frame starts in the marker color and the backplate in the near-black of the mission objective backplate, and neither is shared with the mission objective markers. Both markers follow the normal radar range and are never hidden for being above or below you. SafeRoute's guide dots are not shown on the radar.
 
 ### Positioning and Toggle Use
 
@@ -917,6 +932,15 @@ These markers only appear while the [Respawn Rewind](#respawn-rewind) mod is ins
 | | Practice respawn points | The respawn glyph at a smaller size, in grey-blue. Off by default, and overview-only by default. |
 | | Practice thresholds | The run-back glyph at a smaller size, in grey. Off by default, and overview-only by default. |
 
+### Safe Route Markers
+
+These markers only appear while the [SafeRoute](#saferoute) mod is installed, enabled and publishing its route markers, which it does on missions whose main path has branching roads, such as Spillway. They are drawn the way SafeRoute draws its own markers in the world: the location or attention icon inside the diamond objective frame, on the objective backplate. Unlike the mission objective markers, whose frame and backplate keep one shared color each, every SafeRoute marker has its own frame and backplate color. The frame defaults to the marker color, so frame and icon are both green or both red, and the backplate to the near-black of the mission objective backplate (`(235, 16, 18, 20)`). The default colors are SafeRoute's green and red, and from then on they are ordinary Radar color settings.
+
+| Preview | Marker | Notes |
+| --- | --- | --- |
+| <img src="doc/img/saferoute_safe.png" width="80" alt="Safe route marker" /> | Safe route | Green frame and location icon on the road the mission keeps. Survives the marker limit ahead of bosses and every other enemy or pickup; live-event and respawn markers rank higher. |
+| <img src="doc/img/saferoute_wrong.png" width="80" alt="Wrong way marker" /> | Wrong way | Red frame and attention icon on every road the mission does not keep. Ranks just below the safe route. |
+
 ### Debug Marker
 
 | Preview | Marker | Notes |
@@ -1102,6 +1126,7 @@ Install order in `Radar.lua`:
 4. `Radar_players`, `Radar_pickups`, `Radar_mission_objectives`, `Radar_expeditions`, `Radar_events`
 5. `Radar_navmesh`
 6. `compatibility/Radar_respawn_rewind`
+7. `compatibility/Radar_safe_route`
 
 `compatibility/Radar_strikemap.lua` is loaded last as an explicit module.
 
@@ -1111,7 +1136,7 @@ The installer mechanism itself is older than 3.0.0. Up to 2.6.x there were five 
 
 | Module | Loaded as | Responsibility |
 | --- | --- | --- |
-| `Radar_enemy_definitions.lua` | Installer 1 | Marker kind registries (`KIND_TO_SETTING`, `MARKER_SCALE_GROUP_BY_KIND`, `ARTWORK_MODE_KIND_TO_SETTING`, `EXPEDITION_*`, `RESPAWN_MARKER_KINDS`, nearby-highlight tables), per-breed enemy definitions (`ENEMY_RADAR_DEFINITIONS_BY_BREED`), the enemy scan `_scan_minions`, the display-mode, scale, priority and render-layer `mod` getters, and the `mod.on_all_mods_loaded` migrations. Installs the color runtime. |
+| `Radar_enemy_definitions.lua` | Installer 1 | Marker kind registries (`KIND_TO_SETTING`, `MARKER_SCALE_GROUP_BY_KIND`, `ARTWORK_MODE_KIND_TO_SETTING`, `EXPEDITION_*`, `RESPAWN_MARKER_KINDS`, `SAFEROUTE_MARKER_KINDS`, nearby-highlight tables), per-breed enemy definitions (`ENEMY_RADAR_DEFINITIONS_BY_BREED`), the enemy scan `_scan_minions`, the display-mode, scale, priority and render-layer `mod` getters, and the `mod.on_all_mods_loaded` migrations. Installs the color runtime. |
 | `Radar_runtime_helpers.lua` | Installer 2 | Defensive `_safe_*` access to engine and game state, the rules that decide whether the radar may run at all, radar position constants, the game's world marker list (`_safe_world_markers_list`), HUD projection and occlusion `mod` methods, and nearby-highlight collection. Holds no feature logic. |
 | `Radar_tracking.lua` | Installer 3 | Category-independent tracking: the tracked unit and point stores, scan scheduling, interactee dispatch, target filtering and the marker limit, the radar snapshot, overview, zoom and position, settings getters, the mission reset, the hooks, the DMF callbacks and the HUD element registration. Feature modules decide what a unit is; tracking decides whether and where it is shown. |
 | `Radar_players.lua` | Installer 4 | Teammates and their states, player companions, player smart tags and tag attribution, ability-outlined enemies, and whether a player carries a luggable. |
@@ -1121,6 +1146,7 @@ The installer mechanism itself is older than 3.0.0. Up to 2.6.x there were five 
 | `Radar_events.lua` | Installer 4 | Live-event pickup and interactable classification (Dark Rites skulls, saints, leftovers, stolen rations) and the Dark Rites circumstance gate. |
 | `Radar_navmesh.lua` | Installer 5 | The built-in live geometry source. It reads the `GwNavWorld` navmesh into bucketed triangle arrays and exposes them only through `mod` methods. |
 | `compatibility/Radar_respawn_rewind.lua` | Installer 6 | Optional import of Respawn Rewind's respawn markers. See [Respawn Rewind](#respawn-rewind). |
+| `compatibility/Radar_safe_route.lua` | Installer 7 | Optional import of SafeRoute's SAFE ROUTE and WRONG WAY markers. See [SafeRoute](#saferoute). |
 | `compatibility/Radar_strikemap.lua` | Explicit, singleton | Optional consumer of Strikemap's geometry API. See [Strikemap](#strikemap). |
 | `Radar_color_settings.lua` | Explicit | The single source of truth for every configurable color: prefix, default ARGB value, the marker kinds that resolve to it and the widget it is anchored under. Also the cached color getters and the color migrations. |
 | `ui/Radar_hud_element.lua` | DMF HUD element `HudElementRadar` | Draws the snapshot: frame, map geometry layer, pooled marker widgets, brackets, texts, center dot, overview legends and on-screen highlights. Owns the static presentation of every marker kind (`PRESENTATIONS`, `ARTWORK_MODE_ICON_PRESENTATIONS`, `LIVE_EVENT_ARTWORK_BY_KIND`). |
@@ -1181,7 +1207,7 @@ Scans run in three tiers:
 | Tier | Interval | Work |
 | --- | --- | --- |
 | Every scan | **Marker update rate** (`radar_scan_rate`): 0.25 s, 0.1 s or 0.05 s | Enemies (`_scan_minions`), teammates and companions (`_refresh_player_units`), and the positions of moving units. |
-| Droppable | 0.25 s | Interactees, including mission objectives and riddle steps, the objective passes, smart-tag targets and the riddle solve check. Also rebuilds `mod._tracked_points` from scratch: Expedition POIs, riddle coordinate fallbacks, player tag points and Respawn Rewind markers. Refreshes the stored position of every tracked unit. |
+| Droppable | 0.25 s | Interactees, including mission objectives and riddle steps, the objective passes, smart-tag targets and the riddle solve check. Also rebuilds `mod._tracked_points` from scratch: Expedition POIs, riddle coordinate fallbacks, player tag points, Respawn Rewind markers and SafeRoute markers. Refreshes the stored position of every tracked unit. |
 | Static | 0.5 s | Chests, destructibles (Heretic Idols, Dark Rites totems) and hazard barrels. |
 
 **Tracked units.** `_track_unit` stores `{ kind, source, position, meta, last_seen_t }` per unit. Positions are copied into plain tables, so engine vectors are never kept across frames. A unit that no scan refreshes for 2.5 seconds is pruned. `_clear_tracked_unit_from_source(unit, source)` removes an entry only when the given source owns it, so one scan can never drop a unit another scan claimed. The sources include `interactee_system`, `mission_objective_system`, `destructible_system`, `smart_tag_system`, `unit_data_system` and `player_manager`.
@@ -1207,9 +1233,9 @@ Survivors are written into pooled target tables. The unclustered list is copied 
 | Rule | Exceptions | Decided in |
 | --- | --- | --- |
 | Radar range | Player smart tags. Explicitly tagged targets and supported ability-marked enemies. Dropped Tech-Remnants, and teammates and bosses set to **Infinite**. Expedition POIs other than loot converters while **Ignore range limit for POI** is on. `respawn_active` and `respawn_runback`. Mission objectives the game is currently pointing at (`_objective_ignores_radar_range`). Power sockets while the local player carries a luggable. | `_ignore_radar_range_for_kind`, `_has_infinite_radar_range_for_kind`, `_collect_radar_targets` |
-| Height hiding | Infinite-range kinds. `VERTICAL_HIDE_EXEMPT_KINDS`: the Heretic Idol and all four respawn kinds. Every mission objective kind, matched by predicate so new categories are covered automatically. Sockets while carrying a luggable. | `_is_vertical_hide_exempt` |
-| Tagged items only | Players, companions, smart tags, enemies, Expedition POIs and respawn kinds are not items, so this filter never hides them. | `_is_item_kind` |
-| Marker limit | Sorted by selection priority first: dropped Tech-Remnants 650, active respawn 620, run-back threshold 610, live-event markers 600, bosses 500, specials 400, elites 350, misc enemies 325, player smart tags 300, shooters 200, common enemies 100, horde 50, everything else 0. | `mod:get_target_selection_priority` |
+| Height hiding | Infinite-range kinds. `VERTICAL_HIDE_EXEMPT_KINDS`: the Heretic Idol, all four respawn kinds and both SafeRoute kinds. Every mission objective kind, matched by predicate so new categories are covered automatically. Sockets while carrying a luggable. | `_is_vertical_hide_exempt` |
+| Tagged items only | Players, companions, smart tags, enemies, Expedition POIs, respawn kinds and SafeRoute kinds are not items, so this filter never hides them. | `_is_item_kind` |
+| Marker limit | Sorted by selection priority first: dropped Tech-Remnants 650, active respawn 620, run-back threshold 610, live-event markers 600, safe route 590, wrong way 580, bosses 500, specials 400, elites 350, misc enemies 325, player smart tags 300, shooters 200, common enemies 100, horde 50, everything else 0. | `mod:get_target_selection_priority` |
 | Vertical arrow deadzone | 2 m by default and 6 m for the flying mission servo skull, whose position is also refreshed on every scan. | `VERTICAL_ARROW_Z_DEADZONE_BY_KIND`, `MOVING_TRACK_KINDS` |
 
 `mod:project_target_to_radar` pins a range-exempt target that lies beyond the range to the radar edge in its direction, on the circle or the square. In the centered overview, targets outside the zoom range are pinned the same way.
@@ -1342,7 +1368,7 @@ MARTYR_SKULL_RIDDLE_SIGNATURES_BY_MISSION = {
 
 ## Compatibility Integrations
 
-Both integrations are optional. Radar never requires either mod. Each one resolves the other mod lazily, so no load order is needed, and fails safe: when the other mod is missing, disabled or silent, it contributes nothing and the rest of Radar is unaffected. Radar bundles no code, data or assets from either mod.
+All three integrations are optional. Radar never requires any of these mods. Each integration resolves the other mod lazily, so no load order is needed, and fails safe: when the other mod is missing, disabled or silent, it contributes nothing and the rest of Radar is unaffected. Radar bundles no code, data or assets from any of them.
 
 ### Respawn Rewind
 
@@ -1396,6 +1422,55 @@ The color step exists because a numberless practice beacon and the active respaw
 - `tests/Radar_respawn_rewind_spec.lua` covers classification, including the color-against-shape and label-only paths. It also covers position copying, marker removal, a missing or disabled Respawn Rewind, the idle path with every kind off, malformed data, run-back offsets including the stale-offset case, the overview rule and the mission reset.
 - `tests/Radar_mission_objective_wiring_spec.lua` pins the kind registration, the priorities, the glyphs and the "requires Respawn Rewind" text in every language.
 
+### SafeRoute
+
+The [SafeRoute](https://github.com/Vansinnet/SafeRoute) mod works out from the level seed which road a mission keeps at each branching path, for example at Spillway's two forks. It publishes the result as ordinary HUD world markers of type `SafeRoute_marker`: a **SAFE ROUTE** marker on the kept road and a **WRONG WAY** marker on every other road. `compatibility/Radar_safe_route.lua` is a read-only consumer of those markers. Radar does not re-implement the crossroad selection; the rules stay in the one mod that tracks them.
+
+**Resolution.**
+- The other mod is looked up with `get_mod("SafeRoute")`, the name SafeRoute registers with DMF.
+- A mod whose `is_enabled()` is not `true` is skipped.
+- While the mod is unavailable, the lookup is retried at most every 5 seconds and nothing else runs: no world marker request and no targets.
+- The resolved mod is forgotten on mission reset and looked up again for the next mission.
+
+**Mission gate.** SafeRoute marks only missions whose main path has branching roads. The game picks the road of every crossroad once, as it builds the mission's main path manager (`Managers.state.main_path`), on clients too, and keeps the picks in `_chosen_crossroads` only when the main path has crossroads. The module reads that field once per manager, which is once per mission, and caches the answer. On a mission without forks the scan stops after comparing the manager, before any world marker request. The gate covers Spillway and any other mission with forks, with no mission names listed. While no manager exists yet nothing is cached, and the mission reset drops the cached manager and answer.
+
+The gate fails open. `_chosen_crossroads` is an internal field, and a game update that stored the picks under another name would otherwise read as a mission without forks and take the markers off the radar while SafeRoute still placed them. So an absent field is confirmed through the game's own `is_crossroad_segment_available`, called once with a crossroad id that does not exist. That method reads the picks wherever the game keeps them and returns `nil` only when there are none. Any other result, a field of an unexpected type, a missing method or a raised error counts as a mission with forks, and the scan keeps running.
+
+**Import.**
+- The scan is skipped while both SafeRoute kinds are **Off**.
+- On the droppable scan tick the module reads the world marker list through `_safe_world_markers_list` and keeps markers whose `type` is `SafeRoute_marker`.
+- SafeRoute's markers are position markers. They are read by unboxing their `Vector3Box` inside `pcall` and copying the result; the engine vector is never kept.
+- Each recognized marker becomes a point with the id `safe_route:<marker id>` and the source `safe_route`. Points are rebuilt on every droppable tick, so a marker that SafeRoute removes stops being tracked on the next one.
+
+**Guide dots.** SafeRoute also draws guide dots about every 2 m along its recorded routes, under the same marker type. They are not imported, since dozens of them around every fork would fill the marker limit. A marker is a guide dot when `data.safe_route_guide` is `true`. Where SafeRoute sets no such field, as in 1.2.0, a dot is recognized by `data.check_line_of_sight == true`, because the dots are the only SafeRoute markers that hide behind walls.
+
+**Classification.**
+
+| Role | Radar kind | SafeRoute 1.2.0 icon | Default display |
+| --- | --- | --- | --- |
+| `safe` | `saferoute_safe` | `content/ui/materials/hud/interactions/icons/location` | **Icon only** |
+| `wrong` | `saferoute_wrong` | `content/ui/materials/hud/interactions/icons/attention` | **Icon only** |
+
+The role is resolved in this order:
+
+1. `data.safe_route_role`, when SafeRoute provides a known role. This is the preferred contract, and a future SafeRoute that sets it needs no change in Radar.
+2. SafeRoute's icon (`data.icon`).
+
+The label is never read, because SafeRoute localizes it. A marker that neither step recognizes is ignored. Malformed marker data never stops the scan.
+
+**Radar-side rules.**
+- SafeRoute kinds are not items, so **Tagged items only** never hides them.
+- They keep vertical arrows and are never hidden for height, since SafeRoute shows its main markers through walls.
+- The safe route (priority 590) and the wrong way (580) outrank enemies and pickups under the marker limit, below the live-event and respawn markers, and draw on higher layers.
+- They wear the objective frame (`point_of_interest_top`, 26 px) on the objective backplate, with SafeRoute's icon at its own share of the frame (28 of 52 px, so 14 px). Each kind registers a frame and a backplate color of its own (`frame_prefix` and `plate_prefix` in `_add_marker`, read through `mod:get_marker_frame_color` and `mod:get_marker_plate_color`), which the HUD uses in place of the shared objective frame and backplate colors. Kinds without them, every mission objective kind among them, keep the shared colors.
+- Both follow the normal radar range. SafeRoute's own marker range (`data.max_distance`) is not applied on the radar.
+
+**What Radar never does.** It never hooks SafeRoute or any HUD element for this. It never creates, removes or edits SafeRoute's markers, never changes its settings, never reads its private state and never loads its route tables. Radar's route colors start from SafeRoute's own colors but are ordinary Radar settings from then on.
+
+**Tests.**
+- `tests/Radar_safe_route_spec.lua` covers classification, including explicit roles against the icon fallback and labels that never decide. It also covers guide-dot filtering, position copying, malformed data, the idle path with both kinds off, the mission gate (no forks, an empty crossroad table, a main path that does not exist yet, one read per mission, and failing open for moved picks, an unknown field type, a missing or raising crossroad lookup), marker removal, a missing, disabled or late-loaded SafeRoute and the mission reset.
+- `tests/Radar_mission_objective_wiring_spec.lua` pins the kind registration, the priorities, the icons and colors, the normal range, the mission gate ahead of the world marker request, and the "requires SafeRoute" text in every language.
+
 ### Strikemap
 
 `compatibility/Radar_strikemap.lua` consumes the public geometry API of [Strikemap](https://www.nexusmods.com/warhammer40kdarktide/mods/1022). The player-facing behavior is described in [Strikemap integration notes](#strikemap-integration-notes).
@@ -1437,7 +1512,7 @@ The widget tree is declared inline in `Radar_data.lua`, with one top-level `grou
 4. **`_apply_missing_tooltips`** gives every widget without a tooltip the id `<setting_id>_tooltip`.
 
 `tests/Radar_settings_menu_spec.lua` builds this tree for a fresh profile and checks:
-- the nine tabs and their group order
+- the ten tabs and their group order
 - that no Alf-only fields remain
 - the color widgets and the `show_widgets` lists
 - that building the menu for a fresh profile saves no setting
@@ -1501,10 +1576,11 @@ luajit tests/Radar_settings_menu_spec.lua
 | --- | --- |
 | `Radar_martyr_skull_riddle_lifecycle_spec.lua` | The riddle coordinate-fallback lifecycle on `cm_habs`: fallbacks for buttons not yet observed, replacement by a live unit, retirement on use or on an active-to-inactive transition (including hot joins), conservative visibility when state is unknown or unreadable, persistence across point rebuilds and toggles, clearing on the runtime reset, and the solved latch suppressing every fallback. |
 | `Radar_mission_objective_interactable_spec.lua` | Objective discovery and lifecycle against fake objective systems: dedicated systems, scan zones and the client-side recovery, active-objective confirmation, appearance before the prompt, armed copies only, used and inactive retirement, category toggles, existing classifications preserved, puzzle colors, the start-marker, hint, world-marker, container and socket rules, growth recognition and tentacles, the range exemption, and the debug lines. |
-| `Radar_mission_objective_wiring_spec.lua` | Module wiring. Installs the real definition and helper modules and checks that every objective kind is registered everywhere a kind must be (settings, scale groups, colors, highlights, presentations). Also checks the shared presentation rules, the respawn registration and priorities, localization requirements, declaration order of shared locals, and headroom under LuaJIT's 200-local limit. |
+| `Radar_mission_objective_wiring_spec.lua` | Module wiring. Installs the real definition and helper modules and checks that every objective kind is registered everywhere a kind must be (settings, scale groups, colors, highlights, presentations). Also checks the shared presentation rules, the respawn and SafeRoute registration and priorities, localization requirements, declaration order of shared locals, and headroom under LuaJIT's 200-local limit. |
 | `Radar_respawn_rewind_spec.lua` | Compatibility behavior: role classification and its fallbacks, position copying, removed markers, a missing or disabled Respawn Rewind, malformed data, run-back offsets, the overview rule and the mission reset. |
+| `Radar_safe_route_spec.lua` | Compatibility behavior: role classification and its icon fallback, guide dots left out, position copying, removed markers, the once-per-mission branching road gate, a missing, disabled or late-loaded SafeRoute, malformed data and the mission reset. |
 | `Radar_screen_highlight_anchor_spec.lua` | Screen highlight placement with the real runtime helpers: objective box centers, pickups on their origin, the barrel `c_explosion` → tracked position → origin order, every engine failure path, and which world markers count as the game marking an objective. |
-| `Radar_settings_menu_spec.lua` | The settings schema and migrations: `Radar.mod` packages and no Alf dependency, the nine tabs and their order, native color widgets and their placement, `show_widgets`, a fresh profile saving nothing, a profile saved by the previous release migrating its channel colors, teammate, map geometry and checkbox settings (old keys deleted, unrelated settings untouched, a second build changing nothing), live dropdown tinting, and the runtime highlight and bracket color migrations. |
+| `Radar_settings_menu_spec.lua` | The settings schema and migrations: `Radar.mod` packages and no Alf dependency, the ten tabs and their order, native color widgets and their placement, `show_widgets`, a fresh profile saving nothing, a profile saved by the previous release migrating its channel colors, teammate, map geometry and checkbox settings (old keys deleted, unrelated settings untouched, a second build changing nothing), live dropdown tinting, and the runtime highlight and bracket color migrations. |
 
 Some checks in the wiring spec read the production source as text, for example to pin a condition, an upvalue name or the declaration order of a local. A refactor that moves such code has to update the spec deliberately.
 
@@ -1528,6 +1604,7 @@ Optional, never required:
 
 - **[Strikemap](https://www.nexusmods.com/warhammer40kdarktide/mods/1022)**, for the **Strikemap floor plan** and **Auto** map geometry sources.
 - **[Respawn Rewind](https://www.nexusmods.com/warhammer40kdarktide/mods/1214)**, for the markers of the **Respawn** tab.
+- **[SafeRoute](https://github.com/Vansinnet/SafeRoute)**, for the markers of the **Safe route** tab.
 
 [Alf's Mod Settings Extensions](https://www.nexusmods.com/warhammer40kdarktide/mods/864) is not required and not used.
 

@@ -226,6 +226,14 @@ return function(env)
         respawn_practice_line = true,
     }
 
+    --- Route marker kinds, mirrored from the SafeRoute mod's SAFE ROUTE and WRONG WAY world markers.
+    -- Read by the tracking layer, which treats them as neither items nor enemies; the item tag
+    -- filter must not hide them, but they still get vertical arrows.
+    SAFEROUTE_MARKER_KINDS = {
+        saferoute_safe = true,
+        saferoute_wrong = true,
+    }
+
     EXPEDITION_MARKER_DISPLAY_MODE_KIND_TO_SETTING = {
         expedition_loot_converter = "show_expedition_loot_converter",
         expedition_objective_opportunity = "show_expedition_objective_opportunity",
@@ -258,6 +266,8 @@ return function(env)
         respawn_runback = "show_respawn_runback",
         respawn_practice_beacon = "show_respawn_practice_beacon",
         respawn_practice_line = "show_respawn_practice_line",
+        saferoute_safe = "show_saferoute_safe",
+        saferoute_wrong = "show_saferoute_wrong",
     }
 
     local ICON_DISTANCE_MARKER_DISPLAY_MODE_DEFAULT_BY_SETTING = {
@@ -273,6 +283,8 @@ return function(env)
         show_respawn_runback = "icon_distance",
         show_respawn_practice_beacon = "off",
         show_respawn_practice_line = "off",
+        show_saferoute_safe = "icon_only",
+        show_saferoute_wrong = "icon_only",
     }
 
     --- Icon of each Expedition location marker kind when the game provides none.
@@ -395,6 +407,8 @@ return function(env)
         respawn_runback = "respawn_group",
         respawn_practice_beacon = "respawn_group",
         respawn_practice_line = "respawn_group",
+        saferoute_safe = "saferoute_group",
+        saferoute_wrong = "saferoute_group",
         pickup_unknown = "debug_group",
     }
 
@@ -415,6 +429,7 @@ return function(env)
         player_companions_group = "player_companions_icon_scale",
         event_group = "event_icon_scale",
         respawn_group = "respawn_icon_scale",
+        saferoute_group = "saferoute_icon_scale",
         debug_group = "debug_icon_scale",
     }
 
@@ -510,6 +525,14 @@ return function(env)
     local RESPAWN_RUNBACK_SELECTION_PRIORITY = 610
     local RESPAWN_ACTIVE_RENDER_LAYER = 6
     local RESPAWN_RUNBACK_RENDER_LAYER = 5
+    --- SafeRoute route marker priorities, just below the live event markers.
+    -- Which road the mission keeps matters most while a horde fills the radar at a fork, so the
+    -- few route markers have to outrank enemies and pickups under the marker limit. The kept road
+    -- ranks and draws above the roads to avoid.
+    local SAFEROUTE_SAFE_SELECTION_PRIORITY = 590
+    local SAFEROUTE_WRONG_SELECTION_PRIORITY = 580
+    local SAFEROUTE_SAFE_RENDER_LAYER = 5
+    local SAFEROUTE_WRONG_RENDER_LAYER = 4
 
     --- Returns the default icon size in pixels of an enemy category.
     -- string: category enemy category
@@ -1532,6 +1555,14 @@ return function(env)
             return RESPAWN_RUNBACK_SELECTION_PRIORITY
         end
 
+        if kind == "saferoute_safe" then
+            return SAFEROUTE_SAFE_SELECTION_PRIORITY
+        end
+
+        if kind == "saferoute_wrong" then
+            return SAFEROUTE_WRONG_SELECTION_PRIORITY
+        end
+
         if kind == "material_expeditions_loot_player_drop" then
             return EXPEDITION_PLAYER_DROP_SELECTION_PRIORITY
         end
@@ -1570,6 +1601,14 @@ return function(env)
 
         if kind == "respawn_runback" then
             return RESPAWN_RUNBACK_RENDER_LAYER
+        end
+
+        if kind == "saferoute_safe" then
+            return SAFEROUTE_SAFE_RENDER_LAYER
+        end
+
+        if kind == "saferoute_wrong" then
+            return SAFEROUTE_WRONG_RENDER_LAYER
         end
 
         if kind == "player_teammate" then

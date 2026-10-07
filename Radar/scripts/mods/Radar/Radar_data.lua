@@ -522,6 +522,14 @@ local MARKER_DROPDOWN_PRESENTATIONS = {
         icon_glyph = "\238\128\135", -- U+E007, Darktide run-back point glyph
         icon_colour = RadarColorSettings.default_marker_color("respawn_practice_line"),
     },
+    show_saferoute_safe = {
+        icon = "content/ui/materials/hud/interactions/icons/location",
+        icon_colour = RadarColorSettings.default_marker_color("saferoute_safe"),
+    },
+    show_saferoute_wrong = {
+        icon = "content/ui/materials/hud/interactions/icons/attention",
+        icon_colour = RadarColorSettings.default_marker_color("saferoute_wrong"),
+    },
     show_unknown_pickups = {
         icon = "content/ui/materials/icons/traits/empty",
         icon_colour = DROPDOWN_ICON_COLOUR_WHITE,
@@ -805,6 +813,14 @@ local COLOR_LABEL_SUFFIX_BY_ROLE = {
     background = {
         key = "color_option_background_suffix",
         fallback = " background color",
+    },
+    frame = {
+        key = "color_option_frame_suffix",
+        fallback = " frame color",
+    },
+    plate = {
+        key = "color_option_plate_suffix",
+        fallback = " backplate color",
     },
 }
 
@@ -2609,6 +2625,16 @@ return {
                             type = "checkbox",
                             default_value = true,
                         },
+                    },
+                },
+                {
+                    setting_id = "saferoute_group",
+                    title = "tab_saferoute",
+                    type = "group",
+                    sub_widgets = {
+                        _icon_scale_slider("saferoute_icon_scale", nil),
+                        _icon_distance_off_dropdown("show_saferoute_safe", "icon_only"),
+                        _icon_distance_off_dropdown("show_saferoute_wrong", "icon_only"),
                     },
                 },
                 {
