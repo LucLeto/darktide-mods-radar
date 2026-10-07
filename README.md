@@ -4,15 +4,13 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 
 This README serves two audiences. The first half is a feature and settings reference. The second half, starting at [Architecture](#architecture), explains how the Lua code is organized, how markers flow from the game to the HUD, how the optional integrations and the settings migrations work, and how the regression specs are run.
 
-## What's new in 3.0.0
+## What's new in 3.1.0
 
-- **Mission objective interactables.** Six new marker categories: scanner targets, hacking terminals, servo skull objectives, daemonic growth, targets to destroy, and other objective interactions. They are read from Darktide's objective extension systems rather than from the HUD's marker list, so a step appears as soon as the mission arms it and retires when it is completed. See [Mission objective tracking](#mission-objective-tracking).
-- **Martyr's Skull riddle interactables.** Per-mission riddle data marks the keys, levers, switches and buttons of supported Martyr's Skull puzzles. Each step clears when it is used, and every riddle marker clears once the riddle is solved. See [Martyr's Skull riddle tracking](#martyrs-skull-riddle-tracking).
-- **Respawn Rewind compatibility.** A new, optional **Respawn** tab mirrors the active respawn, the run-back threshold and the practice layout that [Respawn Rewind](#respawn-rewind) publishes. Radar reads that mod's world markers and never re-implements its logic.
-- **Native DMF settings.** The options menu moved to DMF's native API: nine tabs, one ARGB color widget per color, marker-specific settings hidden while the marker is **Off**, and tinted dropdown previews. [Alf's Mod Settings Extensions](https://www.nexusmods.com/warhammer40kdarktide/mods/864) is no longer used. Settings saved by older versions are migrated automatically. See [Settings and Migration](#settings-and-migration).
-- **Feature-module runtime.** Player, pickup, objective and live-event code moved out of `Radar_expeditions.lua` into dedicated installer modules. Every production file now carries LDoc-style file and function documentation. See [Architecture](#architecture).
-- **Marker refinements.** Diamantine and Plasteel icon mode now uses Darktide's official glyphs, and glyph dropdown labels are tinted in the marker color. Stolen Rations gained a real **Artwork** / **Icon** / **Off** mode with per-size artwork. Heretical Artifact artwork now loads its live-event package, so it no longer draws as a white square.
-- **Regression specs.** New standalone LuaJIT specs cover the new subsystems, the settings schema and migrations, and the module wiring. See [Testing](#testing).
+- **SafeRoute compatibility.** A new, optional **Safe route** tab mirrors the **SAFE ROUTE** and **WRONG WAY** markers that [SafeRoute](#saferoute) places at a mission's branching paths, such as Spillway's forks. Radar reads that mod's world markers and never re-implements its crossroad selection. See [Safe Route Controls](#safe-route-controls) and [Safe Route Markers](#safe-route-markers).
+- **Stimm Supply marker.** The Hive Scum's deployed Stimm Supply used to be drawn as a Medical Crate. It now has its own **Stimm Supply** option, purple icon and color under Deployed Items, with a radar-scaled 4 m effect-radius ring. Profiles that hid Medical Crates start with it hidden too.
+- **Darktide 1.13 compatibility.** The Spillway Wizard boss shows as a monstrosity (since 3.0.1). Dropped Tech-Remnants artwork no longer draws as a white square, because Darktide 1.13 moved that material into a package of its own, which `Radar.mod` now declares. Darktide 1.13 no longer ships the Stolen Rations artwork at all, so its **Artwork** mode draws a white square until the art returns (see [Notes](#notes)).
+- **Traditional Chinese.** The `zh-tw` translation was updated by SyuanTsai.
+- **Regression specs.** `Radar_safe_route_spec` covers the SafeRoute import, and the wiring and settings specs pin the new kinds, the Stimm Supply settings seed and the `.mod` package list. See [Testing](#testing).
 
 ## Feature Overview
 

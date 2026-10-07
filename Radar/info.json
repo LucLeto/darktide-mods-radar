@@ -1,7 +1,7 @@
 {
   "name": "Radar",
   "description": "Displays items, teammates and high-priority enemies on a configurable radar.",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "author": "LucLeto",
   "homepage": "https://www.nexusmods.com/warhammer40kdarktide/mods/790",
   "source": "https://github.com/LucLeto/darktide-mods-radar",
