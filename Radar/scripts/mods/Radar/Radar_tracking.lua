@@ -137,6 +137,8 @@ return function(env)
         respawn_runback = true,
         respawn_practice_beacon = true,
         respawn_practice_line = true,
+        saferoute_safe = true,
+        saferoute_wrong = true,
     }
 
     -- ----------------------------------------------------------------------------
@@ -1151,6 +1153,10 @@ return function(env)
             return false
         end
 
+        if SAFEROUTE_MARKER_KINDS[kind] then
+            return false
+        end
+
         if RESPAWN_MARKER_KINDS[kind] then
             return false
         end
@@ -1197,6 +1203,10 @@ return function(env)
         end
 
         if RESPAWN_MARKER_KINDS[kind] then
+            return true
+        end
+
+        if SAFEROUTE_MARKER_KINDS[kind] then
             return true
         end
 
@@ -1345,6 +1355,7 @@ return function(env)
                     kind == "location_attention" or
                     kind == "location_ping" or
                     kind == "location_threat" or
+                    SAFEROUTE_MARKER_KINDS[kind] == true or
                     RESPAWN_MARKER_KINDS[kind] == true
                 priority_target_cache[kind] = is_priority_target
             end
@@ -1839,6 +1850,7 @@ return function(env)
             _scan_martyr_skull_riddle_coordinate_fallbacks()
             _scan_player_tag_points()
             _scan_respawn_rewind_markers()
+            _scan_safe_route_markers()
         end
 
         _prune_units(droppable_scan_due)
@@ -1886,6 +1898,7 @@ return function(env)
         _reset_mission_objective_marker_state()
         _reset_expedition_runtime_state()
         _reset_respawn_rewind_state()
+        _reset_safe_route_state()
         mod._overview_mode_active = false
         mod._overview_zoom_range = _normalize_overview_zoom_range(mod:get("overview_zoom_range"))
         mod._overview_capture_actions = mod._overview_capture_actions or {}

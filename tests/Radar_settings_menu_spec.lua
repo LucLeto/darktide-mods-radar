@@ -150,6 +150,7 @@ local EXPECTED_TABS = {
     { "enemies_group", "tab_enemies" },
     { "players_group", "tab_players" },
     { "respawn_group", "tab_respawn" },
+    { "saferoute_group", "tab_saferoute" },
     { "debug_group", "tab_debug" },
 }
 
@@ -376,6 +377,31 @@ check(parent_id("show_stimm_supply_deployable") == "deployables_group"
 check(parent_id("broker_stimm_field_crate_deployable_marker_color") == "show_stimm_supply_deployable"
     and parent_id("medical_crate_deployable_marker_color") == "show_medical_crate_deployable",
     "the Stimm Supply and the Medical Crate do not have a colour each")
+
+for _, kind in ipairs({ "saferoute_safe", "saferoute_wrong" }) do
+    local setting_id = "show_" .. kind
+
+    check(parent_id(setting_id) == "saferoute_group" and widget_by_id[setting_id]
+        and widget_by_id[setting_id].default_value == "icon_only",
+        setting_id .. " is not on the SafeRoute tab with an icon only default")
+    check(parent_id(kind .. "_marker_color") == setting_id, kind .. " has no colour of its own under its marker")
+
+    -- Icon, frame and backplate, in the order they are drawn on top of each other.
+    local sub_widgets = widget_by_id[setting_id] and widget_by_id[setting_id].sub_widgets or {}
+
+    check(sub_widgets[1] and sub_widgets[1].setting_id == kind .. "_marker_color"
+        and sub_widgets[2] and sub_widgets[2].setting_id == kind .. "_frame_color"
+        and sub_widgets[3] and sub_widgets[3].setting_id == kind .. "_plate_color",
+        setting_id .. " does not list its icon, frame and backplate colours in that order")
+    check(same_color(widget_by_id[kind .. "_plate_color"] and widget_by_id[kind .. "_plate_color"].default_value,
+        ColorSettings.default_color("mission_objective_background_marker")),
+        kind .. " backplate does not default to the objective backplate colour")
+    check(same_color(widget_by_id[kind .. "_frame_color"] and widget_by_id[kind .. "_frame_color"].default_value,
+        ColorSettings.default_color(kind .. "_marker")),
+        kind .. " frame does not default to its marker colour")
+end
+
+check(parent_id("saferoute_icon_scale") == "saferoute_group", "the SafeRoute markers have no icon size slider")
 check(shows("show_players", "dot_only", "show_player_state_icons")
     and shows("show_players", "marked_icon", "player_marker_range_mode")
     and option_of("show_players", "off").show_widgets == nil,

@@ -49,15 +49,17 @@ local RADAR_OUTLINE = _color(255, 213, 226, 206)
 local AUSPEX_GREEN = _color(255, 0, 255, 0)
 
 --- Colour registry filled by the registration calls below and exported on `ColorSettings`.
--- `marker_prefix_by_kind`, `marker_background_prefix_by_kind`,
--- `marker_highlight_prefix_by_kind` and `enemy_icon_prefix_by_kind` map a marker kind to a
--- colour prefix. `default_by_prefix` holds each prefix's default colour and
+-- `marker_prefix_by_kind`, `marker_background_prefix_by_kind`, `marker_frame_prefix_by_kind`,
+-- `marker_plate_prefix_by_kind`, `marker_highlight_prefix_by_kind` and
+-- `enemy_icon_prefix_by_kind` map a marker kind to a colour prefix. `default_by_prefix` holds each prefix's default colour and
 -- `color_setting_id_by_prefix` its native colour setting id, `highlight_prefixes` lists every
 -- highlight prefix, the opacity maps name legacy opacity settings that did not follow the
 -- `p_opacity` pattern (and their pre-migration names), and `anchored_color_settings` lists the
 -- colour widget descriptors to insert under each settings widget id.
 local marker_prefix_by_kind = {}
 local marker_background_prefix_by_kind = {}
+local marker_frame_prefix_by_kind = {}
+local marker_plate_prefix_by_kind = {}
 local marker_highlight_prefix_by_kind = {}
 local enemy_icon_prefix_by_kind = {}
 local default_by_prefix = {}
@@ -114,7 +116,9 @@ end
 --- Registers the colours of one marker kind.
 -- Always registers the marker colour, named `<kind>_marker` unless `prefix` or
 -- `icon_prefix` is given (an icon prefix takes `icon_default` as its default). Optionally
--- registers a background colour (`background_prefix`) and a nearby highlight colour
+-- registers a background colour (`background_prefix`), a colour of its own for the objective
+-- frame and for the backplate behind it (`frame_prefix` and `plate_prefix`, for a framed kind
+-- that is not part of the objective family) and a nearby highlight colour
 -- (`supports_highlight`, named `<kind>_highlight` by default). `aliases` resolve to the
 -- same marker and highlight prefixes. Each registered colour gets its colour widget under
 -- `anchor`; `shared` marks colours that other settings' markers use too, so they stay visible
@@ -162,6 +166,36 @@ local function _add_marker(descriptor)
             title_prefix = "marker_background_color",
             tooltip = "marker_background_color_slider_tooltip",
             label_role = "background",
+            label_prefix = descriptor.label_prefix,
+            shared = shared,
+        })
+    end
+
+    if descriptor.frame_prefix then
+        _add_default(descriptor.frame_prefix, descriptor.frame_default or default)
+        marker_frame_prefix_by_kind[kind] = descriptor.frame_prefix
+
+        _add_anchor(descriptor.anchor, {
+            prefix = descriptor.frame_prefix,
+            default = descriptor.frame_default or default,
+            title_prefix = "marker_frame_color",
+            tooltip = "marker_frame_color_slider_tooltip",
+            label_role = "frame",
+            label_prefix = descriptor.label_prefix,
+            shared = shared,
+        })
+    end
+
+    if descriptor.plate_prefix then
+        _add_default(descriptor.plate_prefix, descriptor.plate_default or default)
+        marker_plate_prefix_by_kind[kind] = descriptor.plate_prefix
+
+        _add_anchor(descriptor.anchor, {
+            prefix = descriptor.plate_prefix,
+            default = descriptor.plate_default or default,
+            title_prefix = "marker_plate_color",
+            tooltip = "marker_plate_color_slider_tooltip",
+            label_role = "plate",
             label_prefix = descriptor.label_prefix,
             shared = shared,
         })
@@ -935,6 +969,29 @@ _add_marker({
     anchor = "show_respawn_practice_line",
     default = _color(255, 175, 175, 175),
 })
+
+-- SafeRoute route markers. The defaults are the green and red SafeRoute draws its own SAFE ROUTE
+-- and WRONG WAY markers in, so they are recognised at a glance, and they are Radar settings from
+-- that point on. Each marker wears the objective frame on the objective backplate, with colours
+-- of its own for both; the frame starts in the marker colour, as SafeRoute draws it, and the
+-- backplate in the objective backplate's near-black. No highlight colours, since the route kinds
+-- have no nearby highlight of their own.
+_add_marker({
+    kind = "saferoute_safe",
+    anchor = "show_saferoute_safe",
+    default = _color(255, 90, 230, 110),
+    frame_prefix = "saferoute_safe_frame",
+    plate_prefix = "saferoute_safe_plate",
+    plate_default = MISSION_OBJECTIVE_BACKGROUND,
+})
+_add_marker({
+    kind = "saferoute_wrong",
+    anchor = "show_saferoute_wrong",
+    default = _color(255, 235, 80, 60),
+    frame_prefix = "saferoute_wrong_frame",
+    plate_prefix = "saferoute_wrong_plate",
+    plate_default = MISSION_OBJECTIVE_BACKGROUND,
+})
 --- Converts a setting value into a colour channel, rounded and clamped to 0 to 255.
 -- param: value setting value
 -- ?number: fallback channel used when the value is not a number, 255 when nil
@@ -1127,6 +1184,24 @@ function ColorSettings.install_runtime(mod)
     -- treturn: ?tab ARGB colour array
     function mod:get_marker_background_color(kind, fallback)
         local prefix = kind and marker_background_prefix_by_kind[kind] or nil
+        return self:get_configurable_color(prefix, fallback)
+    end
+
+    --- Returns the configured objective frame colour of a framed marker kind, or `fallback` when it has none.
+    -- Only kinds outside the objective family have one; the objective kinds share
+    -- `get_mission_objective_frame_color`.
+    -- treturn: ?tab ARGB colour array
+    function mod:get_marker_frame_color(kind, fallback)
+        local prefix = kind and marker_frame_prefix_by_kind[kind] or nil
+        return self:get_configurable_color(prefix, fallback)
+    end
+
+    --- Returns the configured backplate colour of a framed marker kind, or `fallback` when it has none.
+    -- Only kinds outside the objective family have one; the objective kinds share
+    -- `get_mission_objective_background_color`.
+    -- treturn: ?tab ARGB colour array
+    function mod:get_marker_plate_color(kind, fallback)
+        local prefix = kind and marker_plate_prefix_by_kind[kind] or nil
         return self:get_configurable_color(prefix, fallback)
     end
 
@@ -1418,6 +1493,8 @@ ColorSettings.anchored_color_settings = anchored_color_settings
 ColorSettings.highlight_prefixes = highlight_prefixes
 ColorSettings.marker_prefix_by_kind = marker_prefix_by_kind
 ColorSettings.marker_background_prefix_by_kind = marker_background_prefix_by_kind
+ColorSettings.marker_frame_prefix_by_kind = marker_frame_prefix_by_kind
+ColorSettings.marker_plate_prefix_by_kind = marker_plate_prefix_by_kind
 ColorSettings.marker_highlight_prefix_by_kind = marker_highlight_prefix_by_kind
 ColorSettings.enemy_icon_prefix_by_kind = enemy_icon_prefix_by_kind
 ColorSettings.vanilla_objective_color = VANILLA_OBJECTIVE

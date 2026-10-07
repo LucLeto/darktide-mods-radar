@@ -190,7 +190,7 @@ local OBJECTIVE_FRAME_ICON = "content/ui/materials/hud/interactions/frames/point
 local OBJECTIVE_PLATE_ICON = "content/ui/materials/hud/interactions/frames/point_of_interest_back"
 local OBJECTIVE_FRAME_SIZE = 26
 
---- Nominal icon size of each objective kind against the 26 px frame.
+--- Nominal icon size of each framed kind against the 26 px frame.
 -- The frame is shared by the whole family; the icon inside it is not. The game's icons are
 -- not normalised (each was drawn to sit differently inside its own box), so one number
 -- cannot fit them all, and a category has to be tunable without moving its neighbours. The
@@ -208,6 +208,9 @@ local OBJECTIVE_ICON_SIZE_BY_KIND = {
     -- Its texture already carries the inset, so it takes a much larger share of
     -- the frame than the rest and still matches the game's own marker.
     mission_objective_other = 20,
+    -- SafeRoute draws its icon at 28 px in its 52 px frame; the same share of this one.
+    saferoute_safe = 14,
+    saferoute_wrong = 14,
 }
 --- Fallback colours used until the configured colours are available.
 local RADAR_OUTLINE_WIDGET_COLOR = { 255, 213, 226, 206 }
@@ -554,6 +557,24 @@ local PRESENTATIONS = {
         glyph = "\238\128\135", -- U+E007, Darktide run-back point glyph
         color = _widget_color(255, 175, 175, 175),
         size = 14,
+    },
+    saferoute_safe = {
+        icon = OBJECTIVE_FRAME_ICON,
+        plate_icon = OBJECTIVE_PLATE_ICON,
+        overlay_icon = "content/ui/materials/hud/interactions/icons/location",
+        color = _widget_color(255, 90, 230, 110),
+        size = OBJECTIVE_FRAME_SIZE,
+        background_base_size = OBJECTIVE_FRAME_SIZE,
+        overlay_base_size = OBJECTIVE_ICON_SIZE_BY_KIND.saferoute_safe,
+    },
+    saferoute_wrong = {
+        icon = OBJECTIVE_FRAME_ICON,
+        plate_icon = OBJECTIVE_PLATE_ICON,
+        overlay_icon = "content/ui/materials/hud/interactions/icons/attention",
+        color = _widget_color(255, 235, 80, 60),
+        size = OBJECTIVE_FRAME_SIZE,
+        background_base_size = OBJECTIVE_FRAME_SIZE,
+        overlay_base_size = OBJECTIVE_ICON_SIZE_BY_KIND.saferoute_wrong,
     },
     medicae_station = {
         icon = "content/ui/materials/hud/interactions/icons/respawn",
@@ -3270,10 +3291,28 @@ local function _target_visual(target, draw_cache)
             if presentation.plate_icon ~= nil then
                 -- A framed marker's base layer is the frame, which is the family's
                 -- identity and has a colour of its own. The marker colour, and
-                -- any state colour, belongs to the icon on top of it.
-                presentation.color = _configured_objective_frame_color(marker_color)
+                -- any state colour, belongs to the icon on top of it. A framed
+                -- kind outside the objective family, such as SafeRoute's markers,
+                -- has a frame and a backplate colour of its own instead of the
+                -- objective family's shared ones.
+                local get_marker_frame_color = mod.get_marker_frame_color
+                local get_marker_plate_color = mod.get_marker_plate_color
+                local frame_color = get_marker_frame_color and get_marker_frame_color(mod, target_kind) or nil
+                local plate_color = get_marker_plate_color and get_marker_plate_color(mod, target_kind) or nil
+
+                if frame_color ~= nil then
+                    presentation.color = frame_color
+                else
+                    presentation.color = _configured_objective_frame_color(marker_color)
+                end
+
                 presentation.overlay_color = marker_color
-                presentation.plate_color = _configured_objective_background_color(presentation.plate_color)
+
+                if plate_color ~= nil then
+                    presentation.plate_color = plate_color
+                else
+                    presentation.plate_color = _configured_objective_background_color(presentation.plate_color)
+                end
             else
                 presentation.color = marker_color
             end

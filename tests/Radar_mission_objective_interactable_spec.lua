@@ -5,6 +5,7 @@ local MISSION_OBJECTIVES_PATH = "Radar/scripts/mods/Radar/Radar_mission_objectiv
 local EXPEDITIONS_PATH = "Radar/scripts/mods/Radar/Radar_expeditions.lua"
 local EVENTS_PATH = "Radar/scripts/mods/Radar/Radar_events.lua"
 local RESPAWN_REWIND_PATH = "Radar/scripts/mods/Radar/compatibility/Radar_respawn_rewind.lua"
+local SAFE_ROUTE_PATH = "Radar/scripts/mods/Radar/compatibility/Radar_safe_route.lua"
 
 local MISSION_OBJECTIVE_SETTING_BY_KIND = {
     mission_objective_scanner = "show_mission_objective_scanner",
@@ -161,6 +162,7 @@ local function new_harness()
         -- From the definitions module; read where the radar targets are built.
         EXPEDITION_MARKER_KINDS = {},
         RESPAWN_MARKER_KINDS = {},
+        SAFEROUTE_MARKER_KINDS = {},
         ENEMY_RADAR_DEFINITION_BY_KIND = {},
         -- No nearby highlight is switched on.
         NEARBY_HIGHLIGHT_SETTING_BY_GROUP = {},
@@ -373,6 +375,7 @@ local function new_harness()
     install(EXPEDITIONS_PATH, env)
     install(EVENTS_PATH, env)
     install(RESPAWN_REWIND_PATH, env)
+    install(SAFE_ROUTE_PATH, env)
 
     local update_internal = named_upvalue(captured.state_gameplay_update, "_update_internal")
     local scan_interactees = named_upvalue(update_internal, "_scan_interactees")
