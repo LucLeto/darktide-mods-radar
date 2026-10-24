@@ -63,6 +63,12 @@ return function(env)
     local HUD_OCCLUSION_RAYCAST_MODE = "closest"
     local HUD_OCCLUSION_COLLISION_FILTER = "collision_filter"
     local HUD_OCCLUSION_RAYCAST_FILTER_COUNT = #HUD_OCCLUSION_RAYCAST_FILTERS
+    --- Raycast setup of the line-of-sight test that hides nearby highlights behind walls.
+    -- The filter, the mode and the hit layout `{ position, distance, normal, actor }` are the
+    -- ones the game's world markers use to test their own line of sight.
+    local HUD_LINE_OF_SIGHT_FILTER = "filter_interactable_line_of_sight_marker_check"
+    local HUD_LINE_OF_SIGHT_RAYCAST_MODE = "all"
+    local HUD_LINE_OF_SIGHT_HIT_ACTOR_INDEX = 4
     --- Default radar placement, nudge step and the corners the radar position can be anchored to.
     DEFAULT_RADAR_POS_X = 40
     DEFAULT_RADAR_POS_Y = 220
@@ -135,14 +141,17 @@ return function(env)
         pickup_saints = 0.12,
         pickup_leftover = 0.12,
         pickup_stolen_rations = 0.08,
+        pickup_ammo_cache_deployable = 0.1,
+        medical_crate_deployable = 0.1,
+        broker_stimm_field_crate_deployable = 0.1,
     }
 
     -- ----------------------------------------------------------------------------
     -- Mutable runtime state
     -- ----------------------------------------------------------------------------
 
-    --- Per-collection cache of whether each kind's nearby highlight is enabled.
-    local _scratch_highlight_enabled_by_kind = {}
+    --- Per-collection cache of each kind's nearby highlight mode, `highlight`, `outline` or false.
+    local _scratch_highlight_mode_by_kind = {}
 
     --- Result slot for the world marker list request.
     -- Used instead of a per-call closure; the event manager invokes the callback
@@ -2143,6 +2152,24 @@ return function(env)
             or _extract_hud_raycast_distance_from_value(d)
     end
 
+    --- Returns the unit an actor belongs to, or nil when the engine cannot say.
+    local function _safe_actor_unit(actor)
+        local actor_api = Actor
+        local actor_unit = actor_api and actor_api.unit
+
+        if not actor_unit then
+            return nil
+        end
+
+        local ok, unit = pcall(actor_unit, actor)
+
+        if ok then
+            return unit
+        end
+
+        return nil
+    end
+
     --- Returns whether level geometry blocks the line of sight from the camera to a world position.
     -- Casts one ray per occlusion filter until a filter reports a hit; any failure counts as
     -- visible.
@@ -2188,6 +2215,61 @@ return function(env)
                 if hit_distance ~= nil then
                     return hit_distance < threshold
                 end
+            end
+        end
+
+        return false
+    end
+
+    --- Returns whether level geometry hides a target unit from the camera.
+    -- Decided the way the game decides it for its own interaction markers, with one ray from the
+    -- camera to the position through the game's marker line-of-sight filter that collects every
+    -- hit; any hit on another unit than the target hides it. The target's own collider therefore
+    -- never hides it, and neither does the player's own character. Any failure counts as visible.
+    -- tab: camera_position camera position
+    -- tab: world_position target position
+    -- ?Unit: unit target unit, whose own collider is ignored
+    -- treturn: bool
+    function mod:is_hud_target_hidden_by_geometry(camera_position, world_position, unit)
+        local physics_world = _safe_hud_physics_world()
+        local immediate_raycast = PhysicsWorld and PhysicsWorld.immediate_raycast
+
+        if not physics_world or not immediate_raycast then
+            return false
+        end
+
+        local dx = world_position.x - camera_position.x
+        local dy = world_position.y - camera_position.y
+        local dz = world_position.z - camera_position.z
+        local distance = math_sqrt(dx * dx + dy * dy + dz * dz)
+
+        if not _is_finite_number(distance) or distance <= HUD_OCCLUSION_EPSILON then
+            return false
+        end
+
+        local ok, hits = pcall(
+            immediate_raycast,
+            physics_world,
+            Vector3(camera_position.x, camera_position.y, camera_position.z),
+            Vector3(dx / distance, dy / distance, dz / distance),
+            distance,
+            HUD_LINE_OF_SIGHT_RAYCAST_MODE,
+            "types",
+            "both",
+            HUD_OCCLUSION_COLLISION_FILTER,
+            HUD_LINE_OF_SIGHT_FILTER
+        )
+
+        if not ok or type(hits) ~= "table" then
+            return false
+        end
+
+        for i = 1, #hits do
+            local hit = hits[i]
+            local actor = type(hit) == "table" and hit[HUD_LINE_OF_SIGHT_HIT_ACTOR_INDEX] or nil
+
+            if actor ~= nil and _safe_actor_unit(actor) ~= unit then
+                return true
             end
         end
 
@@ -2546,8 +2628,11 @@ return function(env)
     -- Considers the highlight source targets kept by tracking (falling back to the unclustered
     -- and then the drawn radar targets) that lie within the highlight range, belong to a settings
     -- group with highlights enabled and are not of an excluded kind. Each entry carries the anchor and
-    -- fallback positions, the highlight colour (following the marker's puzzle state colour) and
-    -- the colour used while occluded. The output list is reused between frames.
+    -- fallback positions, the highlight colour (following the marker's puzzle state colour), the
+    -- colour used while occluded and whether a player has tagged the target. The output list is
+    -- reused between frames. A target of a group set to outlines is handed to
+    -- `_mark_highlight_outline` instead and gets no entry, unless its unit cannot be outlined;
+    -- then it keeps its bracket.
     -- treturn: tab highlight entries
     function _collect_screen_highlight_targets()
         local highlights = _reuse_screen_highlight_output()
@@ -2580,14 +2665,15 @@ return function(env)
         local screen_highlight_projection_fallback_position = _screen_highlight_projection_fallback_position
         local darkened_color_array = _darkened_color_array
         local distance_squared = _distance_squared
+        local mark_highlight_outline = _mark_highlight_outline
         local interactee_extension_map = _safe_unit_to_extension_map("interactee_system")
         local max_distance = mod:get_nearby_highlight_range()
         local max_distance_sq = max_distance * max_distance
         local highlight_count = 0
 
-        table_clear(_scratch_highlight_enabled_by_kind)
+        table_clear(_scratch_highlight_mode_by_kind)
 
-        local highlight_enabled_by_kind = _scratch_highlight_enabled_by_kind
+        local highlight_mode_by_kind = _scratch_highlight_mode_by_kind
         local source_targets = mod._highlight_source_radar_targets or mod._unclustered_radar_targets or
             mod._radar_targets
         local source_target_count = source_targets and #source_targets or 0
@@ -2597,26 +2683,30 @@ return function(env)
             local kind = target and target.kind
 
             if kind ~= nil then
-                local enabled = highlight_enabled_by_kind[kind]
+                local mode = highlight_mode_by_kind[kind]
 
-                if enabled == nil then
+                if mode == nil then
                     local group_name = get_marker_scale_group(mod, kind)
                     local setting_id = group_name and highlight_setting_by_group[group_name] or nil
 
-                    enabled = setting_id ~= nil and get_setting(mod, setting_id) == true or false
+                    mode = setting_id ~= nil and get_setting(mod, setting_id) or false
+
+                    if mode ~= "highlight" and mode ~= "outline" then
+                        mode = false
+                    end
 
                     -- This screen-space bracket is gated separately from the radar-side
                     -- highlight (`is_nearby_highlight_enabled_for_kind`), so it applies the
                     -- per-kind exclusion list itself; without this an excluded kind still
                     -- gets a bracket drawn around it in the world.
-                    if enabled and NEARBY_HIGHLIGHT_EXCLUDED_KINDS[kind] then
-                        enabled = false
+                    if mode and NEARBY_HIGHLIGHT_EXCLUDED_KINDS[kind] then
+                        mode = false
                     end
 
-                    highlight_enabled_by_kind[kind] = enabled
+                    highlight_mode_by_kind[kind] = mode
                 end
 
-                if enabled then
+                if mode then
                     local position = target.position
                     local distance_sq = target.distance_sq_3d
 
@@ -2630,22 +2720,35 @@ return function(env)
                         -- view or behind level geometry.
                         local color_kind = marker_color_kind(mod, kind, target.meta)
                         local color = screen_highlight_color_for_kind(color_kind)
-                        local world_position = screen_highlight_anchor_position(target, interactee_extension_map)
+                        local meta = target.meta
+                        -- The tag test tracking applies for "Tagged items only"
+                        -- (`_target_has_explicit_tag`); a tagged target is still
+                        -- highlighted behind walls while only visible ones are.
+                        local tagged = target.source == "smart_tag_system"
+                            or (meta ~= nil and meta.marked_by_player_slot ~= nil)
                         local fallback_world_position = screen_highlight_projection_fallback_position(target)
+                        local outlined = mode == "outline" and color ~= nil and fallback_world_position ~= nil
+                            and mark_highlight_outline ~= nil
+                            and mark_highlight_outline(target.unit, color, fallback_world_position, tagged)
 
-                        if color and world_position then
-                            highlight_count = highlight_count + 1
-                            highlights[highlight_count] = {
-                                unit = target.unit,
-                                kind = kind,
-                                world_position = world_position,
-                                fallback_world_position = fallback_world_position or world_position,
-                                color = color,
-                                occluded_color = get_occluded_highlight_color and
-                                    get_occluded_highlight_color(mod, color_kind, NEARBY_OUTLINE_OCCLUDED_MULTIPLIER) or
-                                    darkened_color_array(color, NEARBY_OUTLINE_OCCLUDED_MULTIPLIER),
-                                distance_sq_3d = distance_sq,
-                            }
+                        if not outlined then
+                            local world_position = screen_highlight_anchor_position(target, interactee_extension_map)
+
+                            if color and world_position then
+                                highlight_count = highlight_count + 1
+                                highlights[highlight_count] = {
+                                    unit = target.unit,
+                                    kind = kind,
+                                    world_position = world_position,
+                                    fallback_world_position = fallback_world_position or world_position,
+                                    color = color,
+                                    occluded_color = get_occluded_highlight_color and
+                                        get_occluded_highlight_color(mod, color_kind, NEARBY_OUTLINE_OCCLUDED_MULTIPLIER) or
+                                        darkened_color_array(color, NEARBY_OUTLINE_OCCLUDED_MULTIPLIER),
+                                    distance_sq_3d = distance_sq,
+                                    tagged = tagged,
+                                }
+                            end
                         end
                     end
                 end

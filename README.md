@@ -23,7 +23,7 @@ This README serves two audiences. The first half is a feature and settings refer
 - Includes mission-ready keybinds for **toggle radar on or off**, **toggle overview mode**, temporary radar zoom, and radar movement, plus per-mode enable toggles for **Regular Missions**, **Havoc**, **Mortis Trials**, and **Expeditions**.
 - Supports anchor-based **radar positioning** with offsets, movement keybinds, configurable movement step size, and an optional unrestricted positioning fallback for ultrawide or advanced layouts.
 - Supports **Artwork**, **Icon**, and **Off** display modes for the supported artwork-based pickup families, with automatic migration from older boolean settings.
-- Adds optional nearby screen-space highlight brackets for supported non-enemy marker groups, with configurable thickness, per-marker highlight colors, and optional distance labels on the screen highlight, the radar marker, or both.
+- Adds optional nearby highlights for supported non-enemy marker groups, drawn per group as screen-space **Highlight markers** (brackets) or as **Outlines** on the items themselves, with configurable thickness, per-marker highlight colors, optional distance labels on the screen highlight, the radar marker, or both, and an option to show them only while the target is in view.
 - Adds optional remaining-charge annotations for Medicae Stations and deployed Ammo Crates, plus scaled effect-radius rings for deployed Medical Crates and the Hive Scum's Stimm Supply.
 - Adds dedicated **Martyr's Skull riddle interactable** markers for supported mission-specific keys, levers, switches, buttons, and related puzzle controls. Markers clear automatically when individual steps are used or the riddle is completed.
 - Adds **Mission Objective Interactable** markers for the world interactions that drive mission progression, split into **Scanner targets**, **Hacking terminals**, **Servo skull objectives**, **Daemonic growth**, **Targets to destroy**, and **Other objective interactions**, each with its own **Icon only**, **Icon + Distance m**, and **Off** display mode and icon. Markers come from the game's own objective systems rather than from what the HUD happens to be drawing, so a step appears as soon as it becomes relevant instead of only once you are close enough for the interaction prompt, and clears again the moment it is completed.
@@ -82,6 +82,10 @@ The keybind-based **centered overview mode** temporarily expands the radar into 
 ### Nearby highlight example
 
 Nearby highlights add small screen-space brackets for supported non-enemy markers when they are close enough to matter. You can tune their thickness, set per-marker highlight colors with ARGB color pickers, and show item distance text on the screen highlight, the radar marker, or both. Objective brackets frame the middle of the device, and hazard barrel brackets sit on the barrel body even when the barrel hangs from a ceiling mount. See [Screen highlight anchoring](#screen-highlight-anchoring).
+
+Each marker group can instead draw **Outlines**: the item itself is outlined in its highlight color with the game's own outline effect, the one it uses for tagged enemies. A target that cannot carry an outline keeps its bracket, such as a Martyr's Skull riddle position without a unit or an objective zone without a visible model. A hanging barrel (the round one on cables) is outlined too, but its outline also shows the hidden fragments of its exploded state as arcs around it. With **Only highlight visible targets** on, brackets and outlines are hidden while level geometry blocks the view of their target, instead of being dimmed; an item a player has tagged is still highlighted through walls. An item you carry is not outlined. See [Highlight outlines](#highlight-outlines).
+
+If you also run **GoodOldOutlines** with its **Highlight tagged items** option, it draws its own outline, in its own color (teal by default), on every item a player tags. That outline is not Radar's: it appears on items Radar does not outline, and it shows for a moment before Radar's outline of a newly tagged item takes over.
 
 <p>
   <img src="doc/img/highlight_example.png" width="70%" alt="Nearby highlight example" />
@@ -301,10 +305,11 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Floors Above Range | Adjustable from **1 m** to **30 m** for the normal radar. Geometry more than this far above you is hidden; centered overview always uses **30 m**. |
 | Floors Below Range | Adjustable from **1 m** to **30 m** for the normal radar. Geometry more than this far below you is hidden; centered overview always uses **30 m**. |
 | Show geometry in overview mode | Also draws the Strikemap floor plan while centered overview mode is active. |
-| Nearby highlight range (m) | Adjustable from **5 m** to **20 m**. Controls how close supported items must be before their screen-space bracket highlights appear. |
+| Nearby highlight range (m) | Adjustable from **5 m** to **20 m**. Controls how close supported items must be before their bracket highlights or outlines appear. |
 | Nearby highlight thickness | Adjusts the line thickness used by nearby screen-space highlight brackets, from **0** to **6**. **0**, the default, keeps the adaptive thickness. |
+| Only highlight visible targets | Hides nearby highlight brackets and outlines while level geometry blocks the view of their target, instead of dimming them. Items a player has tagged are still highlighted through walls. Off by default. |
 | Show distance above nearby highlights | Shows item distance text above supported nearby screen-space highlights. |
-| Show distance on radar markers | Per marker group. Shows distance text under every radar marker of that group, independent of the nearby highlight toggle and range. |
+| Show distance on radar markers | Per marker group. Shows distance text under every radar marker of that group, independent of the nearby highlight setting and range. |
 | Medicae Station Charges | Shows remaining healing charges on Medicae Station radar markers when their marker is visible. |
 | Ammo Crate Charges | Shows remaining resupply charges on deployed Ammo Crate radar markers when their marker is visible. |
 | Boss marker style | **Icon only** or **Marked icon**. |
@@ -421,9 +426,12 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Option | What it controls |
 | --- | --- |
 | Nearby highlight thickness | Adjusts the line thickness used by nearby screen-space highlight brackets, from **0** to **6**. **0**, the default, keeps the adaptive thickness. |
-| Marker highlight colors | ARGB color pickers used directly by nearby highlights for a specific supported marker. |
+| Only highlight visible targets | Hides nearby highlight brackets and outlines while level geometry blocks the view of their target, instead of dimming them. Items a player has tagged are still highlighted through walls. Off by default. |
+| Marker highlight colors | ARGB color pickers used directly by nearby highlights and outlines for a specific supported marker. Outlines use the RGB channels only. |
 | Show distance above nearby highlights | Shows item distance text above supported nearby screen-space highlights. |
-| Show distance on radar markers | Per marker group. Shows distance text under every radar marker of that group, independent of the nearby highlight toggle and range. |
+| Show distance on radar markers | Per marker group. Shows distance text under every radar marker of that group, independent of the nearby highlight setting and range. |
+
+Each group below has a nearby highlight dropdown with **Highlight markers** (screen-space brackets), **Outlines** (the item itself is outlined) and **Off**. The default is **Off**; a profile that had the old checkbox ticked starts on **Highlight markers**.
 
 | Option group | What it controls |
 | --- | --- |
@@ -435,7 +443,7 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Expeditions-Specific Items | Highlights nearby salvage, tech-remnants, expedition pocketables, and related expedition pickups. |
 | Martyr's Skull Items | Highlights nearby Martyr's Skull items, riddle interactables, and orange power cell markers. |
 | Environment | Highlights nearby medicae stations, power sockets, heretic idols, and hazard barrels. |
-| Deployed Items | Has no nearby highlight; only the radar-marker distance text for deployed ammo crates, medical crates, and Stimm Supply. |
+| Deployed Items | Highlights nearby deployed ammo crates, medical crates, and Stimm Supply. |
 | Event-Related Items | Highlights nearby event pickups and event objectives, including Dark Rites totems and servo skulls. |
 
 ### Tech-Remnant controls
@@ -1125,6 +1133,7 @@ Install order in `Radar.lua`:
 5. `Radar_navmesh`
 6. `compatibility/Radar_respawn_rewind`
 7. `compatibility/Radar_safe_route`
+8. `Radar_highlight_outlines`
 
 `compatibility/Radar_strikemap.lua` is loaded last as an explicit module.
 
@@ -1145,6 +1154,7 @@ The installer mechanism itself is older than 3.0.0. Up to 2.6.x there were five 
 | `Radar_navmesh.lua` | Installer 5 | The built-in live geometry source. It reads the `GwNavWorld` navmesh into bucketed triangle arrays and exposes them only through `mod` methods. |
 | `compatibility/Radar_respawn_rewind.lua` | Installer 6 | Optional import of Respawn Rewind's respawn markers. See [Respawn Rewind](#respawn-rewind). |
 | `compatibility/Radar_safe_route.lua` | Installer 7 | Optional import of SafeRoute's SAFE ROUTE and WRONG WAY markers. See [SafeRoute](#saferoute). |
+| `Radar_highlight_outlines.lua` | Installer 8 | Nearby highlight outlines: adds, colors, shows and hides the outline material layer on the target units of groups set to **Outlines**, and switches every outline off when the radar stops. See [Highlight outlines](#highlight-outlines). |
 | `compatibility/Radar_strikemap.lua` | Explicit, singleton | Optional consumer of Strikemap's geometry API. See [Strikemap](#strikemap). |
 | `Radar_color_settings.lua` | Explicit | The single source of truth for every configurable color: prefix, default ARGB value, the marker kinds that resolve to it and the widget it is anchored under. Also the cached color getters and the color migrations. |
 | `ui/Radar_hud_element.lua` | DMF HUD element `HudElementRadar` | Draws the snapshot: frame, map geometry layer, pooled marker widgets, brackets, texts, center dot, overview legends and on-screen highlights. Owns the static presentation of every marker kind (`PRESENTATIONS`, `ARTWORK_MODE_ICON_PRESENTATIONS`, `LIVE_EVENT_ARTWORK_BY_KIND`). |
@@ -1194,6 +1204,7 @@ game extension systems, world marker list, other mods
   -> _prune_units
   -> _collect_radar_targets                    -> mod._radar_targets
   -> _collect_screen_highlight_targets         -> mod._screen_highlight_targets
+     _mark_highlight_outline, _sync_highlight_outlines (outlined units)
   -> mod._radar_snapshot                       -> mod:get_radar_snapshot()
   -> ui/Radar_hud_element.lua                  (mod:project_target_to_radar, presentations, widgets)
 ```
@@ -1253,6 +1264,23 @@ Survivors are written into pooled target tables. The unclustered list is copied 
 | Targets without a unit | The tracked position. |
 
 The barrel order exists because of hanging barrels. Their unit origin is the ceiling mount, so an origin-anchored bracket sat on the mount and was occlusion-tested there instead of at the barrel. Tracking stores the barrel's radar position the same way: `c_explosion`, then the hazard extension's broadphase position, then the origin. Every engine call is `pcall`-guarded, and a failure falls through to the next step. `tests/Radar_screen_highlight_anchor_spec.lua` pins this order.
+
+**Only highlight visible targets.** While this option is on, a bracket whose target is hidden is left out, along with its distance text, instead of being drawn in its dimmed color. Whether the target is hidden is decided by `mod:is_hud_target_hidden_by_geometry`, the way the game decides it for its own interaction markers. It casts one ray from the camera to the anchor with the game's `filter_interactable_line_of_sight_marker_check` filter, collecting every hit, and any hit on another unit than the target hides it. The target's own collider therefore never hides it; an objective's box center lies inside that collider. The dimming test (`mod:is_hud_world_position_occluded`) is not used for this. Three of its four filter names do not exist in the game, and the fourth is the filter enemy shots use, which reported every target as hidden in game. A target a player has tagged is exempt and is dimmed as before. The collection marks it `tagged` with the same test tracking uses for **Tagged items only**. With the option off, the test runs exactly as before.
+
+### Highlight outlines
+
+A group set to **Outlines** is still collected by `_collect_screen_highlight_targets`, which hands each of its targets to `_mark_highlight_outline` instead of adding a bracket entry. `Radar_highlight_outlines.lua` draws the outline the way the game's `OutlineSystem` outlines minions:
+
+- **Layer.** A prop has no outline layer of its own. The first time a unit is outlined, it gets a material layer built from `content/characters/materials/minion_outline` (`Unit.add_material_layer`). That material ships in `packages/boot_assets`, so it is always loaded. The layer stays on the unit for its lifetime and is only switched on and off. It is marked in the unit's script data, so a Radar reload never adds a second one.
+- **Color.** The marker's highlight color is written to the layer's `outline_color` as RGB from 0 to 1 every time the outline is switched on, and at once when it changes while shown. It goes to the unit and two levels of its child units. In game, a color written only while the layer was off showed the material's default color once the outline came on, and the parts of multi-part props kept it too; the game's `OutlineSystem` likewise writes the color each time it shows an outline.
+- **Culling.** While the outline shows, unit culling is off, as the game does for its own outlines. Twice a second, culling is switched off again for every shown outline, because other code switches it back on; GoodOldOutlines does when a tag ends, which hid Radar's outline behind walls. It is restored when the outline goes off, unless the game's outline system is showing an outline of its own on that unit.
+- **Carried items.** A luggable whose locomotion state is `carried` is not outlined and gets no bracket, since it hangs in the middle of the first-person view.
+- **Lifecycle.** Tracking calls `_sync_highlight_outlines` after every collection. That shows what was marked and switches off and forgets everything else. Every outline is also switched off when the radar stops or is not allowed to run, at the end of a mission, during a cinematic, and when Radar is disabled or unloaded.
+- **Fallback.** `_mark_highlight_outline` returns false, and the target keeps its bracket, for a target without a unit (a Martyr's Skull riddle coordinate fallback), a unit without meshes (such as an objective zone), and a unit the engine refuses the layer for. Refused units are remembered until the mission ends.
+- **Hidden meshes.** The outline covers every mesh of a unit, hidden ones included; the engine has no way to give a material layer to some meshes only. A hazard prop carries an `intact` and a `broken` mesh visibility group (`HazardPropExtension._update_mesh_visuals`). A standing barrel (`_hazard_shape` `barrel`) keeps its broken fragments inside its own outline, while a hanging one (`sphere`) shows them as arcs around it. Giving hanging barrels a bracket instead was tried and rejected; the outline with the arcs is kept.
+- **Visible targets only.** The HUD element calls `mod:update_highlight_outline_visibility` every frame, which runs the same line-of-sight test against the anchor `_screen_highlight_projection_fallback_position` returns. A new outline starts hidden in this mode, so it never shows through a wall before its first test. A tagged unit skips the test and shows through walls.
+
+How the outline looks on a prop (its thickness, and whether it shows through walls) is decided by the game's renderer, not by Radar. GoodOldOutlines was only read to learn which engine calls make a prop outlinable; none of its code is used.
 
 ### Mission objective tracking
 
@@ -1548,7 +1576,7 @@ DMF's native options ignore widget `get` and `change` callbacks, which the old e
 | --- | --- | --- |
 | While `Radar_data.lua` builds the menu, before DMF saves the option defaults | Colors saved as the four channel settings `p_opacity`, `p_red`, `p_green` and `p_blue`, plus the pre-color `background_opacity`, are folded into `p_color`. Missing channels take the default, and an existing native setting is never overwritten. The channel keys are deleted afterwards. | `ColorSettings.migrate_channel_settings` |
 | Same | `map_geometry_source` is derived from the old `use_strikemap_geometry` and `show_navmesh` toggles, while it has never been saved. | `_migrate_map_geometry_source_setting` |
-| Same | Dropdowns that still hold a saved checkbox value: `true` becomes the enabled mode, `false` becomes `off`. | `_migrate_marker_enabled_dropdown_setting`, `_migrate_checkbox_display_mode_setting` |
+| Same | Dropdowns that still hold a saved checkbox value: `true` becomes the enabled mode, `false` becomes `off`. The per-group nearby highlight dropdowns are among them; a ticked box becomes **Highlight markers**. | `_migrate_marker_enabled_dropdown_setting`, `_migrate_checkbox_display_mode_setting` |
 | `mod.on_all_mods_loaded` | Marker checkboxes to dropdowns; artwork and Expedition POI booleans to dropdown values; the per-breed enemy settings split out of the old common and shooter settings (seeded only while unset); the old teammate checkbox and player style into `show_players`. | `Radar_enemy_definitions.lua` |
 | `mod.on_all_mods_loaded` | The old global nearby-highlight opacity and custom color are copied into every per-marker highlight color still at its default, then deleted. Once per profile, the enemy bracket color takes the RGB of a customized enemy background color, latched by `enemy_bracket_color_migrated`. | `mod:migrate_radar_color_settings` |
 
@@ -1572,13 +1600,14 @@ luajit tests/Radar_settings_menu_spec.lua
 
 | Spec | Contracts it protects |
 | --- | --- |
+| `Radar_highlight_outlines_spec.lua` | Highlight outlines with the real module against a fake engine: the layer added once per unit (also across a reload) from the minion outline material, colors written whenever an outline is switched on and on change (child units included), culling switched off again twice a second, unmarked units switched off and forgotten, the bracket fallback for missing, mesh-less, refused and dead units, carried units, culling left to the game's own outlines, the visible-only mode and its tagged exemption, the line-of-sight test (the game's marker filter, collecting every hit, the target's own collider ignored, failures counted as visible), cinematics, the clear, reset, disable and unload paths, no engine call while idle, and, through the real collection, which groups get outlines and which keep brackets. |
 | `Radar_martyr_skull_riddle_lifecycle_spec.lua` | The riddle coordinate-fallback lifecycle on `cm_habs`: fallbacks for buttons not yet observed, replacement by a live unit, retirement on use or on an active-to-inactive transition (including hot joins), conservative visibility when state is unknown or unreadable, persistence across point rebuilds and toggles, clearing on the runtime reset, and the solved latch suppressing every fallback. |
 | `Radar_mission_objective_interactable_spec.lua` | Objective discovery and lifecycle against fake objective systems: dedicated systems, scan zones and the client-side recovery, active-objective confirmation, appearance before the prompt, armed copies only, used and inactive retirement, category toggles, existing classifications preserved, puzzle colors, the start-marker, hint, world-marker, container and socket rules, growth recognition and tentacles, the range exemption, and the debug lines. |
 | `Radar_mission_objective_wiring_spec.lua` | Module wiring. Installs the real definition and helper modules and checks that every objective kind is registered everywhere a kind must be (settings, scale groups, colors, highlights, presentations). Also checks the shared presentation rules, the respawn and SafeRoute registration and priorities, localization requirements, declaration order of shared locals, and headroom under LuaJIT's 200-local limit. |
 | `Radar_respawn_rewind_spec.lua` | Compatibility behavior: role classification and its fallbacks, position copying, removed markers, a missing or disabled Respawn Rewind, malformed data, run-back offsets, the overview rule and the mission reset. |
 | `Radar_safe_route_spec.lua` | Compatibility behavior: role classification and its icon fallback, guide dots left out, position copying, removed markers, the once-per-mission branching road gate, a missing, disabled or late-loaded SafeRoute, malformed data and the mission reset. |
 | `Radar_screen_highlight_anchor_spec.lua` | Screen highlight placement with the real runtime helpers: objective box centers, pickups on their origin, the barrel `c_explosion` → tracked position → origin order, every engine failure path, and which world markers count as the game marking an objective. |
-| `Radar_settings_menu_spec.lua` | The settings schema and migrations: `Radar.mod` packages and no Alf dependency, the ten tabs and their order, native color widgets and their placement, `show_widgets`, a fresh profile saving nothing, a profile saved by the previous release migrating its channel colors, teammate, map geometry and checkbox settings (old keys deleted, unrelated settings untouched, a second build changing nothing), live dropdown tinting, and the runtime highlight and bracket color migrations. |
+| `Radar_settings_menu_spec.lua` | The settings schema and migrations: `Radar.mod` packages and no Alf dependency, the ten tabs and their order, native color widgets and their placement, `show_widgets`, a fresh profile saving nothing, the per-group nearby highlight dropdowns and the visible-only option, a profile saved by the previous release migrating its channel colors, teammate, map geometry and checkbox settings (including the old nearby highlight checkboxes) (old keys deleted, unrelated settings untouched, a second build changing nothing), live dropdown tinting, and the runtime highlight and bracket color migrations. |
 
 Some checks in the wiring spec read the production source as text, for example to pin a condition, an upvalue name or the declaration order of a local. A refactor that moves such code has to update the spec deliberately.
 

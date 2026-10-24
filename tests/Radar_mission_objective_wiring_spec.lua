@@ -26,7 +26,7 @@ local settings_store = {
     show_mission_objective_hacking = "icon_distance",
     show_mission_objective_servo_skull = "off",
     show_mission_objective_other = "icon_only",
-    nearby_highlight_mission_objective = true,
+    nearby_highlight_mission_objective = "highlight",
     nearby_highlight_distance_text_mission_objective = true,
     mission_objective_icon_scale = 150,
 }
@@ -87,6 +87,8 @@ local respawn_rewind_source =
     assert(io.open("Radar/scripts/mods/Radar/compatibility/Radar_respawn_rewind.lua")):read("*a")
 local safe_route_source =
     assert(io.open("Radar/scripts/mods/Radar/compatibility/Radar_safe_route.lua")):read("*a")
+local highlight_outlines_source =
+    assert(io.open("Radar/scripts/mods/Radar/Radar_highlight_outlines.lua")):read("*a")
 local definitions_source = assert(io.open("Radar/scripts/mods/Radar/Radar_enemy_definitions.lua")):read("*a")
 
 local problems = {}
@@ -542,6 +544,7 @@ for label, source in pairs({
     ["Radar_events.lua"] = events_source,
     ["compatibility/Radar_respawn_rewind.lua"] = respawn_rewind_source,
     ["compatibility/Radar_safe_route.lua"] = safe_route_source,
+    ["Radar_highlight_outlines.lua"] = highlight_outlines_source,
 }) do
     local count = 0
 
@@ -1138,6 +1141,7 @@ check_declared_aliases(events_source, "Radar_events.lua")
 check_declared_aliases(respawn_rewind_source, "compatibility/Radar_respawn_rewind.lua")
 check_declared_aliases(safe_route_source, "compatibility/Radar_safe_route.lua")
 check_declared_aliases(definitions_source, "Radar_enemy_definitions.lua")
+check_declared_aliases(highlight_outlines_source, "Radar_highlight_outlines.lua")
 
 -- With no interaction marker from the game -- always the case for a scan target
 -- -- the bracket is placed on the fallback position, not the anchor. Objectives
@@ -1232,6 +1236,7 @@ check_local_use_before_declaration(pickups_source, "Radar_pickups.lua")
 check_local_use_before_declaration(events_source, "Radar_events.lua")
 check_local_use_before_declaration(respawn_rewind_source, "compatibility/Radar_respawn_rewind.lua")
 check_local_use_before_declaration(safe_route_source, "compatibility/Radar_safe_route.lua")
+check_local_use_before_declaration(highlight_outlines_source, "Radar_highlight_outlines.lua")
 
 -- --------------------------------------------------------------------------------------------
 -- Respawn awareness, mirrored from the Respawn Rewind mod's world markers.
@@ -1673,6 +1678,8 @@ local respawn_rewind_install_at =
 check(safe_route_install_at ~= nil and respawn_rewind_install_at ~= nil
     and safe_route_install_at > respawn_rewind_install_at,
     "the SafeRoute integration is not installed after the Respawn Rewind integration")
+check(radar_source:find('_install("Radar/scripts/mods/Radar/Radar_highlight_outlines", shared_env)', 1, true) ~= nil,
+    "the highlight outline module is not installed, so tracking calls nil outline functions")
 
 -- Nothing on the SafeRoute tab works without SafeRoute, and the tab title is the only place a
 -- player sees that without hovering.

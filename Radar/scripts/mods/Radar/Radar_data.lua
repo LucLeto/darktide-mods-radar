@@ -1208,6 +1208,26 @@ local function _insert_color_settings(widgets)
     end
 end
 
+--- Builds the highlight markers / outlines / off dropdown of a group's nearby highlights.
+-- A value saved by the checkbox it replaced is converted first, a ticked box becoming
+-- highlight markers.
+-- string: setting_id setting id
+-- treturn: tab widget
+local function _nearby_highlight_mode_dropdown(setting_id)
+    _migrate_checkbox_display_mode_setting(setting_id, "highlight")
+
+    return {
+        setting_id = setting_id,
+        type = "dropdown",
+        default_value = "off",
+        options = {
+            _dropdown_option("nearby_highlight_mode_highlight", "highlight"),
+            _dropdown_option("nearby_highlight_mode_outline", "outline"),
+            _dropdown_option("radar_outline_off", "off"),
+        },
+    }
+end
+
 --- Builds the checkbox that shows nearby highlight distance text on the radar for a group.
 local function _nearby_highlight_radar_distance_text_checkbox(setting_id)
     return {
@@ -1921,6 +1941,11 @@ return {
                                     decimals_number = 0,
                                     step_size_value = 1,
                                 },
+                                {
+                                    setting_id = "nearby_highlight_visible_only",
+                                    type = "checkbox",
+                                    default_value = false,
+                                },
                             },
                         },
                     },
@@ -1935,11 +1960,7 @@ return {
                             type = "group",
                             sub_widgets = {
                                 _icon_scale_slider("common_pickups_icon_scale", nil),
-                                {
-                                    setting_id = "nearby_highlight_common_pickups",
-                                    type = "checkbox",
-                                    default_value = false,
-                                },
+                                _nearby_highlight_mode_dropdown("nearby_highlight_common_pickups"),
                                 _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_common_pickups"),
                                 _artwork_icon_off_dropdown("show_crates"),
                                 {
@@ -1994,11 +2015,7 @@ return {
                             type = "group",
                             sub_widgets = {
                                 _icon_scale_slider("materials_icon_scale", nil),
-                                {
-                                    setting_id = "nearby_highlight_materials",
-                                    type = "checkbox",
-                                    default_value = false,
-                                },
+                                _nearby_highlight_mode_dropdown("nearby_highlight_materials"),
                                 _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_materials"),
                                 _artwork_icon_off_dropdown("show_diamantine"),
                                 _artwork_icon_off_dropdown("show_plasteel"),
@@ -2009,11 +2026,7 @@ return {
                             type = "group",
                             sub_widgets = {
                                 _icon_scale_slider("environment_icon_scale", nil),
-                                {
-                                    setting_id = "nearby_highlight_environment",
-                                    type = "checkbox",
-                                    default_value = false,
-                                },
+                                _nearby_highlight_mode_dropdown("nearby_highlight_environment"),
                                 _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_environment"),
                                 _icon_distance_off_dropdown("show_explosive_barrels", "icon_only"),
                                 _icon_distance_off_dropdown("show_fire_barrels", "icon_only"),
@@ -2046,6 +2059,7 @@ return {
                             type = "group",
                             sub_widgets = {
                                 _icon_scale_slider("deployables_icon_scale"),
+                                _nearby_highlight_mode_dropdown("nearby_highlight_deployables"),
                                 _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_deployables"),
                                 {
                                     setting_id = "show_ammo_crate_deployable",
@@ -2083,11 +2097,7 @@ return {
                             type = "group",
                             sub_widgets = {
                                 _icon_scale_slider("mission_objective_icon_scale", nil),
-                                {
-                                    setting_id = "nearby_highlight_mission_objective",
-                                    type = "checkbox",
-                                    default_value = false,
-                                },
+                                _nearby_highlight_mode_dropdown("nearby_highlight_mission_objective"),
                                 _nearby_highlight_radar_distance_text_checkbox(
                                     "nearby_highlight_distance_text_mission_objective"),
                                 _icon_distance_off_dropdown("show_mission_objective_scanner", "icon_only"),
@@ -2103,11 +2113,7 @@ return {
                             type = "group",
                             sub_widgets = {
                                 _icon_scale_slider("primary_objective_icon_scale", nil),
-                                {
-                                    setting_id = "nearby_highlight_primary_objective",
-                                    type = "checkbox",
-                                    default_value = false,
-                                },
+                                _nearby_highlight_mode_dropdown("nearby_highlight_primary_objective"),
                                 _nearby_highlight_radar_distance_text_checkbox(
                                     "nearby_highlight_distance_text_primary_objective"),
                                 {
@@ -2157,11 +2163,7 @@ return {
                             type = "group",
                             sub_widgets = {
                                 _icon_scale_slider("secondary_objective_icon_scale", nil),
-                                {
-                                    setting_id = "nearby_highlight_secondary_objective",
-                                    type = "checkbox",
-                                    default_value = false,
-                                },
+                                _nearby_highlight_mode_dropdown("nearby_highlight_secondary_objective"),
                                 _nearby_highlight_radar_distance_text_checkbox(
                                     "nearby_highlight_distance_text_secondary_objective"),
                                 {
@@ -2181,11 +2183,7 @@ return {
                             type = "group",
                             sub_widgets = {
                                 _icon_scale_slider("martyr_s_skull_icon_scale", nil),
-                                {
-                                    setting_id = "nearby_highlight_martyr_s_skull",
-                                    type = "checkbox",
-                                    default_value = false,
-                                },
+                                _nearby_highlight_mode_dropdown("nearby_highlight_martyr_s_skull"),
                                 _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_martyr_s_skull"),
                                 {
                                     setting_id = "show_martyr_skull",
@@ -2209,11 +2207,7 @@ return {
                             type = "group",
                             sub_widgets = {
                                 _icon_scale_slider("event_icon_scale", nil),
-                                {
-                                    setting_id = "nearby_highlight_event",
-                                    type = "checkbox",
-                                    default_value = false,
-                                },
+                                _nearby_highlight_mode_dropdown("nearby_highlight_event"),
                                 _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_event"),
                                 _artwork_icon_off_dropdown("show_tainted_skull", "artwork"),
                                 {
@@ -2312,11 +2306,7 @@ return {
                                     type = "group",
                                     sub_widgets = {
                                         _icon_scale_slider("expeditions_specific_icon_scale", nil),
-                                        {
-                                            setting_id = "nearby_highlight_expeditions_specific",
-                                            type = "checkbox",
-                                            default_value = false,
-                                        },
+                                        _nearby_highlight_mode_dropdown("nearby_highlight_expeditions_specific"),
                                         _nearby_highlight_radar_distance_text_checkbox(
                                             "nearby_highlight_distance_text_expeditions_specific"),
                                         _artwork_icon_off_dropdown("show_expeditions_currency"),
