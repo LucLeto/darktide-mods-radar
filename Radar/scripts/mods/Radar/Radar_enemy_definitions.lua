@@ -107,6 +107,9 @@ return function(env)
         "pickup_saints",
         "pickup_leftover",
         "pickup_stolen_rations",
+        "pickup_ammo_cache_deployable",
+        "medical_crate_deployable",
+        "broker_stimm_field_crate_deployable",
     }
 
     --- Default highlight colour per marker kind.
@@ -1183,6 +1186,7 @@ return function(env)
         expeditions_specific_group = "nearby_highlight_expeditions_specific",
         martyr_s_skull_group = "nearby_highlight_martyr_s_skull",
         environment_group = "nearby_highlight_environment",
+        deployables_group = "nearby_highlight_deployables",
         event_group = "nearby_highlight_event",
     }
 

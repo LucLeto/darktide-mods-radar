@@ -883,6 +883,7 @@ local _draw_cache = {
     show_nearby_highlight_distance_text_on_screen = false,
     nearby_highlight_range_sq = 0,
     nearby_highlight_thickness = 0,
+    nearby_highlight_visible_only = false,
     script_unit_has_extension = nil,
     health_station_max_charges = HEALTH_STATION_MAX_CHARGES,
     game_session_manager = nil,
@@ -1162,6 +1163,7 @@ local function _build_draw_cache(t)
     local show_nearby_highlight_distance_text_on_screen = mod.show_nearby_highlight_distance_text_on_screen
     local get_nearby_highlight_range = mod.get_nearby_highlight_range
     local get_nearby_highlight_thickness = mod.get_nearby_highlight_thickness
+    local is_nearby_highlight_visible_only = mod.is_nearby_highlight_visible_only
 
     table_clear(draw_cache.marker_display_mode_by_kind)
     table_clear(draw_cache.expedition_marker_display_mode_by_kind)
@@ -1198,6 +1200,8 @@ local function _build_draw_cache(t)
     draw_cache.nearby_highlight_range_sq = nearby_highlight_range * nearby_highlight_range
     draw_cache.nearby_highlight_thickness = get_nearby_highlight_thickness and
         get_nearby_highlight_thickness(mod) or 0
+    draw_cache.nearby_highlight_visible_only = is_nearby_highlight_visible_only and
+        is_nearby_highlight_visible_only(mod) or false
     draw_cache.slot_colors = UISettings and UISettings.player_slot_colors or nil
     draw_cache.debug_mode = get(mod, "debug_mode") == true
     draw_cache.marker_value_text_color = _configured_radar_color("marker_value_text", MARKER_VALUE_TEXT_WIDGET_COLOR)
@@ -3355,7 +3359,10 @@ end
 
 --- Draws the on-screen nearby highlight brackets and their distance texts.
 -- A bracket sits on the game's own interaction marker when it draws one, otherwise on the
--- projected fallback position; it is dimmed while level geometry hides the target.
+-- projected fallback position; it is dimmed while level geometry hides the target, or left
+-- out together with its distance text while only visible targets are highlighted, unless a
+-- player has tagged the target. In that mode the nearby highlight outlines are shown and hidden
+-- by line of sight here as well, every frame.
 -- tab: self HUD element
 -- tab: ui_renderer active UI renderer
 -- ?tab: snapshot radar snapshot
@@ -3365,12 +3372,17 @@ local function _draw_screen_highlights(self, ui_renderer, snapshot, z, draw_cach
     local highlights = snapshot and snapshot.screen_highlights or nil
     local highlight_count = highlights and #highlights or 0
     local highlight_thickness = draw_cache and draw_cache.nearby_highlight_thickness or 0
+    local visible_only = draw_cache and draw_cache.nearby_highlight_visible_only or false
+    local fallback_camera_position = snapshot and snapshot.player_position or nil
+
+    if visible_only and mod.update_highlight_outline_visibility then
+        mod:update_highlight_outline_visibility(self, fallback_camera_position)
+    end
 
     if highlight_count == 0 then
         return
     end
 
-    local fallback_camera_position = snapshot and snapshot.player_position or nil
     local fallback_rotation = snapshot and snapshot.player_rotation or nil
     local projection_context = mod.get_hud_projection_context and
         mod:get_hud_projection_context(self, fallback_camera_position, fallback_rotation) or nil
@@ -3411,34 +3423,45 @@ local function _draw_screen_highlights(self, ui_renderer, snapshot, z, draw_cach
             local draw_y = screen_y - bracket_size * 0.5
             local draw_color = highlight.color
             local occlusion_world_position = marker_draw_size ~= nil and world_position or fallback_world_position
+            local hidden = false
 
             if camera_position and occlusion_world_position then
-                local ok_occluded, occluded = pcall(mod.is_hud_world_position_occluded, mod, camera_position,
-                    occlusion_world_position)
+                if visible_only and not highlight.tagged then
+                    local ok_hidden, hidden_by_geometry = pcall(mod.is_hud_target_hidden_by_geometry, mod,
+                        camera_position, occlusion_world_position, highlight.unit)
 
-                if ok_occluded and occluded == true then
-                    draw_color = highlight.occluded_color or highlight.color
+                    hidden = ok_hidden and hidden_by_geometry == true
+                else
+                    local ok_occluded, occluded = pcall(mod.is_hud_world_position_occluded, mod, camera_position,
+                        occlusion_world_position)
+
+                    if ok_occluded and occluded == true then
+                        draw_color = highlight.occluded_color or highlight.color
+                    end
                 end
             end
 
-            RadarHudRenderer.draw_marker_brackets(ui_renderer, draw_x, draw_y, z, bracket_size, draw_color, highlight_thickness)
+            if not hidden then
+                RadarHudRenderer.draw_marker_brackets(ui_renderer, draw_x, draw_y, z, bracket_size, draw_color,
+                    highlight_thickness)
 
-            local distance_text = _screen_nearby_highlight_item_distance_text(highlight, draw_cache)
+                local distance_text = _screen_nearby_highlight_item_distance_text(highlight, draw_cache)
 
-            if distance_text ~= nil then
-                _draw_marker_value_text(
-                    ui_renderer,
-                    distance_text,
-                    draw_x,
-                    draw_y,
-                    z,
-                    bracket_size,
-                    false,
-                    draw_color,
-                    "top_center",
-                    0,
-                    -4
-                )
+                if distance_text ~= nil then
+                    _draw_marker_value_text(
+                        ui_renderer,
+                        distance_text,
+                        draw_x,
+                        draw_y,
+                        z,
+                        bracket_size,
+                        false,
+                        draw_color,
+                        "top_center",
+                        0,
+                        -4
+                    )
+                end
             end
         end
     end

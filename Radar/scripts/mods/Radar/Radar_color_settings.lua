@@ -887,16 +887,19 @@ _add_marker({
     kind = "pickup_ammo_cache_deployable",
     anchor = "show_ammo_crate_deployable",
     default = _color(255, 240, 210, 80),
+    supports_highlight = true,
 })
 _add_marker({
     kind = "medical_crate_deployable",
     anchor = "show_medical_crate_deployable",
     default = _color(255, 38, 205, 26),
+    supports_highlight = true,
 })
 _add_marker({
     kind = "broker_stimm_field_crate_deployable",
     anchor = "show_stimm_supply_deployable",
     default = _color(255, 160, 80, 220),
+    supports_highlight = true,
 })
 
 _add_marker({

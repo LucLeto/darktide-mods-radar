@@ -191,7 +191,7 @@ return function(env)
         return {}
     end
 
-    --- Clears the published outputs (points, targets, highlights, snapshot) while tracked units are kept.
+    --- Clears the published outputs (points, targets, highlights, outlines, snapshot) while tracked units are kept.
     local function _reset_runtime_output_tables()
         mod._tracked_points = _reuse_or_new_table(mod._tracked_points)
         mod._radar_targets = _reuse_or_new_table(mod._radar_targets)
@@ -199,6 +199,7 @@ return function(env)
         mod._unclustered_radar_targets = _reuse_or_new_table(mod._unclustered_radar_targets)
         mod._highlight_source_radar_targets = _reuse_or_new_table(mod._highlight_source_radar_targets)
         mod._radar_snapshot = nil
+        _clear_highlight_outlines()
     end
 
     --- Clears every tracked unit and the per-player unit map.
@@ -1757,7 +1758,7 @@ return function(env)
     -- it clears the outputs and returns; tracked units are also dropped while the local player
     -- has no unit, is dead, captured or spectating. Otherwise the snapshot is refreshed every frame, and
     -- when the scan is due the scans run in a fixed order for their tier, followed by pruning,
-    -- target collection, highlight collection and the final snapshot.
+    -- target collection, highlight collection, the outline sync and the final snapshot.
     -- ?number: t time passed by the caller, used when no gameplay time is available
     local function _update_internal(t)
         if mod:get("enable_radar") == false and not mod:is_overview_mode_active() then
@@ -1857,6 +1858,7 @@ return function(env)
 
         mod._radar_targets = _collect_radar_targets()
         mod._screen_highlight_targets = _collect_screen_highlight_targets()
+        _sync_highlight_outlines()
         mod._radar_snapshot = _collect_radar_snapshot()
 
         if scan_start_time then
@@ -1899,6 +1901,7 @@ return function(env)
         _reset_expedition_runtime_state()
         _reset_respawn_rewind_state()
         _reset_safe_route_state()
+        _reset_highlight_outlines()
         mod._overview_mode_active = false
         mod._overview_zoom_range = _normalize_overview_zoom_range(mod:get("overview_zoom_range"))
         mod._overview_capture_actions = mod._overview_capture_actions or {}
@@ -2633,16 +2636,24 @@ return function(env)
         return y
     end
 
-    --- Returns whether nearby highlights are enabled for any settings group.
+    --- Returns whether nearby highlight markers or outlines are enabled for any settings group.
     -- treturn: bool
     function mod:has_any_nearby_highlight_enabled()
         for _, setting_id in pairs(NEARBY_HIGHLIGHT_SETTING_BY_GROUP) do
-            if self:get(setting_id) == true then
+            local mode = self:get(setting_id)
+
+            if mode == "highlight" or mode == "outline" then
                 return true
             end
         end
 
         return false
+    end
+
+    --- Returns whether nearby highlights are hidden instead of dimmed while level geometry hides their target.
+    -- treturn: bool
+    function mod:is_nearby_highlight_visible_only()
+        return self:get("nearby_highlight_visible_only") == true
     end
 
     --- Returns the distance in metres within which nearby highlights are drawn (5 to 20).
@@ -2708,7 +2719,7 @@ return function(env)
         return self:get(setting_id) == true
     end
 
-    --- Returns whether an enabled, non-excluded kind gets a nearby highlight on the radar.
+    --- Returns whether an enabled, non-excluded kind gets a nearby highlight marker or outline.
     -- treturn: bool
     function mod:is_nearby_highlight_enabled_for_kind(kind)
         if not kind or not _kind_enabled(kind) then
@@ -2726,7 +2737,9 @@ return function(env)
             return false
         end
 
-        return self:get(setting_id) == true
+        local mode = self:get(setting_id)
+
+        return mode == "highlight" or mode == "outline"
     end
 
     --- Saves radar offsets from the anchor corner; either may be nil to keep it.

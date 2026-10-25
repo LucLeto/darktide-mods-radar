@@ -266,6 +266,10 @@ local function new_harness()
     env._reset_screen_highlight_anchor_probe = function()
     end
 
+    -- From the highlight outline module, which this harness does not install either.
+    env._reset_highlight_outlines = function()
+    end
+
     install(TRACKING_PATH, env)
     install(PLAYERS_PATH, env)
     install(PICKUPS_PATH, env)
