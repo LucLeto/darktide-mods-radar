@@ -4,9 +4,9 @@
 -- to the feature classifiers, filters tracked entries into radar targets (enablement,
 -- range, floor, tags, marker limit) and publishes the snapshot the HUD element draws. It
 -- also owns overview mode, radar zoom and position, the input capture for zoom keys, the
--- settings getters the HUD reads, the mission reset, the hooks and DMF callbacks, and
--- registers the HUD element. Feature modules decide what a unit is; this module decides
--- whether and where it is shown.
+-- settings getters the HUD reads, the mission reset, the hooks and DMF callbacks and the
+-- opt-in performance profiler, and registers the HUD element. Feature modules decide what a
+-- unit is; this module decides whether and where it is shown.
 --
 -- Installer module, installed third into Radar's shared runtime environment (see
 -- `Radar.lua`). Contributes `_track_unit`, `_clear_tracked_unit_from_source`, `_track_point`,
@@ -1221,6 +1221,491 @@ return function(env)
     end
 
     -- ----------------------------------------------------------------------------
+    -- Performance profiling
+    -- ----------------------------------------------------------------------------
+
+    --- Opt-in profiler behind the `debug_profiling` setting.
+    -- Times the input hook, the tracking update with its scan tiers and, through the
+    -- `radar_profiler_*` methods, the HUD draw, and writes one summary to the log every
+    -- `PROFILE_REPORT_INTERVAL_MS` milliseconds. A timing keeps its count, total and maximum
+    -- exactly, and its last `PROFILE_SAMPLE_CAPACITY` samples for the 95th percentile. While
+    -- profiling is off, the hot paths only test `_profiling_enabled`.
+    local PROFILE_REPORT_INTERVAL_MS = 5000
+    local PROFILE_SAMPLE_CAPACITY = 1024
+    local PROFILE_TIMER_CALIBRATION_READS = 1000
+    --- Timings and values the profiler records, and the events it counts.
+    local PROFILE_METRIC_NAMES = {
+        "input_other",
+        "input_candidate",
+        "update_runtime",
+        "update_scan",
+        "scan_moving",
+        "scan_droppable",
+        "scan_static",
+        "scan_collect",
+        "scan_targets",
+        "scan_active",
+        "scan_highlights",
+        "scan_tracked",
+        "draw_total",
+        "draw_gate",
+        "draw_setup",
+        "draw_cache",
+        "draw_frame",
+        "draw_markers",
+        "draw_overlays",
+        "draw_highlights",
+        "draw_finish",
+        "draw_markers_drawn",
+    }
+    local PROFILE_COUNTER_NAMES = {
+        "input_calls",
+        "input_suppressed",
+        "update_duplicate",
+        "update_blocked",
+        "update_disabled",
+        "draw_cache_refreshes",
+    }
+
+    --- Profiler state. The records are built on the first start and reset in place after that.
+    -- `_profile_phase_ms` adds up the time of each scan tier within one scan, since the tiers
+    -- take turns in the scan order.
+    local _profiling_enabled = false
+    local _profile_metrics = {}
+    local _profile_counters = {}
+    local _profile_phase_ms = {
+        moving = 0,
+        droppable = 0,
+        static = 0,
+    }
+    local _profile_sort_scratch = {}
+    local _profile_timer_handle = nil
+    local _profile_time_since_query = nil
+    local _profile_state = {
+        timer_name = "none",
+        timer_resolution_us = 0,
+        timer_overhead_us = 0,
+        window_start_ms = 0,
+        window_frames = 0,
+        window_frame_dt = 0,
+    }
+
+    --- Returns `os.clock` in milliseconds; the profiler clock when the engine timer is missing.
+    local function _os_clock_ms()
+        return os_clock() * 1000
+    end
+
+    --- Returns the profiler clock in milliseconds.
+    -- treturn: number
+    local function _profile_now()
+        return _profile_time_since_query(_profile_timer_handle)
+    end
+
+    --- Builds an empty timing record with its sample ring.
+    -- treturn: tab
+    local function _new_profile_record()
+        local script = Script
+        local new_array = script and script.new_array
+
+        return {
+            count = 0,
+            total = 0,
+            max = 0,
+            sample_count = 0,
+            next_sample = 1,
+            samples = new_array and new_array(PROFILE_SAMPLE_CAPACITY) or {},
+        }
+    end
+
+    --- Adds one sample to a record, overwriting the oldest once the ring is full.
+    -- tab: record timing record
+    -- number: value sample
+    local function _profile_record(record, value)
+        local next_sample = record.next_sample
+        local sample_count = record.sample_count
+
+        record.count = record.count + 1
+        record.total = record.total + value
+
+        if value > record.max then
+            record.max = value
+        end
+
+        record.samples[next_sample] = value
+        record.next_sample = next_sample < PROFILE_SAMPLE_CAPACITY and next_sample + 1 or 1
+
+        if sample_count < PROFILE_SAMPLE_CAPACITY then
+            record.sample_count = sample_count + 1
+        end
+    end
+
+    --- Records the time since a mark under a metric and returns the current time.
+    -- Unknown metric names are ignored.
+    -- string: name metric name
+    -- number: since earlier profiler time
+    -- treturn: number
+    local function _profile_lap(name, since)
+        local now = _profile_now()
+        local record = _profile_metrics[name]
+
+        if record then
+            _profile_record(record, now - since)
+        end
+
+        return now
+    end
+
+    --- Adds one to an event counter.
+    -- string: name counter name
+    local function _profile_count(name)
+        _profile_counters[name] = _profile_counters[name] + 1
+    end
+
+    --- Adds the time since a mark to a scan tier of the running scan and returns the current time.
+    -- string: phase `moving`, `droppable` or `static`
+    -- number: since earlier profiler time
+    -- treturn: number
+    local function _profile_phase(phase, since)
+        local now = _profile_now()
+
+        _profile_phase_ms[phase] = _profile_phase_ms[phase] + now - since
+
+        return now
+    end
+
+    --- Records a finished scan; its total, the time of each tier that ran, the collection
+    -- after the scans, and how many targets and highlights it produced.
+    -- number: scan_start profiler time the update started at
+    -- number: collect_start profiler time the collection after the scans started at
+    -- bool: droppable_scan_due whether the droppable tier ran
+    -- bool: static_scan_due whether the static tier ran
+    local function _profile_finish_scan(scan_start, collect_start, droppable_scan_due, static_scan_due)
+        local metrics = _profile_metrics
+        local phase_ms = _profile_phase_ms
+        local highlights = mod._screen_highlight_targets
+        local now = _profile_now()
+
+        _profile_record(metrics.update_scan, now - scan_start)
+        _profile_record(metrics.scan_collect, now - collect_start)
+        _profile_record(metrics.scan_moving, phase_ms.moving)
+
+        if droppable_scan_due then
+            _profile_record(metrics.scan_droppable, phase_ms.droppable)
+        end
+
+        if static_scan_due then
+            _profile_record(metrics.scan_static, phase_ms.static)
+        end
+
+        phase_ms.moving = 0
+        phase_ms.droppable = 0
+        phase_ms.static = 0
+
+        _profile_record(metrics.scan_targets, tonumber(mod._last_radar_unclustered_marker_count) or 0)
+        _profile_record(metrics.scan_active, tonumber(mod._last_radar_active_marker_count) or 0)
+        _profile_record(metrics.scan_highlights, highlights and #highlights or 0)
+        _profile_record(metrics.scan_tracked, _table_size(mod._tracked_units))
+    end
+
+    --- Records one read of the input hook.
+    -- The time of the capture check counts as `input_candidate` for an action a zoom key may
+    -- swallow, and as `input_other` for every other action.
+    -- number: start profiler time before the capture check
+    -- ?string: action_name input action that was read
+    -- bool: captured whether the value was swallowed
+    local function _profile_input_action(start, action_name, captured)
+        local now = _profile_now()
+        local counters = _profile_counters
+        local capture_actions = mod._overview_capture_actions
+        local candidate = capture_actions ~= nil and capture_actions[action_name] == true
+
+        counters.input_calls = counters.input_calls + 1
+
+        if captured then
+            counters.input_suppressed = counters.input_suppressed + 1
+        end
+
+        _profile_record(candidate and _profile_metrics.input_candidate or _profile_metrics.input_other, now - start)
+    end
+
+    --- Empties every record, counter and tier sum and starts a new report window.
+    local function _reset_profile_window()
+        for _, record in pairs(_profile_metrics) do
+            record.count = 0
+            record.total = 0
+            record.max = 0
+            record.sample_count = 0
+            record.next_sample = 1
+        end
+
+        for name in pairs(_profile_counters) do
+            _profile_counters[name] = 0
+        end
+
+        _profile_phase_ms.moving = 0
+        _profile_phase_ms.droppable = 0
+        _profile_phase_ms.static = 0
+
+        _profile_state.window_start_ms = _profile_now()
+        _profile_state.window_frames = 0
+        _profile_state.window_frame_dt = 0
+    end
+
+    --- Measures what one clock read costs and the smallest step the clock reports.
+    local function _calibrate_profile_timer()
+        local start = _profile_now()
+        local previous = start
+        local resolution = math_huge
+
+        for _ = 1, PROFILE_TIMER_CALIBRATION_READS do
+            local now = _profile_now()
+            local step = now - previous
+
+            if step > 0 and step < resolution then
+                resolution = step
+            end
+
+            previous = now
+        end
+
+        _profile_state.timer_overhead_us = (previous - start) * 1000 / PROFILE_TIMER_CALIBRATION_READS
+        _profile_state.timer_resolution_us = resolution < math_huge and resolution * 1000 or 0
+    end
+
+    --- Starts or stops profiling.
+    -- A start picks the engine's performance counter, or `os.clock` when it is missing, measures
+    -- the clock once and opens a new report window.
+    -- bool: enabled whether to profile
+    local function _set_profiling_enabled(enabled)
+        if enabled ~= true then
+            _profiling_enabled = false
+            return
+        end
+
+        local application = Application
+        local query_performance_counter = application and application.query_performance_counter
+        local time_since_query = application and application.time_since_query
+
+        if query_performance_counter and time_since_query then
+            _profile_timer_handle = query_performance_counter()
+            _profile_time_since_query = time_since_query
+            _profile_state.timer_name = "performance_counter"
+        elseif os_clock then
+            _profile_timer_handle = nil
+            _profile_time_since_query = _os_clock_ms
+            _profile_state.timer_name = "os_clock"
+        else
+            _profiling_enabled = false
+            return
+        end
+
+        for i = 1, #PROFILE_METRIC_NAMES do
+            local name = PROFILE_METRIC_NAMES[i]
+
+            _profile_metrics[name] = _profile_metrics[name] or _new_profile_record()
+        end
+
+        for i = 1, #PROFILE_COUNTER_NAMES do
+            _profile_counters[PROFILE_COUNTER_NAMES[i]] = 0
+        end
+
+        _calibrate_profile_timer()
+        _reset_profile_window()
+        _profiling_enabled = true
+    end
+
+    --- Formats a timing as `avg/p95/max`, or `-` without samples.
+    -- tab: record timing record
+    -- number: scale unit factor, 1 for milliseconds and 1000 for microseconds
+    -- treturn: string
+    local function _profile_timing_text(record, scale)
+        local count = record.count
+
+        if count == 0 then
+            return "-"
+        end
+
+        local sample_count = record.sample_count
+        local samples = record.samples
+        local sorted = _profile_sort_scratch
+
+        table_clear(sorted)
+
+        for i = 1, sample_count do
+            sorted[i] = samples[i]
+        end
+
+        table_sort(sorted)
+
+        return string_format(
+            "%.3f/%.3f/%.3f",
+            record.total / count * scale,
+            sorted[math_floor((sample_count - 1) * 0.95) + 1] * scale,
+            record.max * scale
+        )
+    end
+
+    --- Formats a recorded value as `avg/max`, or `-` without samples.
+    -- tab: record value record
+    -- treturn: string
+    local function _profile_value_text(record)
+        local count = record.count
+
+        if count == 0 then
+            return "-"
+        end
+
+        return string_format("%.1f/%.0f", record.total / count, record.max)
+    end
+
+    --- Writes the summary of the current window to the log and starts the next window.
+    -- A window without input reads, updates or draws is dropped silently.
+    -- number: now profiler time
+    local function _report_profile_window(now)
+        local metrics = _profile_metrics
+        local counters = _profile_counters
+        local state = _profile_state
+        local window_s = (now - state.window_start_ms) / 1000
+
+        if window_s <= 0
+            or (counters.input_calls == 0
+                and counters.update_duplicate == 0
+                and counters.update_blocked == 0
+                and counters.update_disabled == 0
+                and metrics.update_runtime.count == 0
+                and metrics.draw_total.count == 0) then
+            _reset_profile_window()
+            return
+        end
+
+        local frames = state.window_frames
+
+        mod:info(string_format(
+            "[Radar] profile | window_s=%.2f timer=%s resolution_us=%.3f overhead_us=%.3f fps=%.1f frame_ms=%.2f radar=%s overview=%s scan_rate=%s geometry=%s highlights=%s max_markers=%s",
+            window_s,
+            state.timer_name,
+            state.timer_resolution_us,
+            state.timer_overhead_us,
+            frames / window_s,
+            frames > 0 and state.window_frame_dt / frames * 1000 or 0,
+            tostring(mod:get("enable_radar") ~= false),
+            tostring(mod:is_overview_mode_active()),
+            tostring(mod:get("radar_scan_rate")),
+            tostring(mod:get("map_geometry_source")),
+            tostring(mod.has_any_nearby_highlight_enabled and mod:has_any_nearby_highlight_enabled()),
+            tostring(mod.get_max_radar_markers and mod:get_max_radar_markers())
+        ))
+        mod:info(string_format(
+            "[Radar] profile input | calls/s=%.0f candidates/s=%.1f suppressed/s=%.1f other_us=%s candidate_us=%s",
+            counters.input_calls / window_s,
+            metrics.input_candidate.count / window_s,
+            counters.input_suppressed / window_s,
+            _profile_timing_text(metrics.input_other, 1000),
+            _profile_timing_text(metrics.input_candidate, 1000)
+        ))
+        mod:info(string_format(
+            "[Radar] profile update | updates/s=%.1f duplicates/s=%.1f blocked/s=%.1f disabled/s=%.1f runtime_ms=%s scan_ms=%s scans/s=%.2f droppable/s=%.2f static/s=%.2f",
+            metrics.update_runtime.count / window_s,
+            counters.update_duplicate / window_s,
+            counters.update_blocked / window_s,
+            counters.update_disabled / window_s,
+            _profile_timing_text(metrics.update_runtime, 1),
+            _profile_timing_text(metrics.update_scan, 1),
+            metrics.update_scan.count / window_s,
+            metrics.scan_droppable.count / window_s,
+            metrics.scan_static.count / window_s
+        ))
+        mod:info(string_format(
+            "[Radar] profile scan | moving_ms=%s droppable_ms=%s static_ms=%s collect_ms=%s targets=%s active=%s highlights=%s tracked=%s",
+            _profile_timing_text(metrics.scan_moving, 1),
+            _profile_timing_text(metrics.scan_droppable, 1),
+            _profile_timing_text(metrics.scan_static, 1),
+            _profile_timing_text(metrics.scan_collect, 1),
+            _profile_value_text(metrics.scan_targets),
+            _profile_value_text(metrics.scan_active),
+            _profile_value_text(metrics.scan_highlights),
+            _profile_value_text(metrics.scan_tracked)
+        ))
+        mod:info(string_format(
+            "[Radar] profile draw | draws/s=%.1f total_ms=%s gate_ms=%s setup_ms=%s cache_ms=%s cache_refreshes/s=%.2f frame_ms=%s markers_ms=%s overlays_ms=%s highlights_ms=%s finish_ms=%s drawn=%s",
+            metrics.draw_total.count / window_s,
+            _profile_timing_text(metrics.draw_total, 1),
+            _profile_timing_text(metrics.draw_gate, 1),
+            _profile_timing_text(metrics.draw_setup, 1),
+            _profile_timing_text(metrics.draw_cache, 1),
+            counters.draw_cache_refreshes / window_s,
+            _profile_timing_text(metrics.draw_frame, 1),
+            _profile_timing_text(metrics.draw_markers, 1),
+            _profile_timing_text(metrics.draw_overlays, 1),
+            _profile_timing_text(metrics.draw_highlights, 1),
+            _profile_timing_text(metrics.draw_finish, 1),
+            _profile_value_text(metrics.draw_markers_drawn)
+        ))
+
+        _reset_profile_window()
+    end
+
+    --- Counts a frame and writes the summary once the report interval has passed.
+    -- ?number: dt frame delta time in seconds
+    local function _profile_update(dt)
+        local state = _profile_state
+        local now = _profile_now()
+
+        state.window_frames = state.window_frames + 1
+        state.window_frame_dt = state.window_frame_dt + (tonumber(dt) or 0)
+
+        if now - state.window_start_ms >= PROFILE_REPORT_INTERVAL_MS then
+            _report_profile_window(now)
+        end
+    end
+
+    --- Returns the profiler time in milliseconds while profiling is enabled.
+    -- The HUD element marks its draw phases with it and `radar_profiler_lap`.
+    -- treturn: ?number nil while profiling is off
+    function mod:radar_profiler_now()
+        if not _profiling_enabled then
+            return nil
+        end
+
+        return _profile_now()
+    end
+
+    --- Records the time since a mark under a profiler metric and returns the current time.
+    -- Unknown metric names are ignored.
+    -- string: name metric name, such as `draw_markers`
+    -- ?number: since mark from `radar_profiler_now` or an earlier lap
+    -- treturn: ?number nil while profiling is off or without a mark
+    function mod:radar_profiler_lap(name, since)
+        if not _profiling_enabled or since == nil then
+            return nil
+        end
+
+        return _profile_lap(name, since)
+    end
+
+    --- Records a value, such as a marker count, under a profiler metric; unknown names are ignored.
+    -- string: name metric name
+    -- number: value value to record
+    function mod:radar_profiler_value(name, value)
+        local record = _profiling_enabled and _profile_metrics[name]
+
+        if record then
+            _profile_record(record, tonumber(value) or 0)
+        end
+    end
+
+    --- Adds to a profiler event counter; unknown names are ignored.
+    -- string: name counter name
+    -- ?number: amount amount to add, 1 when nil
+    function mod:radar_profiler_count(name, amount)
+        local count = _profiling_enabled and _profile_counters[name]
+
+        if count then
+            _profile_counters[name] = count + (tonumber(amount) or 1)
+        end
+    end
+
+    -- ----------------------------------------------------------------------------
     -- Radar target collection and update
     -- ----------------------------------------------------------------------------
 
@@ -1759,10 +2244,18 @@ return function(env)
     -- has no unit, is dead, captured or spectating. Otherwise the snapshot is refreshed every frame, and
     -- when the scan is due the scans run in a fixed order for their tier, followed by pruning,
     -- target collection, highlight collection, the outline sync and the final snapshot.
+    -- While profiling, the update and each scan tier are timed without changing the scan order.
     -- ?number: t time passed by the caller, used when no gameplay time is available
     local function _update_internal(t)
+        local profile_start = _profiling_enabled and _profile_now() or nil
+
         if mod:get("enable_radar") == false and not mod:is_overview_mode_active() then
             _reset_runtime_output_tables()
+
+            if profile_start then
+                _profile_count("update_disabled")
+            end
+
             return
         end
 
@@ -1770,6 +2263,10 @@ return function(env)
         local scan_clock = gameplay_t or t or 0
 
         if mod._last_update_t and scan_clock and scan_clock == mod._last_update_t then
+            if profile_start then
+                _profile_count("update_duplicate")
+            end
+
             return
         end
         mod._last_update_t = scan_clock
@@ -1788,11 +2285,18 @@ return function(env)
 
             _reset_runtime_output_tables()
             _debug_log_block(reason, gameplay_t, mission_name, activity, mechanism_name)
+
+            if profile_start then
+                _profile_count("update_blocked")
+            end
+
             return
         end
 
         mod._last_block_signature = nil
         mod._radar_snapshot = _write_radar_snapshot(player_unit, player_pos)
+
+        local profile_mark = profile_start and _profile_lap("update_runtime", profile_start)
 
         if scan_clock < (mod._next_scan_t or 0) then
             return
@@ -1826,15 +2330,31 @@ return function(env)
             _scan_interactees()
         end
 
+        if profile_mark then
+            profile_mark = _profile_phase("droppable", profile_mark)
+        end
+
         if static_scan_due then
             _scan_chests()
         end
 
+        if profile_mark then
+            profile_mark = _profile_phase("static", profile_mark)
+        end
+
         _scan_minions()
+
+        if profile_mark then
+            profile_mark = _profile_phase("moving", profile_mark)
+        end
 
         if static_scan_due then
             _scan_destructibles()
             _scan_hazard_props()
+        end
+
+        if profile_mark then
+            profile_mark = _profile_phase("static", profile_mark)
         end
 
         if droppable_scan_due then
@@ -1843,7 +2363,15 @@ return function(env)
             _debug_log_martyr_skull_door_candidates()
         end
 
+        if profile_mark then
+            profile_mark = _profile_phase("droppable", profile_mark)
+        end
+
         _refresh_player_units()
+
+        if profile_mark then
+            profile_mark = _profile_phase("moving", profile_mark)
+        end
 
         if droppable_scan_due then
             mod._tracked_points = {}
@@ -1852,6 +2380,10 @@ return function(env)
             _scan_player_tag_points()
             _scan_respawn_rewind_markers()
             _scan_safe_route_markers()
+        end
+
+        if profile_mark then
+            profile_mark = _profile_phase("droppable", profile_mark)
         end
 
         _prune_units(droppable_scan_due)
@@ -1863,6 +2395,10 @@ return function(env)
 
         if scan_start_time then
             mod._last_scan_cost_ms = (os_clock() - scan_start_time) * 1000
+        end
+
+        if profile_mark then
+            _profile_finish_scan(profile_start, profile_mark, droppable_scan_due, static_scan_due)
         end
 
         _debug_log_scan()
@@ -1929,9 +2465,9 @@ return function(env)
     end
 
     --- DMF callback for game state changes.
-    -- Entering `GameplayStateRun` starts the radar with an immediate scan and a warm target
-    -- pool. Leaving it, or entering a loading, menu, title or gameplay init state, resets all
-    -- runtime state so nothing carries into the next mission.
+    -- Entering `GameplayStateRun` starts the radar with an immediate scan, a warm target pool
+    -- and, while profiling, a new profile window. Leaving it, or entering a loading, menu, title
+    -- or gameplay init state, resets all runtime state so nothing carries into the next mission.
     -- string: status `enter` or `exit`
     -- string: state_name game state class name
     mod.on_game_state_changed = function(status, state_name)
@@ -1943,6 +2479,11 @@ return function(env)
             mod._next_static_scan_t = 0
             mod._last_update_t = nil
             _invalidate_runtime_state_cache()
+
+            if _profiling_enabled then
+                _reset_profile_window()
+            end
+
             return
         end
 
@@ -3071,6 +3612,7 @@ return function(env)
 
     --- Hook on `InputService` action reads that swallows scroll actions used by the zoom keys.
     -- Without it, scrolling to zoom would also switch weapons or scroll the tactical overlay.
+    -- While profiling, every read is counted and its capture check timed.
     -- func: func original method
     -- tab: self input service
     -- string: action_name input action being read
@@ -3078,8 +3620,14 @@ return function(env)
     -- return: the original value, or its neutral value when the action is captured
     local function _overview_input_action_hook(func, self, action_name, ...)
         local value = func(self, action_name, ...)
+        local profile_start = _profiling_enabled and _profile_now() or nil
+        local captured = mod:should_capture_overview_input_action(action_name)
 
-        if not mod:should_capture_overview_input_action(action_name) then
+        if profile_start then
+            _profile_input_action(profile_start, action_name, captured)
+        end
+
+        if not captured then
             return value
         end
 
@@ -3102,7 +3650,13 @@ return function(env)
     -- ----------------------------------------------------------------------------
 
     --- DMF update callback; runs the radar update while gameplay is running (at most once per gameplay time).
-    mod.update = function()
+    -- While profiling, it also counts the frame and writes the profile summary when it is due.
+    -- ?number: dt frame delta time in seconds
+    mod.update = function(dt)
+        if _profiling_enabled then
+            _profile_update(dt)
+        end
+
         if not mod._gameplay_run then
             return
         end
@@ -3113,11 +3667,11 @@ return function(env)
     local previous_on_setting_changed = mod.on_setting_changed
 
     --- DMF callback, chained after any previously installed handler.
-    -- Rebuilds the input capture when a zoom key changes and rescans when player state icons
-    -- are toggled. DMF saves a menu value as it is, so the radar position, anchor and size
-    -- settings are resolved here the way the menu used to; a new anchor keeps the radar where it
-    -- is on screen, offsets are clamped to the screen and a new size re-clamps them. A chosen
-    -- teammate marker style is also kept as the player marker style.
+    -- Rebuilds the input capture when a zoom key changes, rescans when player state icons are
+    -- toggled and starts or stops the profiler. DMF saves a menu value as it is, so the radar
+    -- position, anchor and size settings are resolved here the way the menu used to; a new
+    -- anchor keeps the radar where it is on screen, offsets are clamped to the screen and a new
+    -- size re-clamps them. A chosen teammate marker style is also kept as the player marker style.
     -- string: setting_id changed setting
     -- param: ... further DMF arguments, forwarded to the previous handler
     mod.on_setting_changed = function(setting_id, ...)
@@ -3129,6 +3683,8 @@ return function(env)
             _refresh_overview_input_capture()
         elseif setting_id == "show_player_state_icons" then
             mod._next_scan_t = 0
+        elseif setting_id == "debug_profiling" then
+            _set_profiling_enabled(mod:get("debug_profiling") == true)
         elseif setting_id == "radar_anchor" then
             local anchor = mod:get("radar_anchor")
             local previous_anchor = mod._radar_settings_anchor
@@ -3153,6 +3709,8 @@ return function(env)
 
     -- The saved anchor as the radar last applied it, raw; `set_radar_anchor` normalises it.
     mod._radar_settings_anchor = mod:get("radar_anchor")
+
+    _set_profiling_enabled(mod:get("debug_profiling") == true)
 
     local previous_on_settings_reset = mod.on_settings_reset
 

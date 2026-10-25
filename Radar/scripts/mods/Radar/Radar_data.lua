@@ -2670,6 +2670,11 @@ return {
                             default_value = false,
                         },
                         {
+                            setting_id = "debug_profiling",
+                            type = "checkbox",
+                            default_value = false,
+                        },
+                        {
                             setting_id = "show_unknown_pickups",
                             type = "checkbox",
                             default_value = false,

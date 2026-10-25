@@ -3528,16 +3528,29 @@ end
 -- geometry source is active, the centre dot, every target up to the marker limit (each
 -- projected onto the radar, given a visual, brackets, a pooled widget and value texts), the
 -- overview legends, the zoom indicator and the screen highlights, and finally clears the
--- widgets left over from the previous frame.
+-- widgets left over from the previous frame. While profiling, each of those steps is timed
+-- through `mod:radar_profiler_lap`.
 -- tab: self HUD element
 -- tab: ui_renderer active UI renderer
 -- ?tab: snapshot radar snapshot
 -- ?number: t draw time
-local function _draw_internal(self, ui_renderer, snapshot, t)
+-- ?number: profile_mark profiler time the frame's drawing starts at, nil while profiling is off
+-- treturn: ?number profiler time after the screen highlights
+local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
     RadarHudWidgets.ensure_overview_scale_widget(self)
     RadarHudWidgets.ensure_marker_widgets(self)
 
+    local cache_refresh_t = profile_mark and _draw_cache.next_refresh_t
     local draw_cache = _build_draw_cache(t)
+
+    if profile_mark then
+        if draw_cache.next_refresh_t ~= cache_refresh_t then
+            mod:radar_profiler_count("draw_cache_refreshes", 1)
+        end
+
+        profile_mark = mod:radar_profiler_lap("draw_cache", profile_mark)
+    end
+
     local marker_widgets = self._marker_widgets
     local size = mod:get_radar_size()
     local range = mod:get_radar_range()
@@ -3579,6 +3592,10 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
         RadarHudRenderer.draw_radar_frame_foreground(self, ui_renderer, x, y, z + 1, size, projection_rotation)
     else
         RadarHudRenderer.draw_radar_frame(self, ui_renderer, x, y, z + 1, size, projection_rotation)
+    end
+
+    if profile_mark then
+        profile_mark = mod:radar_profiler_lap("draw_frame", profile_mark)
     end
 
     local next_widget_index = 1
@@ -3753,6 +3770,11 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
         )
     end
 
+    if profile_mark then
+        mod:radar_profiler_value("draw_markers_drawn", drawn_marker_count)
+        profile_mark = mod:radar_profiler_lap("draw_markers", profile_mark)
+    end
+
     _draw_overview_scale_overlay(
         self,
         ui_renderer,
@@ -3843,7 +3865,15 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
             zoom_color)
     end
 
+    if profile_mark then
+        profile_mark = mod:radar_profiler_lap("draw_overlays", profile_mark)
+    end
+
     _draw_screen_highlights(self, ui_renderer, snapshot, z + 40, draw_cache)
+
+    if profile_mark then
+        profile_mark = mod:radar_profiler_lap("draw_highlights", profile_mark)
+    end
 
     local last_active_marker_widget_index = next_widget_index - 1
     local previous_active_marker_widget_index = self._last_active_marker_widget_index or 0
@@ -3859,6 +3889,8 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
     end
 
     self._last_active_marker_widget_index = last_active_marker_widget_index
+
+    return profile_mark
 end
 
 -- ----------------------------------------------------------------------------
@@ -3884,17 +3916,21 @@ HudElementRadar.update = function(self, dt, t)
 end
 
 --- Draws the radar when the mod is enabled and the radar may be drawn.
--- Errors in the draw are caught and reported without breaking the HUD.
+-- Errors in the draw are caught and reported without breaking the HUD. While profiling, the
+-- draw check, the pass setup, each drawing step, the finish and the whole draw are timed.
 -- number: dt frame delta time
 -- number: t time
 -- tab: ui_renderer active UI renderer
 -- ?tab: render_settings render settings; `start_layer` is set to the element's layer
 -- param: input_service input service
 HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input_service)
+    local profile_start = mod:radar_profiler_now()
+
     if not mod:is_enabled() or not mod:should_draw_radar() then
         return
     end
 
+    local profile_mark = profile_start and mod:radar_profiler_lap("draw_gate", profile_start)
     local snapshot = mod:get_radar_snapshot()
 
     render_settings = render_settings or {}
@@ -3904,12 +3940,19 @@ HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input
 
     UIRenderer_begin_pass(ui_renderer, self._ui_scenegraph, input_service, dt, render_settings)
 
-    local ok, err = pcall(_draw_internal, self, ui_renderer, snapshot, t)
+    if profile_mark then
+        profile_mark = mod:radar_profiler_lap("draw_setup", profile_mark)
+    end
+
+    local ok, result = pcall(_draw_internal, self, ui_renderer, snapshot, t, profile_mark)
 
     UIRenderer_end_pass(ui_renderer)
 
     if not ok then
-        mod:error("HudElementRadar.draw failed: %s", tostring(err))
+        mod:error("HudElementRadar.draw failed: %s", tostring(result))
+    elseif profile_mark then
+        mod:radar_profiler_lap("draw_finish", result)
+        mod:radar_profiler_lap("draw_total", profile_start)
     end
 end
 

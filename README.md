@@ -1145,7 +1145,7 @@ The installer mechanism itself is older than 3.0.0. Up to 2.6.x there were five 
 | --- | --- | --- |
 | `Radar_enemy_definitions.lua` | Installer 1 | Marker kind registries (`KIND_TO_SETTING`, `MARKER_SCALE_GROUP_BY_KIND`, `ARTWORK_MODE_KIND_TO_SETTING`, `EXPEDITION_*`, `RESPAWN_MARKER_KINDS`, `SAFEROUTE_MARKER_KINDS`, nearby-highlight tables), per-breed enemy definitions (`ENEMY_RADAR_DEFINITIONS_BY_BREED`), the enemy scan `_scan_minions`, the display-mode, scale, priority and render-layer `mod` getters, and the `mod.on_all_mods_loaded` migrations. Installs the color runtime. |
 | `Radar_runtime_helpers.lua` | Installer 2 | Defensive `_safe_*` access to engine and game state, the rules that decide whether the radar may run at all, radar position constants, the game's world marker list (`_safe_world_markers_list`), HUD projection and occlusion `mod` methods, and nearby-highlight collection. Holds no feature logic. |
-| `Radar_tracking.lua` | Installer 3 | Category-independent tracking: the tracked unit and point stores, scan scheduling, interactee dispatch, target filtering and the marker limit, the radar snapshot, overview, zoom and position, settings getters, the mission reset, the hooks, the DMF callbacks and the HUD element registration. Feature modules decide what a unit is; tracking decides whether and where it is shown. |
+| `Radar_tracking.lua` | Installer 3 | Category-independent tracking: the tracked unit and point stores, scan scheduling, interactee dispatch, target filtering and the marker limit, the radar snapshot, overview, zoom and position, settings getters, the mission reset, the hooks, the DMF callbacks, the opt-in [performance profiler](#performance-profiling) and the HUD element registration. Feature modules decide what a unit is; tracking decides whether and where it is shown. |
 | `Radar_players.lua` | Installer 4 | Teammates and their states, player companions, player smart tags and tag attribution, ability-outlined enemies, and whether a player carries a luggable. |
 | `Radar_pickups.lua` | Installer 4 | `_classify_interactee` and its fixed classifier order, plus chests, hazard barrels, destructibles (Heretic Idols, Dark Rites totems) and tagged medical crates and Stimm Supply crates. |
 | `Radar_mission_objectives.lua` | Installer 4 | Objective interactable discovery and lifecycle, luggable containers and cargo sockets, puzzle-state colors, the objective range exemption, and Martyr's Skull riddle data, fallbacks and solve detection. |
@@ -1566,6 +1566,7 @@ DMF's native options ignore widget `get` and `change` callbacks, which the old e
 - re-clamping when the size changes
 - mirroring the player marker style
 - rebuilding the zoom-key input capture
+- starting or stopping the performance profiler
 - invalidating the color cache
 - re-tinting dropdown icons
 - resetting the Strikemap integration
@@ -1588,6 +1589,34 @@ DMF's native options ignore widget `get` and `change` callbacks, which the old e
 - One-time migrations that cannot be detected from the data are latched with a saved flag instead.
 - The channel migration must run before DMF initializes the options, because DMF saves the default of every native color setting that is still unset. That is why it lives in `Radar_data.lua` rather than in `on_all_mods_loaded`.
 
+## Performance profiling
+
+**Performance profiling** (`debug_profiling`) in the Debug tab measures how much CPU time Radar itself uses. It is off by default. While it is off, the input hook, the tracking update and the HUD draw only test a flag. Turn **Debug logs** off while profiling, because debug mode builds log keys inside the marker draw loop and would distort the draw times.
+
+Every 5 seconds Radar writes a summary to the DMF log, five lines starting with `[Radar] profile`:
+- Timings are milliseconds (`_ms`) or microseconds (`_us`), given as `avg/p95/max`. The 95th percentile covers the last 1024 samples of the window.
+- Counts are given as `avg/max`, and rates per second.
+- A window without any input read, update or draw is dropped.
+
+| Line | Fields |
+| --- | --- |
+| `profile` | Window length, the clock with its resolution and the cost of one read (`performance_counter` is the engine's high-resolution timer, `os_clock` the fallback), frame rate and frame time, and the settings the numbers depend on: radar on, overview open, marker update rate, map geometry source, nearby highlights, marker limit. |
+| `profile input` | Action reads through the `InputService` hook per second, how many were zoom scroll actions (`candidates`), how many of those were swallowed, and the time of the capture check for other actions and for candidates. |
+| `profile update` | Tracking updates per second, and updates skipped as same-timestamp duplicates, blocked (dead, captured, spectating, hub, a disabled game mode) or disabled (radar off). `runtime_ms` is the runtime check and snapshot refresh every update pays; `scan_ms` is a whole scan update. Then scans per second for each tier. |
+| `profile scan` | Time per scan of the moving tier (enemies, teammates, companions), the droppable tier (interactees, smart tags, tracked points) and the static tier (chests, destructibles, hazards), and of the collection after them (pruning, target filtering, clustering and sorting, highlights, outlines, snapshot). Per scan, the collected targets, the targets left after the marker limit, the screen highlights and the tracked units. |
+| `profile draw` | HUD draws per second and the draw time: total, the draw check (`gate`), scenegraph and pass setup, the draw cache with its refreshes per second, the frame and map geometry, the markers with the markers drawn, the overview legends and zoom indicator, the screen highlights, and the widget cleanup and pass end (`finish`). |
+
+At the low, medium and high marker update rates the moving tier runs about 4, 10 and 20 times a second, the droppable tier 4 times and the static tier twice a second. Rates come out slightly lower at low frame rates, because a scan waits for the first frame after its interval. During an overview zoom transition, scans run every 0.05 seconds.
+
+Every timing includes one clock read, whose cost the `profile` line reports. Compare like with like, before and after a change:
+1. Radar disabled in DMF (compare the game's frame time), then enabled with few targets nearby.
+2. Dense combat with many enemies and pickups.
+3. Low, medium and high marker update rate.
+4. Overview mode with many markers, zooming with the mouse wheel.
+5. Map geometry off, live navmesh and Strikemap.
+6. Nearby highlights on and off.
+7. Rebound zoom keys, mission transitions, death and respawn, and switching the radar off and on.
+
 ## Testing
 
 `tests/` holds standalone LuaJIT specs that need no Darktide session. Each spec:
@@ -1604,6 +1633,7 @@ luajit tests/Radar_settings_menu_spec.lua
 | Spec | Contracts it protects |
 | --- | --- |
 | `Radar_highlight_outlines_spec.lua` | Highlight outlines with the real module against a fake engine: the layer added once per unit (also across a reload) from the minion outline material, colors written whenever an outline is switched on and on change (child units included), culling switched off again twice a second, unmarked units switched off and forgotten, the bracket fallback for missing, mesh-less, refused and dead units, the mesh lists of hanging barrels and Heretic Idols and the fallback when the engine rejects one, carried units, culling left to the game's own outlines, the visible-only mode and its tagged exemption, the line-of-sight test (the game's marker filter, collecting every hit, the target's own collider ignored, failures counted as visible), cinematics, the clear, reset, disable and unload paths, no engine call while idle, and, through the real collection, which groups get outlines and which keep brackets, every eye of a growth tentacle and the prop behind a destroy target. |
+| `Radar_input_capture_spec.lua` | Mouse wheel zoom input capture with the real tracking module, with profiling off and on: one handler on both `InputService` read paths, the lazily built capture map, the default wheel keys and rebinding them, the neutral values, a truth table over overview, modifier key, grace period, UI input and game mode, and the overview and modifier keybinds. Also the profiler: nothing while off, its counters and summary lines, empty windows, switching it off and on, and the scan tier rates of a profiled update. |
 | `Radar_martyr_skull_riddle_lifecycle_spec.lua` | The riddle coordinate-fallback lifecycle on `cm_habs`: fallbacks for buttons not yet observed, replacement by a live unit, retirement on use or on an active-to-inactive transition (including hot joins), conservative visibility when state is unknown or unreadable, persistence across point rebuilds and toggles, clearing on the runtime reset, and the solved latch suppressing every fallback. |
 | `Radar_mission_objective_interactable_spec.lua` | Objective discovery and lifecycle against fake objective systems: dedicated systems, scan zones and the client-side recovery, active-objective confirmation, appearance before the prompt, armed copies only, used and inactive retirement, category toggles, existing classifications preserved, puzzle colors, the start-marker, hint, world-marker, container and socket rules, growth recognition and tentacles, the eyes and objective props the outlines go on, the range exemption, and the debug lines. |
 | `Radar_mission_objective_wiring_spec.lua` | Module wiring. Installs the real definition and helper modules and checks that every objective kind is registered everywhere a kind must be (settings, scale groups, colors, highlights, presentations). Also checks the shared presentation rules, the respawn and SafeRoute registration and priorities, localization requirements, declaration order of shared locals, and headroom under LuaJIT's 200-local limit. |
