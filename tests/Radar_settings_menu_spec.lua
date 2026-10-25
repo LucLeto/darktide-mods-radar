@@ -365,7 +365,7 @@ check(parent_id("nearby_highlight_common_pickups") == "common_pickups_group",
 check(parent_id("nearby_highlight_distance_text_common_pickups") == "common_pickups_group",
     "the radar distance text works without highlights but is nested under them")
 
--- Every group's highlight toggle chooses between highlight markers and outlines, off by default.
+-- Every group's highlight toggle chooses between highlight markers and outlines, outlines by default.
 for _, setting_id in ipairs({
     "nearby_highlight_common_pickups",
     "nearby_highlight_materials",
@@ -380,10 +380,10 @@ for _, setting_id in ipairs({
 }) do
     local widget = widget_by_id[setting_id] or {}
 
-    check(widget.type == "dropdown" and widget.default_value == "off" and #(widget.options or {}) == 3
+    check(widget.type == "dropdown" and widget.default_value == "outline" and #(widget.options or {}) == 3
         and option_of(setting_id, "highlight") ~= nil and option_of(setting_id, "outline") ~= nil
         and option_of(setting_id, "off") ~= nil,
-        setting_id .. " is not a highlight markers / outlines / off dropdown that is off by default")
+        setting_id .. " is not a highlight markers / outlines / off dropdown that outlines by default")
 end
 
 check(parent_id("nearby_highlight_visible_only") == "nearby_highlight_group"
@@ -504,8 +504,11 @@ check(legacy_store.show_players == "off", "the old hidden teammates setting was 
 check(legacy_store.map_geometry_source == "strikemap", "the old Strikemap geometry toggle was lost")
 check(legacy_store.show_crates == "off" and legacy_store.show_explosive_barrels == "icon_only",
     "display mode dropdowns kept checkbox values")
-check(legacy_store.nearby_highlight_common_pickups == "highlight" and legacy_store.nearby_highlight_materials == "off",
-    "nearby highlight dropdowns kept checkbox values")
+check(legacy_store.nearby_highlight_common_pickups == "outline" and legacy_store.nearby_highlight_materials == "off",
+    "nearby highlight dropdowns kept checkbox values, or a ticked box did not become outlines")
+-- Deployed Items had no checkbox to tick, so it stays off like every unticked group.
+check(legacy_store.nearby_highlight_deployables == "off",
+    "a profile from the checkbox release took the outlines default for Deployed Items")
 -- Stimm Supply crates used to be drawn as Medical Crates, so hiding those hid both.
 check(legacy_store.show_medical_crate_deployable == "off" and legacy_store.show_stimm_supply_deployable == "off",
     "the Stimm Supply appeared on a profile that hid Medical Crates")
@@ -534,6 +537,18 @@ load_data(medical_crate_shown_store)
 check(stimm_saved_store.show_stimm_supply_deployable == "icon", "hiding Medical Crates hid a saved Stimm Supply")
 check(medical_crate_shown_store.show_stimm_supply_deployable == nil,
     "a shown Medical Crate saved the Stimm Supply setting")
+
+-- Only a never saved Deployed Items highlight on a profile that still has the checkboxes is switched off.
+local deployables_saved_store = { nearby_highlight_event = false, nearby_highlight_deployables = "highlight" }
+local dropdown_profile_store = { nearby_highlight_event = "highlight" }
+
+load_data(deployables_saved_store)
+load_data(dropdown_profile_store)
+check(deployables_saved_store.nearby_highlight_deployables == "highlight"
+    and deployables_saved_store.nearby_highlight_event == "off",
+    "a saved Deployed Items highlight was overwritten")
+check(dropdown_profile_store.nearby_highlight_deployables == nil,
+    "a profile without the checkboxes saved the Deployed Items highlight")
 
 -- Dropdown icons follow a colour change without the menu being rebuilt.
 local function find_widget(list, setting_id)

@@ -1209,17 +1209,17 @@ local function _insert_color_settings(widgets)
 end
 
 --- Builds the highlight markers / outlines / off dropdown of a group's nearby highlights.
--- A value saved by the checkbox it replaced is converted first, a ticked box becoming
--- highlight markers.
+-- Outlines are the default. A value saved by the checkbox it replaced is converted first, a
+-- ticked box becoming outlines and an unticked one staying off.
 -- string: setting_id setting id
 -- treturn: tab widget
 local function _nearby_highlight_mode_dropdown(setting_id)
-    _migrate_checkbox_display_mode_setting(setting_id, "highlight")
+    _migrate_checkbox_display_mode_setting(setting_id, "outline")
 
     return {
         setting_id = setting_id,
         type = "dropdown",
-        default_value = "off",
+        default_value = "outline",
         options = {
             _dropdown_option("nearby_highlight_mode_highlight", "highlight"),
             _dropdown_option("nearby_highlight_mode_outline", "outline"),
@@ -1489,10 +1489,41 @@ local function _migrate_stimm_supply_deployable_setting()
     end
 end
 
+--- Nearby highlight settings that were checkboxes up to 3.1.0, before each became a dropdown.
+local NEARBY_HIGHLIGHT_CHECKBOX_SETTINGS = {
+    "nearby_highlight_common_pickups",
+    "nearby_highlight_materials",
+    "nearby_highlight_environment",
+    "nearby_highlight_mission_objective",
+    "nearby_highlight_primary_objective",
+    "nearby_highlight_secondary_objective",
+    "nearby_highlight_martyr_s_skull",
+    "nearby_highlight_event",
+    "nearby_highlight_expeditions_specific",
+}
+
+--- Switches Deployed Items highlights off while they were never saved on a profile that still has the checkboxes.
+-- Such a profile keeps every group it had not ticked switched off. Deployed Items had no
+-- checkbox to tick, so it does not take the new Outlines default either. Runs before any
+-- checkbox is converted, and before DMF saves the dropdown's default over the unset setting.
+local function _migrate_nearby_highlight_deployables_setting()
+    if mod:get("nearby_highlight_deployables") ~= nil then
+        return
+    end
+
+    for i = 1, #NEARBY_HIGHLIGHT_CHECKBOX_SETTINGS do
+        if type(mod:get(NEARBY_HIGHLIGHT_CHECKBOX_SETTINGS[i])) == "boolean" then
+            mod:set("nearby_highlight_deployables", "off")
+            return
+        end
+    end
+end
+
 -- Settings DMF would otherwise initialise with their defaults take their saved older form first.
 RadarColorSettings.migrate_channel_settings(mod)
 _migrate_map_geometry_source_setting()
 _migrate_stimm_supply_deployable_setting()
+_migrate_nearby_highlight_deployables_setting()
 
 --- The DMF mod data table.
 return {
