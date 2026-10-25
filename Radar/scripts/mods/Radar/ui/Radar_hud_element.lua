@@ -3534,8 +3534,8 @@ end
 -- tab: ui_renderer active UI renderer
 -- ?tab: snapshot radar snapshot
 -- ?number: t draw time
--- ?number: profile_mark profiler time the frame's drawing starts at, nil while profiling is off
--- treturn: ?number profiler time after the screen highlights
+-- param: profile_mark profiler mark taken earlier in this frame, nil while profiling is off
+-- return: profiler mark after the screen highlights, or nil
 local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
     RadarHudWidgets.ensure_overview_scale_widget(self)
     RadarHudWidgets.ensure_marker_widgets(self)
@@ -3924,7 +3924,7 @@ end
 -- ?tab: render_settings render settings; `start_layer` is set to the element's layer
 -- param: input_service input service
 HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input_service)
-    local profile_start = mod:radar_profiler_now()
+    local profile_start = mod:radar_profiler_mark()
 
     if not mod:is_enabled() or not mod:should_draw_radar() then
         return

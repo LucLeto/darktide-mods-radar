@@ -94,6 +94,7 @@ local function new_harness(options)
     local state = {
         gameplay_t = 100,
         clock_ms = 1000,
+        frame = 0,
         ui_input_active = false,
         game_mode_allowed = true,
         held_keys = {},
@@ -181,14 +182,17 @@ local function new_harness(options)
         Vector3 = function(x, y, z)
             return { x = x, y = y, z = z }
         end,
+        -- The game only reads a counter handle within the frame it took it in, so reading one
+        -- from an earlier frame fails the spec.
         Application = {
             query_performance_counter = function()
-                return "counter"
+                return { frame = state.frame, clock_ms = state.clock_ms }
             end,
             time_since_query = function(handle)
-                assert_equal("counter", handle, "the profiler read the clock without its counter handle")
+                assert_true(type(handle) == "table" and handle.frame == state.frame,
+                    "the profiler read a counter handle outside the frame it was taken in")
 
-                return state.clock_ms
+                return state.clock_ms - handle.clock_ms
             end,
         },
     }
@@ -262,6 +266,29 @@ local function new_harness(options)
 
     function harness:set_overview(active)
         mod._overview_mode_active = active == true
+    end
+
+    --- Starts a new frame and runs DMF's update callback with its delta time.
+    function harness:update(dt)
+        state.frame = state.frame + 1
+        mod.update(dt)
+    end
+
+    --- Returns the logged profile summary lines, without the start and stop lines.
+    function harness:summary_lines()
+        local lines = {}
+
+        for i = 1, #captured.info do
+            local line = captured.info[i]
+
+            if line:find("[Radar] profile", 1, true) == 1
+                and line:find("| started", 1, true) == nil
+                and line:find("| stopped", 1, true) == nil then
+                lines[#lines + 1] = line
+            end
+        end
+
+        return lines
     end
 
     return harness
@@ -473,8 +500,8 @@ end
 test("profiling is off by default and logs nothing", function()
     local harness = new_harness()
 
-    assert_nil(harness.mod:radar_profiler_now(), "the profiler clock is readable while profiling is off")
-    assert_nil(harness.mod:radar_profiler_lap("draw_total", 0), "a lap was recorded while profiling is off")
+    assert_nil(harness.mod:radar_profiler_mark(), "a profiler mark was taken while profiling is off")
+    assert_nil(harness.mod:radar_profiler_lap("draw_total", {}), "a lap was recorded while profiling is off")
 
     harness:set_overview(true)
 
@@ -483,19 +510,17 @@ test("profiling is off by default and logs nothing", function()
         harness:read("jump", true)
     end
 
-    harness.state.clock_ms = harness.state.clock_ms + 6000
-    harness.mod.update(0.016)
+    harness:update(6)
 
     assert_equal(0, #harness.captured.info, "a profile line was logged while profiling is off")
 end)
 
-test("profiling counts reads and suppressions and reports one summary per window", function()
+test("profiling counts reads and suppressions and reports one summary per window of frame time", function()
     local harness = new_harness({ profiling = true })
     local mod = harness.mod
     local state = harness.state
-    local info = harness.captured.info
 
-    assert_equal(state.clock_ms, mod:radar_profiler_now(), "the profiler does not read the engine counter")
+    assert_true(mod:radar_profiler_mark() ~= nil, "no profiler mark while profiling is on")
 
     harness:set_overview(true)
 
@@ -506,76 +531,97 @@ test("profiling counts reads and suppressions and reports one summary per window
     harness:read("wield_scroll_up", true)
     harness:read("wield_scroll_down", true)
 
-    local mark = mod:radar_profiler_now()
+    local mark = mod:radar_profiler_mark()
 
     state.clock_ms = state.clock_ms + 2
-    mod:radar_profiler_lap("draw_total", mark)
+    mark = mod:radar_profiler_lap("draw_total", mark)
     mod:radar_profiler_value("draw_markers_drawn", 12)
     mod:radar_profiler_count("draw_cache_refreshes", 1)
     mod:radar_profiler_lap("not_a_metric", mark)
     mod:radar_profiler_value("not_a_metric", 1)
     mod:radar_profiler_count("not_a_counter", 1)
 
-    state.clock_ms = state.clock_ms + 4997
-    mod.update(0.016)
-    assert_equal(0, #info, "a summary was written before the window closed")
+    harness:update(2.5)
+    assert_equal(0, #harness:summary_lines(), "a summary was written before the window closed")
 
-    state.clock_ms = state.clock_ms + 1
-    mod.update(0.016)
-    assert_equal(5, #info, "unexpected number of summary lines")
-    assert_contains(info[1], "[Radar] profile | window_s=5.00 timer=performance_counter", "header line")
-    assert_contains(info[1], "fps=0.4 frame_ms=16.00", "frame rate")
-    assert_contains(info[1], "overview=true scan_rate=low", "settings context")
-    assert_contains(info[2], "[Radar] profile input | calls/s=2 candidates/s=0.4 suppressed/s=0.4", "input rates")
-    assert_contains(info[2], "other_us=0.000/0.000/0.000 candidate_us=0.000/0.000/0.000", "input timings")
-    assert_contains(info[3], "[Radar] profile update | updates/s=0.0", "update line")
-    assert_contains(info[4], "[Radar] profile scan | moving_ms=- ", "scan line without scans")
-    assert_contains(info[5], "[Radar] profile draw | draws/s=0.2 total_ms=2.000/2.000/2.000", "draw total")
-    assert_contains(info[5], "cache_refreshes/s=0.20", "cache refreshes")
-    assert_contains(info[5], "drawn=12.0/12", "drawn markers")
+    harness:update(2.5)
 
-    state.clock_ms = state.clock_ms + 5000
-    mod.update(0.016)
-    assert_equal(5, #info, "an empty window was reported")
+    local lines = harness:summary_lines()
+
+    assert_equal(5, #lines, "unexpected number of summary lines")
+    assert_contains(lines[1], "[Radar] profile | window_s=5.00 timer=performance_counter", "header line")
+    assert_contains(lines[1], "fps=0.4 frame_ms=2500.00", "frame rate")
+    assert_contains(lines[1], "overview=true scan_rate=low", "settings context")
+    assert_contains(lines[2], "[Radar] profile input | calls/s=2 candidates/s=0.4 suppressed/s=0.4", "input rates")
+    assert_contains(lines[2], "other_us=0.000/0.000/0.000 candidate_us=0.000/0.000/0.000", "input timings")
+    assert_contains(lines[3], "[Radar] profile update | updates/s=0.0", "update line")
+    assert_contains(lines[4], "[Radar] profile scan | moving_ms=- ", "scan line without scans")
+    assert_contains(lines[5], "[Radar] profile draw | draws/s=0.2 total_ms=2.000/2.000/2.000", "draw total")
+    assert_contains(lines[5], "cache_refreshes/s=0.20", "cache refreshes")
+    assert_contains(lines[5], "drawn=12.0/12", "drawn markers")
+
+    harness:update(5)
+    assert_equal(5, #harness:summary_lines(), "an empty window was reported")
 end)
 
-test("turning profiling off stops the reports and the clock", function()
+test("profiling says in the log when it starts and stops, and a restart opens a new window", function()
     local harness = new_harness({ profiling = true })
     local mod = harness.mod
+    local info = harness.captured.info
+
+    assert_equal(1, #info, "unexpected number of lines after starting")
+    assert_contains(info[1], "[Radar] profile | started timer=performance_counter", "start line")
+    assert_contains(info[1], "interval_s=5", "report interval in the start line")
+
+    for _ = 1, 20 do
+        harness:read("jump", true)
+    end
 
     harness:change_setting("debug_profiling", false)
-    assert_nil(mod:radar_profiler_now(), "the profiler clock is readable after profiling was turned off")
+    assert_equal("[Radar] profile | stopped", info[2], "stop line")
+    assert_nil(mod:radar_profiler_mark(), "a profiler mark was taken after profiling was turned off")
+
+    harness:change_setting("debug_profiling", false)
+    assert_equal(2, #info, "stopping again logged another line")
 
     harness:read("jump", true)
-    harness.state.clock_ms = harness.state.clock_ms + 6000
-    mod.update(0.016)
-    assert_equal(0, #harness.captured.info, "a summary was written after profiling was turned off")
+    harness:update(6)
+    assert_equal(0, #harness:summary_lines(), "a summary was written after profiling was turned off")
 
     harness:change_setting("debug_profiling", true)
-    harness:read("jump", true)
-    harness.state.clock_ms = harness.state.clock_ms + 5000
-    mod.update(0.016)
-    assert_equal(5, #harness.captured.info, "profiling did not restart")
-    assert_contains(harness.captured.info[2], "calls/s=0 ", "the restarted window kept old reads")
+    assert_contains(info[3], "[Radar] profile | started", "restart line")
+
+    for _ = 1, 5 do
+        harness:read("jump", true)
+    end
+
+    harness:update(5)
+
+    local lines = harness:summary_lines()
+
+    assert_equal(5, #lines, "profiling did not report after the restart")
+    assert_contains(lines[2], "calls/s=1 ", "the restarted window kept reads from before the stop")
 end)
 
 test("a profiled update counts every scan tier at its configured rate", function()
     local harness = new_harness({ profiling = true })
     local mod = harness.mod
     local state = harness.state
-    local info = harness.captured.info
     local state_gameplay = {}
 
     mod._gameplay_run = true
 
-    -- 40 frames of 0.125 s, five seconds of gameplay and of profiler clock. The low rate scans
-    -- every 0.25 s, the droppable tier runs with it and the static tier every 0.5 s.
+    -- 40 frames of 0.125 s, five seconds of frame time. The low rate scans every 0.25 s, the
+    -- droppable tier runs with it and the static tier every 0.5 s.
     for _ = 1, 40 do
+        state.frame = state.frame + 1
         state.gameplay_t = state.gameplay_t + 0.125
         state.clock_ms = state.clock_ms + 125
         harness.captured.state_gameplay_update(state_gameplay, 0.125, state.gameplay_t)
         mod.update(0.125)
     end
+
+    local info = harness:summary_lines()
 
     -- `mod.update` repeats the update of the gameplay state's own hook, which is skipped as a
     -- duplicate, but it reports first; the last frame's duplicate belongs to the next window.
