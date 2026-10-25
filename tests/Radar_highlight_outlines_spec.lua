@@ -739,6 +739,8 @@ test("a group set to outlines outlines its units, and a target without a unit ke
     local barrel = new_unit(engine, { position = { x = 3, y = 0, z = 0 } })
     local standing_barrel = new_unit(engine, { position = { x = 3, y = 1, z = 0 } })
     local medical_crate = new_unit(engine, { position = { x = 0, y = 3, z = 0 } })
+    local train_control = new_unit(engine, { position = { x = 4, y = 0, z = 0 } })
+    local cogitator = new_unit(engine, { position = { x = 4.5, y = 0, z = 0 } })
     local carrier_eye = new_unit(engine, { position = { x = 0, y = 5, z = 0 } })
     local second_eye = new_unit(engine, { position = { x = 0.3, y = 5, z = 0 } })
     local third_eye = new_unit(engine, { position = { x = 0, y = 5.3, z = 0 } })
@@ -749,6 +751,7 @@ test("a group set to outlines outlines its units, and a target without a unit ke
         hazard_explosive_barrel = "environment_group",
         medical_crate_deployable = "deployables_group",
         mission_objective_growth = "mission_objective_group",
+        mission_objective_destroy = "mission_objective_group",
     }
 
     env.NEARBY_HIGHLIGHT_SETTING_BY_GROUP = {
@@ -769,6 +772,10 @@ test("a group set to outlines outlines its units, and a target without a unit ke
         out[3] = third_eye
 
         return 3
+    end
+    -- From the mission objectives module: the objective prop a destroy target stands for.
+    env._destroy_objective_prop = function(unit)
+        return unit == train_control and cogitator or nil
     end
     env.NEARBY_HIGHLIGHT_EXCLUDED_KINDS = {}
     env.NEARBY_OUTLINE_OCCLUDED_MULTIPLIER = 0.6
@@ -811,6 +818,7 @@ test("a group set to outlines outlines its units, and a target without a unit ke
             distance_sq_3d = 10 },
         { unit = medical_crate, kind = "medical_crate_deployable", position = medical_crate.position, distance_sq_3d = 9 },
         { unit = carrier_eye, kind = "mission_objective_growth", position = carrier_eye.position, distance_sq_3d = 25 },
+        { unit = train_control, kind = "mission_objective_destroy", position = train_control.position, distance_sq_3d = 16 },
     }
 
     local highlights = env._collect_screen_highlight_targets()
@@ -832,6 +840,9 @@ test("a group set to outlines outlines its units, and a target without a unit ke
     for _, eye in ipairs({ carrier_eye, second_eye, third_eye }) do
         assert_equal(true, engine.layers[eye] and engine.layers[eye].on, "an eye of the growth tentacle has no outline")
     end
+
+    assert_equal(true, engine.layers[cogitator] and engine.layers[cogitator].on, "the cogitator behind a destroy target has no outline")
+    assert_equal(nil, engine.layers[train_control], "the destroy target's helper was outlined")
 
     harness.settings.nearby_highlight_common_pickups = "off"
     env._collect_screen_highlight_targets()

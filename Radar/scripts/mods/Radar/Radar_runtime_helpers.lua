@@ -2636,7 +2636,8 @@ return function(env)
     -- reused between frames. A target of a group set to outlines is handed to
     -- `_mark_highlight_outline` instead and gets no entry, unless its unit cannot be outlined;
     -- then it keeps its bracket. A growth tentacle's outline goes on every eye still standing
-    -- (`_growth_tentacle_eyes`), not only on the one carrying its marker.
+    -- (`_growth_tentacle_eyes`), not only on the one carrying its marker, and a destroy target's
+    -- on the objective prop it stands for (`_destroy_objective_prop`).
     -- treturn: tab highlight entries
     function _collect_screen_highlight_targets()
         local highlights = _reuse_screen_highlight_output()
@@ -2672,6 +2673,7 @@ return function(env)
         local mark_highlight_outline = _mark_highlight_outline
         local growth_tentacle_eyes = _growth_tentacle_eyes
         local tentacle_eyes = _scratch_growth_tentacle_eyes
+        local destroy_objective_prop = _destroy_objective_prop
         local interactee_extension_map = _safe_unit_to_extension_map("interactee_system")
         local max_distance = mod:get_nearby_highlight_range()
         local max_distance_sq = max_distance * max_distance
@@ -2733,9 +2735,23 @@ return function(env)
                         local tagged = target.source == "smart_tag_system"
                             or (meta ~= nil and meta.marked_by_player_slot ~= nil)
                         local fallback_world_position = screen_highlight_projection_fallback_position(target)
+                        local outline_unit = target.unit
+                        local outline_anchor = fallback_world_position
+
+                        -- A destroy target can be a helper standing beside the prop
+                        -- to destroy; the outline goes on the prop.
+                        if mode == "outline" and kind == "mission_objective_destroy" and destroy_objective_prop ~= nil then
+                            local prop = destroy_objective_prop(outline_unit)
+
+                            if prop ~= nil and prop ~= outline_unit then
+                                outline_unit = prop
+                                outline_anchor = _safe_unit_box_center(prop) or fallback_world_position
+                            end
+                        end
+
                         local outlined = mode == "outline" and color ~= nil and fallback_world_position ~= nil
                             and mark_highlight_outline ~= nil
-                            and mark_highlight_outline(target.unit, color, fallback_world_position, tagged)
+                            and mark_highlight_outline(outline_unit, color, outline_anchor, tagged)
 
                         -- A growth tentacle is one radar marker on one of its eyes;
                         -- its outline goes on every eye still standing, each tested

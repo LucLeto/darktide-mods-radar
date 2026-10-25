@@ -2551,6 +2551,49 @@ test("a tentacle hands every standing eye to the outline, and no destroyed one",
     assert_equal(0, harness.env._growth_tentacle_eyes({ name = "stranger" }, out), "a unit that is no eye was listed")
 end)
 
+-- Rolling Steel's train controls are helper units with one small mesh the game
+-- never draws, a metre from the cogitator that takes the damage, so an outline
+-- on the helper showed nothing.
+test("a destroy target hands its outline to the objective prop beside it", function()
+    local harness = new_harness()
+    local function unit_data(breed_type)
+        return {
+            breed = function()
+                return { breed_type = breed_type }
+            end,
+        }
+    end
+    local control = { name = "train_control", position = { x = 7.4, y = -263.75, z = 0.8 } }
+    local cogitator = { name = "train_cogitator", position = { x = 8, y = -263.75, z = 0 } }
+    local far_cogitator = { name = "far_cogitator", position = { x = 8, y = -253, z = 0 } }
+    local poxwalker = { name = "poxwalker", position = { x = 7.5, y = -263.7, z = 0.5 } }
+    local tank = { name = "druglab_tank", position = { x = 40, y = 0, z = 0 } }
+    local stray = { name = "stray_target", position = { x = 0, y = 0, z = 0 } }
+    local destroy_objective_prop = harness.env._destroy_objective_prop
+
+    harness:add_to_system("unit_data_system", cogitator, unit_data("objective_prop"))
+    harness:add_to_system("unit_data_system", far_cogitator, unit_data("objective_prop"))
+    harness:add_to_system("unit_data_system", poxwalker, unit_data("minion"))
+    harness:add_to_system("unit_data_system", tank, unit_data("objective_prop"))
+
+    assert_equal(cogitator, destroy_objective_prop(control), "the helper did not hand its outline to its cogitator")
+    assert_equal(tank, destroy_objective_prop(tank), "a prop that is its own target did not keep its outline")
+    assert_nil(destroy_objective_prop(stray), "a target with no prop within three metres got one")
+
+    cogitator.alive = false
+
+    assert_nil(destroy_objective_prop(control), "a cogitator that is gone was still returned")
+
+    cogitator.alive = true
+    harness:remove_from_system("unit_data_system", cogitator)
+
+    assert_equal(cogitator, destroy_objective_prop(control), "the answer was not kept for the mission")
+
+    harness.env._reset_mission_objective_marker_state()
+
+    assert_nil(destroy_objective_prop(control), "the mission reset did not forget the answer")
+end)
+
 test("a cleared tentacle leaves no marker", function()
     local harness = new_harness()
 

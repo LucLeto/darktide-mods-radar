@@ -18,7 +18,7 @@
 -- `_scan_mission_objective_targets` and its per-scan preparation
 -- `_refresh_mission_objective_markers`, the lifecycle, kind and classification functions used
 -- by the tracking and pickup scans, `_objective_ignores_radar_range`, `_growth_tentacle_eyes`
--- for the nearby highlight outlines, the luggable rules
+-- and `_destroy_objective_prop` for the nearby highlight outlines, the luggable rules
 -- (`_luggable_hidden_in_container`, `_luggable_socket_display_kind`, `_luggable_unmoved`),
 -- the Martyr's Skull riddle functions, `MARTYR_SKULL_RIDDLE_SIGNATURES_BY_MISSION` and the
 -- resets. Relies on the world marker helpers of `Radar_runtime_helpers.lua` and on tracking.
@@ -109,6 +109,13 @@ return function(env)
     }
     --- Seconds after an objective goes live during which the game may not have assigned its markers yet.
     local OBJECTIVE_MARKER_SETTLE_SECONDS = 2
+
+    --- Breed type the game gives a prop players destroy for an objective (`BreedSettings.types`).
+    local OBJECTIVE_PROP_BREED_TYPE = "objective_prop"
+
+    --- Squared distance, three metres, within which an objective prop is the one a destroy target stands for.
+    -- Rolling Steel's train controls stand about a metre from their cogitators.
+    local DESTROY_OBJECTIVE_PROP_DISTANCE_SQ = 9
 
     --- Squared distances matching a unit to a recorded riddle position, a door to a solve door, and a live interactable to a coordinate fallback.
     local MARTYR_SKULL_RIDDLE_POSITION_MATCH_DISTANCE_SQ = 0.01
@@ -430,6 +437,9 @@ return function(env)
     --- Targets any other objective marks for destruction (ice on machinery, tanks, cogitators), refilled every scan.
     -- They are their own kind, so they read neither as a growth nor as a switch to press.
     local _scratch_destroy_objective_units = {}
+
+    --- The objective prop each destroy target stands for, false for none, kept for the mission.
+    local _destroy_objective_prop_by_unit = {}
 
     --- Units the game holds a world marker for this scan, and whether the marker list could be read.
     -- Bare objective steps (the train controls destroyed to stop the train) carry no completion
@@ -2079,6 +2089,69 @@ return function(env)
         return count
     end
 
+    --- Returns whether a unit data extension belongs to a prop players destroy for an objective.
+    -- param: extension unit data extension
+    -- treturn: bool
+    local function _is_objective_prop(extension)
+        local breed = type(extension) == "table" and extension.breed or nil
+
+        if type(breed) ~= "function" then
+            return false
+        end
+
+        local ok, data = pcall(breed, extension)
+
+        return ok and type(data) == "table" and data.breed_type == OBJECTIVE_PROP_BREED_TYPE
+    end
+
+    --- Returns the objective prop a destroy target stands for, the target itself when it is one.
+    -- Not every destroy target is the thing to destroy: Rolling Steel's train controls are helper
+    -- units with one small mesh the game never draws, a metre from the cogitator that takes the
+    -- damage, so an outline on the helper showed nothing. The nearest objective prop within three
+    -- metres is taken instead. The answer is kept for the mission; while the unit data system
+    -- cannot be read, nothing is kept and nil is returned. A prop that is gone returns nil too.
+    -- !Unit: unit destroy target
+    -- treturn: ?Unit objective prop, nil when none stands there
+    function _destroy_objective_prop(unit)
+        local known = _destroy_objective_prop_by_unit[unit]
+
+        if known ~= nil then
+            return known and _safe_unit_alive(known) and known or nil
+        end
+
+        local unit_data_map = _safe_unit_to_extension_map("unit_data_system")
+
+        if unit_data_map == nil then
+            return nil
+        end
+
+        local prop = false
+
+        if _is_objective_prop(unit_data_map[unit]) then
+            prop = unit
+        else
+            local position = _safe_unit_position(unit)
+            local nearest_distance_sq = DESTROY_OBJECTIVE_PROP_DISTANCE_SQ
+
+            if position ~= nil then
+                for candidate, extension in pairs(unit_data_map) do
+                    if candidate ~= unit and _is_objective_prop(extension) then
+                        local distance_sq = _distance_squared(position, _safe_unit_position(candidate))
+
+                        if distance_sq <= nearest_distance_sq then
+                            prop = candidate
+                            nearest_distance_sq = distance_sq
+                        end
+                    end
+                end
+            end
+        end
+
+        _destroy_objective_prop_by_unit[unit] = prop
+
+        return prop or nil
+    end
+
     -- ----------------------------------------------------------------------------
     -- Radar range exemption
     -- ----------------------------------------------------------------------------
@@ -3039,6 +3112,7 @@ return function(env)
         table_clear(GROWTH_EYE.member_group)
         table_clear(GROWTH_EYE.member_standing)
         table_clear(GROWTH_EYE.prefab_of)
+        table_clear(_destroy_objective_prop_by_unit)
         GROWTH_EYE.member_count = 0
         GROWTH_EYE.group_next = 0
         table_clear(_scratch_world_marker_units)
