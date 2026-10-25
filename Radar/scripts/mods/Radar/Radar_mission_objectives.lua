@@ -17,7 +17,8 @@
 -- environment (see `Radar.lua`). Contributes the objective scan
 -- `_scan_mission_objective_targets` and its per-scan preparation
 -- `_refresh_mission_objective_markers`, the lifecycle, kind and classification functions used
--- by the tracking and pickup scans, `_objective_ignores_radar_range`, the luggable rules
+-- by the tracking and pickup scans, `_objective_ignores_radar_range`, `_growth_tentacle_eyes`
+-- for the nearby highlight outlines, the luggable rules
 -- (`_luggable_hidden_in_container`, `_luggable_socket_display_kind`, `_luggable_unmoved`),
 -- the Martyr's Skull riddle functions, `MARTYR_SKULL_RIDDLE_SIGNATURES_BY_MISSION` and the
 -- resets. Relies on the world marker helpers of `Radar_runtime_helpers.lua` and on tracking.
@@ -589,6 +590,9 @@ return function(env)
         group_of = {},
         member_units = {},
         member_group = {},
+        -- Whether each member was standing at the last pass, for the outline
+        -- that goes on every eye of a tentacle.
+        member_standing = {},
         member_count = 0,
         group_next = 0,
         group_standing = {},
@@ -1975,6 +1979,7 @@ return function(env)
 
         local standing = GROWTH_EYE.group_standing
         local carrier = GROWTH_EYE.group_carrier
+        local member_standing = GROWTH_EYE.member_standing
 
         table_clear(standing)
         table_clear(carrier)
@@ -1991,10 +1996,13 @@ return function(env)
                 local group = member_group[k]
 
                 standing[group] = (standing[group] or 0) + 1
+                member_standing[k] = true
 
                 if carrier[group] == nil then
                     carrier[group] = k
                 end
+            else
+                member_standing[k] = false
             end
         end
 
@@ -2038,6 +2046,37 @@ return function(env)
         for i = 1, count do
             units[i] = nil
         end
+    end
+
+    --- Fills a list with the standing eyes of the tentacle an eye belongs to, that eye included.
+    -- The radar draws one marker per tentacle, carried by one of its eyes, and a nearby
+    -- highlight outline goes on every eye of it instead. Standing is what the last tentacle pass
+    -- found, so a destroyed eye, whose debris an outline would draw, is left out. Entries past
+    -- the returned count are left as they were.
+    -- !Unit: unit eye carrying a tentacle's marker
+    -- tab: out list to fill
+    -- treturn: int number of eyes, 0 for a unit that is no tentacle eye
+    function _growth_tentacle_eyes(unit, out)
+        local eye = GROWTH_EYE
+        local group = eye.group_of[unit]
+        local count = 0
+
+        if group == nil then
+            return 0
+        end
+
+        local member_units = eye.member_units
+        local member_group = eye.member_group
+        local member_standing = eye.member_standing
+
+        for k = 1, eye.member_count do
+            if member_group[k] == group and member_standing[k] == true then
+                count = count + 1
+                out[count] = member_units[k]
+            end
+        end
+
+        return count
     end
 
     -- ----------------------------------------------------------------------------
@@ -2998,6 +3037,7 @@ return function(env)
         table_clear(GROWTH_EYE.group_of)
         table_clear(GROWTH_EYE.member_units)
         table_clear(GROWTH_EYE.member_group)
+        table_clear(GROWTH_EYE.member_standing)
         table_clear(GROWTH_EYE.prefab_of)
         GROWTH_EYE.member_count = 0
         GROWTH_EYE.group_next = 0

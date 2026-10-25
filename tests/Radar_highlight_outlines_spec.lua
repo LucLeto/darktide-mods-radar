@@ -32,6 +32,7 @@ local function new_engine()
         cinematic = false,
         occlusion_queries = {},
         raycasts = {},
+        infos = {},
         t = 0,
     }
 end
@@ -47,7 +48,8 @@ local function new_harness(options)
         return settings[setting_id]
     end
 
-    function mod:info()
+    function mod:info(message, ...)
+        engine.infos[#engine.infos + 1] = string.format(message, ...)
     end
 
     function mod:is_nearby_highlight_visible_only()
@@ -84,11 +86,19 @@ local function new_harness(options)
             count()
             return unit.meshes or 1
         end,
-        add_material_layer = function(unit, layer, material)
+        has_node = function(unit, node)
+            count()
+            return unit.root_node == node
+        end,
+        add_material_layer = function(unit, layer, material, _, _, meshes)
             count()
 
             if unit.refuse then
                 error("the engine refused the layer")
+            end
+
+            if meshes ~= nil and engine.reject_mesh_whitelist then
+                error("bad argument #6")
             end
 
             local entry = engine.layers[unit] or { added = 0 }
@@ -96,6 +106,7 @@ local function new_harness(options)
             entry.added = entry.added + 1
             entry.layer = layer
             entry.material = material
+            entry.meshes = meshes
             -- On straight away, so the spec sees the module switch it off itself.
             entry.on = true
             engine.layers[unit] = entry
@@ -183,6 +194,15 @@ local function new_harness(options)
         end
         env._safe_gameplay_time = function()
             return engine.t
+        end
+        -- As in the runtime helpers: only in debug mode, once per key.
+        env._log_once = function(key, text)
+            if settings.debug_mode ~= true or mod._logged_units[key] then
+                return
+            end
+
+            mod._logged_units[key] = true
+            mod:info(text)
         end
     end
 
@@ -397,6 +417,94 @@ test("a unit that cannot carry the outline keeps its bracket", function()
     refused.refuse = nil
 
     assert_equal(true, mark(refused, COLOR, ANCHOR), "the mission reset did not forget the refused units")
+end)
+
+local function listed_meshes(layer)
+    local meshes = layer and layer.meshes or {}
+    local listed = {}
+
+    for i = 1, #meshes do
+        listed[meshes[i]] = true
+    end
+
+    return listed
+end
+
+-- add_material_layer's sixth argument limits the layer to a list of mesh names. A layer on every
+-- mesh drew a hanging barrel's hidden broken fragments as arcs, and a Heretic Idol's glow mesh and
+-- collision hull as a box of planes.
+test("hanging barrels and idols are outlined on their visible meshes only, other units on every mesh", function()
+    local harness = new_harness()
+    local hanging = new_unit(harness.engine, { root_node = "rp_hazard_sphere_01" })
+    local idol = new_unit(harness.engine, { root_node = "rp_collectible_destructible_01" })
+    local hanging_idol = new_unit(harness.engine, { root_node = "rp_collectible_destructible_01_hanging" })
+    local other_prop = new_unit(harness.engine, { root_node = "rp_other_prop_01" })
+    local pickup = new_unit(harness.engine)
+
+    for _, unit in ipairs({ hanging, idol, hanging_idol, other_prop, pickup }) do
+        assert_equal(true, harness.env._mark_highlight_outline(unit, COLOR, ANCHOR), "a unit was refused")
+    end
+
+    harness.env._sync_highlight_outlines()
+
+    local barrel_meshes = listed_meshes(harness.engine.layers[hanging])
+    local idol_meshes = listed_meshes(harness.engine.layers[idol])
+    local hanging_idol_meshes = listed_meshes(harness.engine.layers[hanging_idol])
+
+    assert_equal(true, barrel_meshes.g_hazard_sphere_01 and barrel_meshes.g_top and barrel_meshes.g_hazard_sphere_cables_01
+        and barrel_meshes.g_hazard_sphere_dynamic_cable_01, "the hanging barrel's intact meshes are not all listed")
+    assert_equal(nil, barrel_meshes.g_hazard_sphere_01_broken, "a broken fragment was listed")
+    assert_equal(true, idol_meshes.g_collectible_destructible_01_body and idol_meshes.g_collectible_destructible_01_body_LOD1
+        and idol_meshes.g_collectible_destructible_01_body_LOD2 and idol_meshes.g_collectible_destructible_01_body_LOD3,
+        "the idol's body levels of detail are not all listed")
+    assert_equal(nil, idol_meshes.g_collectible_destructible_01_glow, "the idol's glow mesh was listed")
+    assert_equal(nil, idol_meshes.c_collectible_destructible_01_convex, "the idol's collision hull was listed")
+    assert_equal(true, hanging_idol_meshes.g_collectible_destructible_01_hanging_body
+        and hanging_idol_meshes.g_collectible_destructible_01_hanging_body_LOD1
+        and hanging_idol_meshes.g_collectible_destructible_01_hanging_body_LOD2
+        and hanging_idol_meshes.g_collectible_destructible_01_hanging_body_LOD3,
+        "the hanging idol's body levels of detail are not all listed")
+    assert_equal(nil, hanging_idol_meshes.g_collectible_destructible_01_hanging_glow, "the hanging idol's glow mesh was listed")
+    assert_equal(nil, hanging_idol_meshes.c_collectible_destructible_01_hanging_convex,
+        "the hanging idol's collision hull was listed")
+
+    for _, unit in ipairs({ hanging, idol, hanging_idol }) do
+        assert_equal(1, harness.engine.layers[unit].added, "a limited layer was added twice")
+        assert_equal(true, harness.engine.layers[unit].on, "a unit with a limited layer is not outlined")
+    end
+
+    assert_equal(nil, harness.engine.layers[other_prop].meshes, "another prop's layer was limited")
+    assert_equal(nil, harness.engine.layers[pickup].meshes, "the pickup's layer was limited")
+    assert_equal(0, #harness.engine.infos, "an accepted mesh list was logged")
+end)
+
+test("a rejected mesh list falls back to a layer on every mesh, logged once and only in debug mode", function()
+    local harness = new_harness({ settings = { debug_mode = true } })
+    local first = new_unit(harness.engine, { root_node = "rp_hazard_sphere_01" })
+    local second = new_unit(harness.engine, { root_node = "rp_hazard_sphere_01" })
+
+    harness.engine.reject_mesh_whitelist = true
+
+    assert_equal(true, harness.env._mark_highlight_outline(first, COLOR, ANCHOR), "the barrel was refused")
+    assert_equal(true, harness.env._mark_highlight_outline(second, COLOR, ANCHOR), "the barrel was refused")
+
+    harness.env._sync_highlight_outlines()
+
+    assert_equal(1, harness.engine.layers[first].added, "the fallback did not add the layer once")
+    assert_equal(nil, harness.engine.layers[first].meshes, "the fallback still passed the mesh list")
+    assert_equal(true, harness.engine.layers[first].on, "the barrel lost its outline")
+    assert_equal(1, #harness.engine.infos, "the rejection was logged more than once")
+    assert_equal(true, harness.engine.infos[1]:find("rp_hazard_sphere_01", 1, true) ~= nil
+        and harness.engine.infos[1]:find("bad argument #6", 1, true) ~= nil,
+        "the log does not name the unit and carry the engine's error")
+
+    local quiet = new_harness()
+    local barrel = new_unit(quiet.engine, { root_node = "rp_hazard_sphere_01" })
+
+    quiet.engine.reject_mesh_whitelist = true
+
+    assert_equal(true, quiet.env._mark_highlight_outline(barrel, COLOR, ANCHOR), "the barrel was refused")
+    assert_equal(0, #quiet.engine.infos, "the rejection was logged outside debug mode")
 end)
 
 test("culling stays off while the game's own outline shows on the unit", function()
@@ -619,6 +727,7 @@ test("a group set to outlines outlines its units, and a target without a unit ke
             nearby_highlight_materials = "highlight",
             nearby_highlight_environment = "outline",
             nearby_highlight_deployables = "off",
+            nearby_highlight_mission_objective = "outline",
         },
     })
     local env = harness.env
@@ -630,12 +739,16 @@ test("a group set to outlines outlines its units, and a target without a unit ke
     local barrel = new_unit(engine, { position = { x = 3, y = 0, z = 0 } })
     local standing_barrel = new_unit(engine, { position = { x = 3, y = 1, z = 0 } })
     local medical_crate = new_unit(engine, { position = { x = 0, y = 3, z = 0 } })
+    local carrier_eye = new_unit(engine, { position = { x = 0, y = 5, z = 0 } })
+    local second_eye = new_unit(engine, { position = { x = 0.3, y = 5, z = 0 } })
+    local third_eye = new_unit(engine, { position = { x = 0, y = 5.3, z = 0 } })
     local group_by_kind = {
         pickup_ammo_small = "common_pickups_group",
         pickup_ammo_big = "common_pickups_group",
         material_plasteel = "materials_group",
         hazard_explosive_barrel = "environment_group",
         medical_crate_deployable = "deployables_group",
+        mission_objective_growth = "mission_objective_group",
     }
 
     env.NEARBY_HIGHLIGHT_SETTING_BY_GROUP = {
@@ -643,7 +756,20 @@ test("a group set to outlines outlines its units, and a target without a unit ke
         materials_group = "nearby_highlight_materials",
         environment_group = "nearby_highlight_environment",
         deployables_group = "nearby_highlight_deployables",
+        mission_objective_group = "nearby_highlight_mission_objective",
     }
+    -- From the mission objectives module: the eyes of the tentacle whose marker an eye carries.
+    env._growth_tentacle_eyes = function(unit, out)
+        if unit ~= carrier_eye then
+            return 0
+        end
+
+        out[1] = carrier_eye
+        out[2] = second_eye
+        out[3] = third_eye
+
+        return 3
+    end
     env.NEARBY_HIGHLIGHT_EXCLUDED_KINDS = {}
     env.NEARBY_OUTLINE_OCCLUDED_MULTIPLIER = 0.6
     env._player_unit = function()
@@ -684,6 +810,7 @@ test("a group set to outlines outlines its units, and a target without a unit ke
         { unit = standing_barrel, kind = "hazard_explosive_barrel", position = standing_barrel.position,
             distance_sq_3d = 10 },
         { unit = medical_crate, kind = "medical_crate_deployable", position = medical_crate.position, distance_sq_3d = 9 },
+        { unit = carrier_eye, kind = "mission_objective_growth", position = carrier_eye.position, distance_sq_3d = 25 },
     }
 
     local highlights = env._collect_screen_highlight_targets()
@@ -701,6 +828,10 @@ test("a group set to outlines outlines its units, and a target without a unit ke
     assert_equal(true, engine.layers[standing_barrel] and engine.layers[standing_barrel].on,
         "the second barrel fell back to a bracket")
     assert_equal(nil, engine.layers[medical_crate], "a group that is off was outlined")
+
+    for _, eye in ipairs({ carrier_eye, second_eye, third_eye }) do
+        assert_equal(true, engine.layers[eye] and engine.layers[eye].on, "an eye of the growth tentacle has no outline")
+    end
 
     harness.settings.nearby_highlight_common_pickups = "off"
     env._collect_screen_highlight_targets()

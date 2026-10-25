@@ -153,6 +153,9 @@ return function(env)
     --- Per-collection cache of each kind's nearby highlight mode, `highlight`, `outline` or false.
     local _scratch_highlight_mode_by_kind = {}
 
+    --- The standing eyes of one growth tentacle, refilled for each tentacle the collection outlines.
+    local _scratch_growth_tentacle_eyes = {}
+
     --- Result slot for the world marker list request.
     -- Used instead of a per-call closure; the event manager invokes the callback
     -- synchronously, so a single slot is enough.
@@ -2632,7 +2635,8 @@ return function(env)
     -- colour used while occluded and whether a player has tagged the target. The output list is
     -- reused between frames. A target of a group set to outlines is handed to
     -- `_mark_highlight_outline` instead and gets no entry, unless its unit cannot be outlined;
-    -- then it keeps its bracket.
+    -- then it keeps its bracket. A growth tentacle's outline goes on every eye still standing
+    -- (`_growth_tentacle_eyes`), not only on the one carrying its marker.
     -- treturn: tab highlight entries
     function _collect_screen_highlight_targets()
         local highlights = _reuse_screen_highlight_output()
@@ -2666,6 +2670,8 @@ return function(env)
         local darkened_color_array = _darkened_color_array
         local distance_squared = _distance_squared
         local mark_highlight_outline = _mark_highlight_outline
+        local growth_tentacle_eyes = _growth_tentacle_eyes
+        local tentacle_eyes = _scratch_growth_tentacle_eyes
         local interactee_extension_map = _safe_unit_to_extension_map("interactee_system")
         local max_distance = mod:get_nearby_highlight_range()
         local max_distance_sq = max_distance * max_distance
@@ -2730,6 +2736,22 @@ return function(env)
                         local outlined = mode == "outline" and color ~= nil and fallback_world_position ~= nil
                             and mark_highlight_outline ~= nil
                             and mark_highlight_outline(target.unit, color, fallback_world_position, tagged)
+
+                        -- A growth tentacle is one radar marker on one of its eyes;
+                        -- its outline goes on every eye still standing, each tested
+                        -- for line of sight at its own centre.
+                        if outlined and growth_tentacle_eyes ~= nil then
+                            local eye_count = growth_tentacle_eyes(target.unit, tentacle_eyes)
+
+                            for e = 1, eye_count do
+                                local eye = tentacle_eyes[e]
+
+                                if eye ~= target.unit then
+                                    mark_highlight_outline(eye, color, _safe_unit_box_center(eye) or fallback_world_position,
+                                        tagged)
+                                end
+                            end
+                        end
 
                         if not outlined then
                             local world_position = screen_highlight_anchor_position(target, interactee_extension_map)

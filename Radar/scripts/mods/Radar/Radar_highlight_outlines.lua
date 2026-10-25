@@ -6,8 +6,9 @@
 -- layer then stays on the unit for its lifetime and is only switched on and off. A unit that
 -- cannot take the layer (no meshes, or the engine refuses it) is remembered for the mission and
 -- keeps its highlight bracket. A unit a player carries is never outlined. An outline covers
--- every mesh of a unit, hidden ones included, so a hanging hazard barrel also shows the hidden
--- fragments of its exploded state around it; that is accepted rather than giving it a bracket.
+-- every mesh of a unit, including hidden meshes and ones the game never draws, so on units where
+-- those showed (hanging hazard barrels, Heretic Idols) the layer is limited to the meshes of their
+-- visible shape.
 --
 -- The colour is written again every time an outline is switched on, to the unit and to its
 -- child units, as the game's `OutlineSystem` does; a colour written only while the layer was off
@@ -27,9 +28,9 @@
 -- Contributes `_mark_highlight_outline`, `_sync_highlight_outlines`, `_clear_highlight_outlines`,
 -- `_reset_highlight_outlines` and `mod:update_highlight_outline_visibility`, and chains
 -- `mod.on_disabled` and `mod.on_unload`. Relies on `_safe_unit_alive`, `_safe_extension_system`,
--- `_safe_unit_outline_extension`, `_safe_gameplay_time`, the HUD camera and the HUD line-of-sight
--- test from `Radar_runtime_helpers.lua`, and on `mod:is_nearby_highlight_visible_only` from
--- `Radar_tracking.lua`.
+-- `_safe_unit_outline_extension`, `_safe_gameplay_time`, `_log_once`, the HUD camera and the HUD
+-- line-of-sight test from `Radar_runtime_helpers.lua`, and on
+-- `mod:is_nearby_highlight_visible_only` from `Radar_tracking.lua`.
 -- module: Radar_highlight_outlines
 -- author: LucLeto
 return function(env)
@@ -39,6 +40,7 @@ return function(env)
     local next = next
     local pairs = pairs
     local pcall = pcall
+    local tostring = tostring
     local type = type
 
     local table_clear = table.clear or function(t)
@@ -69,6 +71,34 @@ return function(env)
 
     --- Locomotion state of a luggable a player is carrying.
     local CARRIED_LOCOMOTION_STATE = "carried"
+
+    --- Meshes the outline layer is limited to, by the root node of the unit they belong to.
+    -- The names were read from the units' resources. A hanging hazard barrel (`rp_hazard_sphere_01`)
+    -- keeps the meshes of its exploded state hidden in a `broken` visibility group, which a layer
+    -- on every mesh drew as arcs around it; its sphere, ceiling mount and cables are listed, its
+    -- decals are not. A Heretic Idol, standing (`rp_collectible_destructible_01`) or hanging
+    -- (`rp_collectible_destructible_01_hanging`), carries a glow box and a convex collision hull,
+    -- which drew a box of flat planes around it; its body's four levels of detail are listed.
+    local OUTLINE_MESHES_BY_ROOT_NODE = {
+        rp_hazard_sphere_01 = {
+            "g_hazard_sphere_01",
+            "g_top",
+            "g_hazard_sphere_cables_01",
+            "g_hazard_sphere_dynamic_cable_01",
+        },
+        rp_collectible_destructible_01 = {
+            "g_collectible_destructible_01_body",
+            "g_collectible_destructible_01_body_LOD1",
+            "g_collectible_destructible_01_body_LOD2",
+            "g_collectible_destructible_01_body_LOD3",
+        },
+        rp_collectible_destructible_01_hanging = {
+            "g_collectible_destructible_01_hanging_body",
+            "g_collectible_destructible_01_hanging_body_LOD1",
+            "g_collectible_destructible_01_hanging_body_LOD2",
+            "g_collectible_destructible_01_hanging_body_LOD3",
+        },
+    }
 
     -- ----------------------------------------------------------------------------
     -- Mutable runtime state
@@ -149,6 +179,29 @@ return function(env)
         return ok_state and state == CARRIED_LOCOMOTION_STATE
     end
 
+    --- Returns the meshes an outline on a unit is limited to and the root node that lists them, nil for every mesh.
+    -- tab: unit_api engine `Unit` table
+    -- !Unit: unit live unit
+    -- treturn: ?tab mesh names
+    -- treturn: ?string root node the names are listed under
+    local function _find_outline_meshes(unit_api, unit)
+        local has_node = unit_api.has_node
+
+        if not has_node then
+            return nil
+        end
+
+        for root_node, meshes in pairs(OUTLINE_MESHES_BY_ROOT_NODE) do
+            local ok, found = pcall(has_node, unit, root_node)
+
+            if ok and found then
+                return meshes, root_node
+            end
+        end
+
+        return nil
+    end
+
     --- Returns whether a unit has meshes an outline can be drawn on, true when the engine cannot say.
     local function _unit_has_meshes(unit_api, unit)
         local num_meshes = unit_api.num_meshes
@@ -193,7 +246,23 @@ return function(env)
             return false
         end
 
-        if not pcall(add_material_layer, unit, OUTLINE_LAYER, OUTLINE_MATERIAL, true) then
+        local added = false
+        local meshes, root_node = _find_outline_meshes(unit_api, unit)
+
+        -- The sixth argument limits the layer to the listed meshes; the fifth is unknown and stays
+        -- nil. Should the engine reject the list, the layer goes on every mesh instead.
+        if meshes ~= nil then
+            local ok, err = pcall(add_material_layer, unit, OUTLINE_LAYER, OUTLINE_MATERIAL, true, nil, meshes)
+
+            added = ok
+
+            if not ok then
+                _log_once("outline_mesh_list_rejected:" .. root_node,
+                    "Outline mesh list of " .. root_node .. " rejected, outlined on every mesh: " .. tostring(err))
+            end
+        end
+
+        if not added and not pcall(add_material_layer, unit, OUTLINE_LAYER, OUTLINE_MATERIAL, true) then
             return false
         end
 

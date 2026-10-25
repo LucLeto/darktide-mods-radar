@@ -2518,6 +2518,39 @@ test("the tentacle marker outlives its first destroyed eyes", function()
     assert_equal(1, #marked_eyes(harness, eyes), "the last living eye must still be marked")
 end)
 
+-- The radar keeps one marker per tentacle, but a nearby highlight outline goes on
+-- every eye still standing; a destroyed one would show its debris.
+test("a tentacle hands every standing eye to the outline, and no destroyed one", function()
+    local harness = new_harness()
+
+    add_growth_objective(harness, { x = 0, y = 0, z = 0 })
+
+    local eyes = add_tentacle(harness, { x = 12, y = 0, z = 0 })
+
+    harness:scan()
+
+    local carrier = marked_eyes(harness, eyes)[1]
+    local out = {}
+    local listed = {}
+
+    assert_equal(3, harness.env._growth_tentacle_eyes(carrier, out), "the tentacle did not list all three eyes")
+
+    for i = 1, 3 do
+        listed[out[i]] = true
+    end
+
+    assert_equal(true, listed[eyes[1]] and listed[eyes[2]] and listed[eyes[3]], "an eye of the tentacle was left out")
+
+    local destroyed = eyes[1] == carrier and eyes[2] or eyes[1]
+
+    harness:remove_from_system("destructible_system", destroyed)
+    harness:scan()
+
+    assert_equal(2, harness.env._growth_tentacle_eyes(carrier, out), "a destroyed eye was still listed")
+    assert_equal(true, out[1] ~= destroyed and out[2] ~= destroyed, "the destroyed eye was listed")
+    assert_equal(0, harness.env._growth_tentacle_eyes({ name = "stranger" }, out), "a unit that is no eye was listed")
+end)
+
 test("a cleared tentacle leaves no marker", function()
     local harness = new_harness()
 
