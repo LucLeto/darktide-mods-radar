@@ -331,6 +331,37 @@ for m = 1, #PROFILING_MODES do
         assert_equal(true, harness:read("jump", true, "_get_simulate"), "a simulated jump was changed")
     end)
 
+    test(mode.label .. ": unrelated actions skip the capture check once the capture map exists", function()
+        local harness = harness_for_mode()
+        local mod = harness.mod
+        local should_capture = mod.should_capture_overview_input_action
+        local checked = {}
+
+        mod.should_capture_overview_input_action = function(self, action_name)
+            checked[#checked + 1] = tostring(action_name)
+
+            return should_capture(self, action_name)
+        end
+
+        harness:set_overview(true)
+        assert_equal(true, harness:read("jump", true), "jump was changed while the map was built")
+        assert_equal(1, #checked, "the first read did not take the capture check that builds the map")
+
+        assert_equal(true, harness:read("jump", true), "jump was changed")
+        assert_equal(0.5, harness:read("move_forward", 0.5, "_get_simulate"), "a simulated move was changed")
+        assert_equal(true, harness:read(nil, true), "a nil action name was changed")
+        assert_equal(1, #checked, "an unrelated action took the capture check")
+
+        assert_equal(false, harness:read("wield_scroll_up", true), "a scroll was not captured")
+        assert_equal(2, #checked, "a scroll action skipped the capture check")
+        assert_equal("wield_scroll_up", checked[2], "the capture check got another action")
+
+        harness:change_setting("overview_zoom_in_key", { "page_up" })
+        harness:change_setting("overview_zoom_out_key", { "page_down" })
+        assert_equal(true, harness:read("wield_scroll_up", true), "a scroll was captured without a wheel key")
+        assert_equal(2, #checked, "a scroll without a wheel key took the capture check")
+    end)
+
     test(mode.label .. ": captured actions read as their neutral value on both read paths", function()
         local harness = harness_for_mode()
 

@@ -2551,29 +2551,33 @@ return function(env)
     end
 
     --- Returns whether the zoom modifier is held (or was pressed within the grace period) for the normal radar.
+    -- The key is checked before whether radar keybinds may act, which reads the game mode; the
+    -- input hook asks this for every scroll read, and the key is rarely held.
     -- treturn: bool
     function mod:is_normal_radar_zoom_modifier_active()
         if self:is_overview_mode_active() then
             return false
         end
 
+        if not _radar_zoom_modifier_binding_held() then
+            local last_t = self._normal_radar_zoom_modifier_t
+
+            if not last_t then
+                return false
+            end
+
+            local now = _safe_gameplay_time() or 0
+
+            if now - last_t > NORMAL_RADAR_ZOOM_MODIFIER_GRACE then
+                return false
+            end
+        end
+
         if not _is_radar_keybind_runtime_allowed() then
             return false
         end
 
-        if _radar_zoom_modifier_binding_held() then
-            return true
-        end
-
-        local last_t = self._normal_radar_zoom_modifier_t
-
-        if not last_t then
-            return false
-        end
-
-        local now = _safe_gameplay_time() or 0
-
-        return now - last_t <= NORMAL_RADAR_ZOOM_MODIFIER_GRACE
+        return true
     end
 
     --- Saves a normal radar range, shows the zoom factor indicator and requests an immediate scan.
@@ -3612,7 +3616,9 @@ return function(env)
 
     --- Hook on `InputService` action reads that swallows scroll actions used by the zoom keys.
     -- Without it, scrolling to zoom would also switch weapons or scroll the tactical overlay.
-    -- While profiling, every read is counted and its capture check timed.
+    -- The game reads dozens of actions a frame through it, so an action outside the capture map
+    -- returns before the capture check. Until the map is built, every read takes the check,
+    -- which builds it. While profiling, every read is counted and each capture check timed.
     -- func: func original method
     -- tab: self input service
     -- string: action_name input action being read
@@ -3620,6 +3626,16 @@ return function(env)
     -- return: the original value, or its neutral value when the action is captured
     local function _overview_input_action_hook(func, self, action_name, ...)
         local value = func(self, action_name, ...)
+        local capture_actions = mod._overview_capture_actions
+
+        if capture_actions ~= nil and capture_actions[action_name] ~= true then
+            if _profiling_enabled then
+                _profile_count("input_calls")
+            end
+
+            return value
+        end
+
         local profile_start = _profiling_enabled and _profile_now() or nil
         local captured = mod:should_capture_overview_input_action(action_name)
 
