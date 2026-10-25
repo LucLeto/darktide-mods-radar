@@ -1,16 +1,16 @@
 # Radar
 
-Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide**. It is built to surface the targets that matter most during live missions: nearby pickups, objective items, the world interactions of the active mission objective, Martyr's Skull riddle controls, deployed support tools, environment interactables, expedition points of interest, teammates and their companions, player smart tags, tagged targets, supported ability-outlined enemies, high-priority enemies and, with the optional [Respawn Rewind](#respawn-rewind) and [SafeRoute](#saferoute) mods, respawn locations and the safe road at branching paths. Everything is configurable from the mod options menu. A centered overview mode can also be toggled during missions when you need a wider tactical read.
+Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide**. It is built to surface the targets that matter most during live missions: nearby pickups, objective items, the world interactions of the active mission objective, Martyr's Skull riddle controls, live-event pickups and objectives, deployed support tools, environment interactables, expedition points of interest, teammates and their companions, player smart tags, tagged targets, supported ability-outlined enemies, high-priority enemies and, with the optional [Respawn Rewind](#respawn-rewind) and [SafeRoute](#saferoute) mods, respawn locations and the safe road at branching paths. Everything is configurable from the mod options menu. A centered overview mode can also be toggled during missions when you need a wider tactical read.
 
 This README serves two audiences. The first half is a feature and settings reference. The second half, starting at [Architecture](#architecture), explains how the Lua code is organized, how markers flow from the game to the HUD, how the optional integrations and the settings migrations work, and how the regression specs are run.
 
-## What's new in 3.1.0
+## What's new in 3.2.0
 
-- **SafeRoute compatibility.** A new, optional **Safe route** tab mirrors the **SAFE ROUTE** and **WRONG WAY** markers that [SafeRoute](#saferoute) places at a mission's branching paths, such as Spillway's forks. Radar reads that mod's world markers and never re-implements its crossroad selection. See [Safe Route Controls](#safe-route-controls) and [Safe Route Markers](#safe-route-markers).
-- **Stimm Supply marker.** The Hive Scum's deployed Stimm Supply used to be drawn as a Medical Crate. It now has its own **Stimm Supply** option, purple icon and color under Deployed Items, with a radar-scaled 4 m effect-radius ring. Profiles that hid Medical Crates start with it hidden too.
-- **Darktide 1.13 compatibility.** The Spillway Wizard boss shows as a monstrosity (since 3.0.1). Dropped Tech-Remnants artwork no longer draws as a white square, because Darktide 1.13 moved that material into a package of its own, which `Radar.mod` now declares. Darktide 1.13 no longer ships the Stolen Rations artwork at all, so its **Artwork** mode draws a white square until the art returns (see [Notes](#notes)).
-- **Traditional Chinese.** The `zh-tw` translation was updated by SyuanTsai.
-- **Regression specs.** `Radar_safe_route_spec` covers the SafeRoute import, and the wiring and settings specs pin the new kinds, the Stimm Supply settings seed and the `.mod` package list. See [Testing](#testing).
+- **Outlines.** Nearby highlights can now outline the item itself, in its highlight color, with the game's own outline effect: the one it uses for tagged enemies. Each group's **Highlight nearby …** toggle is now a **Highlight markers** / **Outlines** / **Off** dropdown, and **Outlines** is the new default. Every eye of a daemonic growth tentacle is outlined, and a target to destroy outlines the object you actually destroy, such as Rolling Steel's cogitators. See [Nearby highlight example](#nearby-highlight-example) and [Highlight outlines](#highlight-outlines).
+- **Only highlight visible targets.** A new option hides highlight markers and outlines while a wall blocks the view of their item, instead of dimming them. Items a player has tagged are still highlighted through walls.
+- **Deployed Items highlights.** Deployed ammo crates, medical crates and the Stimm Supply can be highlighted too, each with its own highlight color.
+- **Your settings carry over.** Groups you had highlighted switch to **Outlines**; groups you had off, and the new Deployed Items group, stay off. New installs start with **Outlines** everywhere. See [Migrations](#migrations).
+- **Regression specs.** `Radar_highlight_outlines_spec` covers the outline module against a fake engine and through the real highlight collection, and the settings spec pins the new dropdowns and their migration. See [Testing](#testing).
 
 ## Feature Overview
 
@@ -81,15 +81,24 @@ The keybind-based **centered overview mode** temporarily expands the radar into 
 
 ### Nearby highlight example
 
-Nearby highlights add small screen-space brackets for supported non-enemy markers when they are close enough to matter. You can tune their thickness, set per-marker highlight colors with ARGB color pickers, and show item distance text on the screen highlight, the radar marker, or both. Objective brackets frame the middle of the device, and hazard barrel brackets sit on the barrel body even when the barrel hangs from a ceiling mount. See [Screen highlight anchoring](#screen-highlight-anchoring).
+Nearby highlights mark supported non-enemy items in the world once you are close enough for them to matter. Each item group has its own **Highlight nearby …** dropdown:
 
-Each marker group can instead draw **Outlines**, the default: the item itself is outlined in its highlight color with the game's own outline effect, the one it uses for tagged enemies. A target that cannot carry an outline keeps its bracket, such as a Martyr's Skull riddle position without a unit or an objective zone without a visible model. With **Only highlight visible targets** on, brackets and outlines are hidden while level geometry blocks the view of their target, instead of being dimmed; an item a player has tagged is still highlighted through walls. An item you carry is not outlined. See [Highlight outlines](#highlight-outlines).
+- **Outlines**, the default, outlines the item itself in its highlight color with the game's own outline effect, the one it uses for tagged enemies. A target that cannot carry an outline keeps a bracket instead, such as a Martyr's Skull riddle position without a unit or an objective zone without a visible model, and an item you carry is not outlined. Every eye of a daemonic growth tentacle is outlined, and a target to destroy outlines the object you actually destroy, such as Rolling Steel's cogitators. See [Highlight outlines](#highlight-outlines).
+- **Highlight markers** draws small screen-space brackets around the item. Objective brackets frame the middle of the device, and hazard barrel brackets sit on the barrel body even when the barrel hangs from a ceiling mount. See [Screen highlight anchoring](#screen-highlight-anchoring).
+- **Off** draws no highlight for that group.
 
-If you also run **GoodOldOutlines** with its **Highlight tagged items** option, it draws its own outline, in its own color (teal by default), on every item a player tags. That outline is not Radar's: it appears on items Radar does not outline, and it shows for a moment before Radar's outline of a newly tagged item takes over.
+Both styles use a per-marker highlight color, set with an ARGB color picker next to the marker color; outlines use its RGB channels only. Brackets can be made thicker and can show the item's distance above them, and the radar markers of a group can show their distance as well. With **Only highlight visible targets** on, brackets and outlines are hidden while level geometry blocks the view of their target, instead of being dimmed; an item a player has tagged is still highlighted through walls.
 
 <p>
-  <img src="doc/img/highlight_example.png" width="70%" alt="Nearby highlight example" />
+  <img src="doc/img/Radar_Outline_example_1.jpg" width="49%" alt="Outlines on a crate in an Expedition" />
+  <img src="doc/img/Radar_Outline_example_2.jpg" width="49%" alt="Outlines on a crate and on a hanging and a standing explosive barrel" />
 </p>
+
+<p>
+  <img src="doc/img/highlight_example.png" width="70%" alt="Highlight markers drawn as screen-space brackets" />
+</p>
+
+If you also run [GoodOldOutlines](https://www.nexusmods.com/warhammer40kdarktide/mods/1455) with its **Highlight tagged items** option, it draws its own outline, in its own color (teal by default), on every item a player tags. That outline is not Radar's: it appears on items Radar does not outline, and it shows for a moment before Radar's outline of a newly tagged item takes over.
 
 ### Resource charges and deployed medical radius
 
@@ -308,7 +317,7 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Nearby highlight range (m) | Adjustable from **5 m** to **20 m**. Controls how close supported items must be before their bracket highlights or outlines appear. |
 | Nearby highlight thickness | Adjusts the line thickness used by nearby screen-space highlight brackets, from **0** to **6**. **0**, the default, keeps the adaptive thickness. |
 | Only highlight visible targets | Hides nearby highlight brackets and outlines while level geometry blocks the view of their target, instead of dimming them. Items a player has tagged are still highlighted through walls. Off by default. |
-| Show distance above nearby highlights | Shows item distance text above supported nearby screen-space highlights. |
+| Show distance above nearby highlights | Shows item distance text above each highlight marker (bracket). Outlined items show none. |
 | Show distance on radar markers | Per marker group. Shows distance text under every radar marker of that group, independent of the nearby highlight setting and range. |
 | Medicae Station Charges | Shows remaining healing charges on Medicae Station radar markers when their marker is visible. |
 | Ammo Crate Charges | Shows remaining resupply charges on deployed Ammo Crate radar markers when their marker is visible. |
@@ -428,7 +437,7 @@ All enemy vertical arrow options use the shared **Show vertical arrows within ra
 | Nearby highlight thickness | Adjusts the line thickness used by nearby screen-space highlight brackets, from **0** to **6**. **0**, the default, keeps the adaptive thickness. |
 | Only highlight visible targets | Hides nearby highlight brackets and outlines while level geometry blocks the view of their target, instead of dimming them. Items a player has tagged are still highlighted through walls. Off by default. |
 | Marker highlight colors | ARGB color pickers used directly by nearby highlights and outlines for a specific supported marker. Outlines use the RGB channels only. |
-| Show distance above nearby highlights | Shows item distance text above supported nearby screen-space highlights. |
+| Show distance above nearby highlights | Shows item distance text above each highlight marker (bracket). Outlined items show none. |
 | Show distance on radar markers | Per marker group. Shows distance text under every radar marker of that group, independent of the nearby highlight setting and range. |
 
 Each group below has a nearby highlight dropdown with **Highlight markers** (screen-space brackets), **Outlines** (the item itself is outlined) and **Off**. The default is **Outlines**. A profile from a release with the old checkboxes keeps its choices: a ticked group starts on **Outlines**, an unticked one stays **Off**, and Deployed Items, which had no checkbox, starts **Off** too.
@@ -439,7 +448,7 @@ Each group below has a nearby highlight dropdown with **Highlight markers** (scr
 | Collectable Materials | Highlights nearby diamantine and plasteel. |
 | Primary Objective Items | Highlights nearby mission luggables and main objective pickups. |
 | Secondary Objective Items | Highlights nearby grimoires and scriptures. |
-| Mission Objective Interactables | Highlights nearby scanner targets, hacking terminals, and other active objective interaction points. Servo skull objectives are excluded because the game already draws its own on-screen marker for them. With **Outlines**, every eye of a daemonic growth tentacle is outlined. |
+| Mission Objective Interactables | Highlights nearby scanner targets, hacking terminals, and other active objective interaction points. Servo skull objectives are excluded because the game already draws its own on-screen marker for them. With **Outlines**, every eye of a daemonic growth tentacle is outlined, and a target to destroy outlines the object you actually destroy, such as Rolling Steel's cogitators. |
 | Expeditions-Specific Items | Highlights nearby salvage, tech-remnants, expedition pocketables, and related expedition pickups. |
 | Martyr's Skull Items | Highlights nearby Martyr's Skull items, riddle interactables, and orange power cell markers. |
 | Environment | Highlights nearby medicae stations, power sockets, heretic idols, and hazard barrels. |
@@ -1686,3 +1695,13 @@ Optional, never required:
 - Darktide 1.12.0 compatibility uses the current `packages/ui/views/expedition_view/expedition_view` package instead of the removed `expedition_play_view` package. Like every package Radar draws from, it is declared in `Radar.mod`.
 - Darktide 1.13.0 no longer ships the Stolen Rations pickup artwork, so **Artwork** mode currently draws a white square, both in the settings dropdown and on the radar. Switch Stolen Rations to **Icon** until the art returns with the event.
 - Marker previews in this readme were generated from the included template assets and documentation images so the legend matches the mod's configured presentations as closely as possible.
+
+## Credits
+
+- **dreams** contributed the built-in **Live scan** map geometry source, its navmesh reader, and the geometry renderer.
+- The author of [Strikemap](https://www.nexusmods.com/warhammer40kdarktide/mods/1022) worked with Radar on the **Strikemap floor plan** source and Strikemap's public compatibility API.
+- **[deluxghost](https://www.nexusmods.com/profile/deluxghost)** and **[tdopz](https://www.nexusmods.com/profile/tdopz?gameId=4943)** helped with the **Outlines**, including the tip that keeps hidden parts of an item, such as a hanging barrel's fragments, out of its outline.
+- **[Alfthebigheaded](https://www.nexusmods.com/warhammer40kdarktide/users/5378401)** wrote the settings-menu scroll position persistence and the settings extensions used by earlier Radar versions.
+- **CaimaoLittle2** and **SyuanTsai** contributed translations.
+
+Thank you all!
