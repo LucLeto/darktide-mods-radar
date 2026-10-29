@@ -3529,7 +3529,9 @@ end
 -- projected onto the radar, given a visual, brackets, a pooled widget and value texts), the
 -- overview legends, the zoom indicator and the screen highlights, and finally clears the
 -- widgets left over from the previous frame. While profiling, each of those steps is timed
--- through `mod:radar_profiler_lap`.
+-- through `mod:radar_profiler_lap`; the frame and the map geometry are timed apart, and each
+-- marker's projection, visual, brackets, widget update, widget draw and texts are added up
+-- over all markers through `mod:radar_profiler_accumulate`.
 -- tab: self HUD element
 -- tab: ui_renderer active UI renderer
 -- ?tab: snapshot radar snapshot
@@ -3578,8 +3580,16 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
     local strikemap_geometry_active = RadarStrikemapGeometry.is_active(t)
     local navmesh_geometry_active = RadarNavmesh.is_active(strikemap_geometry_active)
 
+    if profile_mark then
+        profile_mark = mod:radar_profiler_lap("draw_layout", profile_mark)
+    end
+
     if strikemap_geometry_active or navmesh_geometry_active then
         RadarHudRenderer.draw_radar_frame_background(self, ui_renderer, x, y, z + 1, size, projection_rotation)
+
+        if profile_mark then
+            profile_mark = mod:radar_profiler_accumulate("draw_frame", profile_mark)
+        end
 
         if strikemap_geometry_active then
             RadarStrikemapGeometry.draw(ui_renderer, snapshot, center_x, center_y, z + 2,
@@ -3589,13 +3599,17 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
                 center_x, center_y, projection_radius, range, z + 2)
         end
 
+        if profile_mark then
+            profile_mark = mod:radar_profiler_accumulate("draw_geometry", profile_mark)
+        end
+
         RadarHudRenderer.draw_radar_frame_foreground(self, ui_renderer, x, y, z + 1, size, projection_rotation)
     else
         RadarHudRenderer.draw_radar_frame(self, ui_renderer, x, y, z + 1, size, projection_rotation)
     end
 
     if profile_mark then
-        profile_mark = mod:radar_profiler_lap("draw_frame", profile_mark)
+        profile_mark = mod:radar_profiler_accumulate("draw_frame", profile_mark)
     end
 
     local next_widget_index = 1
@@ -3610,6 +3624,7 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
         local targets = snapshot.targets or {}
         collected_marker_count = #targets
         local project_target_to_radar = mod.project_target_to_radar
+        local profiler_accumulate = profile_mark and mod.radar_profiler_accumulate
 
         if draw_cache.show_player_center_dot then
             local player_slot = tonumber(snapshot.player_slot)
@@ -3641,6 +3656,8 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
             )
         end
 
+        local marker_mark = profile_mark and mod:radar_profiler_mark()
+
         for i = 1, collected_marker_count do
             if next_widget_index > max_widget_index then
                 break
@@ -3656,6 +3673,10 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
                 range,
                 target.ignore_radar_range
             )
+
+            if marker_mark then
+                marker_mark = profiler_accumulate(mod, "draw_marker_project", marker_mark)
+            end
 
             if px and py then
                 local visual = target_visual(target, draw_cache)
@@ -3690,12 +3711,24 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
                 local secondary_value_text_offset_y = visual and visual.secondary_value_text_offset_y or nil
                 local has_vertical_state = target.vertical_state ~= nil
 
+                if marker_mark then
+                    marker_mark = profiler_accumulate(mod, "draw_marker_visual", marker_mark)
+                end
+
                 if bracket_color and should_draw_marker_brackets(target, draw_cache) then
                     draw_marker_brackets(ui_renderer, bracket_x, bracket_y, bracket_z, bracket_size, bracket_color)
                 end
 
+                if marker_mark then
+                    marker_mark = profiler_accumulate(mod, "draw_marker_brackets", marker_mark)
+                end
+
                 apply_marker_widget(widget, visual, draw_x, draw_y, icon_z, target, marker_size,
                     bracket_x, bracket_y, bracket_size, radius_icon_size)
+
+                if marker_mark then
+                    marker_mark = profiler_accumulate(mod, "draw_marker_widget", marker_mark)
+                end
 
                 if debug_mode then
                     _log_once(
@@ -3721,6 +3754,10 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
 
                     RadarHudRenderer.draw_box(ui_renderer, draw_x, draw_y, base_icon_z, marker_size, marker_size,
                         RadarHudRenderer.widget_to_color(visual and visual.color or nil))
+                end
+
+                if marker_mark then
+                    marker_mark = profiler_accumulate(mod, "draw_marker_widget_draw", marker_mark)
                 end
 
                 draw_marker_value_text(
@@ -3750,6 +3787,10 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
                     secondary_value_text_offset_x,
                     secondary_value_text_offset_y
                 )
+
+                if marker_mark then
+                    marker_mark = profiler_accumulate(mod, "draw_marker_text", marker_mark)
+                end
 
                 next_widget_index = next_widget_index + 1
                 drawn_marker_count = drawn_marker_count + 1
@@ -3917,7 +3958,8 @@ end
 
 --- Draws the radar when the mod is enabled and the radar may be drawn.
 -- Errors in the draw are caught and reported without breaking the HUD. While profiling, the
--- draw check, the pass setup, each drawing step, the finish and the whole draw are timed.
+-- draw check, the pass setup, each drawing step, the finish and the whole draw are timed, and
+-- the steps added up over the draw (frame, geometry, marker steps) are recorded once.
 -- number: dt frame delta time
 -- number: t time
 -- tab: ui_renderer active UI renderer
@@ -3953,6 +3995,10 @@ HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input
     elseif profile_mark then
         mod:radar_profiler_lap("draw_finish", result)
         mod:radar_profiler_lap("draw_total", profile_start)
+    end
+
+    if profile_mark then
+        mod:radar_profiler_commit()
     end
 end
 

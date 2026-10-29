@@ -1253,12 +1253,33 @@ return function(env)
         "draw_gate",
         "draw_setup",
         "draw_cache",
+        "draw_layout",
         "draw_frame",
+        "draw_geometry",
         "draw_markers",
+        "draw_marker_project",
+        "draw_marker_visual",
+        "draw_marker_brackets",
+        "draw_marker_widget",
+        "draw_marker_widget_draw",
+        "draw_marker_text",
         "draw_overlays",
         "draw_highlights",
         "draw_finish",
         "draw_markers_drawn",
+    }
+    --- Timings the HUD adds up over several stretches of one draw and records once per draw.
+    -- The radar frame is drawn before and after the map geometry, and each marker step runs
+    -- once per marker.
+    local PROFILE_ACCUMULATED_NAMES = {
+        "draw_frame",
+        "draw_geometry",
+        "draw_marker_project",
+        "draw_marker_visual",
+        "draw_marker_brackets",
+        "draw_marker_widget",
+        "draw_marker_widget_draw",
+        "draw_marker_text",
     }
     local PROFILE_COUNTER_NAMES = {
         "input_calls",
@@ -1271,11 +1292,13 @@ return function(env)
 
     --- Profiler state. The records are built on the first start and reset in place after that.
     -- `_profile_phase_ms` adds up the time of each scan tier within one scan, since the tiers
-    -- take turns in the scan order. `_profile_mark` returns a new mark and
+    -- take turns in the scan order. `_profile_accumulated` holds the sums of the current draw
+    -- for each name in `PROFILE_ACCUMULATED_NAMES`. `_profile_mark` returns a new mark and
     -- `_profile_elapsed_ms` the milliseconds since one; both are picked when profiling starts.
     local _profiling_enabled = false
     local _profile_metrics = {}
     local _profile_counters = {}
+    local _profile_accumulated = {}
     local _profile_phase_ms = {
         moving = 0,
         droppable = 0,
@@ -1440,6 +1463,11 @@ return function(env)
             _profile_counters[name] = 0
         end
 
+        for _, accumulated in pairs(_profile_accumulated) do
+            accumulated.ms = 0
+            accumulated.active = false
+        end
+
         _profile_phase_ms.moving = 0
         _profile_phase_ms.droppable = 0
         _profile_phase_ms.static = 0
@@ -1512,6 +1540,15 @@ return function(env)
             _profile_counters[PROFILE_COUNTER_NAMES[i]] = 0
         end
 
+        for i = 1, #PROFILE_ACCUMULATED_NAMES do
+            local name = PROFILE_ACCUMULATED_NAMES[i]
+
+            _profile_accumulated[name] = _profile_accumulated[name] or {
+                ms = 0,
+                active = false,
+            }
+        end
+
         _calibrate_profile_timer()
         _reset_profile_window()
         _profiling_enabled = true
@@ -1567,6 +1604,18 @@ return function(env)
         end
 
         return string_format("%.1f/%.0f", record.total / count, record.max)
+    end
+
+    --- Formats a timing's total as microseconds per drawn marker, or `-` without samples or markers.
+    -- tab: record timing record
+    -- number: drawn markers drawn in the window
+    -- treturn: string
+    local function _profile_per_marker_text(record, drawn)
+        if record.count == 0 or drawn <= 0 then
+            return "-"
+        end
+
+        return string_format("%.2f", record.total / drawn * 1000)
     end
 
     --- Writes the summary of the current window to the log and starts the next window.
@@ -1638,19 +1687,39 @@ return function(env)
             _profile_value_text(metrics.scan_tracked)
         ))
         mod:info(string_format(
-            "[Radar] profile draw | draws/s=%.1f total_ms=%s gate_ms=%s setup_ms=%s cache_ms=%s cache_refreshes/s=%.2f frame_ms=%s markers_ms=%s overlays_ms=%s highlights_ms=%s finish_ms=%s drawn=%s",
+            "[Radar] profile draw | draws/s=%.1f total_ms=%s gate_ms=%s setup_ms=%s cache_ms=%s cache_refreshes/s=%.2f layout_ms=%s frame_ms=%s geometry_ms=%s markers_ms=%s overlays_ms=%s highlights_ms=%s finish_ms=%s drawn=%s",
             metrics.draw_total.count / window_s,
             _profile_timing_text(metrics.draw_total, 1),
             _profile_timing_text(metrics.draw_gate, 1),
             _profile_timing_text(metrics.draw_setup, 1),
             _profile_timing_text(metrics.draw_cache, 1),
             counters.draw_cache_refreshes / window_s,
+            _profile_timing_text(metrics.draw_layout, 1),
             _profile_timing_text(metrics.draw_frame, 1),
+            _profile_timing_text(metrics.draw_geometry, 1),
             _profile_timing_text(metrics.draw_markers, 1),
             _profile_timing_text(metrics.draw_overlays, 1),
             _profile_timing_text(metrics.draw_highlights, 1),
             _profile_timing_text(metrics.draw_finish, 1),
             _profile_value_text(metrics.draw_markers_drawn)
+        ))
+
+        local drawn = metrics.draw_markers_drawn.total
+
+        mod:info(string_format(
+            "[Radar] profile markers | project_ms=%s visual_ms=%s brackets_ms=%s widget_ms=%s widget_draw_ms=%s text_ms=%s per_marker_us=%s/%s/%s/%s/%s/%s",
+            _profile_timing_text(metrics.draw_marker_project, 1),
+            _profile_timing_text(metrics.draw_marker_visual, 1),
+            _profile_timing_text(metrics.draw_marker_brackets, 1),
+            _profile_timing_text(metrics.draw_marker_widget, 1),
+            _profile_timing_text(metrics.draw_marker_widget_draw, 1),
+            _profile_timing_text(metrics.draw_marker_text, 1),
+            _profile_per_marker_text(metrics.draw_marker_project, drawn),
+            _profile_per_marker_text(metrics.draw_marker_visual, drawn),
+            _profile_per_marker_text(metrics.draw_marker_brackets, drawn),
+            _profile_per_marker_text(metrics.draw_marker_widget, drawn),
+            _profile_per_marker_text(metrics.draw_marker_widget_draw, drawn),
+            _profile_per_marker_text(metrics.draw_marker_text, drawn)
         ))
 
         _reset_profile_window()
@@ -1693,6 +1762,44 @@ return function(env)
         end
 
         return _profile_lap(name, since)
+    end
+
+    --- Adds the time since a mark to a profiler sum of the current draw and returns a new mark.
+    -- For timings that run in several stretches of one draw, listed in `PROFILE_ACCUMULATED_NAMES`;
+    -- `radar_profiler_commit` records each sum once. Unknown names are ignored.
+    -- string: name metric name, such as `draw_marker_widget`
+    -- param: since mark from `radar_profiler_mark` or an earlier lap in the same frame
+    -- return: new mark, or nil while profiling is off or without a mark
+    function mod:radar_profiler_accumulate(name, since)
+        if not _profiling_enabled or since == nil then
+            return nil
+        end
+
+        local accumulated = _profile_accumulated[name]
+        local elapsed = _profile_elapsed_ms(since)
+
+        if accumulated then
+            accumulated.ms = accumulated.ms + elapsed
+            accumulated.active = true
+        end
+
+        return _profile_mark()
+    end
+
+    --- Records every sum added up since the last commit as one sample and empties it.
+    -- The HUD element commits once per draw, so a sum that ran in several stretches counts as one draw.
+    function mod:radar_profiler_commit()
+        if not _profiling_enabled then
+            return
+        end
+
+        for name, accumulated in pairs(_profile_accumulated) do
+            if accumulated.active then
+                _profile_record(_profile_metrics[name], accumulated.ms)
+                accumulated.ms = 0
+                accumulated.active = false
+            end
+        end
     end
 
     --- Records a value, such as a marker count, under a profiler metric; unknown names are ignored.

@@ -541,6 +541,23 @@ test("profiling counts reads and suppressions and reports one summary per window
     mod:radar_profiler_value("not_a_metric", 1)
     mod:radar_profiler_count("not_a_counter", 1)
 
+    -- The frame is drawn in two stretches around the geometry, and a marker step runs once per
+    -- marker; each adds up over the draw and is recorded once at the commit.
+    state.clock_ms = state.clock_ms + 1
+    mark = mod:radar_profiler_accumulate("draw_frame", mark)
+    state.clock_ms = state.clock_ms + 3
+    mark = mod:radar_profiler_accumulate("draw_geometry", mark)
+    state.clock_ms = state.clock_ms + 1
+    mark = mod:radar_profiler_accumulate("draw_frame", mark)
+
+    for _ = 1, 12 do
+        state.clock_ms = state.clock_ms + 0.25
+        mark = mod:radar_profiler_accumulate("draw_marker_widget_draw", mark)
+    end
+
+    assert_true(mod:radar_profiler_accumulate("not_a_metric", mark) ~= nil, "an unknown sum returned no mark")
+    mod:radar_profiler_commit()
+
     harness:update(2.5)
     assert_equal(0, #harness:summary_lines(), "a summary was written before the window closed")
 
@@ -548,7 +565,7 @@ test("profiling counts reads and suppressions and reports one summary per window
 
     local lines = harness:summary_lines()
 
-    assert_equal(5, #lines, "unexpected number of summary lines")
+    assert_equal(6, #lines, "unexpected number of summary lines")
     assert_contains(lines[1], "[Radar] profile | window_s=5.00 timer=performance_counter", "header line")
     assert_contains(lines[1], "fps=0.4 frame_ms=2500.00", "frame rate")
     assert_contains(lines[1], "overview=true scan_rate=low", "settings context")
@@ -559,9 +576,16 @@ test("profiling counts reads and suppressions and reports one summary per window
     assert_contains(lines[5], "[Radar] profile draw | draws/s=0.2 total_ms=2.000/2.000/2.000", "draw total")
     assert_contains(lines[5], "cache_refreshes/s=0.20", "cache refreshes")
     assert_contains(lines[5], "drawn=12.0/12", "drawn markers")
+    assert_contains(lines[5], "frame_ms=2.000/2.000/2.000 geometry_ms=3.000/3.000/3.000",
+        "the frame's two stretches were not recorded as one draw")
+    assert_contains(lines[6], "[Radar] profile markers | project_ms=- visual_ms=- brackets_ms=- widget_ms=- "
+        .. "widget_draw_ms=3.000/3.000/3.000 text_ms=-", "marker steps per draw")
+    assert_contains(lines[6], "per_marker_us=-/-/-/-/250.00/-", "marker steps per drawn marker")
 
+    mark = mod:radar_profiler_mark()
+    mod:radar_profiler_accumulate("draw_frame", mark)
     harness:update(5)
-    assert_equal(5, #harness:summary_lines(), "an empty window was reported")
+    assert_equal(6, #harness:summary_lines(), "a sum that was never committed was reported")
 end)
 
 test("profiling says in the log when it starts and stops, and a restart opens a new window", function()
@@ -599,7 +623,7 @@ test("profiling says in the log when it starts and stops, and a restart opens a 
 
     local lines = harness:summary_lines()
 
-    assert_equal(5, #lines, "profiling did not report after the restart")
+    assert_equal(6, #lines, "profiling did not report after the restart")
     assert_contains(lines[2], "calls/s=1 ", "the restarted window kept reads from before the stop")
 end)
 
@@ -625,7 +649,7 @@ test("a profiled update counts every scan tier at its configured rate", function
 
     -- `mod.update` repeats the update of the gameplay state's own hook, which is skipped as a
     -- duplicate, but it reports first; the last frame's duplicate belongs to the next window.
-    assert_equal(5, #info, "unexpected number of summary lines")
+    assert_equal(6, #info, "unexpected number of summary lines")
     assert_contains(info[3], "updates/s=8.0 duplicates/s=7.8 blocked/s=0.0 disabled/s=0.0", "update rates")
     assert_contains(info[3], "scans/s=4.00 droppable/s=4.00 static/s=2.00", "scan tier rates")
     assert_contains(info[4], "moving_ms=0.000/0.000/0.000 droppable_ms=0.000/0.000/0.000", "scan tier timings")
