@@ -17,6 +17,24 @@ local function assert_equal(expected, actual, message)
     end
 end
 
+local function same_mesh_list(first, second)
+    if first == nil or second == nil then
+        return first == second
+    end
+
+    if #first ~= #second then
+        return false
+    end
+
+    for i = 1, #first do
+        if first[i] ~= second[i] then
+            return false
+        end
+    end
+
+    return true
+end
+
 -- `engine` is the fake engine state shared by every module installed into one harness, so a
 -- second install of the outline module into a new environment behaves like a Radar reload.
 local function new_engine()
@@ -29,6 +47,7 @@ local function new_engine()
         game_outlines = {},
         calls = 0,
         color_writes = 0,
+        crashes = 0,
         cinematic = false,
         occlusion_queries = {},
         raycasts = {},
@@ -42,10 +61,14 @@ local function new_harness(options)
 
     local engine = options.engine or new_engine()
     local settings = options.settings or {}
-    local mod = { _logged_units = {} }
+    local mod = { _logged_units = {}, hooks = {} }
 
     function mod:get(setting_id)
         return settings[setting_id]
+    end
+
+    function mod:hook(object, method, handler)
+        self.hooks[object .. "." .. method] = handler
     end
 
     function mod:info(message, ...)
@@ -72,7 +95,29 @@ local function new_harness(options)
         engine.calls = engine.calls + 1
     end
 
+    -- As the engine does with the fourth argument of add_material_layer: child units take the
+    -- layer too, each with its own count.
+    local function add_layer(unit, layer, material, meshes)
+        local entry = engine.layers[unit] or { added = 0 }
+
+        entry.added = entry.added + 1
+        entry.layer = layer
+        entry.material = material
+        entry.meshes = meshes
+        -- On straight away, so the spec sees the module switch it off itself.
+        entry.on = true
+        engine.layers[unit] = entry
+
+        for _, child in ipairs(unit.children or {}) do
+            add_layer(child, layer, material, meshes)
+        end
+    end
+
     env.Unit = {
+        alive = function(unit)
+            count()
+            return engine.alive[unit] == true
+        end,
         get_data = function(unit, key)
             count()
             return engine.data[unit] and engine.data[unit][key]
@@ -101,15 +146,27 @@ local function new_harness(options)
                 error("bad argument #6")
             end
 
-            local entry = engine.layers[unit] or { added = 0 }
+            add_layer(unit, layer, material, meshes)
+        end,
+        -- The real call crashes the game on a dead unit and on any mesh it walks that lacks the
+        -- layer, which pcall does not catch, so those count as crashes instead of raising.
+        remove_material_layer = function(unit, layer, walk_child_units, meshes)
+            count()
 
-            entry.added = entry.added + 1
-            entry.layer = layer
-            entry.material = material
-            entry.meshes = meshes
-            -- On straight away, so the spec sees the module switch it off itself.
-            entry.on = true
-            engine.layers[unit] = entry
+            if engine.remove_error then
+                error("the engine refused the removal")
+            end
+
+            local entry = engine.layers[unit]
+            local removed = entry and entry.removed or 0
+
+            if engine.alive[unit] ~= true or not entry or removed >= entry.added or walk_child_units
+                or not same_mesh_list(meshes, entry.meshes) or layer ~= entry.layer then
+                engine.crashes = engine.crashes + 1
+                return
+            end
+
+            entry.removed = removed + 1
         end,
         set_material_layer = function(unit, layer, on)
             count()
@@ -702,6 +759,304 @@ test("clearing, a mission reset, disabling and unloading Radar switch every outl
     assert_equal(true, chained.unload, "the previous on_unload handler was not chained")
 end)
 
+-- What the game does to units leaving it: the extension manager unregisters them, and then they are destroyed.
+local function unregister_units(harness, units, original)
+    return harness.mod.hooks["ExtensionManager.unregister_units"](original or function() end, {}, units, #units, true)
+end
+
+local function layer_count(harness, unit)
+    local layer = harness.engine.layers[unit]
+
+    return layer and layer.added - (layer.removed or 0) or 0
+end
+
+test("a unit leaving the game loses its layer before the game unregisters it", function()
+    local harness = new_harness()
+    local engine = harness.engine
+    local outlined = new_unit(engine)
+    local other = new_unit(engine)
+    local manager = {}
+    local received = {}
+
+    harness.env._mark_highlight_outline(outlined, COLOR, ANCHOR)
+    harness.env._sync_highlight_outlines()
+
+    local result = harness.mod.hooks["ExtensionManager.unregister_units"](function(self, units, num_units, flag)
+        received.self = self
+        received.units = units
+        received.num_units = num_units
+        received.flag = flag
+        received.layers_left = layer_count(harness, outlined)
+
+        return "result"
+    end, manager, { other, outlined }, 2, true)
+
+    assert_equal(0, received.layers_left, "the layer was still on when the game unregistered the unit")
+    assert_equal(manager, received.self, "the manager was not passed on")
+    assert_equal(other, received.units[1], "the unit list was not passed on")
+    assert_equal(2, received.num_units, "the unit count was not passed on")
+    assert_equal(true, received.flag, "the further arguments were not passed on")
+    assert_equal("result", result, "the game's return value was lost")
+    assert_equal(nil, engine.layers[other], "a unit never outlined reached the engine")
+    assert_equal(0, engine.crashes, "the removal would have crashed the game")
+    assert_equal(false, engine.data[outlined].radar_highlight_outline, "the unit is still marked as carrying the layer")
+
+    unregister_units(harness, { outlined })
+
+    assert_equal(0, engine.crashes, "a second removal would have crashed the game")
+
+    local calls = engine.calls
+
+    engine.alive[outlined] = nil
+    harness.env._sync_highlight_outlines()
+
+    assert_equal(calls, engine.calls, "the unit was not forgotten")
+end)
+
+test("a mission reset takes the layer off every unit carrying one, also units no longer outlined", function()
+    local harness = new_harness()
+    local engine = harness.engine
+    local env = harness.env
+    local outlined = new_unit(engine)
+    local out_of_range = new_unit(engine)
+    local never_outlined = new_unit(engine)
+    local refused = new_unit(engine, { refuse = true })
+    local destroyed = new_unit(engine)
+
+    env._mark_highlight_outline(out_of_range, COLOR, ANCHOR)
+    env._mark_highlight_outline(destroyed, COLOR, ANCHOR)
+    env._mark_highlight_outline(refused, COLOR, ANCHOR)
+    env._sync_highlight_outlines()
+    env._mark_highlight_outline(outlined, COLOR, ANCHOR)
+    env._mark_highlight_outline(destroyed, COLOR, ANCHOR)
+    env._sync_highlight_outlines()
+    engine.alive[destroyed] = nil
+
+    assert_equal(1, layer_count(harness, out_of_range), "a unit out of range lost its layer before the reset")
+
+    env._reset_highlight_outlines()
+
+    assert_equal(0, layer_count(harness, outlined), "an outlined unit kept its layer")
+    assert_equal(0, layer_count(harness, out_of_range), "a unit no longer outlined kept its layer")
+    assert_equal(nil, engine.layers[never_outlined], "a unit never outlined reached the engine")
+    assert_equal(nil, engine.layers[refused], "a refused unit reached the engine")
+    assert_equal(nil, engine.layers[destroyed].removed, "a dead unit reached the engine")
+    assert_equal(0, engine.crashes, "the removal would have crashed the game")
+
+    local calls = engine.calls
+
+    env._reset_highlight_outlines()
+
+    assert_equal(calls, engine.calls, "a second reset reached the engine")
+end)
+
+test("clearing only switches outlines off, and the layer is kept for when they come back", function()
+    local harness = new_harness()
+    local unit = new_unit(harness.engine)
+
+    harness.env._mark_highlight_outline(unit, COLOR, ANCHOR)
+    harness.env._sync_highlight_outlines()
+    harness.env._clear_highlight_outlines()
+
+    assert_equal(1, layer_count(harness, unit), "clearing took the layer off")
+
+    harness.env._mark_highlight_outline(unit, COLOR, ANCHOR)
+    harness.env._sync_highlight_outlines()
+
+    assert_equal(1, harness.engine.layers[unit].added, "the returning unit got a second layer")
+    assert_equal(true, harness.engine.layers[unit].on, "the returning unit has no outline")
+end)
+
+test("disabling and unloading Radar take every layer off", function()
+    local harness = new_harness()
+
+    for _, switch_off in ipairs({ harness.mod.on_disabled, harness.mod.on_unload }) do
+        local outlined = new_unit(harness.engine)
+        local out_of_range = new_unit(harness.engine)
+
+        harness.env._mark_highlight_outline(out_of_range, COLOR, ANCHOR)
+        harness.env._sync_highlight_outlines()
+        harness.env._mark_highlight_outline(outlined, COLOR, ANCHOR)
+        harness.env._sync_highlight_outlines()
+        switch_off()
+
+        assert_equal(0, layer_count(harness, outlined), "an outlined unit kept its layer")
+        assert_equal(0, layer_count(harness, out_of_range), "a unit no longer outlined kept its layer")
+    end
+
+    assert_equal(0, harness.engine.crashes, "the removal would have crashed the game")
+end)
+
+test("a unit outlined again after its layer came off gets a new one and its outline back", function()
+    local harness = new_harness()
+    local engine = harness.engine
+    local env = harness.env
+
+    for _, remove in ipairs({
+        function(unit)
+            unregister_units(harness, { unit })
+        end,
+        env._reset_highlight_outlines,
+        harness.mod.on_disabled,
+    }) do
+        local unit = new_unit(engine)
+
+        env._mark_highlight_outline(unit, COLOR, ANCHOR)
+        env._sync_highlight_outlines()
+        remove(unit)
+
+        assert_equal(0, layer_count(harness, unit), "the layer did not come off")
+
+        engine.layers[unit].color = nil
+
+        assert_equal(true, env._mark_highlight_outline(unit, COLOR, ANCHOR), "the unit was refused")
+
+        env._sync_highlight_outlines()
+
+        assert_equal(2, engine.layers[unit].added, "the unit did not get a new layer")
+        assert_equal(1, layer_count(harness, unit), "the unit does not carry one layer")
+        assert_equal(true, engine.layers[unit].on, "the unit has no outline")
+        assert_equal(true, engine.layers[unit].color ~= nil, "the new layer did not get its colour")
+        assert_equal(false, engine.culling[unit], "the unit is culled again")
+        assert_equal(true, engine.data[unit].radar_highlight_outline, "the unit is not marked as carrying the layer")
+
+        env._reset_highlight_outlines()
+    end
+
+    assert_equal(0, engine.crashes, "the removal would have crashed the game")
+end)
+
+-- remove_material_layer walks every mesh unless it is given a list, and the real call crashes on one without the layer.
+test("a layer limited to a mesh list comes off those meshes, a rejected list off every mesh", function()
+    local harness = new_harness()
+    local barrel = new_unit(harness.engine, { root_node = "rp_hazard_sphere_01" })
+    local prop = new_unit(harness.engine, { root_node = "rp_other_prop_01" })
+
+    harness.env._mark_highlight_outline(barrel, COLOR, ANCHOR)
+    harness.env._mark_highlight_outline(prop, COLOR, ANCHOR)
+    harness.env._reset_highlight_outlines()
+
+    assert_equal(true, harness.engine.layers[barrel].meshes ~= nil, "the barrel's layer was not limited")
+    assert_equal(0, layer_count(harness, barrel), "the barrel kept its layer")
+    assert_equal(0, layer_count(harness, prop), "the prop kept its layer")
+    assert_equal(0, harness.engine.crashes, "the removal did not name the meshes the layer is on")
+
+    local rejected = new_harness()
+    local fallback = new_unit(rejected.engine, { root_node = "rp_hazard_sphere_01" })
+
+    rejected.engine.reject_mesh_whitelist = true
+    rejected.env._mark_highlight_outline(fallback, COLOR, ANCHOR)
+    rejected.env._reset_highlight_outlines()
+
+    assert_equal(0, layer_count(rejected, fallback), "the barrel on the fallback layer kept it")
+    assert_equal(0, rejected.engine.crashes, "the removal named meshes although the list was rejected")
+end)
+
+-- Passing true to remove_material_layer would walk every current child, and the real call
+-- crashes on one linked after the layer was added.
+test("the layer comes off the child units it reached, and only those", function()
+    local harness = new_harness()
+    local engine = harness.engine
+    local grandchild = new_unit(engine)
+    local gone_child = new_unit(engine)
+    local child = new_unit(engine, { children = { grandchild } })
+    local unit = new_unit(engine, { children = { child, gone_child } })
+    local linked_later = new_unit(engine)
+
+    harness.env._mark_highlight_outline(unit, COLOR, ANCHOR)
+
+    assert_equal(1, layer_count(harness, grandchild), "the fake engine did not give the grandchild the layer")
+
+    unit.children[3] = linked_later
+    engine.alive[gone_child] = nil
+    unregister_units(harness, { unit })
+
+    assert_equal(0, layer_count(harness, unit), "the unit kept its layer")
+    assert_equal(0, layer_count(harness, child), "a child unit kept its layer")
+    assert_equal(0, layer_count(harness, grandchild), "a grandchild unit kept its layer")
+    assert_equal(nil, engine.layers[gone_child].removed, "a dead child unit reached the engine")
+    assert_equal(nil, engine.layers[linked_later], "a child linked later reached the engine")
+    assert_equal(0, engine.crashes, "the removal would have crashed the game")
+end)
+
+test("a reloaded Radar takes off a layer it found on a unit, with a limited one's meshes", function()
+    local harness = new_harness()
+    local barrel = new_unit(harness.engine, { root_node = "rp_hazard_sphere_01" })
+
+    harness.env._mark_highlight_outline(barrel, COLOR, ANCHOR)
+
+    local reloaded = new_harness({ engine = harness.engine })
+
+    reloaded.env._mark_highlight_outline(barrel, COLOR, ANCHOR)
+
+    assert_equal(1, harness.engine.layers[barrel].added, "the reloaded module added a second layer")
+
+    reloaded.env._reset_highlight_outlines()
+
+    assert_equal(0, layer_count(reloaded, barrel), "the reloaded module did not take the layer off")
+    assert_equal(0, harness.engine.crashes, "the removal would have crashed the game")
+end)
+
+test("a unit unloaded with its layer taken off gets a new one from the reloaded Radar", function()
+    local harness = new_harness()
+    local unit = new_unit(harness.engine)
+
+    harness.env._mark_highlight_outline(unit, COLOR, ANCHOR)
+    harness.mod.on_unload()
+
+    local reloaded = new_harness({ engine = harness.engine })
+
+    assert_equal(true, reloaded.env._mark_highlight_outline(unit, COLOR, ANCHOR), "the unit was refused")
+    assert_equal(2, harness.engine.layers[unit].added, "the unit did not get a new layer")
+    assert_equal(1, layer_count(reloaded, unit), "the unit does not carry one layer")
+end)
+
+test("a missing or refusing removal call is tolerated, keeps the marker and logs once in debug mode", function()
+    local function remove_with(setup)
+        local harness = new_harness({ settings = { debug_mode = true } })
+        local first = new_unit(harness.engine)
+        local second = new_unit(harness.engine)
+        local reached = false
+
+        setup(harness)
+        harness.env._mark_highlight_outline(first, COLOR, ANCHOR)
+        harness.env._mark_highlight_outline(second, COLOR, ANCHOR)
+        unregister_units(harness, { first }, function()
+            reached = true
+        end)
+        harness.env._reset_highlight_outlines()
+
+        assert_equal(true, reached, "the game did not get to unregister the unit")
+        assert_equal(1, #harness.engine.infos, "the failure was not logged once")
+        assert_equal(true, harness.engine.data[first].radar_highlight_outline, "the marker was cleared")
+
+        harness.env._mark_highlight_outline(first, COLOR, ANCHOR)
+
+        assert_equal(1, harness.engine.layers[first].added, "the unit got a second layer")
+
+        return harness.engine.infos[1]
+    end
+
+    local refused = remove_with(function(harness)
+        harness.engine.remove_error = true
+    end)
+
+    assert_equal(true, refused:find("the engine refused the removal", 1, true) ~= nil, "the log does not carry the engine's error")
+
+    remove_with(function(harness)
+        harness.env.Unit.remove_material_layer = nil
+    end)
+
+    local quiet = new_harness()
+    local unit = new_unit(quiet.engine)
+
+    quiet.engine.remove_error = true
+    quiet.env._mark_highlight_outline(unit, COLOR, ANCHOR)
+    quiet.env._reset_highlight_outlines()
+
+    assert_equal(0, #quiet.engine.infos, "the failure was logged outside debug mode")
+end)
+
 test("nothing reaches the engine or the camera while nothing is outlined", function()
     local harness = new_harness({ settings = { nearby_highlight_visible_only = true } })
     local camera_reads = 0
@@ -713,6 +1068,8 @@ test("nothing reaches the engine or the camera while nothing is outlined", funct
 
     harness.env._sync_highlight_outlines()
     harness.env._clear_highlight_outlines()
+    harness.env._reset_highlight_outlines()
+    unregister_units(harness, { {} })
     harness.mod:update_highlight_outline_visibility({}, nil)
 
     assert_equal(0, harness.engine.calls, "an idle outline module called the engine")

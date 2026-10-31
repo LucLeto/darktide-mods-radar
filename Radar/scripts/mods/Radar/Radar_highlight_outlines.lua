@@ -3,18 +3,25 @@
 -- `outline_color` variable and keeping the unit out of culling while the layer shows, which is
 -- what its `OutlineSystem` does for minions. A prop has no outline layer of its own, so the first
 -- time Radar outlines a unit it adds one built from the game's minion outline material. The
--- layer then stays on the unit for its lifetime and is only switched on and off. A unit that
--- cannot take the layer (no meshes, or the engine refuses it) is remembered for the mission and
--- keeps its highlight bracket. A unit a player carries is never outlined. An outline covers
--- every mesh of a unit, including hidden meshes and ones the game never draws, so on units where
--- those showed (hanging hazard barrels, Heretic Idols) the layer is limited to the meshes of their
--- visible shape.
+-- layer then stays on the unit and is only switched on and off, until the unit leaves the game
+-- or the mission ends. A unit that cannot take the layer (no meshes, or the engine refuses it) is
+-- remembered for the mission and keeps its highlight bracket. A unit a player carries is never
+-- outlined. An outline covers every mesh of a unit, including hidden meshes and ones the game
+-- never draws, so on units where those showed (hanging hazard barrels, Heretic Idols) the layer is
+-- limited to the meshes of their visible shape.
 --
 -- The colour is written again every time an outline is switched on, to the unit and to its
 -- child units, as the game's `OutlineSystem` does; a colour written only while the layer was off
 -- showed the material's default instead. Culling is switched off again twice a second while an
 -- outline shows, since other code (another mod's tag outline being removed, the game's own
 -- outlines) can switch it back on, which hides the outline behind walls.
+--
+-- The engine warns about a unit destroyed with a layer added at runtime, once for every mesh
+-- carrying it, so the layer comes off first. A single unit loses it right before the game
+-- unregisters the unit, which every outlined unit goes through on its way out (a pickup taken, an
+-- idol destroyed, the game session ending, a level section despawning). Every unit loses it when
+-- the mission ends, before the game starts destroying them, and when Radar is disabled or
+-- unloaded. A unit outlined again gets a new layer.
 --
 -- `_collect_screen_highlight_targets` marks every target it outlines in a scan through
 -- `_mark_highlight_outline`, and tracking calls `_sync_highlight_outlines` after the collection,
@@ -26,11 +33,12 @@
 --
 -- Installer module, installed last into Radar's shared runtime environment (see `Radar.lua`).
 -- Contributes `_mark_highlight_outline`, `_sync_highlight_outlines`, `_clear_highlight_outlines`,
--- `_reset_highlight_outlines` and `mod:update_highlight_outline_visibility`, and chains
--- `mod.on_disabled` and `mod.on_unload`. Relies on `_safe_unit_alive`, `_safe_extension_system`,
--- `_safe_unit_outline_extension`, `_safe_gameplay_time`, `_log_once`, the HUD camera and the HUD
--- line-of-sight test from `Radar_runtime_helpers.lua`, and on
--- `mod:is_nearby_highlight_visible_only` from `Radar_tracking.lua`.
+-- `_reset_highlight_outlines` and `mod:update_highlight_outline_visibility`, hooks
+-- `ExtensionManager.unregister_units` and chains `mod.on_disabled` and `mod.on_unload`. Relies on
+-- `_safe_unit_alive`, `_safe_extension_system`, `_safe_unit_outline_extension`,
+-- `_safe_gameplay_time`, `_log_once`, the HUD camera and the HUD line-of-sight test from
+-- `Radar_runtime_helpers.lua`, and on `mod:is_nearby_highlight_visible_only` from
+-- `Radar_tracking.lua`.
 -- module: Radar_highlight_outlines
 -- author: LucLeto
 return function(env)
@@ -110,6 +118,11 @@ return function(env)
     -- `green`, `blue`), the position the occlusion test aims at (`anchor`) and the scan pass that
     -- last marked the unit (`pass`).
     local _outline_by_unit = {}
+
+    --- Units carrying the outline layer, also while not outlined, and what the layer went on.
+    -- A record holds the meshes the layer is limited to (`meshes`), nil for every mesh, and the
+    -- set of child units it reached when it was added (`child_units`).
+    local _outline_layered_units = {}
 
     --- Units that cannot take the outline layer this mission, which keep their bracket.
     local _outline_refused_units = {}
@@ -215,9 +228,29 @@ return function(env)
         return not ok or type(count) ~= "number" or count > 0
     end
 
+    --- Adds a unit's child units at every depth to a set.
+    -- func: get_child_units engine child unit getter
+    -- !Unit: unit unit whose child units are collected
+    -- tab: child_units set to add them to
+    local function _collect_child_units(get_child_units, unit, child_units)
+        local ok, children = pcall(get_child_units, unit)
+
+        if not ok or type(children) ~= "table" then
+            return
+        end
+
+        for i = 1, #children do
+            local child = children[i]
+
+            child_units[child] = true
+            _collect_child_units(get_child_units, child, child_units)
+        end
+    end
+
     --- Gives a unit the outline layer, switched off, unless it already carries it.
-    -- The layer is added once per unit lifetime and marked in the unit's script data, so
-    -- reloading Radar never adds a second one.
+    -- The layer is marked in the unit's script data, so a unit whose layer could not be removed
+    -- never gets a second one. A marked unit Radar does not know, found after a reload, is taken
+    -- to have the layer on its listed meshes and no child units, the only part that is certain.
     -- !Unit: unit live unit
     -- treturn: bool whether the unit carries the layer
     local function _ensure_outline_layer(unit)
@@ -239,6 +272,13 @@ return function(env)
         local ok_data, has_layer = pcall(get_data, unit, OUTLINE_LAYER)
 
         if ok_data and has_layer == true then
+            if not _outline_layered_units[unit] then
+                _outline_layered_units[unit] = {
+                    meshes = (_find_outline_meshes(unit_api, unit)),
+                    child_units = {},
+                }
+            end
+
             return true
         end
 
@@ -262,6 +302,8 @@ return function(env)
             end
         end
 
+        local layered_meshes = added and meshes or nil
+
         if not added and not pcall(add_material_layer, unit, OUTLINE_LAYER, OUTLINE_MATERIAL, true) then
             return false
         end
@@ -269,7 +311,80 @@ return function(env)
         pcall(set_data, unit, OUTLINE_LAYER, true)
         pcall(set_material_layer, unit, OUTLINE_LAYER, false)
 
+        local child_units = {}
+        local get_child_units = unit_api.get_child_units
+
+        if get_child_units then
+            _collect_child_units(get_child_units, unit, child_units)
+        end
+
+        _outline_layered_units[unit] = {
+            meshes = layered_meshes,
+            child_units = child_units,
+        }
+
         return true
+    end
+
+    --- Returns whether a unit handle still points at a unit.
+    -- func: alive engine `Unit.alive`
+    -- !Unit: unit unit handle
+    -- treturn: bool
+    local function _unit_handle_alive(alive, unit)
+        local ok, is_alive = pcall(alive, unit)
+
+        return ok and is_alive == true
+    end
+
+    --- Takes the outline layer off a unit and the child units it reached, and forgets the unit.
+    -- The call is `Unit.remove_material_layer(unit, layer, walk_child_units, meshes)`, read from the
+    -- game binary, since no game code calls it. It crashes the game on a dead unit and on a mesh
+    -- without the layer, which `pcall` does not catch. So every unit is checked first, the call names
+    -- the meshes the layer was limited to, and the child units are listed instead of walked, because
+    -- one linked after the layer was added does not carry it. When the engine refuses, the marker
+    -- stays, so the unit never gets a second layer.
+    -- !Unit: unit unit carrying the layer
+    local function _remove_outline_layer(unit)
+        local layered = _outline_layered_units[unit]
+
+        _outline_layered_units[unit] = nil
+        _outline_by_unit[unit] = nil
+
+        local unit_api = Unit
+        local alive = unit_api and unit_api.alive
+        local remove_material_layer = unit_api and unit_api.remove_material_layer
+
+        if not alive or not remove_material_layer then
+            _log_once("outline_layer_removal_missing", "Unit.remove_material_layer is missing, outline layers stay on")
+            return
+        end
+
+        if not _unit_handle_alive(alive, unit) then
+            return
+        end
+
+        local meshes = layered.meshes
+        local ok, err = pcall(remove_material_layer, unit, OUTLINE_LAYER, false, meshes)
+
+        if not ok then
+            _log_once("outline_layer_removal_failed", "Outline layer removal failed: " .. tostring(err))
+            return
+        end
+
+        pcall(unit_api.set_data, unit, OUTLINE_LAYER, false)
+
+        for child in pairs(layered.child_units) do
+            if _unit_handle_alive(alive, child) then
+                pcall(remove_material_layer, child, OUTLINE_LAYER, false, meshes)
+            end
+        end
+    end
+
+    --- Takes the outline layer off every unit carrying it.
+    local function _remove_outline_layers()
+        for unit in pairs(_outline_layered_units) do
+            _remove_outline_layer(unit)
+        end
     end
 
     --- Writes an outline colour into a unit's outline layer and those of its child units.
@@ -488,7 +603,7 @@ return function(env)
         end
     end
 
-    --- Switches every outline off and forgets the outlined units; the refused units are kept.
+    --- Switches every outline off and forgets the outlined units; the layers and the refused units are kept.
     function _clear_highlight_outlines()
         if next(_outline_by_unit) == nil then
             return
@@ -500,9 +615,12 @@ return function(env)
         end
     end
 
-    --- Switches every outline off and forgets the outlined and the refused units, for a new mission.
+    --- Switches every outline off, takes every layer off and forgets the refused units, for a new mission.
+    -- Tracking calls this when the game leaves `GameplayStateRun`, before the mission's cleanup
+    -- destroys any unit.
     function _reset_highlight_outlines()
         _clear_highlight_outlines()
+        _remove_outline_layers()
         table_clear(_outline_refused_units)
         _outline_cinematic_active = false
         _outline_next_culling_refresh_t = 0
@@ -547,13 +665,32 @@ return function(env)
     end
 
     -- ----------------------------------------------------------------------------
+    -- Hooks
+    -- ----------------------------------------------------------------------------
+
+    -- Only a unit in `ALIVE` gets the layer, and this is the one place a unit leaves `ALIVE`, so
+    -- every outlined unit passes here before it is destroyed. It runs once per unit leaving the
+    -- game, never per frame.
+    mod:hook("ExtensionManager", "unregister_units", function(func, self, units, num_units, ...)
+        for i = 1, num_units do
+            local unit = units[i]
+
+            if _outline_layered_units[unit] then
+                _remove_outline_layer(unit)
+            end
+        end
+
+        return func(self, units, num_units, ...)
+    end)
+
+    -- ----------------------------------------------------------------------------
     -- DMF callbacks
     -- ----------------------------------------------------------------------------
 
     local previous_on_disabled = mod.on_disabled
 
-    --- DMF callback, chained after any previously installed handler; switches every outline off.
-    -- Radar's update stops while it is disabled, so nothing else would.
+    --- DMF callback, chained after any previously installed handler; switches every outline off and takes every layer off.
+    -- Radar's update stops while it is disabled and DMF switches its hooks off, so nothing else would.
     -- param: ... DMF arguments, forwarded to the previous handler
     mod.on_disabled = function(...)
         if previous_on_disabled then
@@ -561,12 +698,14 @@ return function(env)
         end
 
         _clear_highlight_outlines()
+        _remove_outline_layers()
     end
 
     local previous_on_unload = mod.on_unload
 
     --- DMF callback run before Radar is unloaded or reloaded, chained after any previously installed handler.
-    -- Switches every outline off; the layers stay on their units and are found again after a reload.
+    -- Switches every outline off and takes every layer off, since a reloaded Radar no longer knows
+    -- which units carry one.
     -- param: ... DMF arguments, forwarded to the previous handler
     mod.on_unload = function(...)
         if previous_on_unload then
@@ -574,6 +713,7 @@ return function(env)
         end
 
         _clear_highlight_outlines()
+        _remove_outline_layers()
     end
 
 end
