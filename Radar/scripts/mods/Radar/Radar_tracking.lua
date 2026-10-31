@@ -1751,6 +1751,17 @@ return function(env)
         return _profile_mark()
     end
 
+    --- Returns the milliseconds since a profiler mark, for a timing logged on its own.
+    -- param: since mark from `radar_profiler_mark` taken in the same frame
+    -- treturn: ?number milliseconds, or nil while profiling is off or without a mark
+    function mod:radar_profiler_elapsed_ms(since)
+        if not _profiling_enabled or since == nil then
+            return nil
+        end
+
+        return _profile_elapsed_ms(since)
+    end
+
     --- Records the time since a mark under a profiler metric and returns a new mark.
     -- Unknown metric names are ignored.
     -- string: name metric name, such as `draw_markers`
