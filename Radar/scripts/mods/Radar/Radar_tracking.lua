@@ -1267,6 +1267,9 @@ return function(env)
         "draw_highlights",
         "draw_finish",
         "draw_markers_drawn",
+        "draw_geometry_selected",
+        "draw_geometry_in_shape",
+        "draw_geometry_triangles",
     }
     --- Timings the HUD adds up over several stretches of one draw and records once per draw.
     -- The radar frame is drawn before and after the map geometry, and each marker step runs
@@ -1687,7 +1690,7 @@ return function(env)
             _profile_value_text(metrics.scan_tracked)
         ))
         mod:info(string_format(
-            "[Radar] profile draw | draws/s=%.1f total_ms=%s gate_ms=%s setup_ms=%s cache_ms=%s cache_refreshes/s=%.2f layout_ms=%s frame_ms=%s geometry_ms=%s markers_ms=%s overlays_ms=%s highlights_ms=%s finish_ms=%s drawn=%s",
+            "[Radar] profile draw | draws/s=%.1f total_ms=%s gate_ms=%s setup_ms=%s cache_ms=%s cache_refreshes/s=%.2f layout_ms=%s frame_ms=%s geometry_ms=%s markers_ms=%s overlays_ms=%s highlights_ms=%s finish_ms=%s drawn=%s geometry_selected=%s geometry_in_shape=%s geometry_triangles=%s",
             metrics.draw_total.count / window_s,
             _profile_timing_text(metrics.draw_total, 1),
             _profile_timing_text(metrics.draw_gate, 1),
@@ -1701,7 +1704,10 @@ return function(env)
             _profile_timing_text(metrics.draw_overlays, 1),
             _profile_timing_text(metrics.draw_highlights, 1),
             _profile_timing_text(metrics.draw_finish, 1),
-            _profile_value_text(metrics.draw_markers_drawn)
+            _profile_value_text(metrics.draw_markers_drawn),
+            _profile_value_text(metrics.draw_geometry_selected),
+            _profile_value_text(metrics.draw_geometry_in_shape),
+            _profile_value_text(metrics.draw_geometry_triangles)
         ))
 
         local drawn = metrics.draw_markers_drawn.total

@@ -536,6 +536,9 @@ test("profiling counts reads and suppressions and reports one summary per window
     state.clock_ms = state.clock_ms + 2
     mark = mod:radar_profiler_lap("draw_total", mark)
     mod:radar_profiler_value("draw_markers_drawn", 12)
+    mod:radar_profiler_value("draw_geometry_selected", 40)
+    mod:radar_profiler_value("draw_geometry_in_shape", 30)
+    mod:radar_profiler_value("draw_geometry_triangles", 25)
     mod:radar_profiler_count("draw_cache_refreshes", 1)
     mod:radar_profiler_lap("not_a_metric", mark)
     mod:radar_profiler_value("not_a_metric", 1)
@@ -576,6 +579,8 @@ test("profiling counts reads and suppressions and reports one summary per window
     assert_contains(lines[5], "[Radar] profile draw | draws/s=0.2 total_ms=2.000/2.000/2.000", "draw total")
     assert_contains(lines[5], "cache_refreshes/s=0.20", "cache refreshes")
     assert_contains(lines[5], "drawn=12.0/12", "drawn markers")
+    assert_contains(lines[5], "geometry_selected=40.0/40 geometry_in_shape=30.0/30 geometry_triangles=25.0/25",
+        "geometry triangle counts")
     assert_contains(lines[5], "frame_ms=2.000/2.000/2.000 geometry_ms=3.000/3.000/3.000",
         "the frame's two stretches were not recorded as one draw")
     assert_contains(lines[6], "[Radar] profile markers | project_ms=- visual_ms=- brackets_ms=- widget_ms=- "

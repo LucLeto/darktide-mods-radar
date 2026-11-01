@@ -1,9 +1,11 @@
 --- Draws the live navmesh geometry as the radar's map layer, shaded in height bands.
 -- Selects the cached navmesh triangles around the player from the spatial buckets built by
 -- `Radar_navmesh.lua`, projects them onto the same camera-aligned basis as the radar
--- markers and submits them through `Radar_triangle_clipper.lua`. Triangles are binned into
--- below, current and above floor bands, drawn in that order with their own configurable
--- colours, so lower floors sit under the current floor and the floor above veils it.
+-- markers and submits them through `Radar_triangle_clipper.lua`. A selection reaches past the
+-- radar shape, so a triangle that cannot touch the shape is dropped before it is projected.
+-- The others are binned into below, current and above floor bands, drawn in that order with
+-- their own configurable colours, so lower floors sit under the current floor and the floor
+-- above veils it.
 --
 -- Explicit module loaded by `ui/Radar_hud_element.lua` through `mod:io_dofile`; the chunk
 -- returns `RadarNavmesh`. The geometry itself comes from `mod:ensure_navmesh_geometry`
@@ -338,9 +340,11 @@ local function _invalidate_selection()
 end
 
 --- Selects, bins and draws the navmesh triangles for one frame.
--- Runs inside `pcall` from `RadarNavmesh.draw`. Triangle vertices are projected onto the
--- camera's right and forward axes, scaled by `projection_radius / range` and clipped to
--- the radar shape; bands with a zero alpha colour are skipped.
+-- Runs inside `pcall` from `RadarNavmesh.draw`. A triangle whose bounding circle misses the
+-- radar shape is dropped, which the clipper would have done at a much higher cost. The rest
+-- have their vertices projected onto the camera's right and forward axes, scaled by
+-- `projection_radius / range` and clipped to the radar shape; bands with a zero alpha colour
+-- are skipped.
 -- tab: ui_renderer active UI renderer
 -- number: t gameplay time
 -- !Vector3: player_pos player position
@@ -442,8 +446,10 @@ local function _draw_geometry(ui_renderer, t, player_pos, rotation, center_x, ce
     local color_above = (above[1] or 0) > 0 and Color(above[1], above[2] or 255, above[3] or 255, above[4] or 255)
         or nil
 
-    local right_x = forward_y
-    local right_y = -forward_x
+    local right_x = forward_y * radar_scale
+    local right_y = -forward_x * radar_scale
+    local down_x = -forward_x * radar_scale
+    local down_y = -forward_y * radar_scale
 
     local limit = projection_radius
     local limit_sq = limit * limit
@@ -451,7 +457,8 @@ local function _draw_geometry(ui_renderer, t, player_pos, rotation, center_x, ce
     local clip_and_emit = _clip_and_emit
     local visible = _visible
     local visible_count = _visible_count
-    local mid_z = geometry.mid_z
+    local mid_x, mid_y, mid_z = geometry.mid_x, geometry.mid_y, geometry.mid_z
+    local radius = geometry.radius
     local ax, ay = geometry.ax, geometry.ay
     local bx, by = geometry.bx, geometry.by
     local cx, cy = geometry.cx, geometry.cy
@@ -461,17 +468,34 @@ local function _draw_geometry(ui_renderer, t, player_pos, rotation, center_x, ce
 
     for k = 1, visible_count do
         local i = visible[k]
-        local dz = mid_z[i] - origin_z
+        local dx = mid_x[i] - origin_x
+        local dy = mid_y[i] - origin_y
+        local reach = range + radius[i]
+        local in_shape
 
-        if dz > current_half then
-            above_n = above_n + 1
-            above_idx[above_n] = i
-        elseif dz < -current_half then
-            below_n = below_n + 1
-            below_idx[below_n] = i
+        if is_circle then
+            in_shape = dx * dx + dy * dy <= reach * reach
         else
-            current_n = current_n + 1
-            current_idx[current_n] = i
+            local along_right = dx * forward_y - dy * forward_x
+            local along_forward = dx * forward_x + dy * forward_y
+
+            in_shape = along_right <= reach and along_right >= -reach
+                and along_forward <= reach and along_forward >= -reach
+        end
+
+        if in_shape then
+            local dz = mid_z[i] - origin_z
+
+            if dz > current_half then
+                above_n = above_n + 1
+                above_idx[above_n] = i
+            elseif dz < -current_half then
+                below_n = below_n + 1
+                below_idx[below_n] = i
+            else
+                current_n = current_n + 1
+                current_idx[current_n] = i
+            end
         end
     end
 
@@ -496,26 +520,30 @@ local function _draw_geometry(ui_renderer, t, player_pos, rotation, center_x, ce
 
                 local dx = ax[i] - origin_x
                 local dy = ay[i] - origin_y
-                local sx1 = (dx * right_x + dy * right_y) * radar_scale
-                local sy1 = -(dx * forward_x + dy * forward_y) * radar_scale
+                local sx1 = dx * right_x + dy * right_y
+                local sy1 = dx * down_x + dy * down_y
 
                 dx = bx[i] - origin_x
                 dy = by[i] - origin_y
 
-                local sx2 = (dx * right_x + dy * right_y) * radar_scale
-                local sy2 = -(dx * forward_x + dy * forward_y) * radar_scale
+                local sx2 = dx * right_x + dy * right_y
+                local sy2 = dx * down_x + dy * down_y
 
                 dx = cx[i] - origin_x
                 dy = cy[i] - origin_y
 
-                local sx3 = (dx * right_x + dy * right_y) * radar_scale
-                local sy3 = -(dx * forward_x + dy * forward_y) * radar_scale
+                local sx3 = dx * right_x + dy * right_y
+                local sy3 = dx * down_x + dy * down_y
 
                 drawn = drawn + clip_and_emit(gui, layer, color, is_circle, limit, limit_sq, ui_scale, center_x,
                     center_y, sx1, sy1, sx2, sy2, sx3, sy3)
             end
         end
     end
+
+    mod:radar_profiler_value("draw_geometry_selected", visible_count)
+    mod:radar_profiler_value("draw_geometry_in_shape", below_n + current_n + above_n)
+    mod:radar_profiler_value("draw_geometry_triangles", drawn)
 
     if draw_start then
         _metric_drawn = drawn
