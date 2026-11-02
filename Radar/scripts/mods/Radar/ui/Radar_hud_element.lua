@@ -3560,7 +3560,7 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
     local center_x = x + radius
     local center_y = y + radius
     local debug_mode = draw_cache.debug_mode
-    local UIWidget_draw = UIWidget.draw
+    local draw_marker_widget = RadarHudWidgets.draw_marker_widget
     local apply_marker_widget = _apply_marker_widget
     local target_visual = _target_visual
     local target_icon_size = _target_icon_size
@@ -3641,7 +3641,7 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
             local self_widget = marker_widgets[MAX_RADAR_MARKERS]
 
             apply_marker_widget(self_widget, self_visual, self_draw_x, self_draw_y, base_icon_z, nil, self_icon_size)
-            UIWidget_draw(self_widget, ui_renderer)
+            draw_marker_widget(self_widget, ui_renderer)
 
             center_dot_drawn = true
         end
@@ -3740,7 +3740,7 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
                     )
                 end
 
-                local widget_ok, widget_err = pcall(UIWidget_draw, widget, ui_renderer)
+                local widget_ok, widget_err = pcall(draw_marker_widget, widget, ui_renderer)
 
                 if not widget_ok then
                     if debug_mode then
