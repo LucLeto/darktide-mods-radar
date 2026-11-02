@@ -3624,6 +3624,7 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
         local targets = snapshot.targets or {}
         collected_marker_count = #targets
         local project_target_to_radar = mod.project_target_to_radar
+        local forward_x, forward_y = mod:radar_projection_forward(projection_rotation)
         local profiler_accumulate = profile_mark and mod.radar_profiler_accumulate
 
         if draw_cache.show_player_center_dot then
@@ -3667,7 +3668,8 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
             local px, py = project_target_to_radar(
                 mod,
                 player_pos,
-                projection_rotation,
+                forward_x,
+                forward_y,
                 target.position,
                 projection_radius,
                 range,

@@ -3646,18 +3646,29 @@ return function(env)
         return x, y, z, radius
     end
 
+    --- Returns the horizontal direction a radar aligned to a rotation faces, for `project_target_to_radar`.
+    -- It is the same for every marker of a draw, so the HUD reads it once per draw.
+    -- param: player_rot rotation the radar is aligned to
+    -- treturn: ?number x, nil when the rotation gives no direction (the radar is then north-up)
+    -- treturn: ?number y
+    function mod:radar_projection_forward(player_rot)
+        return _safe_forward_xy(player_rot)
+    end
+
     --- Projects a world position onto the radar, relative to the player and aligned to the view.
     -- Targets outside the range are dropped unless they ignore the range or overview mode is
     -- open, in which case they are pinned to the radar edge (circle or square).
     -- tab: player_pos player position
-    -- param: player_rot rotation the radar is aligned to; north-up when unavailable
+    -- ?number: forward_x x of the direction from `radar_projection_forward`; north-up when nil
+    -- ?number: forward_y y of that direction
     -- tab: target_pos target position
     -- number: max_radius radar radius in UI pixels
     -- number: range radar range in metres
     -- ?bool: ignore_radar_range pin out-of-range targets to the edge instead of dropping them
     -- treturn: ?number x offset from the radar centre
     -- treturn: ?number y offset from the radar centre
-    function mod:project_target_to_radar(player_pos, player_rot, target_pos, max_radius, range, ignore_radar_range)
+    function mod:project_target_to_radar(player_pos, forward_x, forward_y, target_pos, max_radius, range,
+                                         ignore_radar_range)
         if not player_pos or not target_pos then
             return nil, nil
         end
@@ -3686,8 +3697,6 @@ return function(env)
 
         local local_x = dx
         local local_y = dy
-
-        local forward_x, forward_y = _safe_forward_xy(player_rot)
 
         if forward_x and forward_y then
             local right_x = forward_y
