@@ -1903,11 +1903,12 @@ local function _apply_marker_marked_ring(widget, visual, icon_offset, icon_size,
 end
 
 --- Configures a pooled marker widget for one target's visual.
--- Sets every layer's content, colour, position and size; the base icon or glyph, the
--- backplate, the radius icon, the marked ring, the overlay icon (centred by ratio of the base
--- size, or anchored to the bottom right corner), the title icon and the vertical arrow. An
--- enemy pinned by a mastiff is drawn without fill. The widget is marked dirty when its
--- texts or cached sizes change.
+-- Sets every layer's content, and the colour, position and size of each layer the target
+-- shows; the base icon or glyph, the backplate, the radius icon, the marked ring, the overlay
+-- icon (centred by ratio of the base size, or anchored to the bottom right corner), the title
+-- icon and the vertical arrow. A layer without content keeps its old style, which no draw
+-- reads, and is styled again when a target shows it. An enemy pinned by a mastiff is drawn
+-- without fill. The widget is marked dirty when its texts or cached sizes change.
 -- tab: widget marker widget
 -- ?tab: visual target visual
 -- number: x marker left edge
@@ -1921,35 +1922,18 @@ end
 -- ?number: radius_icon_size radius icon size
 local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, bracket_x, bracket_y, bracket_size,
                                     radius_icon_size)
-    local icon_style = widget.style.icon
-    local radius_icon_style = widget.style.radius_icon
-    local glyph_icon_style = widget.style.glyph_icon
-    local overlay_icon_style = widget.style.overlay_icon
-    local title_icon_style = widget.style.title_icon
-    local arrow_icon_style = widget.style.arrow_icon
+    local style = widget.style
+    local content = widget.content
+    local icon_style = style.icon
     local size = tonumber(icon_size) or _scaled_icon_size(visual and visual.size or 14)
     local radius_icon = visual and visual.radius_icon or nil
     local radius_size = radius_icon and tonumber(radius_icon_size) or nil
     local glyph_icon = visual and visual.glyph or ""
+    local plate_icon = visual and visual.plate_icon or nil
+    local overlay_icon = visual and visual.overlay_icon or nil
+    local title_icon = visual and visual.title_icon or nil
     local suppress_enemy_fill = target and target.disabled_by_mastiff == true
     local color = _copy_into_widget_color(_style_color_table(icon_style), visual and visual.color or nil)
-    local glyph_color = glyph_icon ~= "" and glyph_icon_style and _copy_into_widget_color(
-        glyph_icon_style.text_color,
-        visual and visual.color or nil
-    ) or nil
-    local overlay_color = overlay_icon_style and _copy_into_widget_color(
-        _style_color_table(overlay_icon_style),
-        visual and visual.overlay_color or nil
-    ) or nil
-    local plate_icon_style_for_color = widget.style.plate_icon
-    local plate_color = plate_icon_style_for_color and _copy_into_widget_color(
-        _style_color_table(plate_icon_style_for_color),
-        visual and visual.plate_color or nil
-    ) or nil
-    local title_color = title_icon_style and _copy_into_widget_color(
-        _style_color_table(title_icon_style),
-        visual and visual.color or nil
-    ) or nil
     local vertical_state = target and target.vertical_state or nil
     local arrow_icon = nil
 
@@ -1959,17 +1943,8 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         arrow_icon = ITEM_VERTICAL_ARROW_DOWN_ICON
     end
 
-    local arrow_color = arrow_icon_style and arrow_icon and _copy_into_widget_color(
-        _style_color_table(arrow_icon_style),
-        _configured_radar_color("vertical_arrow", VERTICAL_ARROW_WIDGET_COLOR)
-    ) or nil
-
     if suppress_enemy_fill then
         color[1] = 0
-
-        if overlay_color then
-            overlay_color[1] = 0
-        end
     end
 
     local value_text = visual and visual.value_text or ""
@@ -1980,22 +1955,22 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         radius_icon = nil
     end
 
-    if widget.content.radius_icon ~= radius_icon
-        or widget.content.radius_icon_size ~= radius_size
-        or widget.content.glyph_icon ~= glyph_icon
-        or widget.content.value_text ~= value_text then
+    if content.radius_icon ~= radius_icon
+        or content.radius_icon_size ~= radius_size
+        or content.glyph_icon ~= glyph_icon
+        or content.value_text ~= value_text then
         widget.dirty = true
     end
 
-    widget.content.radius_icon = radius_icon
-    widget.content.radius_icon_size = radius_size
-    widget.content.icon = visual and visual.icon or nil
-    widget.content.glyph_icon = glyph_icon
-    widget.content.plate_icon = visual and visual.plate_icon or nil
-    widget.content.overlay_icon = visual and visual.overlay_icon or nil
-    widget.content.title_icon = visual and visual.title_icon or nil
-    widget.content.arrow_icon = arrow_icon
-    widget.content.value_text = value_text
+    content.radius_icon = radius_icon
+    content.radius_icon_size = radius_size
+    content.icon = visual and visual.icon or nil
+    content.glyph_icon = glyph_icon
+    content.plate_icon = plate_icon
+    content.overlay_icon = overlay_icon
+    content.title_icon = title_icon
+    content.arrow_icon = arrow_icon
+    content.value_text = value_text
 
     local icon_offset = icon_style.offset
     local icon_size_tbl = icon_style.size
@@ -2020,9 +1995,9 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
     -- under their art. A marker enables it purely by naming a `plate_icon`; kinds
     -- that do not name one -- every enemy marker among them, which composes its
     -- own background into the base layer instead -- are drawn exactly as before.
-    local plate_icon_style = widget.style.plate_icon
+    local plate_icon_style = style.plate_icon
 
-    if plate_icon_style then
+    if plate_icon_style and plate_icon ~= nil and plate_icon ~= "" then
         local plate_offset = plate_icon_style.offset
         local plate_size_tbl = plate_icon_style.size
 
@@ -2031,8 +2006,10 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         plate_offset[3] = icon_z - 1
         plate_size_tbl[1] = size
         plate_size_tbl[2] = size
-        plate_icon_style.color = plate_color or color
+        plate_icon_style.color = _copy_into_widget_color(_style_color_table(plate_icon_style), visual.plate_color)
     end
+
+    local radius_icon_style = style.radius_icon
 
     if radius_icon_style and radius_icon and radius_size then
         local radius_offset = radius_icon_style.offset
@@ -2049,6 +2026,8 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         )
     end
 
+    local glyph_icon_style = style.glyph_icon
+
     if glyph_icon_style and glyph_icon ~= "" then
         local glyph_offset = glyph_icon_style.offset
         local glyph_size = glyph_icon_style.size
@@ -2059,14 +2038,19 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         glyph_size[1] = size
         glyph_size[2] = size
         glyph_icon_style.font_size = size
-        glyph_icon_style.text_color = glyph_color or color
+        glyph_icon_style.text_color = _copy_into_widget_color(glyph_icon_style.text_color, visual.color)
     end
 
     _apply_marker_marked_ring(widget, visual, icon_offset, size, icon_z)
 
-    if target
+    local arrow_icon_style = arrow_icon and style.arrow_icon or nil
+    -- An enemy's vertical arrow sits on its brackets, sized from the overlay when it has one.
+    local arrow_follows_enemy = arrow_icon_style ~= nil
+        and target ~= nil
         and _is_enemy_kind(target.kind)
-        and not _is_boss_enemy_kind(target.kind) then
+        and not _is_boss_enemy_kind(target.kind)
+
+    if arrow_follows_enemy then
         local anchor_size = tonumber(bracket_size)
 
         if anchor_size and anchor_size > 0 then
@@ -2078,7 +2062,10 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         arrow_size_base = arrow_size_base or size
     end
 
-    if overlay_icon_style then
+    local overlay_icon_style = style.overlay_icon
+    local shows_overlay = overlay_icon ~= nil and overlay_icon ~= ""
+
+    if overlay_icon_style and (shows_overlay or arrow_follows_enemy) then
         local overlay_base_size = visual and tonumber(visual.overlay_base_size) or nil
         local background_base_size = visual and tonumber(visual.background_base_size or visual.size) or nil
         -- Kept unrounded: the parity correction below needs to know which way
@@ -2134,17 +2121,25 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
 
         overlay_size_tbl[1] = overlay_size
         overlay_size_tbl[2] = overlay_size
-        overlay_icon_style.color = overlay_color
 
-        if target
-            and _is_enemy_kind(target.kind)
-            and not _is_boss_enemy_kind(target.kind)
-            and overlay_base_size ~= nil then
+        if shows_overlay then
+            local overlay_color = _copy_into_widget_color(_style_color_table(overlay_icon_style), visual.overlay_color)
+
+            if suppress_enemy_fill then
+                overlay_color[1] = 0
+            end
+
+            overlay_icon_style.color = overlay_color
+        end
+
+        if arrow_follows_enemy and overlay_base_size ~= nil then
             arrow_size_base = overlay_size
         end
     end
 
-    if title_icon_style then
+    local title_icon_style = style.title_icon
+
+    if title_icon_style and title_icon ~= nil and title_icon ~= "" then
         local title_offset = title_icon_style.offset
         local title_size = title_icon_style.size
 
@@ -2153,7 +2148,7 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         title_offset[3] = icon_z + 2
         title_size[1] = size
         title_size[2] = size
-        title_icon_style.color = title_color or color
+        title_icon_style.color = _copy_into_widget_color(_style_color_table(title_icon_style), visual.color)
     end
 
     if arrow_icon_style then
@@ -2177,10 +2172,10 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         arrow_offset[3] = icon_z + 3
         arrow_size_tbl[1] = arrow_size
         arrow_size_tbl[2] = arrow_size
-
-        if arrow_color then
-            arrow_icon_style.color = arrow_color
-        end
+        arrow_icon_style.color = _copy_into_widget_color(
+            _style_color_table(arrow_icon_style),
+            _configured_radar_color("vertical_arrow", VERTICAL_ARROW_WIDGET_COLOR)
+        )
     end
 end
 
