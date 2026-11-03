@@ -858,6 +858,8 @@ local LogBuckets = {
     draws = {},
 }
 local PLAYER_COMPANION_VISUAL_CACHE = {}
+--- Whether each kind seen so far starts with `enemy_`, filled by `_has_enemy_prefix`.
+local ENEMY_PREFIX_BY_KIND = {}
 --- Settings and lookups read once for many frames by `_build_draw_cache`.
 -- Rebuilt every `DRAW_CACHE_REFRESH_INTERVAL` seconds or when a setting changes the colour
 -- cache generation. The per-kind tables are filled lazily while drawing.
@@ -871,6 +873,7 @@ local _draw_cache = {
     enemy_marker_mode_by_kind = {},
     marker_scale_by_group = {},
     enemy_scale_by_kind = {},
+    icon_scale_by_kind = {},
     enemy_visual_by_kind = {},
     nearby_highlight_enabled_by_kind = {},
     nearby_highlight_distance_text_enabled_by_kind = {},
@@ -1171,6 +1174,7 @@ local function _build_draw_cache(t)
     table_clear(draw_cache.enemy_marker_mode_by_kind)
     table_clear(draw_cache.marker_scale_by_group)
     table_clear(draw_cache.enemy_scale_by_kind)
+    table_clear(draw_cache.icon_scale_by_kind)
     table_clear(draw_cache.enemy_visual_by_kind)
     table_clear(draw_cache.nearby_highlight_enabled_by_kind)
     table_clear(draw_cache.nearby_highlight_distance_text_enabled_by_kind)
@@ -1300,17 +1304,26 @@ local function _cached_group_icon_scale(kind, draw_cache)
     return get_marker_scale_factor and get_marker_scale_factor(mod, group_name) or 1
 end
 
---- Returns whether a kind is an enemy kind (`enemy_` prefix).
+--- Returns whether a kind is an enemy kind (`enemy_` prefix), remembered per string kind.
 local function _has_enemy_prefix(kind)
     if kind == nil then
         return false
     end
 
-    if type(kind) == "string" then
-        return string_sub(kind, 1, 6) == "enemy_"
+    local has_prefix = ENEMY_PREFIX_BY_KIND[kind]
+
+    if has_prefix ~= nil then
+        return has_prefix
     end
 
-    return string_sub(tostring(kind), 1, 6) == "enemy_"
+    if type(kind) ~= "string" then
+        return string_sub(tostring(kind), 1, 6) == "enemy_"
+    end
+
+    has_prefix = string_sub(kind, 1, 6) == "enemy_"
+    ENEMY_PREFIX_BY_KIND[kind] = has_prefix
+
+    return has_prefix
 end
 
 --- Returns the enemy category icon scale factor of an enemy kind, cached per kind.
@@ -1340,9 +1353,20 @@ local function _cached_enemy_category_icon_scale(kind, draw_cache)
 end
 
 --- Returns a target's total icon scale; radar size, settings group and enemy category combined.
+-- Cached per kind until the draw cache reads the scales again.
 local function _resolved_icon_scale_for_target(target, draw_cache)
-    local scale = tonumber(draw_cache and draw_cache.icon_scale) or _icon_scale_factor()
     local kind = target and target.kind
+    local cache = kind ~= nil and draw_cache and draw_cache.icon_scale_by_kind or nil
+
+    if cache then
+        local cached = cache[kind]
+
+        if cached ~= nil then
+            return cached
+        end
+    end
+
+    local scale = tonumber(draw_cache and draw_cache.icon_scale) or _icon_scale_factor()
 
     if kind then
         scale = scale * _cached_group_icon_scale(kind, draw_cache)
@@ -1350,6 +1374,10 @@ local function _resolved_icon_scale_for_target(target, draw_cache)
         if _has_enemy_prefix(kind) then
             scale = scale * _cached_enemy_category_icon_scale(kind, draw_cache)
         end
+    end
+
+    if cache then
+        cache[kind] = scale
     end
 
     return scale
@@ -1382,38 +1410,26 @@ local function _enemy_icon_size_limits(kind)
     return 10, 72
 end
 
---- Returns the drawn marker size of a target in pixels.
--- treturn: int
-local function _target_icon_size(target, visual, draw_cache)
+--- Returns the drawn size of a target's marker and of its brackets, in pixels.
+-- Enemy brackets scale with the drawn marker, within the size limits of the enemy's category.
+-- treturn: int marker size
+-- treturn: int bracket size
+local function _target_marker_sizes(target, visual, draw_cache)
+    local kind = target and target.kind
     local base_size = visual and visual.size or 14
+    local bracket_base_size = visual and (visual.bracket_base_size or visual.size) or 14
     local icon_scale = _resolved_icon_scale_for_target(target, draw_cache)
 
-    if target and _has_enemy_prefix(target.kind) then
-        local min_size, max_size = _enemy_icon_size_limits(target.kind)
-        return _scaled_icon_size(base_size, icon_scale, min_size, max_size)
+    if _has_enemy_prefix(kind) then
+        local min_size, max_size = _enemy_icon_size_limits(kind)
+        local marker_size = _scaled_icon_size(base_size, icon_scale, min_size, max_size)
+        local base_marker_size = tonumber(visual and visual.size) or bracket_base_size
+        local bracket_scale = 1 + (marker_size / math_max(1, base_marker_size) - 1)
+
+        return marker_size, _scaled_icon_size(bracket_base_size, bracket_scale, min_size, max_size)
     end
 
-    return _scaled_icon_size(base_size, icon_scale, 10, 48)
-end
-
---- Returns the size of a target's marker brackets; enemy brackets scale with the drawn marker.
--- treturn: int
-local function _target_bracket_size(target, visual, draw_cache, marker_size)
-    local base_size = visual and (visual.bracket_base_size or visual.size) or 14
-
-    if target and _has_enemy_prefix(target.kind) then
-        local base_marker_size = tonumber(visual and visual.size) or base_size
-        local actual_marker_size = tonumber(marker_size) or _target_icon_size(target, visual, draw_cache)
-        local actual_marker_scale = actual_marker_size / math_max(1, base_marker_size)
-        local bracket_scale = 1 + (actual_marker_scale - 1)
-        local min_size, max_size = _enemy_icon_size_limits(target.kind)
-
-        return _scaled_icon_size(base_size, bracket_scale, min_size, max_size)
-    end
-
-    local icon_scale = _resolved_icon_scale_for_target(target, draw_cache)
-
-    return _scaled_icon_size(base_size, icon_scale, 10, 64)
+    return _scaled_icon_size(base_size, icon_scale, 10, 48), _scaled_icon_size(bracket_base_size, icon_scale, 10, 64)
 end
 
 local function _is_enemy_kind(kind)
@@ -3462,16 +3478,9 @@ local function _draw_screen_highlights(self, ui_renderer, snapshot, z, draw_cach
     end
 end
 
---- Pixel snapping helpers; a rounded centre, and the top left of a box of a size around it.
+--- Rounds a marker's centre to a whole pixel.
 local function _snap_center(value)
     return math_floor((tonumber(value) or 0) + 0.5)
-end
-
-local function _top_left_from_center(center_value, size)
-    local snapped_center = _snap_center(center_value)
-    local snapped_size = math_max(1, math_floor((tonumber(size) or 0) + 0.5))
-
-    return snapped_center - math_floor(snapped_size * 0.5)
 end
 
 --- Returns the pixel size of a marker's radius icon (such as a medical crate's healing radius).
@@ -3558,14 +3567,12 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
     local draw_marker_widget = RadarHudWidgets.draw_marker_widget
     local apply_marker_widget = _apply_marker_widget
     local target_visual = _target_visual
-    local target_icon_size = _target_icon_size
+    local target_marker_sizes = _target_marker_sizes
     local target_radius_icon_size = _target_radius_icon_size
-    local target_bracket_size = _target_bracket_size
     local should_draw_marker_brackets = _should_draw_marker_brackets
     local draw_marker_brackets = RadarHudRenderer.draw_marker_brackets
     local draw_marker_value_text = _draw_marker_value_text
     local snap_center = _snap_center
-    local top_left_from_center = _top_left_from_center
     local base_icon_z = z + 5
     local projection_radius = radius - 8
     local radar_style = _current_radar_style()
@@ -3677,17 +3684,18 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
 
             if px and py then
                 local visual = target_visual(target, draw_cache)
-                local marker_size = target_icon_size(target, visual, draw_cache)
+                local marker_size, bracket_size = target_marker_sizes(target, visual, draw_cache)
                 local radius_icon_size = visual and visual.radius_icon and
                     target_radius_icon_size(target, visual, projection_radius, range, px, py, radar_style) or nil
-                local bracket_size = target_bracket_size(target, visual, draw_cache, marker_size)
                 local marker_center_x = snap_center(center_x + px)
                 local marker_center_y = snap_center(center_y + py)
+                local half_marker_size = math_floor(marker_size * 0.5)
+                local half_bracket_size = math_floor(bracket_size * 0.5)
 
-                local draw_x = top_left_from_center(marker_center_x, marker_size)
-                local draw_y = top_left_from_center(marker_center_y, marker_size)
-                local bracket_x = top_left_from_center(marker_center_x, bracket_size)
-                local bracket_y = top_left_from_center(marker_center_y, bracket_size)
+                local draw_x = marker_center_x - half_marker_size
+                local draw_y = marker_center_y - half_marker_size
+                local bracket_x = marker_center_x - half_bracket_size
+                local bracket_y = marker_center_y - half_bracket_size
 
                 local widget = marker_widgets[next_widget_index]
                 local render_layer = tonumber(target.render_layer) or 0
