@@ -2,7 +2,9 @@
 -- Draws the radar background, outline and guide overlays for the square, circle and Auspex
 -- styles, plus the rectangles and brackets the HUD element uses around markers. All
 -- coordinates are unscaled UI pixels; `Gui.rect` positions are scaled by the renderer's UI
--- scale and layered on top of `render_settings.start_layer`.
+-- scale and layered on top of `render_settings.start_layer`. Circles and diagonal lines are
+-- worked out pixel by pixel, but neighbouring pixels in a row or column are drawn as one
+-- rectangle, which covers the same pixels with far fewer engine calls.
 --
 -- Explicit module loaded by `ui/Radar_hud_element.lua` through `mod:io_dofile`; the chunk
 -- returns a table of draw functions. Colours come from `mod:get_radar_color` when the colour
@@ -280,14 +282,26 @@ local function _draw_marker_brackets(ui_renderer, x, y, z, size, color, thicknes
 end
 
 --- Fills a pixel-aligned circle with one horizontal span per row.
+-- Consecutive rows of the same width are drawn as one box, which covers the same pixels.
 local function _draw_circle_fill(ui_renderer, center_x, center_y, z, radius, color)
     local integer_radius = math_max(1, math_floor((radius or 0) + 0.5))
     local radius_sq = integer_radius * integer_radius
+    local run_start = -integer_radius
+    local run_span = math_floor(math_sqrt(math_max(0, radius_sq - run_start * run_start)))
 
-    for dy = -integer_radius, integer_radius do
+    for dy = run_start + 1, integer_radius do
         local span = math_floor(math_sqrt(math_max(0, radius_sq - dy * dy)))
-        _draw_box(ui_renderer, center_x - span, center_y + dy, z, span * 2 + 1, 1, color)
+
+        if span ~= run_span then
+            _draw_box(ui_renderer, center_x - run_span, center_y + run_start, z, run_span * 2 + 1, dy - run_start,
+                color)
+            run_start = dy
+            run_span = span
+        end
     end
+
+    _draw_box(ui_renderer, center_x - run_span, center_y + run_start, z, run_span * 2 + 1,
+        integer_radius + 1 - run_start, color)
 end
 
 local function _round(n)
@@ -337,70 +351,84 @@ local function _draw_dot(ui_renderer, x, y, z, size, color)
     _draw_box(ui_renderer, _round(x - half), _round(y - half), z, size, size, color)
 end
 
-local function _draw_circle_pixel(ui_renderer, x, y, z, color)
-    _draw_box(ui_renderer, x, y, z, 1, 1, color)
-end
+--- Draws, in all eight octants, a run of midpoint-circle steps that share one column.
+-- The run covers rows `y_first` to `y_last` (`y_last <= x`) of column `x` in the first octant;
+-- its mirror images are vertical boxes, and its images across the diagonal horizontal boxes.
+-- Row 0 and the diagonal belong to two octants each and are drawn once, so every pixel of the
+-- outline is drawn exactly once.
+-- tab: ui_renderer active UI renderer
+-- int: center_x circle centre x
+-- int: center_y circle centre y
+-- number: z layer offset
+-- int: x column of the run in the first octant
+-- int: y_first first row of the run
+-- int: y_last last row of the run
+-- param: color engine `Color`
+local function _draw_circle_perimeter_run(ui_renderer, center_x, center_y, z, x, y_first, y_last, color)
+    if y_first == 0 then
+        local height = y_last * 2 + 1
 
---- Plots the symmetric points of one midpoint-circle step without drawing shared pixels twice.
-local function _plot_circle_octants(ui_renderer, center_x, center_y, z, x, y, color)
-    if x == 0 and y == 0 then
-        _draw_circle_pixel(ui_renderer, center_x, center_y, z, color)
+        _draw_box(ui_renderer, center_x + x, center_y - y_last, z, 1, height, color)
+        _draw_box(ui_renderer, center_x - x, center_y - y_last, z, 1, height, color)
+    else
+        local height = y_last - y_first + 1
+
+        _draw_box(ui_renderer, center_x + x, center_y + y_first, z, 1, height, color)
+        _draw_box(ui_renderer, center_x - x, center_y + y_first, z, 1, height, color)
+        _draw_box(ui_renderer, center_x + x, center_y - y_last, z, 1, height, color)
+        _draw_box(ui_renderer, center_x - x, center_y - y_last, z, 1, height, color)
+    end
+
+    local row_last = y_last == x and y_last - 1 or y_last
+
+    if row_last < y_first then
         return
     end
 
-    if y == 0 then
-        _draw_circle_pixel(ui_renderer, center_x + x, center_y, z, color)
-        _draw_circle_pixel(ui_renderer, center_x - x, center_y, z, color)
-        _draw_circle_pixel(ui_renderer, center_x, center_y + x, z, color)
-        _draw_circle_pixel(ui_renderer, center_x, center_y - x, z, color)
-        return
-    end
+    if y_first == 0 then
+        local width = row_last * 2 + 1
 
-    if x == 0 then
-        _draw_circle_pixel(ui_renderer, center_x + y, center_y, z, color)
-        _draw_circle_pixel(ui_renderer, center_x - y, center_y, z, color)
-        _draw_circle_pixel(ui_renderer, center_x, center_y + y, z, color)
-        _draw_circle_pixel(ui_renderer, center_x, center_y - y, z, color)
-        return
-    end
+        _draw_box(ui_renderer, center_x - row_last, center_y + x, z, width, 1, color)
+        _draw_box(ui_renderer, center_x - row_last, center_y - x, z, width, 1, color)
+    else
+        local width = row_last - y_first + 1
 
-    if x == y then
-        _draw_circle_pixel(ui_renderer, center_x + x, center_y + y, z, color)
-        _draw_circle_pixel(ui_renderer, center_x - x, center_y + y, z, color)
-        _draw_circle_pixel(ui_renderer, center_x + x, center_y - y, z, color)
-        _draw_circle_pixel(ui_renderer, center_x - x, center_y - y, z, color)
-        return
+        _draw_box(ui_renderer, center_x + y_first, center_y + x, z, width, 1, color)
+        _draw_box(ui_renderer, center_x - row_last, center_y + x, z, width, 1, color)
+        _draw_box(ui_renderer, center_x + y_first, center_y - x, z, width, 1, color)
+        _draw_box(ui_renderer, center_x - row_last, center_y - x, z, width, 1, color)
     end
-
-    _draw_circle_pixel(ui_renderer, center_x + x, center_y + y, z, color)
-    _draw_circle_pixel(ui_renderer, center_x - x, center_y + y, z, color)
-    _draw_circle_pixel(ui_renderer, center_x + x, center_y - y, z, color)
-    _draw_circle_pixel(ui_renderer, center_x - x, center_y - y, z, color)
-    _draw_circle_pixel(ui_renderer, center_x + y, center_y + x, z, color)
-    _draw_circle_pixel(ui_renderer, center_x - y, center_y + x, z, color)
-    _draw_circle_pixel(ui_renderer, center_x + y, center_y - x, z, color)
-    _draw_circle_pixel(ui_renderer, center_x - y, center_y - x, z, color)
 end
 
 --- Draws a one pixel circle outline with the midpoint circle algorithm.
+-- Consecutive steps in the same column are drawn as one run, which covers the same pixels as
+-- drawing every step on its own.
 local function _draw_circle_perimeter(ui_renderer, center_x, center_y, z, radius, color)
     radius = math_max(1, math_floor((radius or 0) + 0.5))
 
     local x = radius
     local y = 0
     local decision = 1 - radius
+    local run_first = 0
 
     while y <= x do
-        _plot_circle_octants(ui_renderer, center_x, center_y, z, x, y, color)
-
-        y = y + 1
+        local next_x = x
+        local next_y = y + 1
 
         if decision < 0 then
-            decision = decision + 2 * y + 1
+            decision = decision + 2 * next_y + 1
         else
-            x = x - 1
-            decision = decision + 2 * (y - x) + 1
+            next_x = x - 1
+            decision = decision + 2 * (next_y - next_x) + 1
         end
+
+        if next_x ~= x or next_y > next_x then
+            _draw_circle_perimeter_run(ui_renderer, center_x, center_y, z, x, run_first, y, color)
+            run_first = next_y
+        end
+
+        x = next_x
+        y = next_y
     end
 end
 
@@ -646,8 +674,15 @@ local function _draw_square_fill_soft(ui_renderer, x, y, z, size, color)
     _draw_box(ui_renderer, x + size - 1, y + 1, z, 1, size - 2, feather_color)
 end
 
---- Draws one pixel at already scaled screen coordinates.
-local function _draw_screen_pixel(ui_renderer, screen_x, screen_y, z, color)
+--- Draws a rectangle at already scaled screen coordinates.
+-- tab: ui_renderer active UI renderer
+-- number: screen_x left edge in screen pixels
+-- number: screen_y top edge in screen pixels
+-- number: z layer offset
+-- number: w width in screen pixels
+-- number: h height in screen pixels
+-- param: color engine `Color`
+local function _draw_screen_box(ui_renderer, screen_x, screen_y, z, w, h, color)
     local gui = ui_renderer and ui_renderer.gui
 
     if not gui then
@@ -660,14 +695,15 @@ local function _draw_screen_pixel(ui_renderer, screen_x, screen_y, z, color)
     Gui_rect(
         gui,
         Vector3(screen_x, screen_y, start_layer + z),
-        Vector2(1, 1),
+        Vector2(w, h),
         color
     )
 end
 
 --- Draws a one pixel line between two UI points with Bresenham's algorithm.
 -- The points are scaled first so the line stays one screen pixel wide; the end points
--- themselves are not drawn.
+-- themselves are not drawn. Consecutive pixels in one row or one column are drawn as one
+-- rectangle, which covers the same pixels as drawing them one by one.
 local function _draw_diagonal_line(ui_renderer, x1, y1, x2, y2, z, color)
     local scale = ui_renderer.scale or 1
 
@@ -684,6 +720,11 @@ local function _draw_diagonal_line(ui_renderer, x1, y1, x2, y2, z, color)
     if sx == ex and sy == ey then
         return
     end
+
+    -- The pending run, from (run_x, run_y) to (last_x, last_y), along a row or a column once it
+    -- has two pixels.
+    local run_x, run_y, last_x, last_y = nil, nil, nil, nil
+    local run_in_row = nil
 
     while true do
         local e2 = err * 2
@@ -702,7 +743,28 @@ local function _draw_diagonal_line(ui_renderer, x1, y1, x2, y2, z, color)
             break
         end
 
-        _draw_screen_pixel(ui_renderer, sx, sy, z, color)
+        if run_x ~= nil and run_in_row ~= false and sy == last_y then
+            run_in_row = true
+        elseif run_x ~= nil and run_in_row ~= true and sx == last_x then
+            run_in_row = false
+        else
+            if run_x ~= nil then
+                _draw_screen_box(ui_renderer, math_min(run_x, last_x), math_min(run_y, last_y), z,
+                    math_abs(last_x - run_x) + 1, math_abs(last_y - run_y) + 1, color)
+            end
+
+            run_x = sx
+            run_y = sy
+            run_in_row = nil
+        end
+
+        last_x = sx
+        last_y = sy
+    end
+
+    if run_x ~= nil then
+        _draw_screen_box(ui_renderer, math_min(run_x, last_x), math_min(run_y, last_y), z,
+            math_abs(last_x - run_x) + 1, math_abs(last_y - run_y) + 1, color)
     end
 end
 

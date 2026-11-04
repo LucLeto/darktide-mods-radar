@@ -858,6 +858,8 @@ local LogBuckets = {
     draws = {},
 }
 local PLAYER_COMPANION_VISUAL_CACHE = {}
+--- Whether each kind seen so far starts with `enemy_`, filled by `_has_enemy_prefix`.
+local ENEMY_PREFIX_BY_KIND = {}
 --- Settings and lookups read once for many frames by `_build_draw_cache`.
 -- Rebuilt every `DRAW_CACHE_REFRESH_INTERVAL` seconds or when a setting changes the colour
 -- cache generation. The per-kind tables are filled lazily while drawing.
@@ -871,6 +873,7 @@ local _draw_cache = {
     enemy_marker_mode_by_kind = {},
     marker_scale_by_group = {},
     enemy_scale_by_kind = {},
+    icon_scale_by_kind = {},
     enemy_visual_by_kind = {},
     nearby_highlight_enabled_by_kind = {},
     nearby_highlight_distance_text_enabled_by_kind = {},
@@ -1171,6 +1174,7 @@ local function _build_draw_cache(t)
     table_clear(draw_cache.enemy_marker_mode_by_kind)
     table_clear(draw_cache.marker_scale_by_group)
     table_clear(draw_cache.enemy_scale_by_kind)
+    table_clear(draw_cache.icon_scale_by_kind)
     table_clear(draw_cache.enemy_visual_by_kind)
     table_clear(draw_cache.nearby_highlight_enabled_by_kind)
     table_clear(draw_cache.nearby_highlight_distance_text_enabled_by_kind)
@@ -1300,17 +1304,26 @@ local function _cached_group_icon_scale(kind, draw_cache)
     return get_marker_scale_factor and get_marker_scale_factor(mod, group_name) or 1
 end
 
---- Returns whether a kind is an enemy kind (`enemy_` prefix).
+--- Returns whether a kind is an enemy kind (`enemy_` prefix), remembered per string kind.
 local function _has_enemy_prefix(kind)
     if kind == nil then
         return false
     end
 
-    if type(kind) == "string" then
-        return string_sub(kind, 1, 6) == "enemy_"
+    local has_prefix = ENEMY_PREFIX_BY_KIND[kind]
+
+    if has_prefix ~= nil then
+        return has_prefix
     end
 
-    return string_sub(tostring(kind), 1, 6) == "enemy_"
+    if type(kind) ~= "string" then
+        return string_sub(tostring(kind), 1, 6) == "enemy_"
+    end
+
+    has_prefix = string_sub(kind, 1, 6) == "enemy_"
+    ENEMY_PREFIX_BY_KIND[kind] = has_prefix
+
+    return has_prefix
 end
 
 --- Returns the enemy category icon scale factor of an enemy kind, cached per kind.
@@ -1340,9 +1353,20 @@ local function _cached_enemy_category_icon_scale(kind, draw_cache)
 end
 
 --- Returns a target's total icon scale; radar size, settings group and enemy category combined.
+-- Cached per kind until the draw cache reads the scales again.
 local function _resolved_icon_scale_for_target(target, draw_cache)
-    local scale = tonumber(draw_cache and draw_cache.icon_scale) or _icon_scale_factor()
     local kind = target and target.kind
+    local cache = kind ~= nil and draw_cache and draw_cache.icon_scale_by_kind or nil
+
+    if cache then
+        local cached = cache[kind]
+
+        if cached ~= nil then
+            return cached
+        end
+    end
+
+    local scale = tonumber(draw_cache and draw_cache.icon_scale) or _icon_scale_factor()
 
     if kind then
         scale = scale * _cached_group_icon_scale(kind, draw_cache)
@@ -1350,6 +1374,10 @@ local function _resolved_icon_scale_for_target(target, draw_cache)
         if _has_enemy_prefix(kind) then
             scale = scale * _cached_enemy_category_icon_scale(kind, draw_cache)
         end
+    end
+
+    if cache then
+        cache[kind] = scale
     end
 
     return scale
@@ -1382,38 +1410,26 @@ local function _enemy_icon_size_limits(kind)
     return 10, 72
 end
 
---- Returns the drawn marker size of a target in pixels.
--- treturn: int
-local function _target_icon_size(target, visual, draw_cache)
+--- Returns the drawn size of a target's marker and of its brackets, in pixels.
+-- Enemy brackets scale with the drawn marker, within the size limits of the enemy's category.
+-- treturn: int marker size
+-- treturn: int bracket size
+local function _target_marker_sizes(target, visual, draw_cache)
+    local kind = target and target.kind
     local base_size = visual and visual.size or 14
+    local bracket_base_size = visual and (visual.bracket_base_size or visual.size) or 14
     local icon_scale = _resolved_icon_scale_for_target(target, draw_cache)
 
-    if target and _has_enemy_prefix(target.kind) then
-        local min_size, max_size = _enemy_icon_size_limits(target.kind)
-        return _scaled_icon_size(base_size, icon_scale, min_size, max_size)
+    if _has_enemy_prefix(kind) then
+        local min_size, max_size = _enemy_icon_size_limits(kind)
+        local marker_size = _scaled_icon_size(base_size, icon_scale, min_size, max_size)
+        local base_marker_size = tonumber(visual and visual.size) or bracket_base_size
+        local bracket_scale = 1 + (marker_size / math_max(1, base_marker_size) - 1)
+
+        return marker_size, _scaled_icon_size(bracket_base_size, bracket_scale, min_size, max_size)
     end
 
-    return _scaled_icon_size(base_size, icon_scale, 10, 48)
-end
-
---- Returns the size of a target's marker brackets; enemy brackets scale with the drawn marker.
--- treturn: int
-local function _target_bracket_size(target, visual, draw_cache, marker_size)
-    local base_size = visual and (visual.bracket_base_size or visual.size) or 14
-
-    if target and _has_enemy_prefix(target.kind) then
-        local base_marker_size = tonumber(visual and visual.size) or base_size
-        local actual_marker_size = tonumber(marker_size) or _target_icon_size(target, visual, draw_cache)
-        local actual_marker_scale = actual_marker_size / math_max(1, base_marker_size)
-        local bracket_scale = 1 + (actual_marker_scale - 1)
-        local min_size, max_size = _enemy_icon_size_limits(target.kind)
-
-        return _scaled_icon_size(base_size, bracket_scale, min_size, max_size)
-    end
-
-    local icon_scale = _resolved_icon_scale_for_target(target, draw_cache)
-
-    return _scaled_icon_size(base_size, icon_scale, 10, 64)
+    return _scaled_icon_size(base_size, icon_scale, 10, 48), _scaled_icon_size(bracket_base_size, icon_scale, 10, 64)
 end
 
 local function _is_enemy_kind(kind)
@@ -1903,11 +1919,12 @@ local function _apply_marker_marked_ring(widget, visual, icon_offset, icon_size,
 end
 
 --- Configures a pooled marker widget for one target's visual.
--- Sets every layer's content, colour, position and size; the base icon or glyph, the
--- backplate, the radius icon, the marked ring, the overlay icon (centred by ratio of the base
--- size, or anchored to the bottom right corner), the title icon and the vertical arrow. An
--- enemy pinned by a mastiff is drawn without fill. The widget is marked dirty when its
--- texts or cached sizes change.
+-- Sets every layer's content, and the colour, position and size of each layer the target
+-- shows; the base icon or glyph, the backplate, the radius icon, the marked ring, the overlay
+-- icon (centred by ratio of the base size, or anchored to the bottom right corner), the title
+-- icon and the vertical arrow. A layer without content keeps its old style, which no draw
+-- reads, and is styled again when a target shows it. An enemy pinned by a mastiff is drawn
+-- without fill. The widget is marked dirty when its texts or cached sizes change.
 -- tab: widget marker widget
 -- ?tab: visual target visual
 -- number: x marker left edge
@@ -1921,35 +1938,18 @@ end
 -- ?number: radius_icon_size radius icon size
 local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, bracket_x, bracket_y, bracket_size,
                                     radius_icon_size)
-    local icon_style = widget.style.icon
-    local radius_icon_style = widget.style.radius_icon
-    local glyph_icon_style = widget.style.glyph_icon
-    local overlay_icon_style = widget.style.overlay_icon
-    local title_icon_style = widget.style.title_icon
-    local arrow_icon_style = widget.style.arrow_icon
+    local style = widget.style
+    local content = widget.content
+    local icon_style = style.icon
     local size = tonumber(icon_size) or _scaled_icon_size(visual and visual.size or 14)
     local radius_icon = visual and visual.radius_icon or nil
     local radius_size = radius_icon and tonumber(radius_icon_size) or nil
     local glyph_icon = visual and visual.glyph or ""
+    local plate_icon = visual and visual.plate_icon or nil
+    local overlay_icon = visual and visual.overlay_icon or nil
+    local title_icon = visual and visual.title_icon or nil
     local suppress_enemy_fill = target and target.disabled_by_mastiff == true
     local color = _copy_into_widget_color(_style_color_table(icon_style), visual and visual.color or nil)
-    local glyph_color = glyph_icon ~= "" and glyph_icon_style and _copy_into_widget_color(
-        glyph_icon_style.text_color,
-        visual and visual.color or nil
-    ) or nil
-    local overlay_color = overlay_icon_style and _copy_into_widget_color(
-        _style_color_table(overlay_icon_style),
-        visual and visual.overlay_color or nil
-    ) or nil
-    local plate_icon_style_for_color = widget.style.plate_icon
-    local plate_color = plate_icon_style_for_color and _copy_into_widget_color(
-        _style_color_table(plate_icon_style_for_color),
-        visual and visual.plate_color or nil
-    ) or nil
-    local title_color = title_icon_style and _copy_into_widget_color(
-        _style_color_table(title_icon_style),
-        visual and visual.color or nil
-    ) or nil
     local vertical_state = target and target.vertical_state or nil
     local arrow_icon = nil
 
@@ -1959,17 +1959,8 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         arrow_icon = ITEM_VERTICAL_ARROW_DOWN_ICON
     end
 
-    local arrow_color = arrow_icon_style and arrow_icon and _copy_into_widget_color(
-        _style_color_table(arrow_icon_style),
-        _configured_radar_color("vertical_arrow", VERTICAL_ARROW_WIDGET_COLOR)
-    ) or nil
-
     if suppress_enemy_fill then
         color[1] = 0
-
-        if overlay_color then
-            overlay_color[1] = 0
-        end
     end
 
     local value_text = visual and visual.value_text or ""
@@ -1980,22 +1971,22 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         radius_icon = nil
     end
 
-    if widget.content.radius_icon ~= radius_icon
-        or widget.content.radius_icon_size ~= radius_size
-        or widget.content.glyph_icon ~= glyph_icon
-        or widget.content.value_text ~= value_text then
+    if content.radius_icon ~= radius_icon
+        or content.radius_icon_size ~= radius_size
+        or content.glyph_icon ~= glyph_icon
+        or content.value_text ~= value_text then
         widget.dirty = true
     end
 
-    widget.content.radius_icon = radius_icon
-    widget.content.radius_icon_size = radius_size
-    widget.content.icon = visual and visual.icon or nil
-    widget.content.glyph_icon = glyph_icon
-    widget.content.plate_icon = visual and visual.plate_icon or nil
-    widget.content.overlay_icon = visual and visual.overlay_icon or nil
-    widget.content.title_icon = visual and visual.title_icon or nil
-    widget.content.arrow_icon = arrow_icon
-    widget.content.value_text = value_text
+    content.radius_icon = radius_icon
+    content.radius_icon_size = radius_size
+    content.icon = visual and visual.icon or nil
+    content.glyph_icon = glyph_icon
+    content.plate_icon = plate_icon
+    content.overlay_icon = overlay_icon
+    content.title_icon = title_icon
+    content.arrow_icon = arrow_icon
+    content.value_text = value_text
 
     local icon_offset = icon_style.offset
     local icon_size_tbl = icon_style.size
@@ -2020,9 +2011,9 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
     -- under their art. A marker enables it purely by naming a `plate_icon`; kinds
     -- that do not name one -- every enemy marker among them, which composes its
     -- own background into the base layer instead -- are drawn exactly as before.
-    local plate_icon_style = widget.style.plate_icon
+    local plate_icon_style = style.plate_icon
 
-    if plate_icon_style then
+    if plate_icon_style and plate_icon ~= nil and plate_icon ~= "" then
         local plate_offset = plate_icon_style.offset
         local plate_size_tbl = plate_icon_style.size
 
@@ -2031,8 +2022,10 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         plate_offset[3] = icon_z - 1
         plate_size_tbl[1] = size
         plate_size_tbl[2] = size
-        plate_icon_style.color = plate_color or color
+        plate_icon_style.color = _copy_into_widget_color(_style_color_table(plate_icon_style), visual.plate_color)
     end
+
+    local radius_icon_style = style.radius_icon
 
     if radius_icon_style and radius_icon and radius_size then
         local radius_offset = radius_icon_style.offset
@@ -2049,6 +2042,8 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         )
     end
 
+    local glyph_icon_style = style.glyph_icon
+
     if glyph_icon_style and glyph_icon ~= "" then
         local glyph_offset = glyph_icon_style.offset
         local glyph_size = glyph_icon_style.size
@@ -2059,14 +2054,19 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         glyph_size[1] = size
         glyph_size[2] = size
         glyph_icon_style.font_size = size
-        glyph_icon_style.text_color = glyph_color or color
+        glyph_icon_style.text_color = _copy_into_widget_color(glyph_icon_style.text_color, visual.color)
     end
 
     _apply_marker_marked_ring(widget, visual, icon_offset, size, icon_z)
 
-    if target
+    local arrow_icon_style = arrow_icon and style.arrow_icon or nil
+    -- An enemy's vertical arrow sits on its brackets, sized from the overlay when it has one.
+    local arrow_follows_enemy = arrow_icon_style ~= nil
+        and target ~= nil
         and _is_enemy_kind(target.kind)
-        and not _is_boss_enemy_kind(target.kind) then
+        and not _is_boss_enemy_kind(target.kind)
+
+    if arrow_follows_enemy then
         local anchor_size = tonumber(bracket_size)
 
         if anchor_size and anchor_size > 0 then
@@ -2078,7 +2078,10 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         arrow_size_base = arrow_size_base or size
     end
 
-    if overlay_icon_style then
+    local overlay_icon_style = style.overlay_icon
+    local shows_overlay = overlay_icon ~= nil and overlay_icon ~= ""
+
+    if overlay_icon_style and (shows_overlay or arrow_follows_enemy) then
         local overlay_base_size = visual and tonumber(visual.overlay_base_size) or nil
         local background_base_size = visual and tonumber(visual.background_base_size or visual.size) or nil
         -- Kept unrounded: the parity correction below needs to know which way
@@ -2134,17 +2137,25 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
 
         overlay_size_tbl[1] = overlay_size
         overlay_size_tbl[2] = overlay_size
-        overlay_icon_style.color = overlay_color
 
-        if target
-            and _is_enemy_kind(target.kind)
-            and not _is_boss_enemy_kind(target.kind)
-            and overlay_base_size ~= nil then
+        if shows_overlay then
+            local overlay_color = _copy_into_widget_color(_style_color_table(overlay_icon_style), visual.overlay_color)
+
+            if suppress_enemy_fill then
+                overlay_color[1] = 0
+            end
+
+            overlay_icon_style.color = overlay_color
+        end
+
+        if arrow_follows_enemy and overlay_base_size ~= nil then
             arrow_size_base = overlay_size
         end
     end
 
-    if title_icon_style then
+    local title_icon_style = style.title_icon
+
+    if title_icon_style and title_icon ~= nil and title_icon ~= "" then
         local title_offset = title_icon_style.offset
         local title_size = title_icon_style.size
 
@@ -2153,7 +2164,7 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         title_offset[3] = icon_z + 2
         title_size[1] = size
         title_size[2] = size
-        title_icon_style.color = title_color or color
+        title_icon_style.color = _copy_into_widget_color(_style_color_table(title_icon_style), visual.color)
     end
 
     if arrow_icon_style then
@@ -2177,10 +2188,10 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         arrow_offset[3] = icon_z + 3
         arrow_size_tbl[1] = arrow_size
         arrow_size_tbl[2] = arrow_size
-
-        if arrow_color then
-            arrow_icon_style.color = arrow_color
-        end
+        arrow_icon_style.color = _copy_into_widget_color(
+            _style_color_table(arrow_icon_style),
+            _configured_radar_color("vertical_arrow", VERTICAL_ARROW_WIDGET_COLOR)
+        )
     end
 end
 
@@ -3467,16 +3478,9 @@ local function _draw_screen_highlights(self, ui_renderer, snapshot, z, draw_cach
     end
 end
 
---- Pixel snapping helpers; a rounded centre, and the top left of a box of a size around it.
+--- Rounds a marker's centre to a whole pixel.
 local function _snap_center(value)
     return math_floor((tonumber(value) or 0) + 0.5)
-end
-
-local function _top_left_from_center(center_value, size)
-    local snapped_center = _snap_center(center_value)
-    local snapped_size = math_max(1, math_floor((tonumber(size) or 0) + 0.5))
-
-    return snapped_center - math_floor(snapped_size * 0.5)
 end
 
 --- Returns the pixel size of a marker's radius icon (such as a medical crate's healing radius).
@@ -3528,16 +3532,31 @@ end
 -- geometry source is active, the centre dot, every target up to the marker limit (each
 -- projected onto the radar, given a visual, brackets, a pooled widget and value texts), the
 -- overview legends, the zoom indicator and the screen highlights, and finally clears the
--- widgets left over from the previous frame.
+-- widgets left over from the previous frame. While profiling, each of those steps is timed
+-- through `mod:radar_profiler_lap`; the frame and the map geometry are timed apart, and each
+-- marker's projection, visual, brackets, widget update, widget draw and texts are added up
+-- over all markers through `mod:radar_profiler_accumulate`.
 -- tab: self HUD element
 -- tab: ui_renderer active UI renderer
 -- ?tab: snapshot radar snapshot
 -- ?number: t draw time
-local function _draw_internal(self, ui_renderer, snapshot, t)
+-- param: profile_mark profiler mark taken earlier in this frame, nil while profiling is off
+-- return: profiler mark after the screen highlights, or nil
+local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
     RadarHudWidgets.ensure_overview_scale_widget(self)
     RadarHudWidgets.ensure_marker_widgets(self)
 
+    local cache_refresh_t = profile_mark and _draw_cache.next_refresh_t
     local draw_cache = _build_draw_cache(t)
+
+    if profile_mark then
+        if draw_cache.next_refresh_t ~= cache_refresh_t then
+            mod:radar_profiler_count("draw_cache_refreshes", 1)
+        end
+
+        profile_mark = mod:radar_profiler_lap("draw_cache", profile_mark)
+    end
+
     local marker_widgets = self._marker_widgets
     local size = mod:get_radar_size()
     local range = mod:get_radar_range()
@@ -3545,17 +3564,15 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
     local center_x = x + radius
     local center_y = y + radius
     local debug_mode = draw_cache.debug_mode
-    local UIWidget_draw = UIWidget.draw
+    local draw_marker_widget = RadarHudWidgets.draw_marker_widget
     local apply_marker_widget = _apply_marker_widget
     local target_visual = _target_visual
-    local target_icon_size = _target_icon_size
+    local target_marker_sizes = _target_marker_sizes
     local target_radius_icon_size = _target_radius_icon_size
-    local target_bracket_size = _target_bracket_size
     local should_draw_marker_brackets = _should_draw_marker_brackets
     local draw_marker_brackets = RadarHudRenderer.draw_marker_brackets
     local draw_marker_value_text = _draw_marker_value_text
     local snap_center = _snap_center
-    local top_left_from_center = _top_left_from_center
     local base_icon_z = z + 5
     local projection_radius = radius - 8
     local radar_style = _current_radar_style()
@@ -3565,8 +3582,16 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
     local strikemap_geometry_active = RadarStrikemapGeometry.is_active(t)
     local navmesh_geometry_active = RadarNavmesh.is_active(strikemap_geometry_active)
 
+    if profile_mark then
+        profile_mark = mod:radar_profiler_lap("draw_layout", profile_mark)
+    end
+
     if strikemap_geometry_active or navmesh_geometry_active then
         RadarHudRenderer.draw_radar_frame_background(self, ui_renderer, x, y, z + 1, size, projection_rotation)
+
+        if profile_mark then
+            profile_mark = mod:radar_profiler_accumulate("draw_frame", profile_mark)
+        end
 
         if strikemap_geometry_active then
             RadarStrikemapGeometry.draw(ui_renderer, snapshot, center_x, center_y, z + 2,
@@ -3576,9 +3601,17 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
                 center_x, center_y, projection_radius, range, z + 2)
         end
 
+        if profile_mark then
+            profile_mark = mod:radar_profiler_accumulate("draw_geometry", profile_mark)
+        end
+
         RadarHudRenderer.draw_radar_frame_foreground(self, ui_renderer, x, y, z + 1, size, projection_rotation)
     else
         RadarHudRenderer.draw_radar_frame(self, ui_renderer, x, y, z + 1, size, projection_rotation)
+    end
+
+    if profile_mark then
+        profile_mark = mod:radar_profiler_accumulate("draw_frame", profile_mark)
     end
 
     local next_widget_index = 1
@@ -3593,6 +3626,8 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
         local targets = snapshot.targets or {}
         collected_marker_count = #targets
         local project_target_to_radar = mod.project_target_to_radar
+        local forward_x, forward_y = mod:radar_projection_forward(projection_rotation)
+        local profiler_accumulate = profile_mark and mod.radar_profiler_accumulate
 
         if draw_cache.show_player_center_dot then
             local player_slot = tonumber(snapshot.player_slot)
@@ -3609,7 +3644,7 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
             local self_widget = marker_widgets[MAX_RADAR_MARKERS]
 
             apply_marker_widget(self_widget, self_visual, self_draw_x, self_draw_y, base_icon_z, nil, self_icon_size)
-            UIWidget_draw(self_widget, ui_renderer)
+            draw_marker_widget(self_widget, ui_renderer)
 
             center_dot_drawn = true
         end
@@ -3624,6 +3659,8 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
             )
         end
 
+        local marker_mark = profile_mark and mod:radar_profiler_mark()
+
         for i = 1, collected_marker_count do
             if next_widget_index > max_widget_index then
                 break
@@ -3633,26 +3670,32 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
             local px, py = project_target_to_radar(
                 mod,
                 player_pos,
-                projection_rotation,
+                forward_x,
+                forward_y,
                 target.position,
                 projection_radius,
                 range,
                 target.ignore_radar_range
             )
 
+            if marker_mark then
+                marker_mark = profiler_accumulate(mod, "draw_marker_project", marker_mark)
+            end
+
             if px and py then
                 local visual = target_visual(target, draw_cache)
-                local marker_size = target_icon_size(target, visual, draw_cache)
+                local marker_size, bracket_size = target_marker_sizes(target, visual, draw_cache)
                 local radius_icon_size = visual and visual.radius_icon and
                     target_radius_icon_size(target, visual, projection_radius, range, px, py, radar_style) or nil
-                local bracket_size = target_bracket_size(target, visual, draw_cache, marker_size)
                 local marker_center_x = snap_center(center_x + px)
                 local marker_center_y = snap_center(center_y + py)
+                local half_marker_size = math_floor(marker_size * 0.5)
+                local half_bracket_size = math_floor(bracket_size * 0.5)
 
-                local draw_x = top_left_from_center(marker_center_x, marker_size)
-                local draw_y = top_left_from_center(marker_center_y, marker_size)
-                local bracket_x = top_left_from_center(marker_center_x, bracket_size)
-                local bracket_y = top_left_from_center(marker_center_y, bracket_size)
+                local draw_x = marker_center_x - half_marker_size
+                local draw_y = marker_center_y - half_marker_size
+                local bracket_x = marker_center_x - half_bracket_size
+                local bracket_y = marker_center_y - half_bracket_size
 
                 local widget = marker_widgets[next_widget_index]
                 local render_layer = tonumber(target.render_layer) or 0
@@ -3673,12 +3716,24 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
                 local secondary_value_text_offset_y = visual and visual.secondary_value_text_offset_y or nil
                 local has_vertical_state = target.vertical_state ~= nil
 
+                if marker_mark then
+                    marker_mark = profiler_accumulate(mod, "draw_marker_visual", marker_mark)
+                end
+
                 if bracket_color and should_draw_marker_brackets(target, draw_cache) then
                     draw_marker_brackets(ui_renderer, bracket_x, bracket_y, bracket_z, bracket_size, bracket_color)
                 end
 
+                if marker_mark then
+                    marker_mark = profiler_accumulate(mod, "draw_marker_brackets", marker_mark)
+                end
+
                 apply_marker_widget(widget, visual, draw_x, draw_y, icon_z, target, marker_size,
                     bracket_x, bracket_y, bracket_size, radius_icon_size)
+
+                if marker_mark then
+                    marker_mark = profiler_accumulate(mod, "draw_marker_widget", marker_mark)
+                end
 
                 if debug_mode then
                     _log_once(
@@ -3690,7 +3745,7 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
                     )
                 end
 
-                local widget_ok, widget_err = pcall(UIWidget_draw, widget, ui_renderer)
+                local widget_ok, widget_err = pcall(draw_marker_widget, widget, ui_renderer)
 
                 if not widget_ok then
                     if debug_mode then
@@ -3704,6 +3759,10 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
 
                     RadarHudRenderer.draw_box(ui_renderer, draw_x, draw_y, base_icon_z, marker_size, marker_size,
                         RadarHudRenderer.widget_to_color(visual and visual.color or nil))
+                end
+
+                if marker_mark then
+                    marker_mark = profiler_accumulate(mod, "draw_marker_widget_draw", marker_mark)
                 end
 
                 draw_marker_value_text(
@@ -3734,6 +3793,10 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
                     secondary_value_text_offset_y
                 )
 
+                if marker_mark then
+                    marker_mark = profiler_accumulate(mod, "draw_marker_text", marker_mark)
+                end
+
                 next_widget_index = next_widget_index + 1
                 drawn_marker_count = drawn_marker_count + 1
             end
@@ -3751,6 +3814,11 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
             MAX_RADAR_MARKERS,
             center_dot_drawn
         )
+    end
+
+    if profile_mark then
+        mod:radar_profiler_value("draw_markers_drawn", drawn_marker_count)
+        profile_mark = mod:radar_profiler_lap("draw_markers", profile_mark)
     end
 
     _draw_overview_scale_overlay(
@@ -3843,7 +3911,15 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
             zoom_color)
     end
 
+    if profile_mark then
+        profile_mark = mod:radar_profiler_lap("draw_overlays", profile_mark)
+    end
+
     _draw_screen_highlights(self, ui_renderer, snapshot, z + 40, draw_cache)
+
+    if profile_mark then
+        profile_mark = mod:radar_profiler_lap("draw_highlights", profile_mark)
+    end
 
     local last_active_marker_widget_index = next_widget_index - 1
     local previous_active_marker_widget_index = self._last_active_marker_widget_index or 0
@@ -3859,6 +3935,8 @@ local function _draw_internal(self, ui_renderer, snapshot, t)
     end
 
     self._last_active_marker_widget_index = last_active_marker_widget_index
+
+    return profile_mark
 end
 
 -- ----------------------------------------------------------------------------
@@ -3884,17 +3962,22 @@ HudElementRadar.update = function(self, dt, t)
 end
 
 --- Draws the radar when the mod is enabled and the radar may be drawn.
--- Errors in the draw are caught and reported without breaking the HUD.
+-- Errors in the draw are caught and reported without breaking the HUD. While profiling, the
+-- draw check, the pass setup, each drawing step, the finish and the whole draw are timed, and
+-- the steps added up over the draw (frame, geometry, marker steps) are recorded once.
 -- number: dt frame delta time
 -- number: t time
 -- tab: ui_renderer active UI renderer
 -- ?tab: render_settings render settings; `start_layer` is set to the element's layer
 -- param: input_service input service
 HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input_service)
+    local profile_start = mod:radar_profiler_mark()
+
     if not mod:is_enabled() or not mod:should_draw_radar() then
         return
     end
 
+    local profile_mark = profile_start and mod:radar_profiler_lap("draw_gate", profile_start)
     local snapshot = mod:get_radar_snapshot()
 
     render_settings = render_settings or {}
@@ -3904,12 +3987,23 @@ HudElementRadar.draw = function(self, dt, t, ui_renderer, render_settings, input
 
     UIRenderer_begin_pass(ui_renderer, self._ui_scenegraph, input_service, dt, render_settings)
 
-    local ok, err = pcall(_draw_internal, self, ui_renderer, snapshot, t)
+    if profile_mark then
+        profile_mark = mod:radar_profiler_lap("draw_setup", profile_mark)
+    end
+
+    local ok, result = pcall(_draw_internal, self, ui_renderer, snapshot, t, profile_mark)
 
     UIRenderer_end_pass(ui_renderer)
 
     if not ok then
-        mod:error("HudElementRadar.draw failed: %s", tostring(err))
+        mod:error("HudElementRadar.draw failed: %s", tostring(result))
+    elseif profile_mark then
+        mod:radar_profiler_lap("draw_finish", result)
+        mod:radar_profiler_lap("draw_total", profile_start)
+    end
+
+    if profile_mark then
+        mod:radar_profiler_commit()
     end
 end
 

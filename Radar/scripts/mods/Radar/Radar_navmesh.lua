@@ -7,7 +7,9 @@
 -- Every `GwNavWorld` call is existence-checked and runs inside `pcall`, coordinates are
 -- validated, and the engine's temporary allocator is rewound after each triangle. The
 -- geometry is cleared and rebuilt whenever the nav world changes, so a previous mission's
--- layout never persists, and a failed build is retried after a short cooldown.
+-- layout never persists, and a failed build is retried after a short cooldown. With the `live`
+-- source the build runs as the mission state starts, not on the first radar draw, so the
+-- frame it stalls is the one the loading screen closes on.
 --
 -- Installer module, installed last into Radar's shared runtime environment (see
 -- `Radar.lua`). It shares nothing through `shared_env`; its interface is a set of `mod`
@@ -106,9 +108,13 @@ return function(env)
     -- treturn: int number of triangles stored
     -- treturn: number largest triangle radius
     -- treturn: int number of database tiles
+    -- treturn: ?number time of the visual representation build in ms, nil while not profiling
     local function _extract(nav_world)
+        local profile_mark = mod:radar_profiler_mark()
+
         GwNavWorld.build_database_visual_representation(nav_world)
 
+        local visual_ms = mod:radar_profiler_elapsed_ms(profile_mark)
         local tile_count = GwNavWorld.database_tile_count(nav_world)
 
         if type(tile_count) ~= "number" or tile_count ~= tile_count or tile_count < 0 then
@@ -196,7 +202,7 @@ return function(env)
             end
         end
 
-        return count, max_radius, tile_count
+        return count, max_radius, tile_count, visual_ms
     end
 
     --- Logs why a navmesh build failed, once per distinct reason and only in debug mode.
@@ -218,10 +224,11 @@ return function(env)
 
     --- Extracts the navmesh of a nav world and rebuilds the bucket grid.
     -- The triangle count, buckets and revision are only replaced on success; on failure the
-    -- reason is logged and false returned.
+    -- reason is logged and false returned. While profiling, a successful build logs its parts.
     -- param: nav_world GwNav world handle
+    -- string: trigger `state_entry` for a build on entering a mission, `draw` for one on a radar draw
     -- treturn: bool true when new geometry was built
-    local function _build(nav_world)
+    local function _build(nav_world, trigger)
         local gw_nav_world = GwNavWorld
 
         if not gw_nav_world
@@ -235,7 +242,8 @@ return function(env)
         end
 
         local build_start = os_clock and os_clock() or nil
-        local ok, count, max_radius, tile_count = pcall(_extract, nav_world)
+        local profile_mark = mod:radar_profiler_mark()
+        local ok, count, max_radius, tile_count, visual_ms = pcall(_extract, nav_world)
 
         if not ok then
             _log_build_failure(count)
@@ -249,6 +257,8 @@ return function(env)
             return false
         end
 
+        local extract_ms = mod:radar_profiler_elapsed_ms(profile_mark)
+        local buckets_mark = mod:radar_profiler_mark()
         local buckets = {}
         local cell_size = NAVMESH_BUCKET_CELL_SIZE
         local mid_x, mid_y, mid_z = geometry.mid_x, geometry.mid_y, geometry.mid_z
@@ -278,6 +288,8 @@ return function(env)
             end
         end
 
+        local buckets_ms = mod:radar_profiler_elapsed_ms(buckets_mark)
+
         geometry.count = count
         geometry.max_radius = max_radius
         geometry.buckets = buckets
@@ -285,6 +297,19 @@ return function(env)
         geometry.build_ms = build_start and (os_clock() - build_start) * 1000 or nil
         geometry.revision = geometry.revision + 1
         last_logged_failure = nil
+
+        if buckets_ms then
+            mod:info(string_format(
+                "[Radar] profile build | when=%s total_ms=%.2f visual_ms=%.2f triangles_ms=%.2f buckets_ms=%.2f tiles=%d triangles=%d",
+                trigger,
+                extract_ms + buckets_ms,
+                visual_ms,
+                extract_ms - visual_ms,
+                buckets_ms,
+                tile_count,
+                count
+            ))
+        end
 
         if mod:get("debug_mode") == true then
             mod:info(string_format(
@@ -312,7 +337,7 @@ return function(env)
     -- Clears the geometry outside a mission and whenever the nav world changes. A pending build
     -- is attempted at most once per cooldown; a gameplay time lower than the last attempt
     -- (a new session) allows an immediate retry.
-    -- ?number: t gameplay time
+    -- ?number: t gameplay time, nil when building on entering a mission
     -- treturn: tab geometry, possibly empty
     function mod:ensure_navmesh_geometry(t)
         local nav_world = _current_nav_world()
@@ -334,6 +359,8 @@ return function(env)
         end
 
         if dirty then
+            local trigger = t and "draw" or "state_entry"
+
             t = tonumber(t) or 0
 
             if last_gen_t and t < last_gen_t then
@@ -341,7 +368,7 @@ return function(env)
             end
 
             if not last_gen_t or (t - last_gen_t) >= NAVMESH_REGEN_COOLDOWN then
-                if _build(nav_world) then
+                if _build(nav_world, trigger) then
                     dirty = false
                 end
 
@@ -350,6 +377,47 @@ return function(env)
         end
 
         return geometry
+    end
+
+    --- Builds the navmesh on entering a mission when the first radar draw would build it anyway.
+    -- Applies to the `live` source only, since `auto` may leave the slot to Strikemap, and not to
+    -- game modes that spawn their navmesh during the mission (expeditions), whose data may still
+    -- be incomplete. Every other case keeps building on the first draw.
+    local function _prebuild_geometry()
+        if not mod:is_enabled() or mod:get_map_geometry_source() ~= "live" then
+            return
+        end
+
+        local state_manager = Managers and Managers.state
+        local nav_mesh = state_manager and state_manager.nav_mesh
+
+        if not nav_mesh or nav_mesh._dynamic_mesh_spawning or not mod:is_radar_runtime_game_mode_allowed() then
+            return
+        end
+
+        mod:ensure_navmesh_geometry()
+    end
+
+    local previous_on_game_state_changed = mod.on_game_state_changed
+
+    --- Starts the navmesh build as the mission state begins, after the previous handler.
+    -- A build stalls its frame for tens of milliseconds. On the first radar draw that frame falls
+    -- in the first seconds of play; here it is the one the loading screen closes on. A failed
+    -- build stays pending for the radar draw to retry.
+    -- string: status `enter` or `exit`
+    -- string: state_name game state class name
+    mod.on_game_state_changed = function(status, state_name)
+        if previous_on_game_state_changed then
+            previous_on_game_state_changed(status, state_name)
+        end
+
+        if status == "enter" and state_name == "GameplayStateRun" then
+            local ok, failure = pcall(_prebuild_geometry)
+
+            if not ok then
+                _log_build_failure(failure)
+            end
+        end
     end
 
     --- Collects the geometry buckets around a point into a caller-owned list.

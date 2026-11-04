@@ -417,7 +417,8 @@ check(widgets_source:find("has_plate_icon = function(content)", 1, true) ~= nil,
     "the backplate visibility function is missing")
 check(widgets_source:find("widget.content.plate_icon = nil", 1, true) ~= nil,
     "the backplate is not cleared when a pooled widget is reused")
-check(hud_source:find("widget.content.plate_icon = visual and visual.plate_icon or nil", 1, true) ~= nil,
+check(hud_source:find("local plate_icon = visual and visual.plate_icon or nil", 1, true) ~= nil
+    and hud_source:find("content.plate_icon = plate_icon", 1, true) ~= nil,
     "the backplate is not driven by an explicit marker property")
 
 -- Enemy markers must not gain the layer: they never name a plate.
