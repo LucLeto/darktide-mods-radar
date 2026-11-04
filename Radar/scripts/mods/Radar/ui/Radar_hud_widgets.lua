@@ -1,17 +1,23 @@
 --- Widget definitions and widget pools for the radar HUD element.
 -- Defines the Auspex frame widget, the overview scale widget and the pooled marker widgets,
--- and the helpers that create them lazily on the HUD element and reset them between uses.
--- Every optional pass is gated by a visibility function on its content value, so a pass
--- only draws while the HUD element has assigned it a material, icon or glyph.
+-- the helpers that create them lazily on the HUD element and reset them between uses, and
+-- the draw of a marker widget. Every optional pass is gated by a visibility function on its
+-- content value, so a pass only draws while the HUD element has assigned it a material, icon
+-- or glyph.
 --
 -- Explicit module loaded by `ui/Radar_hud_element.lua` through `mod:io_dofile`; the chunk
--- returns the pool size and the ensure and clear helpers. The widgets are stored on the
+-- returns the pool size and the ensure, clear and draw helpers. The widgets are stored on the
 -- HUD element instance passed in as `self`.
 -- module: Radar_hud_widgets
 -- author: LucLeto
 local mod = get_mod("Radar")
 local UIFontSettings = require("scripts/managers/ui/ui_font_settings")
+local UIRenderer = require("scripts/managers/ui/ui_renderer")
+local UIScenegraph = require("scripts/managers/ui/ui_scenegraph")
 local UIWidget = require("scripts/managers/ui/ui_widget")
+local Gui = Gui
+local Vector2 = Vector2
+local Vector3 = Vector3
 local string_format = string.format
 
 -- ----------------------------------------------------------------------------
@@ -21,6 +27,18 @@ local string_format = string.format
 local WHITE_WIDGET_COLOR = { 255, 255, 255, 255 }
 --- Number of marker widgets in the pool; the HUD element reserves the last one for the player's centre dot.
 local MAX_RADAR_MARKERS = 301
+--- The plain texture layers of a marker widget, in pass order, which `_draw_marker_widget` draws itself.
+-- The marker definition's other two layers, the marked ring (a texture with material values) and
+-- the glyph (a text pass), are left to `UIWidget.draw`.
+local MARKER_TEXTURE_LAYERS = {
+    "radius_icon",
+    "plate_icon",
+    "icon",
+    "overlay_icon",
+    "title_icon",
+    "arrow_icon",
+}
+local MARKER_TEXTURE_LAYER_COUNT = #MARKER_TEXTURE_LAYERS
 
 -- ----------------------------------------------------------------------------
 -- Mutable state
@@ -496,6 +514,65 @@ local function _ensure_marker_widgets(self)
     end
 end
 
+--- Draws a pooled marker widget.
+-- Each visible texture layer is drawn with the calls the game's texture pass makes, in pass
+-- order and at the same position, size and colour, which saves `UIWidget.draw` stepping
+-- through the passes of every marker. Like `UIWidget.draw`, the renderer's alpha and colour
+-- intensity multipliers apply while the widget draws, and the render settings are left with
+-- material flags. A widget showing its marked ring or its glyph, or a draw without render
+-- settings or in forced retained mode, goes through `UIWidget.draw`.
+-- tab: widget marker widget
+-- tab: ui_renderer active UI renderer
+local function _draw_marker_widget(widget, ui_renderer)
+    local content = widget.content
+    local render_settings = ui_renderer.render_settings
+    local marked_ring = content.marked_ring
+    local glyph_icon = content.glyph_icon
+
+    if not render_settings
+        or render_settings.force_retained_mode
+        or (marked_ring ~= nil and marked_ring ~= "")
+        or (glyph_icon ~= nil and glyph_icon ~= "") then
+        return UIWidget.draw(widget, ui_renderer)
+    end
+
+    local previous_alpha_multiplier = render_settings.alpha_multiplier
+    local previous_color_intensity_multiplier = render_settings.color_intensity_multiplier
+    local world_position = UIScenegraph.world_position(ui_renderer.ui_scenegraph, widget.scenegraph_id)
+    local widget_offset = widget.offset
+    local x = world_position[1] + widget_offset[1]
+    local y = world_position[2] + widget_offset[2]
+    local z = world_position[3] + widget_offset[3]
+    local style = widget.style
+    local scale = ui_renderer.scale
+    local scale_vector3 = Gui.scale_vector3
+    local script_draw_bitmap = UIRenderer.script_draw_bitmap
+
+    render_settings.alpha_multiplier = (previous_alpha_multiplier or 1) * (ui_renderer.alpha_multiplier or 1)
+    render_settings.color_intensity_multiplier = (previous_color_intensity_multiplier or 1)
+        * (ui_renderer.color_intensity_multiplier or 1)
+    render_settings.material_flags = render_settings.material_flags or 0
+
+    for i = 1, MARKER_TEXTURE_LAYER_COUNT do
+        local layer = MARKER_TEXTURE_LAYERS[i]
+        local material = content[layer]
+
+        if material ~= nil and material ~= "" then
+            local layer_style = style[layer]
+            local offset = layer_style.offset
+            local size = layer_style.size
+
+            script_draw_bitmap(ui_renderer, material,
+                scale_vector3(Vector3(x + offset[1], y + offset[2], z + (offset[3] or 0)), scale),
+                scale_vector3(Vector2(size[1], size[2]), scale), layer_style.color)
+        end
+    end
+
+    render_settings.alpha_multiplier = previous_alpha_multiplier
+    render_settings.color_intensity_multiplier = previous_color_intensity_multiplier
+    widget.dirty = nil
+end
+
 --- Module interface consumed by `ui/Radar_hud_element.lua`.
 return {
     MAX_RADAR_MARKERS = MAX_RADAR_MARKERS,
@@ -505,4 +582,5 @@ return {
     clear_frame_widget = _clear_frame_widget,
     clear_overview_scale_widget = _clear_overview_scale_widget,
     clear_marker_widget = _clear_marker_widget,
+    draw_marker_widget = _draw_marker_widget,
 }
