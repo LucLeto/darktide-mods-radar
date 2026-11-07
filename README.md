@@ -324,8 +324,9 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Boss marker style | **Icon only** or **Marked icon**. |
 | Boss marker range | **Normal** or **Infinite**. Lets boss-type markers follow the normal radar range or stay visible at any distance. |
 | Show boss distance text | Shows yellow distance text in meters for bosses except the daemonhost. |
-| Teammate marker style | **Icon only**, **Marked icon**, **Dot only**, **Marked Dot**, or **Off**. The two teammate settings below are hidden while it is **Off**. |
+| Teammate marker style | **Icon only**, **Marked icon**, **Dot only**, **Marked dot**, or **Off**. The three teammate settings below are hidden while it is **Off**. |
 | Teammate state icons | Replaces teammate class or dot markers with contextual state icons. |
+| Teammate coherency | Puts teammate markers on a dark backplate inside a frame. The frame takes the teammate's color while that teammate is in coherency with you, following the team panel, and the **Frame color** while they are not; a short flash marks the change. On by default; while it is off, teammate markers look as before. **Backplate color**, **Frame color**, **Gained flash color** and **Lost flash color** below it set those colors and opacities. **Frame color** defaults to the objective frame's color. |
 | Teammate marker range | **Normal** or **Infinite**. Lets teammate markers follow the normal radar range or stay visible at any distance. |
 | Player center dot | **Icon** or **Off**. Shows or hides your own center point on the radar. |
 | Icon size (%) (Player Companions) | Resizes Cyber Mastiff and Servo Skull markers independently from player markers. Default: **100%**. |
@@ -363,10 +364,10 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Safe route | Safe route, Wrong way | **Icon only**, **Icon + Distance m**, **Off** |
 | Enemy bosses (Boss marker style) | Daemonhost, Monstrosities, Captains, Karnak Twins | **Icon only**, **Marked icon** |
 | Individual enemies | Dreg and Scab Bruisers and Vanguards, Dreg and Scab Stalkers, Scab Shooters, and the Elite, Special, and Misc enemies listed below | **Icon only**, **Marked icon**, **Off** |
-| Teammates | Teammate marker style | **Icon only**, **Marked icon**, **Dot only**, **Marked Dot**, **Off** |
+| Teammates | Teammate marker style | **Icon only**, **Marked icon**, **Dot only**, **Marked dot**, **Off** |
 | Single markers | Every other pickup, luggable, objective item, environment, and deployed-item marker, Martyr's Skull and its Power Cell, Dark Rites Totems and Servo Skulls, Tainted Communications Device, Monstrosities, Captains, Karnak Twins, Horde enemies, Player center dot, and Show unknown pickups | **Icon**, **Off** |
 
-Riddle interactables, the charge annotations, the companion toggles, and the player tag toggle remain checkboxes.
+Riddle interactables, the charge annotations, the teammate state icon and teammate coherency toggles, the companion toggles, and the player tag toggle remain checkboxes.
 
 ### Per-category icon size controls
 
@@ -592,7 +593,7 @@ Each marker has its own icon, frame and backplate color pickers, which are hidde
 
 ### Marker Rules
 
-- **Enemies**, **teammates**, **player companions**, and **player smart tags** each use their own display rules and settings. Teammates also have a **Teammate marker range** mode and an optional **Teammate state icons** override for disabled, rescue, luggable, and dead states. The local **center dot** has its own toggle and always keeps its normal dot icon.
+- **Enemies**, **teammates**, **player companions**, and **player smart tags** each use their own display rules and settings. Teammates also have a **Teammate marker range** mode, an optional **Teammate state icons** override for disabled, rescue, luggable, and dead states, and an optional coherency annotation built from the game's own interaction marker backplate, ring and flash. The local **center dot** has its own toggle and always keeps its normal dot icon.
 - Companion markers use their owning player's bright slot color. Player markers take priority over following companions at the same position, while Servo Skulls performing an active task and Cyber Mastiffs pinning an enemy are drawn above the assisted or disabled unit.
 - Following Servo Skulls are hidden when they are very close to their visible owner marker. Hacking, reviving, and active Purgator/Flamer skulls remain visible near their owner.
 - While a Cyber Mastiff is mauling an enemy that uses Darktide's actual companion-disable behavior, that enemy's icon and background are made transparent so the Mastiff remains readable; enabled enemy marker brackets remain visible.
@@ -720,7 +721,7 @@ Left: **Icon only**. Right: **Marked icon**.
 
 | Preview | Marker | Notes |
 | --- | --- | --- |
-| <img src="doc/img/player_teammate_sample.png"  width="80" alt="Teammate marker sample" /> | Teammates | Uses class icons, colored by teammate slot at runtime. **Teammate marker style** shows them as **Icon only**, **Marked icon**, **Dot only**, or **Marked Dot**, or turns them **Off**. Optional contextual state icons replace the selected marker while a teammate is disabled, needs rescue, carries a luggable, or is dead. **Teammate marker range** can be set to **Normal** or **Infinite**, and teammate visibility can be toggled independently from the unchanged local player center dot. |
+| <img src="doc/img/player_teammate_sample.png"  width="80" alt="Teammate marker sample" /> | Teammates | Uses class icons, colored by teammate slot at runtime. **Teammate marker style** shows them as **Icon only**, **Marked icon**, **Dot only**, or **Marked dot**, or turns them **Off**. Optional contextual state icons replace the selected marker while a teammate is disabled, needs rescue, carries a luggable, or is dead. With **Teammate coherency** on, every style draws the teammate on a black backplate inside a frame. The frame takes the teammate's color while that teammate is in coherency with you and turns the near-white **Frame color** of the objective frames while they are out of coherency, dead or hogtied, as the team panel shows it. A short flash marks the change: green and growing outward when coherency is gained, red and shrinking inward when it is lost, so the direction also reads without telling the colors apart. These are the backplate, ring and tag flash of the game's own interaction markers. A player color too dark to read on the backplate, which mods such as ColorSelection allow, is lightened just enough to stay readable. **Teammate marker range** can be set to **Normal** or **Infinite**, and teammate visibility can be toggled independently from the unchanged local player center dot. |
 
 Display style example for teammate markers:
 

@@ -497,6 +497,22 @@ for m = 1, #PROFILING_MODES do
     end)
 end
 
+test("toggling the teammate state icons or coherency annotation rescans at once", function()
+    local harness = new_harness()
+
+    for _, setting_id in ipairs({ "show_player_state_icons", "show_player_coherency_annotation" }) do
+        for _, value in ipairs({ false, true }) do
+            harness.mod._next_scan_t = 1000
+            harness:change_setting(setting_id, value)
+            assert_equal(0, harness.mod._next_scan_t, setting_id .. " set to " .. tostring(value) .. " did not rescan")
+        end
+    end
+
+    harness.mod._next_scan_t = 1000
+    harness:change_setting("show_player_center_dot", false)
+    assert_equal(1000, harness.mod._next_scan_t, "an unrelated setting rescanned")
+end)
+
 test("profiling is off by default and logs nothing", function()
     local harness = new_harness()
 
