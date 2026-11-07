@@ -2560,6 +2560,12 @@ return {
                                             default_value = true,
                                         },
                                         {
+                                            setting_id = "show_player_coherency_annotation",
+                                            tooltip = "show_player_coherency_annotation_tooltip",
+                                            type = "checkbox",
+                                            default_value = true,
+                                        },
+                                        {
                                             setting_id = "player_marker_range_mode",
                                             type = "dropdown",
                                             default_value = "normal",

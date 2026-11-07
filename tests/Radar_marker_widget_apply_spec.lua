@@ -16,8 +16,8 @@ local ARROW_UP = "content/ui/materials/icons/circumstances/more_resistance_01"
 local ARROW_SIZE_RATIO = 0.34
 local ARROW_CENTRE_RATIO = 0.885
 local ARROW_MIN_SIZE = 6
-local LAYERS = { "radius_icon", "marked_ring", "plate_icon", "icon", "glyph_icon", "overlay_icon", "title_icon",
-    "arrow_icon" }
+local LAYERS = { "radius_icon", "flash_icon", "marked_ring", "plate_icon", "ring_icon", "icon", "glyph_icon",
+    "overlay_icon", "title_icon", "arrow_icon" }
 
 local function assert_equal(expected, actual, message)
     if expected ~= actual then
@@ -490,6 +490,94 @@ test("an enemy's vertical arrow sits on its brackets, sized from its overlay whe
     end
 end)
 
+test("a teammate's coherency layers are centred on the icon, by their ratio, below it", function()
+    local harness = new_harness()
+
+    for _, icon_size in ipairs({ 10, 15, 19, 30, 48 }) do
+        local widget = harness.new_widget(1)
+        local label = "size " .. icon_size
+
+        apply(harness, widget, {
+            visual = {
+                icon = "icon",
+                color = { 255, 4, 5, 6 },
+                size = 15,
+                plate_icon = "plate",
+                plate_color = { 200, 0, 0, 0 },
+                plate_base_size = 30,
+                ring_icon = "ring",
+                ring_color = { 255, 4, 5, 6 },
+                ring_base_size = 30,
+                flash_icon = "flash",
+                flash_color = { 120, 255, 255, 255 },
+                flash_base_size = 36,
+            },
+            target = { kind = "player_teammate" },
+            icon_size = icon_size,
+        })
+
+        local centre = 100 * 2 + icon_size
+
+        for layer, base_size in pairs({ plate_icon = 30, ring_icon = 30, flash_icon = 36 }) do
+            local layer_style = widget.style[layer]
+            local margin = math.floor(icon_size * (base_size / 15 - 1) * 0.5 + 0.5)
+
+            assert_equal(icon_size + margin * 2, layer_style.size[1], label .. " " .. layer .. " width")
+            assert_equal(layer_style.size[1], layer_style.size[2], label .. " " .. layer .. " is not square")
+            assert_equal(centre, layer_style.offset[1] * 2 + layer_style.size[1], label .. " " .. layer .. " is off centre")
+            assert_equal(200 * 2 + icon_size, layer_style.offset[2] * 2 + layer_style.size[2],
+                label .. " " .. layer .. " is off centre vertically")
+        end
+
+        -- Bottom to top; flash, backplate, ring (on the brackets' layer), icon.
+        assert_equal(7, widget.style.flash_icon.offset[3], label .. " flash layer")
+        assert_equal(8, widget.style.plate_icon.offset[3], label .. " backplate layer")
+        assert_equal(9, widget.style.ring_icon.offset[3], label .. " ring layer")
+        assert_equal(10, widget.style.icon.offset[3], label .. " icon layer")
+
+        local records = harness.draw(widget)
+        local order = { "flash", "plate", "ring", "icon" }
+
+        assert_equal(#order, #records, label .. " bitmap count")
+
+        for i = 1, #order do
+            assert_equal(order[i], records[i]:match("^bitmap (%S+)"), label .. " layer " .. i)
+        end
+
+        assert_equal("120,255,255,255", drawn_color(records, "flash"), label .. " flash colour")
+        assert_equal("200,0,0,0", drawn_color(records, "plate"), label .. " backplate colour")
+        assert_equal("255,4,5,6", drawn_color(records, "ring"), label .. " ring colour")
+    end
+
+    -- A ring or flash without a base size takes the icon's box, and a target without them draws neither.
+    local widget = harness.new_widget(1)
+
+    apply(harness, widget, {
+        visual = { icon = "icon", size = 15, ring_icon = "ring", flash_icon = "flash" },
+        target = { kind = "player_teammate" },
+        icon_size = 20,
+    })
+
+    assert_equal(20, widget.style.ring_icon.size[1], "ring without a base size")
+    assert_equal(100, widget.style.ring_icon.offset[1], "ring without a base size is not on the icon")
+    assert_equal(20, widget.style.flash_icon.size[1], "flash without a base size")
+
+    apply(harness, widget, { visual = { icon = "icon", size = 15 }, target = { kind = ITEM_KIND }, icon_size = 20 })
+
+    local records = harness.draw(widget)
+
+    assert_equal(1, #records, "a reused widget kept its ring or flash")
+
+    -- The flash belongs to the frame, so a flash without one is not drawn.
+    apply(harness, widget, {
+        visual = { icon = "icon", size = 15, flash_icon = "flash", flash_base_size = 30 },
+        target = { kind = "player_teammate" },
+        icon_size = 20,
+    })
+
+    assert_equal(1, #harness.draw(widget), "a flash without its frame was drawn")
+end)
+
 test("a widget handed from target to target draws what a fresh widget draws", function()
     local harness = new_harness()
     local reused = harness.new_widget(1)
@@ -524,6 +612,13 @@ test("a widget handed from target to target draws what a fresh widget draws", fu
             color = chance(0.9) and random_color() or nil,
             plate_icon = chance(0.4) and "plate" or (chance(0.2) and "" or nil),
             plate_color = chance(0.7) and random_color() or nil,
+            plate_base_size = chance(0.2) and random_int(8, 40) or nil,
+            ring_icon = chance(0.3) and "ring" or (chance(0.2) and "" or nil),
+            ring_color = chance(0.7) and random_color() or nil,
+            ring_base_size = chance(0.5) and random_int(8, 40) or nil,
+            flash_icon = chance(0.3) and "flash" or (chance(0.2) and "" or nil),
+            flash_color = chance(0.7) and random_color() or nil,
+            flash_base_size = chance(0.5) and random_int(8, 48) or nil,
             overlay_icon = chance(0.4) and "overlay" or (chance(0.2) and "" or nil),
             overlay_color = chance(0.7) and random_color() or nil,
             overlay_base_size = chance(0.4) and random_int(4, 30) or nil,

@@ -3828,11 +3828,12 @@ return function(env)
     local previous_on_setting_changed = mod.on_setting_changed
 
     --- DMF callback, chained after any previously installed handler.
-    -- Rebuilds the input capture when a zoom key changes, rescans when player state icons are
-    -- toggled and starts or stops the profiler. DMF saves a menu value as it is, so the radar
-    -- position, anchor and size settings are resolved here the way the menu used to; a new
-    -- anchor keeps the radar where it is on screen, offsets are clamped to the screen and a new
-    -- size re-clamps them. A chosen teammate marker style is also kept as the player marker style.
+    -- Rebuilds the input capture when a zoom key changes, rescans when player state icons or the
+    -- coherency annotation are toggled and starts or stops the profiler. DMF saves a menu value
+    -- as it is, so the radar position, anchor and size settings are resolved here the way the
+    -- menu used to; a new anchor keeps the radar where it is on screen, offsets are clamped to
+    -- the screen and a new size re-clamps them. A chosen teammate marker style is also kept as
+    -- the player marker style.
     -- string: setting_id changed setting
     -- param: ... further DMF arguments, forwarded to the previous handler
     mod.on_setting_changed = function(setting_id, ...)
@@ -3842,7 +3843,7 @@ return function(env)
 
         if setting_id == "overview_zoom_in_key" or setting_id == "overview_zoom_out_key" then
             _refresh_overview_input_capture()
-        elseif setting_id == "show_player_state_icons" then
+        elseif setting_id == "show_player_state_icons" or setting_id == "show_player_coherency_annotation" then
             mod._next_scan_t = 0
         elseif setting_id == "debug_profiling" then
             _set_profiling_enabled(mod:get("debug_profiling") == true)

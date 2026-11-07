@@ -437,6 +437,41 @@ check(shows("show_players", "dot_only", "show_player_state_icons")
     and shows("show_players", "marked_icon", "player_marker_range_mode")
     and option_of("show_players", "off").show_widgets == nil,
     "the teammate settings do not follow the teammate marker")
+check(parent_id("show_player_coherency_annotation") == "show_players"
+    and (widget_by_id.show_player_coherency_annotation or {}).type == "checkbox"
+    and (widget_by_id.show_player_coherency_annotation or {}).default_value == true
+    and (widget_by_id.show_player_coherency_annotation or {}).tooltip == "show_player_coherency_annotation_tooltip",
+    "the coherency annotation is not a teammate checkbox that is on by default")
+check(parent_id("player_teammate_backplate_color") == "show_player_coherency_annotation"
+    and parent_id("player_teammate_frame_color") == "show_player_coherency_annotation"
+    and parent_id("player_coherency_gained_flash_color") == "show_player_coherency_annotation"
+    and parent_id("player_coherency_lost_flash_color") == "show_player_coherency_annotation",
+    "the coherency colours do not follow the coherency annotation")
+
+-- Black is the one colour the game gives no player; gaining coherency flashes green, losing it red.
+local teammate_backplate_default = (widget_by_id.player_teammate_backplate_color or {}).default_value or {}
+local gained_flash_default = (widget_by_id.player_coherency_gained_flash_color or {}).default_value or {}
+local lost_flash_default = (widget_by_id.player_coherency_lost_flash_color or {}).default_value or {}
+
+check(teammate_backplate_default[2] == 0 and teammate_backplate_default[3] == 0 and teammate_backplate_default[4] == 0,
+    "the teammate backplate does not default to black")
+
+-- Out of coherency the teammate frame looks like the objective frame.
+check(same_color((widget_by_id.player_teammate_frame_color or {}).default_value,
+    (widget_by_id.mission_objective_frame_marker_color or {}).default_value),
+    "the teammate frame does not default to the objective frame colour")
+check((gained_flash_default[3] or 0) > (gained_flash_default[2] or 0)
+    and (gained_flash_default[3] or 0) > (gained_flash_default[4] or 0),
+    "the gained coherency flash does not default to green")
+check((lost_flash_default[2] or 0) > (lost_flash_default[3] or 0)
+    and (lost_flash_default[2] or 0) > (lost_flash_default[4] or 0),
+    "the lost coherency flash does not default to red")
+
+for _, style in ipairs({ "icon_only", "marked_icon", "dot_only", "marked_dot" }) do
+    check(shows("show_players", style, "show_player_coherency_annotation"),
+        "the coherency annotation setting is hidden for " .. style .. " teammates")
+end
+
 check(parent_id("show_player_tag_distance_text") == "show_player_tags"
     and parent_id("player_tag_display_style") == "show_player_tags",
     "the player tag settings do not follow the player tag toggle")

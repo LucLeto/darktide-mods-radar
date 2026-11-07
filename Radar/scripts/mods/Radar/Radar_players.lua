@@ -1,9 +1,9 @@
 --- Teammates, player companions, player smart tags and ability-marked enemies.
--- Tracks the other players with their archetype and rescue/captured/luggable state, the
--- companions every player owns (cyber mastiff and servo skull, with what they are doing),
--- and the location tags players place. It also reads which enemies a player tagged and
--- which ones an ability of the local player outlines, and whether a player carries a
--- luggable.
+-- Tracks the other players with their archetype, rescue/captured/luggable state and
+-- coherency with the local player, the companions every player owns (cyber mastiff and
+-- servo skull, with what they are doing), and the location tags players place. It also
+-- reads which enemies a player tagged and which ones an ability of the local player
+-- outlines, and whether a player carries a luggable.
 --
 -- Installer module, installed as the first feature module into Radar's shared runtime
 -- environment (see `Radar.lua`). Contributes `_refresh_player_units` and
@@ -642,13 +642,62 @@ return function(env)
         return nil
     end
 
+    --- Returns whether the team panel would show a teammate in coherency with the local player.
+    -- Follows the panel's own rule; the teammate's coherency extension lists a unit the local
+    -- player owns (their player unit or their companion), while the teammate is alive, not
+    -- hogtied and has unit data. Anything that cannot be read counts as out of coherency.
+    -- param: unit teammate unit
+    -- ?tab: unit_data_extension the teammate's unit data extension
+    -- func: has_extension `ScriptUnit.has_extension`
+    -- tab: local_player local player
+    -- tab: player_unit_spawn `Managers.state.player_unit_spawn`
+    -- treturn: bool
+    local function _player_in_coherency_with_local_player(unit, unit_data_extension, has_extension, local_player,
+                                                          player_unit_spawn)
+        if not unit_data_extension or _safe_health_alive(unit) ~= true then
+            return false
+        end
+
+        local character_state_component = _safe_player_component(unit_data_extension, "character_state")
+
+        if not character_state_component or character_state_component.state_name == "hogtied" then
+            return false
+        end
+
+        local coherency_extension = has_extension(unit, "coherency_system")
+        local in_coherence_units_fn = coherency_extension and coherency_extension.in_coherence_units
+        local owner_fn = player_unit_spawn.owner
+
+        if not in_coherence_units_fn or not owner_fn then
+            return false
+        end
+
+        local ok_units, in_coherence_units = pcall(in_coherence_units_fn, coherency_extension)
+
+        if not ok_units or type(in_coherence_units) ~= "table" then
+            return false
+        end
+
+        for coherency_unit in pairs(in_coherence_units) do
+            local ok_owner, owner = pcall(owner_fn, player_unit_spawn, coherency_unit)
+
+            if ok_owner and owner == local_player then
+                return true
+            end
+        end
+
+        return false
+    end
+
     -- ----------------------------------------------------------------------------
     -- Player and companion scan
     -- ----------------------------------------------------------------------------
 
     --- Tracks the other players and every player's companions.
-    -- Teammates are tracked with name, slot, archetype and state; companions with their owner,
-    -- whether a servo skull is following its owner, its talent role and what it is doing.
+    -- Teammates are tracked with name, slot, archetype, state and whether they are in coherency
+    -- with the local player (nil while the coherency annotation is off or teammates are hidden);
+    -- companions with their owner, whether a servo skull is following its owner, its talent role
+    -- and what it is doing.
     -- Mastiffs pinning a target are collected for `_mastiff_disabled_enemy_units`. A player
     -- whose unit changed or who left has the old unit removed.
     function _refresh_player_units()
@@ -666,8 +715,14 @@ return function(env)
         local has_extension = script_unit and script_unit.has_extension
         local radar_player_unit_by_player = mod._radar_player_unit_by_player or {}
         local seen_radar_players = _scratch_seen_radar_players
+        local show_players = mod:get_show_players()
         local scan_player_states = mod:get("show_player_state_icons") ~= false
-            and mod:get_show_players()
+            and show_players
+        local scan_player_coherency = local_player ~= nil
+            and show_players
+            and mod:get("show_player_coherency_annotation") ~= false
+        local state = Managers and Managers.state
+        local player_unit_spawn = scan_player_coherency and state and state.player_unit_spawn or nil
         local show_cyber_mastiff = mod:get("show_cyber_mastiff") ~= false
         local scan_player_companions = show_cyber_mastiff
             or mod:get("show_servo_skulls") ~= false
@@ -825,11 +880,20 @@ return function(env)
                     end
                 end
 
+                local player_in_coherency = nil
+
+                if scan_player_coherency then
+                    player_in_coherency = player_unit_spawn ~= nil
+                        and _player_in_coherency_with_local_player(unit, unit_data_extension, has_extension,
+                            local_player, player_unit_spawn)
+                end
+
                 _track_unit(unit, "player_teammate", "player_manager", {
                     player = player_name,
                     player_slot = player_slot,
                     archetype_name = archetype_name,
                     player_radar_state = player_radar_state,
+                    player_in_coherency = player_in_coherency,
                 })
             end
         end
