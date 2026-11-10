@@ -7,7 +7,9 @@
 -- element against a fake UI stack and checks the coherency look `_target_visual` gives every
 -- teammate style; the game's interaction marker backplate in its configured colour, the ring in
 -- the teammate's colour while in coherency, a flash when that changes between frames, and a
--- player colour lightened where it would not read on the backplate.
+-- player colour lightened where it would not read on the backplate. A cyber mastiff counts
+-- towards coherency only when its owner has the Part of the Squad aura, and then while the local
+-- player's own coherency list holds it; it takes the same look in its owner's bright colour.
 
 local PLAYERS_PATH = "Radar/scripts/mods/Radar/Radar_players.lua"
 local HUD_PATH = "Radar/scripts/mods/Radar/ui/Radar_hud_element.lua"
@@ -21,6 +23,15 @@ local FRAME_COLOR = { 230, 223, 229, 219 }
 local GAINED_FLASH_COLOR = { 190, 70, 200, 60 }
 local LOST_FLASH_COLOR = { 180, 250, 50, 40 }
 local SETTING_ID = "show_player_coherency_annotation"
+local MASTIFF_SETTING_ID = "show_cyber_mastiff_coherency"
+local MASTIFF_RULE = "adamant_dog_counts_towards_coherency"
+local MASTIFF_GLYPH = "\238\129\145"
+local BRIGHT_SLOT_COLORS = {
+    { 255, 255, 238, 160 },
+    { 255, 230, 140, 210 },
+    { 255, 255, 180, 130 },
+    { 255, 170, 195, 255 },
+}
 
 local function assert_true(value, message)
     if value ~= true then
@@ -235,6 +246,41 @@ local function new_players_harness()
         managers.state.player_unit_spawn = value
     end
 
+    --- Gives a player's unit talents with or without the Part of the Squad rule, talents that
+    -- raise an error, or no talent extension at all.
+    function harness.set_aura(player, aura)
+        local extensions = world.extensions[player.player_unit]
+
+        if aura == nil then
+            extensions.talent_system = nil
+
+            return
+        end
+
+        extensions.talent_system = {
+            has_special_rule = function(_, rule)
+                if aura == "error" then
+                    error("talents cannot be read")
+                end
+
+                return aura == true and rule == MASTIFF_RULE
+            end,
+        }
+    end
+
+    --- Gives a player a cyber mastiff, with or without the Part of the Squad aura.
+    function harness.add_mastiff(name, owner, aura)
+        local unit = harness.add_unit(name, owner)
+
+        world.extensions[unit].unit_data_system.breed = function()
+            return { name = "companion_dog", tags = { companion = true } }
+        end
+        owner.owned_units[unit] = true
+        harness.set_aura(owner, aura)
+
+        return unit
+    end
+
     --- Runs one player scan and returns the tracked entries by unit, and the units cleared since.
     function harness.scan()
         tracked = {}
@@ -269,6 +315,17 @@ local function teammate_meta(tracked, unit)
     assert_true(entry ~= nil, "the teammate was not tracked")
     assert_equal("player_teammate", entry.kind, "kind")
     assert_equal("player_manager", entry.source, "source")
+
+    return entry.meta
+end
+
+--- The meta a mastiff unit was tracked with, which must be a companion entry.
+local function mastiff_meta(tracked, unit)
+    local entry = tracked[unit]
+
+    assert_true(entry ~= nil, "the mastiff was not tracked")
+    assert_equal("player_companion_dog", entry.kind, "kind")
+    assert_equal("player_companion", entry.source, "source")
 
     return entry.meta
 end
@@ -495,6 +552,99 @@ test("a replaced unit or a departed teammate leaves nothing behind", function()
     assert_nil(tracked[new_unit], "the departed teammate was tracked")
 end)
 
+test("a mastiff counts towards coherency only with Part of the Squad, by the local player's own list", function()
+    local harness = new_players_harness()
+    local own_mastiff = harness.add_mastiff("own mastiff", harness.local_player, true)
+    local teammate_mastiff = harness.add_mastiff("teammate mastiff", harness.teammate, true)
+    local other_mastiff = harness.add_mastiff("other mastiff", harness.other, false)
+
+    -- The game chains a mastiff to the local player directly or through a teammate.
+    harness.set_coherency(harness.local_unit, { harness.local_unit, own_mastiff, harness.teammate_unit })
+    harness.set_coherency(harness.teammate_unit, { harness.teammate_unit, teammate_mastiff })
+
+    local tracked = harness.scan()
+
+    assert_true(mastiff_meta(tracked, own_mastiff).companion_in_coherency, "the own mastiff in coherency")
+    assert_equal(false, mastiff_meta(tracked, teammate_mastiff).companion_in_coherency,
+        "a mastiff in coherency only with its owner")
+    assert_nil(mastiff_meta(tracked, other_mastiff).companion_in_coherency, "a mastiff without the aura")
+    assert_equal(2, mastiff_meta(tracked, teammate_mastiff).player_slot, "the mastiff keeps its owner's slot")
+
+    harness.set_coherency(harness.local_unit, { harness.local_unit, teammate_mastiff, other_mastiff })
+    tracked = harness.scan()
+
+    assert_equal(false, mastiff_meta(tracked, own_mastiff).companion_in_coherency, "the own mastiff out of coherency")
+    assert_true(mastiff_meta(tracked, teammate_mastiff).companion_in_coherency, "a teammate's mastiff in coherency")
+    assert_nil(mastiff_meta(tracked, other_mastiff).companion_in_coherency,
+        "a mastiff without the aura is never in coherency")
+
+    for _, aura in ipairs({ "error", "none" }) do
+        harness.set_aura(harness.teammate, aura ~= "none" and aura or nil)
+        assert_nil(mastiff_meta(harness.scan(), teammate_mastiff).companion_in_coherency,
+            "a mastiff whose owner's talents are " .. aura)
+    end
+end)
+
+test("mastiff coherency reads nothing while off, and a list it cannot read counts as out of coherency", function()
+    local harness = new_players_harness()
+    local mastiff = harness.add_mastiff("teammate mastiff", harness.teammate, true)
+
+    harness.set_coherency(harness.local_unit, { mastiff })
+
+    for _, value in ipairs({ "unsaved", true }) do
+        harness.settings[MASTIFF_SETTING_ID] = value ~= "unsaved" and value or nil
+        assert_true(mastiff_meta(harness.scan(), mastiff).companion_in_coherency, "the setting " .. tostring(value))
+    end
+
+    harness.settings[MASTIFF_SETTING_ID] = false
+    assert_nil(mastiff_meta(harness.scan(), mastiff).companion_in_coherency, "the setting off")
+    assert_equal(0, harness.world.coherency_reads, "coherency was read with the setting off")
+
+    harness.settings[MASTIFF_SETTING_ID] = nil
+    harness.settings.show_cyber_mastiff = false
+    assert_nil(mastiff_meta(harness.scan(), mastiff).companion_in_coherency, "mastiffs hidden")
+    assert_equal(0, harness.world.coherency_reads, "coherency was read with mastiffs hidden")
+
+    -- Mastiff coherency does not depend on the teammate annotation, nor the other way round.
+    harness.settings.show_cyber_mastiff = nil
+    harness.settings[SETTING_ID] = false
+    assert_true(mastiff_meta(harness.scan(), mastiff).companion_in_coherency, "with the teammate annotation off")
+
+    local local_extensions = harness.world.extensions[harness.local_unit]
+    local cases = {
+        { "no coherency extension", function()
+            local_extensions.coherency_system = nil
+        end },
+        { "a list that raises an error", function()
+            local_extensions.coherency_system = {
+                in_coherence_units = function()
+                    error("coherency cannot be read")
+                end,
+            }
+        end },
+        { "a list that is no table", function()
+            local_extensions.coherency_system = {
+                in_coherence_units = function()
+                    return true
+                end,
+            }
+        end },
+        { "a dead local player", function()
+            harness.set_coherency(harness.local_unit, { mastiff })
+            harness.world.alive[harness.local_unit] = false
+        end },
+    }
+
+    for i = 1, #cases do
+        cases[i][2]()
+        assert_equal(false, mastiff_meta(harness.scan(), mastiff).companion_in_coherency, cases[i][1])
+    end
+
+    harness.world.alive[harness.local_unit] = true
+    harness.local_player = nil
+    assert_nil(mastiff_meta(harness.scan(), mastiff).companion_in_coherency, "no local player")
+end)
+
 -- --------------------------------------------------------------------------------------------
 -- The teammate visual
 -- --------------------------------------------------------------------------------------------
@@ -548,7 +698,7 @@ local function load_target_visual()
             end,
         },
         ["scripts/settings/ui/ui_hud_settings"] = {},
-        ["scripts/settings/ui/ui_settings"] = { player_bright_slot_colors = {} },
+        ["scripts/settings/ui/ui_settings"] = { player_bright_slot_colors = BRIGHT_SLOT_COLORS },
     }
 
     env = setmetatable({
@@ -615,6 +765,7 @@ local function new_draw_cache(style, slot_colors, draw_t)
         debug_mode = false,
         enemy_visual_by_kind = {},
         teammate_color_by_slot = {},
+        companion_color_by_slot = {},
         teammate_backplate_color = BACKPLATE_COLOR,
         teammate_frame_color = FRAME_COLOR,
         coherency_gained_flash_color = GAINED_FLASH_COLOR,
@@ -862,6 +1013,103 @@ test("a changed player colour is picked up in place at the next draw cache refre
     assert_true(refreshed.ring_color == refreshed.color, "the frame did not follow the new player colour")
 end)
 
+local function mastiff(in_coherency, unit, player_slot)
+    return {
+        kind = "player_companion_dog",
+        unit = unit,
+        meta = {
+            player_slot = player_slot or 2,
+            companion_in_coherency = in_coherency,
+        },
+    }
+end
+
+test("a mastiff that can count towards coherency gets the teammate look in its owner's bright colour", function()
+    local target_visual = load_target_visual()
+    local before = target_visual(mastiff(nil, {}), new_draw_cache("marked_icon", nil, 10))
+
+    assert_equal(MASTIFF_GLYPH, before.glyph, "the mastiff lost its glyph")
+    assert_true(same_values(BRIGHT_SLOT_COLORS[2], before.color), "the mastiff is not in its owner's bright colour")
+    assert_true(target_visual(mastiff(nil, {}), new_draw_cache("marked_icon", nil, 10)) == before,
+        "mastiffs without the aura no longer share their slot's visual")
+
+    for f = 1, #COHERENCY_FIELDS do
+        assert_nil(before[COHERENCY_FIELDS[f]], "a mastiff without the aura has " .. COHERENCY_FIELDS[f])
+    end
+
+    local draw_cache = new_draw_cache("marked_icon", nil, 10)
+    local unit = {}
+    local outside = target_visual(mastiff(false, unit), draw_cache)
+
+    for _, field in ipairs({ "glyph", "icon", "color", "accent_color", "size" }) do
+        assert_true(same_values(before[field], outside[field]), "coherency changed the mastiff's " .. field)
+    end
+
+    assert_equal(BACKPLATE, outside.plate_icon, "backplate")
+    assert_true(same_values(BACKPLATE_COLOR, outside.plate_color), "backplate colour")
+    assert_equal(before.size * 2, outside.plate_base_size, "backplate size")
+    assert_equal(RING, outside.ring_icon, "frame")
+    assert_equal(before.size * 2, outside.ring_base_size, "frame size")
+    assert_true(same_values(FRAME_COLOR, outside.ring_color), "the frame is not in the frame colour out of coherency")
+    assert_nil(outside.flash_icon, "a mastiff flashed when first seen")
+
+    draw_cache.draw_t = 10.016
+
+    local inside = target_visual(mastiff(true, unit), draw_cache)
+
+    assert_true(inside == outside, "the mastiff's visual was built anew")
+    assert_true(same_values(inside.color, inside.ring_color), "the frame is not in the owner's colour in coherency")
+    assert_equal(FLASH, inside.flash_icon, "gaining coherency did not flash")
+
+    draw_cache.draw_t = 10.416
+    assert_true(same_values(GAINED_FLASH_COLOR, target_visual(mastiff(true, unit), draw_cache).flash_color),
+        "the gained flash is not in the gained colour half way")
+
+    -- A teammate in the same slot keeps its own slot colour and its own visual.
+    local teammate_visual = target_visual(teammate(true, {}, 2), draw_cache)
+
+    assert_true(teammate_visual ~= inside, "the mastiff and its owner share one visual")
+    assert_true(same_values(SLOT_COLORS[2], teammate_visual.color), "the teammate took the bright colour")
+    assert_true(same_values(BRIGHT_SLOT_COLORS[2], target_visual(mastiff(true, unit), draw_cache).color),
+        "the mastiff took the teammate's slot colour")
+end)
+
+test("a mastiff's coherency visual allocates nothing from frame to frame", function()
+    local target_visual = load_target_visual()
+    local draw_cache = new_draw_cache("marked_icon", nil, 10)
+    local target = mastiff(true, {})
+
+    target_visual(target, draw_cache)
+
+    local jit_api = rawget(_G, "jit")
+
+    if jit_api then
+        jit_api.off()
+        jit_api.flush()
+    end
+
+    collectgarbage("collect")
+    collectgarbage("stop")
+
+    local before = collectgarbage("count")
+
+    for frame = 1, 1000 do
+        draw_cache.draw_t = 10 + frame * 0.016
+        target.meta.companion_in_coherency = frame % 120 < 60
+        target_visual(target, draw_cache)
+    end
+
+    local kilobytes = collectgarbage("count") - before
+
+    collectgarbage("restart")
+
+    if jit_api then
+        jit_api.on()
+    end
+
+    assert_true(kilobytes < 0.5, string.format("1000 frames, flashes included, allocated %.2f KB", kilobytes))
+end)
+
 test("the setting and its colours are named in every language the state icons have", function()
     local chunk = assert(loadfile(LOCALIZATION_PATH))
 
@@ -885,6 +1133,8 @@ test("the setting and its colours are named in every language the state icons ha
         "player_coherency_gained_flash_color_slider_tooltip",
         "player_coherency_lost_flash_color",
         "player_coherency_lost_flash_color_slider_tooltip",
+        MASTIFF_SETTING_ID,
+        MASTIFF_SETTING_ID .. "_tooltip",
     }) do
         local entry = localization[key]
 

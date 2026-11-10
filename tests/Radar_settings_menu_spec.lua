@@ -472,6 +472,12 @@ for _, style in ipairs({ "icon_only", "marked_icon", "dot_only", "marked_dot" })
         "the coherency annotation setting is hidden for " .. style .. " teammates")
 end
 
+check(parent_id("show_cyber_mastiff_coherency") == "show_cyber_mastiff"
+    and (widget_by_id.show_cyber_mastiff_coherency or {}).type == "checkbox"
+    and (widget_by_id.show_cyber_mastiff_coherency or {}).default_value == true
+    and (widget_by_id.show_cyber_mastiff_coherency or {}).tooltip == "show_cyber_mastiff_coherency_tooltip",
+    "mastiff coherency is not a Cyber Mastiff checkbox that is on by default")
+
 check(parent_id("show_player_tag_distance_text") == "show_player_tags"
     and parent_id("player_tag_display_style") == "show_player_tags",
     "the player tag settings do not follow the player tag toggle")

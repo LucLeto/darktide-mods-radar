@@ -497,10 +497,11 @@ for m = 1, #PROFILING_MODES do
     end)
 end
 
-test("toggling the teammate state icons or coherency annotation rescans at once", function()
+test("toggling the teammate state icons, coherency annotation or mastiff coherency rescans at once", function()
     local harness = new_harness()
 
-    for _, setting_id in ipairs({ "show_player_state_icons", "show_player_coherency_annotation" }) do
+    for _, setting_id in ipairs({ "show_player_state_icons", "show_player_coherency_annotation",
+        "show_cyber_mastiff_coherency" }) do
         for _, value in ipairs({ false, true }) do
             harness.mod._next_scan_t = 1000
             harness:change_setting(setting_id, value)

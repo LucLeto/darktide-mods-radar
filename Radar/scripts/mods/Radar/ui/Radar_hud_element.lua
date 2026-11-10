@@ -886,6 +886,7 @@ local _draw_cache = {
     nearby_highlight_enabled_by_kind = {},
     nearby_highlight_distance_text_enabled_by_kind = {},
     teammate_color_by_slot = {},
+    companion_color_by_slot = {},
     teammate_color_generation = 0,
     teammate_backplate_color = nil,
     teammate_frame_color = nil,
@@ -3169,8 +3170,143 @@ local function _player_smart_tag_visual(target, draw_cache)
     }
 end
 
+--- Returns the coherency look of a teammate or mastiff marker, kept and refilled per unit.
+-- The marker sits on the coherency backplate in its player colour, lightened where it would not
+-- read on it and kept per player slot until the next draw cache refresh, inside a frame in that
+-- colour while in coherency and in the configured frame colour while not. A change between
+-- frames close together starts a short flash, so a unit seen for the first time, or back on the
+-- radar after a while, does not flash. The flash takes the gained colour and grows outward when
+-- coherency is gained, and takes the lost colour and shrinks inward when it is lost, so the
+-- direction reads without telling the colours apart.
+-- tab: target radar target
+-- tab: draw_cache draw cache
+-- ?string: icon icon material
+-- ?string: glyph icon glyph
+-- ?tab: player_color player colour
+-- number: size icon size
+-- bool: in_coherency whether the unit is in coherency with the local player
+-- ?tab: color_by_slot readable colour per player slot
+-- treturn: tab visual
+local function _coherency_marker_visual(target, draw_cache, icon, glyph, player_color, size, in_coherency,
+                                        color_by_slot)
+    local meta = target.meta or nil
+    local backplate_color = draw_cache and draw_cache.teammate_backplate_color
+        or _configured_radar_color("player_teammate_backplate")
+        or RadarColorSettings.default_color("player_teammate_backplate")
+    local frame_color = draw_cache and draw_cache.teammate_frame_color
+        or _configured_radar_color("player_teammate_frame")
+        or RadarColorSettings.default_color("player_teammate_frame")
+    local color_generation = draw_cache and draw_cache.teammate_color_generation or nil
+    local player_slot = meta and tonumber(meta.player_slot) or nil
+    local slot_key = player_slot or 0
+    local readable_entry = color_by_slot and color_by_slot[slot_key] or nil
+    local readable_color = readable_entry and readable_entry.color or nil
+
+    if readable_color == nil or readable_entry.generation ~= color_generation then
+        readable_color = RadarColorSettings.readable_on(player_color or WHITE_WIDGET_COLOR, backplate_color, 3,
+            readable_color)
+
+        if readable_entry ~= nil then
+            readable_entry.generation = color_generation
+        elseif color_by_slot then
+            color_by_slot[slot_key] = {
+                color = readable_color,
+                generation = color_generation,
+            }
+        end
+    end
+
+    local flash_color = nil
+    local flash_base_size = nil
+    local now = draw_cache and draw_cache.draw_t or nil
+    local state_by_unit = draw_cache and draw_cache.coherency_state_by_unit or nil
+    local unit = target.unit
+    local state = nil
+
+    if now ~= nil and state_by_unit ~= nil and unit ~= nil then
+        state = state_by_unit[unit]
+
+        if state == nil then
+            state = {
+                in_coherency = in_coherency,
+                seen_t = now,
+                changed_t = nil,
+                flash_color = { 0, 255, 255, 255 },
+                accent_color = { 180, 255, 255, 255 },
+                visual = {
+                    icon = icon,
+                    glyph = glyph,
+                    color = readable_color,
+                    accent_color = nil,
+                    size = size,
+                    plate_icon = PLAYER_STATE_ICONS.coherency_backplate,
+                    plate_color = backplate_color,
+                    plate_base_size = size * 2,
+                    ring_icon = PLAYER_STATE_ICONS.coherency_ring,
+                    ring_color = frame_color,
+                    ring_base_size = size * 2,
+                    flash_icon = nil,
+                    flash_color = nil,
+                    flash_base_size = nil,
+                },
+            }
+            state_by_unit[unit] = state
+        else
+            if state.in_coherency ~= in_coherency and now - state.seen_t < 0.5 then
+                state.changed_t = now
+            end
+
+            state.in_coherency = in_coherency
+            state.seen_t = now
+        end
+
+        local changed_t = state.changed_t
+        local progress = changed_t and (now - changed_t) / 0.8 or 1
+
+        if progress >= 0 and progress < 1 then
+            local configured_flash_color = in_coherency and draw_cache.coherency_gained_flash_color
+                or not in_coherency and draw_cache.coherency_lost_flash_color
+                or WHITE_WIDGET_COLOR
+
+            flash_color = state.flash_color
+            flash_color[1] = math_floor((configured_flash_color[1] or 255) * math.sin(progress * math.pi) + 0.5)
+            flash_color[2] = configured_flash_color[2] or 255
+            flash_color[3] = configured_flash_color[3] or 255
+            flash_color[4] = configured_flash_color[4] or 255
+
+            if in_coherency then
+                flash_base_size = size * (2 + 0.5 * progress)
+            else
+                flash_base_size = size * (2.5 - 0.5 * progress)
+            end
+        end
+    end
+
+    local visual = state and state.visual or {}
+    local accent_color = _copy_into_widget_color(state and state.accent_color or {}, player_color)
+
+    accent_color[1] = 180
+    visual.icon = icon
+    visual.glyph = glyph
+    visual.color = readable_color
+    visual.accent_color = accent_color
+    visual.size = size
+    visual.plate_icon = PLAYER_STATE_ICONS.coherency_backplate
+    visual.plate_color = backplate_color
+    visual.plate_base_size = size * 2
+    visual.ring_icon = PLAYER_STATE_ICONS.coherency_ring
+    visual.ring_color = in_coherency and readable_color or frame_color
+    visual.ring_base_size = size * 2
+    visual.flash_icon = flash_color and PLAYER_STATE_ICONS.coherency_flash or nil
+    visual.flash_color = flash_color
+    visual.flash_base_size = flash_base_size
+
+    return visual
+end
+
 --- Builds the visual of a player companion, cached per kind, role and player slot.
--- A servo skull shows its role or hacking action as a corner overlay.
+-- A servo skull shows its role or hacking action as a corner overlay. A mastiff that can count
+-- towards coherency takes the coherency look of `_coherency_marker_visual` instead, kept per unit.
 local function _player_companion_visual(target, draw_cache)
     local kind = target and target.kind or nil
     local presentation = kind and PLAYER_COMPANION_PRESENTATIONS[kind] or nil
@@ -3181,6 +3317,18 @@ local function _player_companion_visual(target, draw_cache)
 
     local meta = target.meta or nil
     local player_slot = tonumber(meta and meta.player_slot or nil)
+    local companion_in_coherency = meta and meta.companion_in_coherency
+
+    if companion_in_coherency ~= nil then
+        local slot_colors = PLAYER_BRIGHT_SLOT_COLORS
+            or (draw_cache and draw_cache.slot_colors)
+            or (UISettings and UISettings.player_slot_colors)
+
+        return _coherency_marker_visual(target, draw_cache, presentation.icon, presentation.glyph,
+            player_slot and slot_colors and slot_colors[player_slot] or nil, presentation.size, companion_in_coherency,
+            draw_cache and draw_cache.companion_color_by_slot or nil)
+    end
+
     local servo_skull_role = meta and meta.servo_skull_role or nil
     local companion_action = meta and meta.companion_action or nil
     local annotation_key = companion_action == "hacking" and "hacking" or servo_skull_role
@@ -3240,13 +3388,7 @@ end
 -- pickup presentation, then applies the per-target overrides. Presentations are shared
 -- tables; their colours are rewritten here for every target (for framed objective markers
 -- the frame, icon and backplate colours) before use. While the coherency annotation is on, a
--- teammate sits on the coherency backplate in its slot colour, lightened where it would not
--- read on it, inside a frame in that colour while in coherency and in the configured frame
--- colour while not, with a short flash after that changes. The flash
--- takes the gained colour and grows outward when coherency is gained, and takes the lost colour
--- and shrinks inward when it is lost, so the direction reads without telling the colours apart.
--- Only a change between frames close together flashes, so a teammate seen for the first time, or
--- back on the radar after a while, does not.
+-- teammate takes the coherency look of `_coherency_marker_visual`.
 -- tab: target radar target
 -- tab: draw_cache draw cache
 -- treturn: ?tab visual
@@ -3311,116 +3453,8 @@ local function _target_visual(target, draw_cache)
             }
         end
 
-        local backplate_color = draw_cache and draw_cache.teammate_backplate_color
-            or _configured_radar_color("player_teammate_backplate")
-            or RadarColorSettings.default_color("player_teammate_backplate")
-        local frame_color = draw_cache and draw_cache.teammate_frame_color
-            or _configured_radar_color("player_teammate_frame")
-            or RadarColorSettings.default_color("player_teammate_frame")
-        local color_by_slot = draw_cache and draw_cache.teammate_color_by_slot or nil
-        local color_generation = draw_cache and draw_cache.teammate_color_generation or nil
-        local slot_key = player_slot or 0
-        local readable_entry = color_by_slot and color_by_slot[slot_key] or nil
-        local readable_color = readable_entry and readable_entry.color or nil
-
-        if readable_color == nil or readable_entry.generation ~= color_generation then
-            readable_color = RadarColorSettings.readable_on(player_color or WHITE_WIDGET_COLOR, backplate_color, 3,
-                readable_color)
-
-            if readable_entry ~= nil then
-                readable_entry.generation = color_generation
-            elseif color_by_slot then
-                color_by_slot[slot_key] = {
-                    color = readable_color,
-                    generation = color_generation,
-                }
-            end
-        end
-
-        local flash_color = nil
-        local flash_base_size = nil
-        local now = draw_cache and draw_cache.draw_t or nil
-        local state_by_unit = draw_cache and draw_cache.coherency_state_by_unit or nil
-        local unit = target.unit
-        local state = nil
-
-        if now ~= nil and state_by_unit ~= nil and unit ~= nil then
-            state = state_by_unit[unit]
-
-            if state == nil then
-                state = {
-                    in_coherency = in_coherency,
-                    seen_t = now,
-                    changed_t = nil,
-                    flash_color = { 0, 255, 255, 255 },
-                    accent_color = { 180, 255, 255, 255 },
-                    visual = {
-                        icon = icon,
-                        color = readable_color,
-                        accent_color = nil,
-                        size = size,
-                        plate_icon = PLAYER_STATE_ICONS.coherency_backplate,
-                        plate_color = backplate_color,
-                        plate_base_size = size * 2,
-                        ring_icon = PLAYER_STATE_ICONS.coherency_ring,
-                        ring_color = frame_color,
-                        ring_base_size = size * 2,
-                        flash_icon = nil,
-                        flash_color = nil,
-                        flash_base_size = nil,
-                    },
-                }
-                state_by_unit[unit] = state
-            else
-                if state.in_coherency ~= in_coherency and now - state.seen_t < 0.5 then
-                    state.changed_t = now
-                end
-
-                state.in_coherency = in_coherency
-                state.seen_t = now
-            end
-
-            local changed_t = state.changed_t
-            local progress = changed_t and (now - changed_t) / 0.8 or 1
-
-            if progress >= 0 and progress < 1 then
-                local configured_flash_color = in_coherency and draw_cache.coherency_gained_flash_color
-                    or not in_coherency and draw_cache.coherency_lost_flash_color
-                    or WHITE_WIDGET_COLOR
-
-                flash_color = state.flash_color
-                flash_color[1] = math_floor((configured_flash_color[1] or 255) * math.sin(progress * math.pi) + 0.5)
-                flash_color[2] = configured_flash_color[2] or 255
-                flash_color[3] = configured_flash_color[3] or 255
-                flash_color[4] = configured_flash_color[4] or 255
-
-                if in_coherency then
-                    flash_base_size = size * (2 + 0.5 * progress)
-                else
-                    flash_base_size = size * (2.5 - 0.5 * progress)
-                end
-            end
-        end
-
-        local visual = state and state.visual or {}
-        local accent_color = _copy_into_widget_color(state and state.accent_color or {}, player_color)
-
-        accent_color[1] = 180
-        visual.icon = icon
-        visual.color = readable_color
-        visual.accent_color = accent_color
-        visual.size = size
-        visual.plate_icon = PLAYER_STATE_ICONS.coherency_backplate
-        visual.plate_color = backplate_color
-        visual.plate_base_size = size * 2
-        visual.ring_icon = PLAYER_STATE_ICONS.coherency_ring
-        visual.ring_color = in_coherency and readable_color or frame_color
-        visual.ring_base_size = size * 2
-        visual.flash_icon = flash_color and PLAYER_STATE_ICONS.coherency_flash or nil
-        visual.flash_color = flash_color
-        visual.flash_base_size = flash_base_size
-
-        return visual
+        return _coherency_marker_visual(target, draw_cache, icon, nil, player_color, size, in_coherency,
+            draw_cache and draw_cache.teammate_color_by_slot or nil)
     end
 
     if _is_expedition_objective_kind(target_kind) then

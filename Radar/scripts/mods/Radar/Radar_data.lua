@@ -2593,6 +2593,14 @@ return {
                                     setting_id = "show_cyber_mastiff",
                                     type = "checkbox",
                                     default_value = true,
+                                    sub_widgets = {
+                                        {
+                                            setting_id = "show_cyber_mastiff_coherency",
+                                            tooltip = "show_cyber_mastiff_coherency_tooltip",
+                                            type = "checkbox",
+                                            default_value = true,
+                                        },
+                                    },
                                 },
                                 {
                                     setting_id = "show_servo_skulls",

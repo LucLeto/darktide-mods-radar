@@ -1,7 +1,8 @@
 --- Teammates, player companions, player smart tags and ability-marked enemies.
 -- Tracks the other players with their archetype, rescue/captured/luggable state and
 -- coherency with the local player, the companions every player owns (cyber mastiff and
--- servo skull, with what they are doing), and the location tags players place. It also
+-- servo skull, with what they are doing, and whether a mastiff counts towards the local
+-- player's coherency), and the location tags players place. It also
 -- reads which enemies a player tagged and which ones an ability of the local player
 -- outlines, and whether a player carries a luggable.
 --
@@ -689,6 +690,34 @@ return function(env)
         return false
     end
 
+    --- Returns whether a cyber mastiff counts towards the local player's coherency.
+    -- Only the mastiff of a player with the Part of the Squad aura, which carries the
+    -- `adamant_dog_counts_towards_coherency` special rule, joins coherency at all, so any other
+    -- mastiff returns nil. The game lists a mastiff among the units in coherency with the local
+    -- player while it is chained to them; a list that cannot be read counts as out of coherency.
+    -- param: owner_unit player unit of the mastiff's owner
+    -- param: mastiff_unit mastiff unit
+    -- func: has_extension `ScriptUnit.has_extension`
+    -- ?tab: local_coherence_units units in coherency with the local player
+    -- treturn: ?bool
+    local function _mastiff_in_coherency_with_local_player(owner_unit, mastiff_unit, has_extension,
+                                                           local_coherence_units)
+        local talent_extension = has_extension(owner_unit, "talent_system")
+        local has_special_rule_fn = talent_extension and talent_extension.has_special_rule
+
+        if not has_special_rule_fn then
+            return nil
+        end
+
+        local ok_rule, has_rule = pcall(has_special_rule_fn, talent_extension, "adamant_dog_counts_towards_coherency")
+
+        if not ok_rule or not has_rule then
+            return nil
+        end
+
+        return local_coherence_units ~= nil and local_coherence_units[mastiff_unit] ~= nil
+    end
+
     -- ----------------------------------------------------------------------------
     -- Player and companion scan
     -- ----------------------------------------------------------------------------
@@ -697,7 +726,8 @@ return function(env)
     -- Teammates are tracked with name, slot, archetype, state and whether they are in coherency
     -- with the local player (nil while the coherency annotation is off or teammates are hidden);
     -- companions with their owner, whether a servo skull is following its owner, its talent role
-    -- and what it is doing.
+    -- and what it is doing, and whether a mastiff counts towards the local player's coherency
+    -- (nil while mastiff coherency is off or its owner lacks the aura).
     -- Mastiffs pinning a target are collected for `_mastiff_disabled_enemy_units`. A player
     -- whose unit changed or who left has the old unit removed.
     function _refresh_player_units()
@@ -726,6 +756,26 @@ return function(env)
         local show_cyber_mastiff = mod:get("show_cyber_mastiff") ~= false
         local scan_player_companions = show_cyber_mastiff
             or mod:get("show_servo_skulls") ~= false
+        local scan_mastiff_coherency = local_player ~= nil
+            and show_cyber_mastiff
+            and has_extension ~= nil
+            and mod:get("show_cyber_mastiff_coherency") ~= false
+        local local_coherence_units = nil
+
+        if scan_mastiff_coherency then
+            local local_unit = local_player.player_unit
+            local local_coherency_extension = local_unit and _safe_unit_alive(local_unit)
+                and has_extension(local_unit, "coherency_system") or nil
+            local in_coherence_units_fn = local_coherency_extension and local_coherency_extension.in_coherence_units
+
+            if in_coherence_units_fn then
+                local ok_units, units = pcall(in_coherence_units_fn, local_coherency_extension)
+
+                if ok_units and type(units) == "table" then
+                    local_coherence_units = units
+                end
+            end
+        end
 
         mod._radar_player_unit_by_player = radar_player_unit_by_player
         table_clear(seen_radar_players)
@@ -780,6 +830,7 @@ return function(env)
                             local companion_action = nil
                             local companion_action_target = nil
                             local companion_pounce_active = nil
+                            local companion_in_coherency = nil
 
                             if companion_kind == "player_companion_servo_skull" then
                                 if not servo_skull_roles_resolved then
@@ -821,6 +872,11 @@ return function(env)
                                     servo_skull_following_owner = true
                                 end
                             elseif companion_kind == "player_companion_dog" then
+                                if scan_mastiff_coherency then
+                                    companion_in_coherency = _mastiff_in_coherency_with_local_player(unit, owned_unit,
+                                        has_extension, local_coherence_units)
+                                end
+
                                 companion_action_target, companion_pounce_active =
                                     _safe_companion_dog_target(owned_unit)
 
@@ -851,6 +907,7 @@ return function(env)
                                 servo_skull_role = servo_skull_role,
                                 companion_action = companion_action,
                                 companion_action_target = companion_action_target,
+                                companion_in_coherency = companion_in_coherency,
                             })
                         end
                     end
