@@ -277,6 +277,21 @@ _add_radar_color("map_geometry_source", "radar_navmesh", _color(80, 101, 133, 96
 _add_radar_color("map_geometry_source", "radar_navmesh_above", _color(32, 120, 150, 185), "radar_navmesh_above_color")
 _add_radar_color("map_geometry_source", "radar_navmesh_below", _color(55, 120, 98, 76), "radar_navmesh_below_color")
 
+-- The teammate coherency layers, under the coherency toggle. The backplate behind every teammate
+-- is black, which the game gives no player, at the opacity of the game's own interaction marker
+-- backplate. The frame around it takes the teammate's own colour while in coherency, and this
+-- frame colour while not, which defaults to the objective frame's tint of the game's HUD. The
+-- flash when a teammate gains coherency is the game's light UI green, and when they lose it its
+-- light UI red.
+_add_radar_color("show_player_coherency_annotation", "player_teammate_backplate", _color(200, 0, 0, 0),
+    "player_teammate_backplate_color", "player_teammate_backplate_color_slider_tooltip")
+_add_radar_color("show_player_coherency_annotation", "player_teammate_frame", VANILLA_OBJECTIVE,
+    "player_teammate_frame_color", "player_teammate_frame_color_slider_tooltip")
+_add_radar_color("show_player_coherency_annotation", "player_coherency_gained_flash", _color(200, 74, 199, 60),
+    "player_coherency_gained_flash_color", "player_coherency_gained_flash_color_slider_tooltip")
+_add_radar_color("show_player_coherency_annotation", "player_coherency_lost_flash", _color(200, 255, 54, 36),
+    "player_coherency_lost_flash_color", "player_coherency_lost_flash_color_slider_tooltip")
+
 -- Enemy icon, background and bracket colours, shared by many enemy kinds and anchored below.
 -- The boss background colour only tints the brackets of boss markers, which draw no background.
 -- Brackets of the other enemies used the background colour at a fixed opacity of 180 before they
@@ -1399,6 +1414,63 @@ function ColorSettings.default_color(prefix)
     local color = prefix and default_by_prefix[prefix] or nil
 
     return color and _copy_color(color) or nil
+end
+
+--- Returns the linear light of one sRGB channel from 0 to 255.
+local function _linear_channel(value)
+    local c = (tonumber(value) or 0) / 255
+
+    if c <= 0.03928 then
+        return c / 12.92
+    end
+
+    return ((c + 0.055) / 1.055) ^ 2.4
+end
+
+--- Returns the relative luminance of an sRGB colour, from 0 for black to 1 for white.
+local function _relative_luminance(red, green, blue)
+    return 0.2126 * _linear_channel(red) + 0.7152 * _linear_channel(green) + 0.0722 * _linear_channel(blue)
+end
+
+--- Returns a colour that keeps at least a contrast ratio against a background.
+-- A colour that already reaches the ratio comes back as a copy. Otherwise it is mixed towards
+-- white on a dark background, or towards black on a light one, in twentieth steps, until it
+-- reaches the ratio, so it keeps as much of its hue as it can. The alpha is kept. Works out
+-- the ratio as WCAG does, `(lighter + 0.05) / (darker + 0.05)`, and treats the background as
+-- opaque. Called once per colour and background, not per frame.
+-- tab: color ARGB colour, as an array or with `a`, `r`, `g` and `b` fields
+-- ?tab: background ARGB background colour, opaque black when nil
+-- number: min_contrast smallest contrast ratio, such as 3
+-- ?tab: out colour array to write the result into, a new one when nil
+-- treturn: tab ARGB colour array
+function ColorSettings.readable_on(color, background, min_contrast, out)
+    local alpha = color[1] or color.a or 255
+    local red = color[2] or color.r or 255
+    local green = color[3] or color.g or 255
+    local blue = color[4] or color.b or 255
+    local background_luminance = background
+        and _relative_luminance(background[2], background[3], background[4]) or 0
+    local target = background_luminance < 0.18 and 255 or 0
+
+    for step = 0, 20 do
+        local mix = step / 20
+        local mixed_red = red + (target - red) * mix
+        local mixed_green = green + (target - green) * mix
+        local mixed_blue = blue + (target - blue) * mix
+        local luminance = _relative_luminance(mixed_red, mixed_green, mixed_blue)
+        local lighter = luminance > background_luminance and luminance or background_luminance
+        local darker = luminance > background_luminance and background_luminance or luminance
+
+        if (lighter + 0.05) / (darker + 0.05) >= min_contrast or step == 20 then
+            out = out or { 0, 0, 0, 0 }
+            out[1] = alpha
+            out[2] = math_floor(mixed_red + 0.5)
+            out[3] = math_floor(mixed_green + 0.5)
+            out[4] = math_floor(mixed_blue + 0.5)
+
+            return out
+        end
+    end
 end
 
 --- Returns a copy of a marker kind's default marker colour.

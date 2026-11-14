@@ -6,8 +6,9 @@
 -- or glyph.
 --
 -- Explicit module loaded by `ui/Radar_hud_element.lua` through `mod:io_dofile`; the chunk
--- returns the pool size and the ensure, clear and draw helpers. The widgets are stored on the
--- HUD element instance passed in as `self`.
+-- returns the pool size, the ensure, clear and draw helpers, and the helper that centres a
+-- square marker layer on its icon. The widgets are stored on the HUD element instance passed in
+-- as `self`.
 -- module: Radar_hud_widgets
 -- author: LucLeto
 local mod = get_mod("Radar")
@@ -18,6 +19,7 @@ local UIWidget = require("scripts/managers/ui/ui_widget")
 local Gui = Gui
 local Vector2 = Vector2
 local Vector3 = Vector3
+local math_floor = math.floor
 local string_format = string.format
 
 -- ----------------------------------------------------------------------------
@@ -29,7 +31,9 @@ local WHITE_WIDGET_COLOR = { 255, 255, 255, 255 }
 local MAX_RADAR_MARKERS = 301
 --- The plain texture layers of a marker widget, in pass order, which `_draw_marker_widget` draws itself.
 -- The marker definition's other two layers, the marked ring (a texture with material values) and
--- the glyph (a text pass), are left to `UIWidget.draw`.
+-- the glyph (a text pass), are left to `UIWidget.draw`. A teammate's coherency frame and flash are
+-- only in the second list, which a widget is drawn from while it shows the frame, so every other
+-- marker loops over the six layers it can have.
 local MARKER_TEXTURE_LAYERS = {
     "radius_icon",
     "plate_icon",
@@ -39,6 +43,17 @@ local MARKER_TEXTURE_LAYERS = {
     "arrow_icon",
 }
 local MARKER_TEXTURE_LAYER_COUNT = #MARKER_TEXTURE_LAYERS
+local MARKER_COHERENCY_TEXTURE_LAYERS = {
+    "radius_icon",
+    "flash_icon",
+    "plate_icon",
+    "ring_icon",
+    "icon",
+    "overlay_icon",
+    "title_icon",
+    "arrow_icon",
+}
+local MARKER_COHERENCY_TEXTURE_LAYER_COUNT = #MARKER_COHERENCY_TEXTURE_LAYERS
 
 -- ----------------------------------------------------------------------------
 -- Mutable state
@@ -84,7 +99,7 @@ end
 --- Visibility functions for the optional widget passes.
 -- A pass is drawn only while its content value is a non-empty string, so the HUD element
 -- turns layers on and off by assigning or clearing content fields instead of rebuilding
--- widgets.
+-- widgets. The coherency flash also needs the coherency frame, which it belongs to.
 local WidgetVisibility = {
     has_icon = function(content)
         return content.icon ~= nil and content.icon ~= ""
@@ -97,6 +112,13 @@ local WidgetVisibility = {
     end,
     has_plate_icon = function(content)
         return content.plate_icon ~= nil and content.plate_icon ~= ""
+    end,
+    has_ring_icon = function(content)
+        return content.ring_icon ~= nil and content.ring_icon ~= ""
+    end,
+    has_flash_icon = function(content)
+        return content.flash_icon ~= nil and content.flash_icon ~= ""
+            and content.ring_icon ~= nil and content.ring_icon ~= ""
     end,
     has_title_icon = function(content)
         return content.title_icon ~= nil and content.title_icon ~= ""
@@ -287,10 +309,11 @@ local function _overview_scale_definition()
 end
 
 --- Builds the widget definition shared by every pooled radar marker.
--- Passes are listed bottom to top by layer offset; radius icon, marked ring, backplate,
--- base icon or glyph, overlay icon, title icon and vertical arrow. The backplate sits below
+-- Passes are listed bottom to top by layer offset; radius icon, flash, marked ring, backplate,
+-- ring, base icon or glyph, overlay icon, title icon and vertical arrow. The backplate sits below
 -- the base icon and only draws for markers that name one, so enemy markers, which build
--- their own background into the base icon, are unaffected.
+-- their own background into the base icon, are unaffected. The flash and the ring are the
+-- teammate coherency layers, drawn below the base icon as well.
 -- treturn: tab widget definition
 local function _marker_definition()
     return UIWidget.create_definition({
@@ -307,6 +330,19 @@ local function _marker_definition()
                 color = _white_widget_color(),
             },
             visibility_function = WidgetVisibility.has_radius_icon,
+        },
+        {
+            pass_type = "texture",
+            value_id = "flash_icon",
+            style_id = "flash_icon",
+            style = {
+                vertical_alignment = "top",
+                horizontal_alignment = "left",
+                offset = { 0, 0, 8 },
+                size = { 16, 16 },
+                color = _white_widget_color(),
+            },
+            visibility_function = WidgetVisibility.has_flash_icon,
         },
         {
             pass_type = "texture",
@@ -341,6 +377,19 @@ local function _marker_definition()
                 color = _white_widget_color(),
             },
             visibility_function = WidgetVisibility.has_plate_icon,
+        },
+        {
+            pass_type = "texture",
+            value_id = "ring_icon",
+            style_id = "ring_icon",
+            style = {
+                vertical_alignment = "top",
+                horizontal_alignment = "left",
+                offset = { 0, 0, 9 },
+                size = { 16, 16 },
+                color = _white_widget_color(),
+            },
+            visibility_function = WidgetVisibility.has_ring_icon,
         },
         {
             pass_type = "texture",
@@ -457,13 +506,47 @@ local function _clear_marker_widget(widget)
     widget.content.marked_ring = nil
     widget.content.marked_ring_slots_mask = nil
     widget.content.marked_ring_size = nil
+    widget.content.flash_icon = nil
     widget.content.icon = nil
     widget.content.glyph_icon = ""
     widget.content.plate_icon = nil
+    widget.content.ring_icon = nil
     widget.content.overlay_icon = nil
     widget.content.title_icon = nil
     widget.content.arrow_icon = nil
     widget.content.value_text = ""
+end
+
+--- Places a square marker layer centred on the marker's icon.
+-- The layer is larger or smaller than the icon by the ratio of its base size to the icon's base
+-- size, and grows by the same whole margin on every side, so it stays exactly centred at every
+-- drawn size. Without a base size it takes the icon's own box.
+-- tab: layer_style style of the layer
+-- number: icon_x icon left edge
+-- number: icon_y icon top edge
+-- number: icon_size drawn icon size
+-- ?number: base_size nominal layer size
+-- ?number: icon_base_size nominal icon size the layer size is measured against
+-- number: z layer
+local function _centre_marker_layer(layer_style, icon_x, icon_y, icon_size, base_size, icon_base_size, z)
+    local margin = 0
+
+    if base_size and icon_base_size and icon_base_size > 0 then
+        margin = math_floor(icon_size * (base_size / icon_base_size - 1) * 0.5 + 0.5)
+
+        if icon_size + margin * 2 < 1 then
+            margin = 0
+        end
+    end
+
+    local offset = layer_style.offset
+    local size = layer_style.size
+
+    offset[1] = icon_x - margin
+    offset[2] = icon_y - margin
+    offset[3] = z
+    size[1] = icon_size + margin * 2
+    size[2] = icon_size + margin * 2
 end
 
 --- Creates the Auspex frame widget on the HUD element on first use.
@@ -520,7 +603,8 @@ end
 -- through the passes of every marker. Like `UIWidget.draw`, the renderer's alpha and colour
 -- intensity multipliers apply while the widget draws, and the render settings are left with
 -- material flags. A widget showing its marked ring or its glyph, or a draw without render
--- settings or in forced retained mode, goes through `UIWidget.draw`.
+-- settings or in forced retained mode, goes through `UIWidget.draw`. Only a widget showing the
+-- coherency frame steps through the coherency layers.
 -- tab: widget marker widget
 -- tab: ui_renderer active UI renderer
 local function _draw_marker_widget(widget, ui_renderer)
@@ -547,14 +631,22 @@ local function _draw_marker_widget(widget, ui_renderer)
     local scale = ui_renderer.scale
     local scale_vector3 = Gui.scale_vector3
     local script_draw_bitmap = UIRenderer.script_draw_bitmap
+    local ring_icon = content.ring_icon
+    local layers = MARKER_TEXTURE_LAYERS
+    local layer_count = MARKER_TEXTURE_LAYER_COUNT
+
+    if ring_icon ~= nil and ring_icon ~= "" then
+        layers = MARKER_COHERENCY_TEXTURE_LAYERS
+        layer_count = MARKER_COHERENCY_TEXTURE_LAYER_COUNT
+    end
 
     render_settings.alpha_multiplier = (previous_alpha_multiplier or 1) * (ui_renderer.alpha_multiplier or 1)
     render_settings.color_intensity_multiplier = (previous_color_intensity_multiplier or 1)
         * (ui_renderer.color_intensity_multiplier or 1)
     render_settings.material_flags = render_settings.material_flags or 0
 
-    for i = 1, MARKER_TEXTURE_LAYER_COUNT do
-        local layer = MARKER_TEXTURE_LAYERS[i]
+    for i = 1, layer_count do
+        local layer = layers[i]
         local material = content[layer]
 
         if material ~= nil and material ~= "" then
@@ -583,4 +675,5 @@ return {
     clear_overview_scale_widget = _clear_overview_scale_widget,
     clear_marker_widget = _clear_marker_widget,
     draw_marker_widget = _draw_marker_widget,
+    centre_marker_layer = _centre_marker_layer,
 }
