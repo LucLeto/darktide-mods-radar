@@ -174,6 +174,7 @@ return function(env)
     local _scratch_selection_priority_cache = {}
     local _scratch_priority_target_cache = {}
     local _scratch_facing_kind_cache = {}
+    local _scratch_elevation_fade_cache = {}
     local _scratch_seen_interactees = {}
 
     -- ----------------------------------------------------------------------------
@@ -219,6 +220,7 @@ return function(env)
         table_clear(_scratch_selection_priority_cache)
         table_clear(_scratch_priority_target_cache)
         table_clear(_scratch_facing_kind_cache)
+        table_clear(_scratch_elevation_fade_cache)
     end
 
     --- Grows the pool of reusable radar target tables to at least the given size.
@@ -1205,6 +1207,37 @@ return function(env)
         return show_enemy_facing ~= nil and show_enemy_facing(mod, kind) == true
     end
 
+    --- Returns whether a kind's category fades its markers with their height difference from the player.
+    -- Every category's toggle is on unless switched off; kinds outside every category never fade.
+    -- treturn: bool
+    local function _kind_fades_with_elevation(kind)
+        local get_elevation_fade_setting = mod.get_elevation_fade_setting
+        local setting_id = get_elevation_fade_setting ~= nil and get_elevation_fade_setting(mod, kind) or nil
+
+        return setting_id ~= nil and mod:get(setting_id) ~= false
+    end
+
+    --- Returns the share of a marker's opacity kept at a height difference from the player.
+    -- Full opacity up to `fade_start`, then a straight line down to `min_alpha` at `fade_end` and
+    -- beyond. A `fade_end` at or below `fade_start` makes the fade a step at `fade_start`, so the
+    -- line's division only runs while `fade_end` is above `fade_start`.
+    -- number: height absolute height difference in metres
+    -- number: fade_start height kept at full opacity
+    -- number: fade_end height from which the minimum applies
+    -- number: min_alpha share kept from `fade_end` on, 0 to 1
+    -- treturn: ?number share below 1, nil for full opacity
+    local function _elevation_fade_alpha(height, fade_start, fade_end, min_alpha)
+        if height <= fade_start or min_alpha >= 1 then
+            return nil
+        end
+
+        if height >= fade_end then
+            return min_alpha
+        end
+
+        return 1 - (height - fade_start) / (fade_end - fade_start) * (1 - min_alpha)
+    end
+
     --- Applies the "only tagged enemies" and "only tagged items" options to a target.
     -- Ability-outlined enemies pass the enemy filter too.
     -- treturn: bool
@@ -1893,9 +1926,10 @@ return function(env)
     -- Every entry passes kind enablement, the companion and tag filters, the container filter,
     -- the range rules (with the exemptions for tags, ability marks, objectives the game points
     -- at and sockets while carrying a luggable) and the floor rules, and is written into a
-    -- pooled target table with its distances, vertical arrow state, render layer and selection
-    -- priority. The unclustered list is kept for highlights; Tech-Remnants are then clustered,
-    -- the list sorted and cut to the marker limit.
+    -- pooled target table with its distances, height difference, vertical arrow state, render
+    -- layer and selection priority. The unclustered list is kept for highlights; Tech-Remnants are
+    -- then clustered, the list sorted and cut to the marker limit. Last, each target left gets the
+    -- share of its opacity its category's elevation fade keeps, `elevation_alpha`, nil for all of it.
     -- treturn: tab radar targets
     local function _collect_radar_targets()
         local player_unit = _player_unit()
@@ -1914,6 +1948,7 @@ return function(env)
         local item_vertical_arrow_threshold = mod:get_item_vertical_arrow_threshold()
         local item_vertical_hide_threshold = mod:get_item_vertical_hide_threshold()
         local item_vertical_arrow_threshold_sq = item_vertical_arrow_threshold * item_vertical_arrow_threshold
+        local elevation_fade_start, elevation_fade_end, elevation_fade_min_alpha = mod:get_elevation_fade_curve()
         local only_tagged_enemies = mod:get_show_only_tagged_enemies()
         local only_tagged_items = mod:get_show_only_tagged_items()
         local show_ability_marked_enemies = mod:get_show_ability_marked_enemies()
@@ -1936,6 +1971,7 @@ return function(env)
         local selection_priority_cache = _scratch_selection_priority_cache
         local priority_target_cache = _scratch_priority_target_cache
         local facing_kind_cache = _scratch_facing_kind_cache
+        local elevation_fade_cache = _scratch_elevation_fade_cache
         local get_target_render_layer = mod.get_target_render_layer
         local get_target_selection_priority = mod.get_target_selection_priority
         local is_event_marker_kind = mod.is_event_marker_kind
@@ -2041,6 +2077,17 @@ return function(env)
             end
 
             return shows_facing
+        end
+
+        local function _cached_fades_with_elevation(kind)
+            local fades = elevation_fade_cache[kind]
+
+            if fades == nil then
+                fades = _kind_fades_with_elevation(kind)
+                elevation_fade_cache[kind] = fades
+            end
+
+            return fades
         end
 
         --- Filters one tracked unit or point and appends it as a radar target.
@@ -2150,12 +2197,10 @@ return function(env)
                 return
             end
 
-            local vertical_delta = nil
+            local vertical_delta = get_vertical_delta(player_pos, position)
             local vertical_state = nil
 
             if _cached_supports_vertical_marker(kind) then
-                vertical_delta = get_vertical_delta(player_pos, position)
-
                 if vertical_delta ~= nil then
                     local abs_vertical_delta = math_abs(vertical_delta)
 
@@ -2252,6 +2297,19 @@ return function(env)
             for i = target_total, max_markers + 1, -1 do
                 targets[i] = nil
             end
+        end
+
+        for i = 1, was_capped and max_markers or target_total do
+            local target = targets[i]
+            local vertical_delta = target.vertical_delta
+            local elevation_alpha = nil
+
+            if vertical_delta ~= nil and _cached_fades_with_elevation(target.kind) then
+                elevation_alpha = _elevation_fade_alpha(math_abs(vertical_delta), elevation_fade_start,
+                    elevation_fade_end, elevation_fade_min_alpha)
+            end
+
+            target.elevation_alpha = elevation_alpha
         end
 
         mod._last_radar_unclustered_marker_count = unclustered_total
@@ -3213,6 +3271,39 @@ return function(env)
         end
 
         return value
+    end
+
+    --- Returns the shared elevation fade curve.
+    -- Heights are metres of height difference, clamped to 0 to 50, and the minimum opacity is a
+    -- percentage clamped to 0 to 100; a missing or non-finite value takes its default (2 m, 8 m,
+    -- 35 %). A fade end at or below the fade start is kept as it is, which makes the fade a step.
+    -- treturn: number fade start, the height up to which markers keep their opacity
+    -- treturn: number fade end, the height from which the minimum applies
+    -- treturn: number minimum share of the opacity, 0 to 1
+    function mod:get_elevation_fade_curve()
+        local fade_start = tonumber(self:get("elevation_fade_start"))
+        local fade_end = tonumber(self:get("elevation_fade_end"))
+        local min_opacity = tonumber(self:get("elevation_fade_min_percent"))
+
+        if not _is_finite_number(fade_start) then
+            fade_start = 2
+        else
+            fade_start = math_max(0, math_min(50, fade_start))
+        end
+
+        if not _is_finite_number(fade_end) then
+            fade_end = 8
+        else
+            fade_end = math_max(0, math_min(50, fade_end))
+        end
+
+        if not _is_finite_number(min_opacity) then
+            min_opacity = 35
+        else
+            min_opacity = math_max(0, math_min(100, min_opacity))
+        end
+
+        return fade_start, fade_end, min_opacity / 100
     end
 
     --- Returns the radar style.

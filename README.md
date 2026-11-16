@@ -29,9 +29,10 @@ This README serves two audiences. The first half is a feature and settings refer
 - Adds **Mission Objective Interactable** markers for the world interactions that drive mission progression, split into **Scanner targets**, **Hacking terminals**, **Servo skull objectives**, **Daemonic growth**, **Targets to destroy**, and **Other objective interactions**, each with its own **Icon only**, **Icon + Distance m**, and **Off** display mode and icon. Markers come from the game's own objective systems rather than from what the HUD happens to be drawing, so a step appears as soon as it becomes relevant instead of only once you are close enough for the interaction prompt, and clears again the moment it is completed.
 - Adds optional **Respawn** markers for the active respawn beacon, the run-back threshold and Respawn Rewind's practice layout. They are mirrored from the [Respawn Rewind](#respawn-rewind) mod when it is installed, and nothing is drawn without it.
 - Adds optional **Safe route** markers for the road a mission keeps at each branching path and **Wrong way** markers for the roads it does not. They are mirrored from the [SafeRoute](#saferoute) mod when it is installed, and nothing is drawn without it.
-- Adds dedicated **Expedition POI** support for numbered **Sites of Interest**, **Deadsider Sanctuaries**, **Data Reliquary Harvesters**, **Main Objective**, **Valkyrie Extraction Zone**, and **Valkyrie Arrival Zone**, with per-category **Icon only**, **Icon + Distance m**, and **Off** display modes. Player-marked navigation POIs show an evenly divided ring containing the slot colors of up to four marking players.
+- Adds dedicated **Expedition POI** support for numbered **Sites of Interest**, **Deadsider Sanctuaries**, **Data Harvesters**, **Main Objective**, **Valkyrie Extraction Zone**, and **Valkyrie Arrival Zone**, with per-category **Icon only**, **Icon + Distance m**, and **Off** display modes. Player-marked navigation POIs show an evenly divided ring containing the slot colors of up to four marking players.
 - Supports tech-remnant loot modes for **Default**, **Scale by value**, and **Merge nearby piles**, plus optional cluster value text and radius tuning.
 - Includes optional distance text for bosses, player tags, nearby marker highlights, and expedition POIs, per-enemy-category vertical arrow toggles, **Infinite** boss and teammate range modes, **debug logs**, and an **unknown pickups** toggle for discovery and troubleshooting.
+- Fades markers on other floors with their height difference from you, the same above and below, so markers at your height stand out. One shared curve sits under **General → Limits & filtering → Elevation fading**, and each marker category has its own **Fade … by height** toggle in its section, all on by default. See [Elevation fading](#elevation-fading).
 
 ## Settings menu
 
@@ -140,7 +141,7 @@ From left to right: a teammate with **Teammate coherency** off, a teammate in it
 
 ### Vertical item and enemy arrows
 
-Vertical arrows add a small **up** or **down** overlay to supported markers when the target is on a different level but still close enough horizontally to matter. Item markers can use this behavior globally, and enemy markers can now use it per enemy category: **Boss**, **Horde**, **Common**, **Shooter**, **Elite**, **Special**, and **Misc**.
+Vertical arrows add a small **up** or **down** overlay to supported markers when the target is on a different level but still close enough horizontally to matter. Item markers can use this behavior globally, and enemy markers can now use it per enemy category: **Boss**, **Horde**, **Common**, **Shooter**, **Elite**, **Specialist**, and **Misc**.
 
 The arrow range and vertical hiding threshold remain global, so enemy arrows reuse the same distance behavior as supported item arrows without adding separate per-category hiding rules.
 
@@ -149,6 +150,22 @@ The arrow range and vertical hiding threshold remain global, so enemy arrows reu
   <img src="doc/img/material_expeditions_loot_up.png" width="50" alt="Item marker with up arrow example" />
   <img src="doc/img/material_expeditions_loot_down.png" width="50" alt="Item marker with down arrow example" />
 </p>
+
+### Elevation fading
+
+Markers on another floor fade with their height difference from you, so the markers at your height stand out. The height difference is measured between the target's position and your own position, the one the radar is centered on, not your camera, and it counts the same above and below you. A marker keeps its configured opacity up to **Elevation fade start**, fades in a straight line to **Minimum elevation opacity** at **Elevation fade end**, and stays there beyond:
+
+| Height difference | Opacity kept (defaults) |
+| --- | --- |
+| 0 to 2 m | 100 % |
+| 5 m | 67.5 % |
+| 8 m and more | 35 % |
+
+The opacity kept multiplies each color's own opacity, so a color you made partly transparent keeps its proportions and a fully transparent layer stays invisible. Everything that belongs to the marker fades together: its icon, artwork or glyph, backplate and overlays, the teammate coherency backplate, frame and flash, the healing radius ring, the Expedition player-marked ring, the brackets, the facing arrow, the vertical arrow, and its value and distance texts. Ability outline colors keep their precedence and fade the same way. Nearby highlights and outlines in the world, the map geometry, the radar frame and guides, and your own center dot keep their own presentation.
+
+Fading only changes how opaque a marker is. Whether a marker is drawn at all is still decided by its own settings, the radar range, the tag filters, the marker limit and **Hide vertical markers above/below (m)**, including their exemptions: a marker that is hidden stays hidden, and a marker exempt from hiding, such as a mission objective, a respawn marker or a target with **Infinite** range, still fades when its category does. Switching a category's fading off does not switch its height hiding off. Every category fades whether or not it shows vertical arrows, on the normal radar and in the centered overview, on every radar style, and also when it is pinned to the radar's edge. A target whose height cannot be read keeps its configured opacity.
+
+The fade follows your height and the target's at the **Marker update rate**. The mission servo skull hovers above the floor and bobs as it flies, so with the defaults it can look slightly faded even while you follow it on the same floor; switch off **Fade objective interactables by height** under **Mission Objective Interactables** if you want it at full opacity.
 
 ## Map geometry
 
@@ -235,7 +252,7 @@ Expedition POI settings use dropdown display modes instead of simple on/off togg
 | --- | --- |
 | Sites of Interest | **Icon + Distance m** |
 | Deadsider Sanctuaries | **Icon only** |
-| Data Reliquary Harvesters | **Icon only** |
+| Data Harvesters | **Icon only** |
 | Main Objective | **Icon only** |
 | Valkyrie Extraction Zone | **Icon only** |
 | Valkyrie Arrival Zone | **Icon only** |
@@ -325,6 +342,10 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Radar range / filter distance | Adjustable from **10 m** to **200 m** for the normal radar. |
 | Show vertical arrows within range (m) | Adjustable from **25 m** to **100 m**. Supported item markers and enemy markers with vertical arrows enabled show a small **up** or **down** arrow when they are on another level and still within this horizontal range. |
 | Hide vertical markers above/below (m) | Adjustable from **8 m** to **50 m**. Supported item markers and enemy markers with vertical arrows enabled are hidden when their vertical separation is larger than this value. |
+| Elevation fade start (m) | Adjustable from **0 m** to **50 m** (default **2 m**), at the end of **Limits & filtering** under **Elevation fading**. Markers of a category with fading on keep their configured opacity up to this height difference above or below you. See [Elevation fading](#elevation-fading). |
+| Elevation fade end (m) | Adjustable from **0 m** to **50 m** (default **8 m**). Fading markers reach the minimum opacity at this height difference and keep it beyond. A value at or below the fade start turns the fade into a step at the start. |
+| Minimum elevation opacity (%) | Adjustable from **0 %** to **100 %** (default **35 %**). The share of a marker's configured opacity kept from the fade end on; **100 %** turns fading off for every category. |
+| Fade … by height | One checkbox per marker category, all on by default, in that category's own section, as the enemy vertical arrow options are. In the item, objective and Expedition sections it follows the section's highlight and distance options (in **Expeditions Specific Items** under its items group, covering Tech-Remnants too). In each enemy section it follows that category's vertical arrow and facing options, so **Common & shooters** has one for common enemies and one for shooters. **Fade teammates by height** sits under **Teammates** beside the look direction option, **Fade player tags by height** under **Player Tags**, and the **Player Companions**, **Respawn** and **Safe route** toggles below their icon size. Unknown pickups from the **Debug** tab fade with **Common Pickups**. A category switched off keeps its configured opacity; the others still fade. |
 | Max radar markers | Adjustable from **10** to **200** for the normal radar. |
 | Max overview markers | Adjustable from **100** to **300** for centered overview mode. |
 | Marker update rate | **Low (4 per second)**, **Medium (10 per second)**, or **High (20 per second)**. Controls how often enemies, teammates, and companions are rescanned so their markers move more smoothly. Droppable items such as pocketables and deployables always update at the **Low** rate, and fully static props update even less often. |
@@ -385,13 +406,13 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Collectable Materials | Diamantine, Plasteel | **Artwork**, **Icon**, **Off** |
 | Expeditions-Specific Items | Salvage, Tech-Remnants, Dropped Tech-Remnants, Servo-Triggered Mine, Purgation Snare, Voltaic Snare, Void Shell, Bombing Run Signal Marker, Artillery Locator Beacon, Modified Grenade, Fire-Support Signal Marker | **Artwork**, **Icon**, **Off** |
 | Event-Related Items | Tainted Skulls, Holy Relics, Heretical Artifacts, Stolen Rations | **Artwork**, **Icon**, **Off** |
-| Expedition POIs | Sites of Interest, Deadsider Sanctuaries, Data Reliquary Harvesters, Main Objective, Valkyrie Extraction Zone, Valkyrie Arrival Zone | **Icon only**, **Icon + Distance m**, **Off** |
+| Expedition POIs | Sites of Interest, Deadsider Sanctuaries, Data Harvesters, Main Objective, Valkyrie Extraction Zone, Valkyrie Arrival Zone | **Icon only**, **Icon + Distance m**, **Off** |
 | Mission Objective Interactables | Scanner targets, Hacking terminals, Servo skull objectives, Daemonic growth, Targets to destroy, Other objective interactions | **Icon only**, **Icon + Distance m**, **Off** |
 | Environment | Explosive Barrels, Fire Barrels | **Icon only**, **Icon + Distance m**, **Off** |
 | Respawn | Active respawn, Run-back threshold, Practice respawn points, Practice thresholds | **Icon only**, **Icon + Distance m**, **Off** |
 | Safe route | Safe route, Wrong way | **Icon only**, **Icon + Distance m**, **Off** |
 | Enemy bosses (Boss marker style) | Daemonhost, Monstrosities, Captains, Karnak Twins | **Icon only**, **Marked icon** |
-| Individual enemies | Dreg and Scab Bruisers and Vanguards, Dreg and Scab Stalkers, Scab Shooters, and the Elite, Special, and Misc enemies listed below | **Icon only**, **Marked icon**, **Off** |
+| Individual enemies | Dreg and Scab Bruisers and Vanguards, Dreg and Scab Stalkers, Scab Shooters, and the Elite, Specialist, and Misc enemies listed below | **Icon only**, **Marked icon**, **Off** |
 | Teammates | Teammate marker style | **Icon only**, **Marked icon**, **Dot only**, **Marked dot**, **Off** |
 | Single markers | Every other pickup, luggable, objective item, environment, and deployed-item marker, Martyr's Skull and its Power Cell, Dark Rites Totems and Servo Skulls, Tainted Communications Device, Monstrosities, Captains, Karnak Twins, Horde enemies, Player center dot, and Show unknown pickups | **Icon**, **Off** |
 
@@ -411,7 +432,7 @@ Each major option group now includes an **Icon size (%)** slider. These sliders 
 | Expeditions POI | Sites of Interest, sanctuaries, harvesters, main objective, extraction, and arrival markers |
 | Expeditions-Specific Items | Salvage, Tech-Remnants, expedition pocketables, and related expedition pickups |
 | Martyr's Skull Items | Martyr's Skull markers, riddle interactables, and related power cell markers |
-| Environment | Medicae Station, Power Socket, Heretic Idol, Explosive Barrels, and Fire Barrels |
+| Environment | Medicae Station, Power Socket, Heretical Idol, Explosive Barrels, and Fire Barrels |
 | Deployed Items | Ammo Crate, Medical Crate, and Stimm Supply deployables |
 | All enemy icon size | Every enemy marker, combined with the category slider below |
 | Monstrosity/Captain/Twins icon size | Daemonhost, Monstrosities, Captains, Karnak Twins |
@@ -419,7 +440,7 @@ Each major option group now includes an **Icon size (%)** slider. These sliders 
 | Common enemy icon size | Common enemies |
 | Shooter enemy icon size | Shooter enemies |
 | Elite enemy icon size | Elite enemies |
-| Special enemy icon size | Special enemies |
+| Specialist icon size | Specialists |
 | Misc enemy icon size | Ritualists |
 | Players (Teammates) | Teammate markers and player tag markers |
 | Player Companions | Cyber Mastiffs and Servo Skulls |
@@ -440,7 +461,7 @@ Each major option group now includes an **Icon size (%)** slider. These sliders 
 | Common enemies | Independent display-style dropdowns for Dreg Bruisers, Scab Bruisers, Dreg Vanguards, and Scab Vanguards. |
 | Shooters | Independent display-style dropdowns for Dreg Stalkers, Scab Stalkers, and Scab Shooters. |
 | Elite enemies | Per-unit display-style dropdowns for Dreg Gunners, Ragers, Shotgunners, Scab Gunners, Maulers, Plasma Gunners, Ragers, Shotgunners, and Ogryn elites. |
-| Special enemies | Per-unit display-style dropdowns for Bombers, Flamers, Mutants, Poxbursters, Hounds, Snipers, and Trappers. |
+| Specialists | Per-unit display-style dropdowns for Bombers, Flamers, Mutants, Poxbursters, Hounds, Snipers, and Trappers. |
 | Ritualist | Dedicated toggle under the misc enemy category. |
 
 ### Enemy vertical arrow controls
@@ -454,7 +475,7 @@ Enemy vertical arrows are controlled per enemy category. Enabling them lets the 
 | Show common enemy vertical arrows | Enables vertical arrows for common enemy markers. |
 | Show shooter vertical arrows | Enables vertical arrows for shooter enemy markers. |
 | Show elite vertical arrows | Enables vertical arrows for elite enemy markers. |
-| Show special vertical arrows | Enables vertical arrows for special enemy markers. |
+| Show specialist vertical arrows | Enables vertical arrows for specialist markers. |
 | Show misc enemy vertical arrows | Enables vertical arrows for misc enemy markers, currently Ritualists. |
 
 All enemy vertical arrow options use the shared **Show vertical arrows within range (m)** and **Hide vertical markers above/below (m)** settings.
@@ -470,7 +491,7 @@ Each enemy category can show the [facing direction](#facing-direction) arrow bes
 | Show common enemy facing direction | Common enemy markers. |
 | Show shooter facing direction | Shooter enemy markers. |
 | Show elite facing direction | Elite enemy markers. |
-| Show special facing direction | Special enemy markers. |
+| Show specialist facing direction | Specialist markers. |
 | Show misc enemy facing direction | Misc enemy markers, currently Ritualists. |
 
 ### Nearby highlight controls
@@ -494,7 +515,7 @@ Each group below has a nearby highlight dropdown with **Highlight markers** (scr
 | Mission Objective Interactables | Highlights nearby scanner targets, hacking terminals, and other active objective interaction points. Servo skull objectives are excluded because the game already draws its own on-screen marker for them. With **Outlines**, every eye of a daemonic growth tentacle is outlined, and a target to destroy outlines the object you actually destroy, such as Rolling Steel's cogitators. |
 | Expeditions-Specific Items | Highlights nearby salvage, tech-remnants, expedition pocketables, and related expedition pickups. |
 | Martyr's Skull Items | Highlights nearby Martyr's Skull items, riddle interactables, and orange power cell markers. |
-| Environment | Highlights nearby medicae stations, power sockets, heretic idols, and hazard barrels. |
+| Environment | Highlights nearby medicae stations, power sockets, heretical idols, and hazard barrels. |
 | Deployed Items | Highlights nearby deployed ammo crates, medical crates, and Stimm Supply. |
 | Event-Related Items | Highlights nearby event pickups and event objectives, including Dark Rites totems and servo skulls. |
 
@@ -512,10 +533,10 @@ Each group below has a nearby highlight dropdown with **Highlight markers** (scr
 | Option | Modes / default | What it controls |
 | --- | --- | --- |
 | Expeditions POI | Option group | Contains independent display mode dropdowns for expedition location markers. |
-| Ignore range limit for POI | Checkbox, default on | Lets expedition POI markers, except Data Reliquary Harvesters, bypass the normal radar range filter. |
+| Ignore range limit for POI | Checkbox, default on | Lets expedition POI markers, except Data Harvesters, bypass the normal radar range filter. |
 | Sites of Interest | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon + Distance m**. | Controls registered expedition opportunity locations, including numbered scanner-map opportunity markers. |
 | Deadsider Sanctuaries | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls expedition transition or sanctuary locations with the dedicated transition icon. |
-| Data Reliquary Harvesters | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls expedition loot converters with the dedicated harvester icon while inside the sanctuary where they are usable, and clears stale harvester markers across sanctuary transitions. |
+| Data Harvesters | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls expedition loot converters with the dedicated harvester icon while inside the sanctuary where they are usable, and clears stale harvester markers across sanctuary transitions. |
 | Main Objective | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls expedition main objective locations with the dedicated objective icon. |
 | Valkyrie Extraction Zone | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls extraction points with the dedicated extraction icon. |
 | Valkyrie Arrival Zone | **Icon only**, **Icon + Distance m**, **Off**. Default: **Icon only**. | Controls arrival points with the dedicated arrival icon. |
@@ -527,7 +548,7 @@ These markers show the world interactions of the **currently active** objective 
 - **Clears when done.** A marker clears when its step is used, scanned, solved, broken or completed, and when the objective itself ends.
 - **Unused alternatives stay hidden.** Where a mission places several copies of a device or files several alternatives under one objective, only the one the mission actually uses is shown.
 - **Range.** A step the game is itself pointing at stays on the radar beyond its range, but only while the game draws that marker.
-- **Height.** Objective markers are never hidden for being above or below you, whatever **Hide vertical markers above/below** is set to.
+- **Height.** Objective markers are never hidden for being above or below you, whatever **Hide vertical markers above/below** is set to. They still fade with their height difference while **Fade objective interactables by height** is on; see [Elevation fading](#elevation-fading).
 
 How these rules are implemented is explained in [Mission objective tracking](#mission-objective-tracking).
 
@@ -571,7 +592,7 @@ A device keeps its marker for as long as its objective runs, so nothing blinks o
 | Medicae Station | Shows medicae station and equivalent health station interactions. |
 | Medicae Station Charges | Shows the remaining healing charges on visible Medicae Station markers. Unpowered stations with a missing battery use a light grey marker, while fully depleted stations follow the game's marker visibility. |
 | Power Socket | Shows luggable power socket targets. Sockets for other mission cargo, such as vacuum capsules, ammunition canisters, cryonic rods, Moebian samples, and the Prismata case, follow Other objective interactions instead. |
-| Heretic Idol | Shows active heretic idols while they are still present. |
+| Heretical Idol | Shows active heretical idols while they are still present. |
 
 ### Deployed Items Controls
 
@@ -642,6 +663,7 @@ Each marker has its own icon, frame and backplate color pickers, which are hidde
 - Supported enemies can also be surfaced through active ability-mark or smart-tag outline states when **Ability-marked enemies** is enabled.
 - **Tagged enemies only** and **Tagged items only** restrict visibility to actively tagged targets, and those tagged targets ignore the usual radar range limit while the tag remains active.
 - Supported item markers and enemy markers from enabled enemy categories can show vertical **up** and **down** arrows. They use the shared vertical arrow range and shared vertical hide threshold, while nearby highlight brackets and optional distance text remain item-focused presentation features.
+- Every marker category, enemies, teammates, companions and tags included, fades with its height difference from you while its **Fade … by height** toggle is on, independently of vertical arrows and of the vertical hide threshold. See [Elevation fading](#elevation-fading).
 - Medicae Stations and deployed Ammo Crates can show their remaining team-resource charges as a small top-right number. If **Show distance on radar markers** is enabled for the same marker group, the distance remains below the icon.
 - Medicae Stations use the normal green marker while powered and usable. Unpowered stations with a missing battery use a light grey marker. Depleted stations without remaining charges follow the game's normal marker visibility.
 - Deployed Medical Crates include a circular healing-radius indicator that scales with the configured radar range. The ring is hidden when the full radius would extend outside the radar bounds.
@@ -654,7 +676,7 @@ Each marker has its own icon, frame and backplate color pickers, which are hidde
 
 ## Target Markers
 
-The legend below follows the option groups exposed by `Radar_data.lua`. Enemy markers are listed in the same gameplay-oriented order used by the enemy settings: bosses, horde, common, shooters, elites, specials, and misc. Each enemy category can also enable vertical **up** and **down** arrows independently. The preview tiles were generated from the included `doc/img` assets and the default ARGB values used by the HUD presentations.
+The legend below follows the option groups exposed by `Radar_data.lua`. Enemy markers are listed in the same gameplay-oriented order used by the enemy settings: bosses, horde, common, shooters, elites, specialists, and misc. Each enemy category can also enable vertical **up** and **down** arrows independently. The preview tiles were generated from the included `doc/img` assets and the default ARGB values used by the HUD presentations.
 
 ### Ability outline and smart-tag examples
 
@@ -727,22 +749,22 @@ Left: **Icon only**. Right: **Marked icon**.
 | <img src="doc/img/chaos_ogryn_executor.png"  width="80" alt="Ogryn Crusher marker" /> | Ogryn - Crusher | Individual elite enemy toggle. |
 | <img src="doc/img/chaos_ogryn_gunner.png"  width="80" alt="Ogryn Reaper marker" /> | Ogryn - Reaper | Individual elite enemy toggle. |
 
-### Special Enemies
+### Specialists
 
 | Preview | Marker | Notes |
 | --- | --- | --- |
-| <img src="doc/img/renegade_grenadier.png"  width="80" alt="Scab Bomber marker" /> | Scab Bomber | Individual special enemy toggle. |
-| <img src="doc/img/cultist_grenadier.png"  width="80" alt="Dreg Tox Bomber marker" /> | Dreg Tox Bomber | Individual special enemy toggle. |
-| <img src="doc/img/renegade_flamer.png"  width="80" alt="Scab Flamer marker" /> | Scab Flamer | Individual special enemy toggle. |
+| <img src="doc/img/renegade_grenadier.png"  width="80" alt="Scab Bomber marker" /> | Scab Bomber | Individual specialist toggle. |
+| <img src="doc/img/cultist_grenadier.png"  width="80" alt="Dreg Tox Bomber marker" /> | Dreg Tox Bomber | Individual specialist toggle. |
+| <img src="doc/img/renegade_flamer.png"  width="80" alt="Scab Flamer marker" /> | Scab Flamer | Individual specialist toggle. |
 | <img src="doc/img/renegade_flamer_mutator.png"  width="80" alt="Scab Flamer mutator variant marker" /> | Scab Flamer, mutator variant | Uses the same toggle and scale settings as **Scab Flamer**. |
-| <img src="doc/img/cultist_flamer.png"  width="80" alt="Dreg Tox Flamer marker" /> | Dreg Tox Flamer | Individual special enemy toggle. |
-| <img src="doc/img/cultist_mutant.png"  width="80" alt="Mutant marker" /> | Mutant | Individual special enemy toggle. |
-| <img src="doc/img/chaos_hound.png"  width="80" alt="Pox Hound marker" /> | Pox Hound | Individual special enemy toggle. |
+| <img src="doc/img/cultist_flamer.png"  width="80" alt="Dreg Tox Flamer marker" /> | Dreg Tox Flamer | Individual specialist toggle. |
+| <img src="doc/img/cultist_mutant.png"  width="80" alt="Mutant marker" /> | Mutant | Individual specialist toggle. |
+| <img src="doc/img/chaos_hound.png"  width="80" alt="Pox Hound marker" /> | Pox Hound | Individual specialist toggle. |
 | <img src="doc/img/chaos_hound_mutator.png"  width="80" alt="Pox Hound mutator variant marker" /> | Pox Hound, mutator variant | Uses the same toggle and scale settings as **Pox Hound**. |
-| <img src="doc/img/chaos_armored_hound.png"  width="80" alt="Armored Pox Hound marker" /> | Armored Pox Hound | Individual special enemy toggle. |
-| <img src="doc/img/chaos_poxwalker_bomber.png"  width="80" alt="Poxburster marker" /> | Poxburster | Individual special enemy toggle. The default display style is **Marked icon**. |
-| <img src="doc/img/renegade_sniper.png"  width="80" alt="Sniper marker" /> | Sniper | Individual special enemy toggle. |
-| <img src="doc/img/renegade_netgunner.png"  width="80" alt="Trapper marker" /> | Trapper | Individual special enemy toggle. |
+| <img src="doc/img/chaos_armored_hound.png"  width="80" alt="Armored Pox Hound marker" /> | Armored Pox Hound | Individual specialist toggle. |
+| <img src="doc/img/chaos_poxwalker_bomber.png"  width="80" alt="Poxburster marker" /> | Poxburster | Individual specialist toggle. The default display style is **Marked icon**. |
+| <img src="doc/img/renegade_sniper.png"  width="80" alt="Sniper marker" /> | Sniper | Individual specialist toggle. |
+| <img src="doc/img/renegade_netgunner.png"  width="80" alt="Trapper marker" /> | Trapper | Individual specialist toggle. |
 
 Poxburster style example:
 
@@ -896,7 +918,7 @@ Player tags intentionally stay flatter and cleaner than supported item markers. 
 | Preview | Marker | Notes |
 | --- | --- | --- |
 | <img src="doc/img/pocketable_grimoire.png"  width="80" alt="Grimoire marker" /> | Grimoire | Secondary objective pocketable. |
-| <img src="doc/img/pocketable_scripture.png"  width="80" alt="Scripture marker" /> | Scripture | Secondary objective pocketable. |
+| <img src="doc/img/pocketable_scripture.png"  width="80" alt="Scriptures marker" /> | Scriptures | Secondary objective pocketable. |
 
 ### Mission Objective Interactables
 
@@ -928,7 +950,7 @@ Each category has its own icon, drawn inside the diamond frame and backplate the
 | <img src="doc/img/expedition_unmarked_xi_2_4x.png" width="48" alt="Expedition unmarked XI 2 marker" /> <img src="doc/img/expedition_unmarked_n_4_4x.png" width="48" alt="Expedition unmarked N 4 marker" /> <img src="doc/img/expedition_unmarked_m_1_4x.png" width="48" alt="Expedition unmarked M 1 marker" /> | Sites of Interest | Unmarked expedition opportunity markers, using scanner-map glyphs with location numbering. |
 | <img src="doc/img/expedition_marked_blue_m_1_4x.png" width="48" alt="Site of Interest marked by one player" /> <img src="doc/img/expedition_marked_purple_xi_2_4x.png" width="48" alt="Site of Interest marked by two players" /> <img src="doc/img/expedition_marked_yellow_n_4_4x.png" width="48" alt="Site of Interest marked by three players" /> | Sites of Interest, player-marked | One player fills the ring; additional marking players divide it into equal slot-colored sections. Up to four player colors are supported. |
 | <img src="doc/img/expedition_objective_transition.png"  width="80" alt="Expedition transition marker" /> | Deadsider Sanctuaries | Transition marker for sanctuary travel and section movement. |
-| <img src="doc/img/expedition_loot_converter.png"  width="80" alt="Expedition loot converter marker" /> | Data Reliquary Harvesters | Uses the expedition harvester icon and is only shown while inside the sanctuary where the converter is relevant. |
+| <img src="doc/img/expedition_loot_converter.png"  width="80" alt="Expedition loot converter marker" /> | Data Harvesters | Uses the expedition harvester icon and is only shown while inside the sanctuary where the converter is relevant. |
 | <img src="doc/img/expedition_objective_main_objective.png"  width="80" alt="Expedition main objective marker" /> | Main Objective | Main expedition objective location marker. |
 | <img src="doc/img/expedition_objective_extraction.png"  width="80" alt="Expedition extraction marker" /> | Valkyrie Extraction Zone | Extraction location marker. |
 | <img src="doc/img/expedition_objective_arrival.png"  width="80" alt="Expedition arrival marker" /> | Valkyrie Arrival Zone | Arrival location marker. |
@@ -969,7 +991,7 @@ These markers are driven by expedition navigation data rather than standard pick
 | --- | --- | --- |
 | <img src="doc/img/medicae_station.png"  width="80" alt="Medicae Station marker" /> | Medicae Station | Green medical interaction marker used for medicae stations and equivalent health-station interactions. Can show remaining healing charges as a top-right number. Unpowered stations with a missing battery use a light grey marker. |
 | <img src="doc/img/luggable_socket.png"  width="80" alt="Power Socket marker" /> | Power Socket | Yellow power socket marker for luggable socket targets. While you carry a luggable, sockets stay on the radar beyond its range and on any floor. Sockets for mission cargo -- vacuum capsules, ammunition canisters, cryonic rods, Moebian samples, and the Prismata case -- feed the mission's own machinery rather than a power line, so they are drawn as Other objective interactions instead. |
-| <img src="doc/img/heretic_idol.png"  width="80" alt="Heretic Idol marker" /> | Heretic Idol | Sickly green idol marker shown while the idol is still active. Active idols now appear reliably on the radar. |
+| <img src="doc/img/heretic_idol.png"  width="80" alt="Heretical Idol marker" /> | Heretical Idol | Sickly green idol marker shown while the idol is still active. Active idols now appear reliably on the radar. |
 | <img src="doc/img/hazard_explosive_barrel.png"  width="80" alt="Explosive Barrel marker" /> | Explosive Barrel | Tan hazard marker for static explosive barrels. Supports **Icon only**, **Icon + Distance m**, and **Off**. |
 | <img src="doc/img/hazard_fire_barrel.png"  width="80" alt="Fire Barrel marker" /> | Fire Barrel | Orange hazard marker for static fire/promethium barrels. Supports **Icon only**, **Icon + Distance m**, and **Off**. |
 
@@ -1105,7 +1127,7 @@ The remaining formerly white pickup icons were recolored so marker families read
 | Medicae Station | `(255, 38, 205, 26)` | Environment medical interaction |
 | Unpowered Medicae Station | `(255, 190, 190, 190)` | Missing battery / chargeable health station state |
 | Power Socket | `(255, 255, 245, 80)` | Environment power interaction |
-| Heretic Idol | `(255, 150, 190, 60)` | Environment idol marker |
+| Heretical Idol | `(255, 150, 190, 60)` | Environment idol marker |
 | Explosive Barrel | `(255, 205, 156, 77)` | Environment explosive hazard marker |
 | Fire Barrel | `(255, 255, 110, 0)` | Environment fire hazard marker |
 
@@ -1219,7 +1241,7 @@ The installer mechanism itself is older than 3.0.0. Up to 2.6.x there were five 
 | `Radar_runtime_helpers.lua` | Installer 2 | Defensive `_safe_*` access to engine and game state, the rules that decide whether the radar may run at all, radar position constants, the game's world marker list (`_safe_world_markers_list`), HUD projection and occlusion `mod` methods, and nearby-highlight collection. Holds no feature logic. |
 | `Radar_tracking.lua` | Installer 3 | Category-independent tracking: the tracked unit and point stores, scan scheduling, interactee dispatch, target filtering and the marker limit, the radar snapshot, overview, zoom and position, settings getters, the mission reset, the hooks, the DMF callbacks, the opt-in [performance profiler](#performance-profiling) and the HUD element registration. Feature modules decide what a unit is; tracking decides whether and where it is shown. |
 | `Radar_players.lua` | Installer 4 | Teammates and their states, player companions, player smart tags and tag attribution, ability-outlined enemies, and whether a player carries a luggable. |
-| `Radar_pickups.lua` | Installer 4 | `_classify_interactee` and its fixed classifier order, plus chests, hazard barrels, destructibles (Heretic Idols, Dark Rites totems) and tagged medical crates and Stimm Supply crates. |
+| `Radar_pickups.lua` | Installer 4 | `_classify_interactee` and its fixed classifier order, plus chests, hazard barrels, destructibles (Heretical Idols, Dark Rites totems) and tagged medical crates and Stimm Supply crates. |
 | `Radar_mission_objectives.lua` | Installer 4 | Objective interactable discovery and lifecycle, luggable containers and cargo sockets, puzzle-state colors, the objective range exemption, and Martyr's Skull riddle data, fallbacks and solve detection. |
 | `Radar_expeditions.lua` | Installer 4 | Expedition sections and sanctuary transitions, Expedition pickups, Tech-Remnant values and clustering, navigation POIs and player-marked rings. Outside an Expedition every rule lets everything pass. |
 | `Radar_events.lua` | Installer 4 | Live-event pickup and interactable classification (Dark Rites skulls, saints, leftovers, stolen rations) and the Dark Rites circumstance gate. |
@@ -1289,7 +1311,7 @@ Scans run in three tiers:
 | --- | --- | --- |
 | Every scan | **Marker update rate** (`radar_scan_rate`): 0.25 s, 0.1 s or 0.05 s | Enemies (`_scan_minions`), teammates and companions (`_refresh_player_units`), and the positions of moving units. |
 | Droppable | 0.25 s | Interactees, including mission objectives and riddle steps, the objective passes, smart-tag targets and the riddle solve check. Also rebuilds `mod._tracked_points` from scratch: Expedition POIs, riddle coordinate fallbacks, player tag points, Respawn Rewind markers and SafeRoute markers. Refreshes the stored position of every tracked unit. |
-| Static | 0.5 s | Chests, destructibles (Heretic Idols, Dark Rites totems) and hazard barrels. |
+| Static | 0.5 s | Chests, destructibles (Heretical Idols, Dark Rites totems) and hazard barrels. |
 
 **Tracked units.** `_track_unit` stores `{ kind, source, position, meta, last_seen_t }` per unit. Positions are copied into plain tables, so engine vectors are never kept across frames. A unit that no scan refreshes for 2.5 seconds is pruned. `_clear_tracked_unit_from_source(unit, source)` removes an entry only when the given source owns it, so one scan can never drop a unit another scan claimed. The sources include `interactee_system`, `mission_objective_system`, `destructible_system`, `smart_tag_system`, `unit_data_system` and `player_manager`.
 
@@ -1302,21 +1324,21 @@ Scans run in three tiers:
 `_collect_radar_targets` checks each tracked unit and point in this order:
 
 1. **Enabled.** `_kind_enabled(kind)` resolves the kind through the player and companion settings, the enemy dropdown, the icon / distance dropdown, the Expedition dropdown, the artwork dropdown and finally `KIND_TO_SETTING`. Supported ability-marked enemies pass even when their kind is off.
-2. **Visibility filters.** Servo skulls hidden by their owner, **Tagged enemies only** and **Tagged items only**, luggables still shut in a container the radar is drawing (unless a player tagged them), and Heretic Idols that carry no collectible id.
+2. **Visibility filters.** Servo skulls hidden by their owner, **Tagged enemies only** and **Tagged items only**, luggables still shut in a container the radar is drawing (unless a player tagged them), and Heretical Idols that carry no collectible id.
 3. **Range.** Horizontal distance against the collection range, unless the target is exempt (see below).
 4. **Height.** Hidden beyond **Hide vertical markers above/below** unless exempt. A vertical arrow is set within **Show vertical arrows within range (m)** once the height difference passes the kind's deadzone.
 5. **Priority.** Render layer and selection priority are attached.
 
-Survivors are written into pooled target tables. The unclustered list is copied for nearby highlights. Tech-Remnants are then clustered, the list is sorted by selection priority, then horizontal distance, then kind, and cut to the active marker limit (**Max radar markers**, or **Max overview markers** while the overview is open).
+Survivors are written into pooled target tables, each with its height difference from the player (`vertical_delta`, for every kind). The unclustered list is copied for nearby highlights. Tech-Remnants are then clustered, the list is sorted by selection priority, then horizontal distance, then kind, and cut to the active marker limit (**Max radar markers**, or **Max overview markers** while the overview is open). Last, every target left gets `elevation_alpha`, the share of its opacity its category's [elevation fade](#elevation-fading) keeps (`nil` for all of it). The category comes from `mod:get_elevation_fade_setting(kind)` in `Radar_enemy_definitions.lua` and the curve from `mod:get_elevation_fade_curve()`. The HUD element multiplies the alpha of the widget's own color copies, the value texts and a scratch copy of the bracket and facing arrow color by it, so shared presentations are never changed.
 
 ### Rule exceptions
 
 | Rule | Exceptions | Decided in |
 | --- | --- | --- |
 | Radar range | Player smart tags. Explicitly tagged targets and supported ability-marked enemies. Dropped Tech-Remnants, and teammates and bosses set to **Infinite**. Expedition POIs other than loot converters while **Ignore range limit for POI** is on. `respawn_active` and `respawn_runback`. Mission objectives the game is currently pointing at (`_objective_ignores_radar_range`). Power sockets while the local player carries a luggable. | `_ignore_radar_range_for_kind`, `_has_infinite_radar_range_for_kind`, `_collect_radar_targets` |
-| Height hiding | Infinite-range kinds. `VERTICAL_HIDE_EXEMPT_KINDS`: the Heretic Idol, all four respawn kinds and both SafeRoute kinds. Every mission objective kind, matched by predicate so new categories are covered automatically. Sockets while carrying a luggable. | `_is_vertical_hide_exempt` |
+| Height hiding | Infinite-range kinds. `VERTICAL_HIDE_EXEMPT_KINDS`: the Heretical Idol, all four respawn kinds and both SafeRoute kinds. Every mission objective kind, matched by predicate so new categories are covered automatically. Sockets while carrying a luggable. | `_is_vertical_hide_exempt` |
 | Tagged items only | Players, companions, smart tags, enemies, Expedition POIs, respawn kinds and SafeRoute kinds are not items, so this filter never hides them. | `_is_item_kind` |
-| Marker limit | Sorted by selection priority first: dropped Tech-Remnants 650, active respawn 620, run-back threshold 610, live-event markers 600, safe route 590, wrong way 580, bosses 500, specials 400, elites 350, misc enemies 325, player smart tags 300, shooters 200, common enemies 100, horde 50, everything else 0. | `mod:get_target_selection_priority` |
+| Marker limit | Sorted by selection priority first: dropped Tech-Remnants 650, active respawn 620, run-back threshold 610, live-event markers 600, safe route 590, wrong way 580, bosses 500, specialists 400, elites 350, misc enemies 325, player smart tags 300, shooters 200, common enemies 100, horde 50, everything else 0. | `mod:get_target_selection_priority` |
 | Vertical arrow deadzone | 2 m by default and 6 m for the flying mission servo skull, whose position is also refreshed on every scan. | `VERTICAL_ARROW_Z_DEADZONE_BY_KIND`, `MOVING_TRACK_KINDS` |
 
 `mod:project_target_to_radar` pins a range-exempt target that lies beyond the range to the radar edge in its direction, on the circle or the square. In the centered overview, targets outside the zoom range are pinned the same way. The radar's facing direction is the same for every marker, so the HUD reads it once per draw with `mod:radar_projection_forward` and passes it to each projection; without a usable direction the radar is north-up.
@@ -1353,7 +1375,7 @@ A group set to **Outlines** is still collected by `_collect_screen_highlight_tar
 - **Destroy targets.** A destroy target is not always the thing to destroy. Rolling Steel's train controls are helper units with one small mesh the game never draws, about a metre from the cogitator that takes the damage, so their outline showed nothing. `_destroy_objective_prop` in `Radar_mission_objectives.lua` hands the outline to the objective prop the target stands for: the target itself when its unit data has the `objective_prop` breed type, otherwise the nearest such prop within three metres. The answer is kept for the mission. With no prop nearby, the target itself is outlined.
 - **Lifecycle.** Tracking calls `_sync_highlight_outlines` after every collection. That shows what was marked and switches off and forgets everything else. Every outline is also switched off when the radar stops or is not allowed to run, at the end of a mission, during a cinematic, and when Radar is disabled or unloaded.
 - **Fallback.** `_mark_highlight_outline` returns false, and the target keeps its bracket, for a target without a unit (a Martyr's Skull riddle coordinate fallback), a unit without meshes (such as an objective zone), and a unit the engine refuses the layer for. Refused units are remembered until the mission ends.
-- **Hidden meshes.** A layer covers every mesh of a unit, including hidden meshes and ones the game never draws. `Unit.add_material_layer` takes an undocumented sixth argument, a list of mesh names the layer is limited to (the fifth is unknown and passed as `nil`). The names cannot be read at runtime, so `OUTLINE_MESHES_BY_ROOT_NODE` lists them per unit, found by the unit's root node; they were read from the units' compiled resources, where names are stored as 32-bit Murmur hashes. A hanging hazard barrel (`rp_hazard_sphere_01`) keeps the fragments of its exploded state in a hidden `broken` visibility group, which showed as arcs around it; its sphere, ceiling mount and cables are listed. A Heretic Idol, standing (`rp_collectible_destructible_01`) or hanging (`rp_collectible_destructible_01_hanging`), carries a glow box and a convex collision hull, which showed as a box of flat planes around it; its body's four levels of detail are listed. If the engine rejects a list, the layer goes on every mesh and debug mode logs it once. A standing barrel keeps its broken fragments inside its own outline and needs no list.
+- **Hidden meshes.** A layer covers every mesh of a unit, including hidden meshes and ones the game never draws. `Unit.add_material_layer` takes an undocumented sixth argument, a list of mesh names the layer is limited to (the fifth is unknown and passed as `nil`). The names cannot be read at runtime, so `OUTLINE_MESHES_BY_ROOT_NODE` lists them per unit, found by the unit's root node; they were read from the units' compiled resources, where names are stored as 32-bit Murmur hashes. A hanging hazard barrel (`rp_hazard_sphere_01`) keeps the fragments of its exploded state in a hidden `broken` visibility group, which showed as arcs around it; its sphere, ceiling mount and cables are listed. A Heretical Idol, standing (`rp_collectible_destructible_01`) or hanging (`rp_collectible_destructible_01_hanging`), carries a glow box and a convex collision hull, which showed as a box of flat planes around it; its body's four levels of detail are listed. If the engine rejects a list, the layer goes on every mesh and debug mode logs it once. A standing barrel keeps its broken fragments inside its own outline and needs no list.
 - **Visible targets only.** The HUD element calls `mod:update_highlight_outline_visibility` every frame, which runs the same line-of-sight test against the anchor `_screen_highlight_projection_fallback_position` returns. A new outline starts hidden in this mode, so it never shows through a wall before its first test. A tagged unit skips the test and shows through walls.
 
 How the outline looks on a prop (its thickness, and whether it shows through walls) is decided by the game's renderer, not by Radar. GoodOldOutlines was only read to learn which engine calls make a prop outlinable; none of its code is used.
@@ -1711,12 +1733,13 @@ luajit tests/Radar_settings_menu_spec.lua
 
 | Spec | Contracts it protects |
 | --- | --- |
-| `Radar_highlight_outlines_spec.lua` | Highlight outlines with the real module against a fake engine: the layer added once per unit (also across a reload) from the minion outline material, colors written whenever an outline is switched on and on change (child units included), culling switched off again twice a second, unmarked units switched off and forgotten, the bracket fallback for missing, mesh-less, refused and dead units, the mesh lists of hanging barrels and Heretic Idols and the fallback when the engine rejects one, carried units, culling left to the game's own outlines, the visible-only mode and its tagged exemption, the line-of-sight test (the game's marker filter, collecting every hit, the target's own collider ignored, failures counted as visible), cinematics, the clear, reset, disable and unload paths, the layer's removal (before a unit is unregistered, on a mission reset, disable and unload, including units no longer outlined, a limited layer's mesh list, the child units it reached but not ones linked later, no call for dead or never outlined units, a missing or refusing engine call, a unit outlined again afterwards), no engine call while idle, and, through the real collection, which groups get outlines and which keep brackets, every eye of a growth tentacle and the prop behind a destroy target. |
+| `Radar_elevation_fade_spec.lua` | Elevation fading. With the real runtime helpers and tracking modules: the default curve (100 % through 2 m, 67.5 % at 5 m, 35 % from 8 m, above and below), configured curves, invalid, non-finite and out-of-range settings falling back or clamped, an end at or below the start as a step with no division, and, through the real collection, every kind getting its height difference, a category switched off keeping its opacity while others fade, a changed curve on the next scan, the vertical hide unchanged, hide-exempt and infinite-range targets still fading, unreadable heights, pooled targets and later scans never keeping an earlier fade, cluster targets, and every target the marker limit keeps. With the real enemy definitions: every marker kind mapped to its category's toggle, enemies by category, teammates and player tags apart, unknown pickups with Common Pickups. With the real settings menu: the curve at the end of Limits & filtering, each of the 23 toggles in its own category's section (an enemy category's after its vertical arrow and facing options) with their defaults, their text in every language, and every localized text surviving DMF's `string.format`. |
+| `Radar_highlight_outlines_spec.lua` | Highlight outlines with the real module against a fake engine: the layer added once per unit (also across a reload) from the minion outline material, colors written whenever an outline is switched on and on change (child units included), culling switched off again twice a second, unmarked units switched off and forgotten, the bracket fallback for missing, mesh-less, refused and dead units, the mesh lists of hanging barrels and Heretical Idols and the fallback when the engine rejects one, carried units, culling left to the game's own outlines, the visible-only mode and its tagged exemption, the line-of-sight test (the game's marker filter, collecting every hit, the target's own collider ignored, failures counted as visible), cinematics, the clear, reset, disable and unload paths, the layer's removal (before a unit is unregistered, on a mission reset, disable and unload, including units no longer outlined, a limited layer's mesh list, the child units it reached but not ones linked later, no call for dead or never outlined units, a missing or refusing engine call, a unit outlined again afterwards), no engine call while idle, and, through the real collection, which groups get outlines and which keep brackets, every eye of a growth tentacle and the prop behind a destroy target. |
 | `Radar_hud_renderer_spec.lua` | Circle radar frame pixels with the real renderer: the fill, its soft edge, the solid outline and the view guides cover exactly the pixels, colors and overlap counts of drawing them one row or pixel at a time (midpoint circle, Bresenham line), at several sizes, UI scales and draw phases, while using far fewer rectangles. The facing arrow: just beyond a round marker and turned along the heading for 16 directions and the four cardinals, round the coherency frame's side bars as measured from the game's texture, clear of every box within its width and only of those (400 random cases against sampled boxes), the outline reset per marker, and nothing drawn without a heading or a color. |
 | `Radar_input_capture_spec.lua` | Mouse wheel zoom input capture with the real tracking module, with profiling off and on: one handler on both `InputService` read paths, the lazily built capture map, the default wheel keys and rebinding them, the neutral values, a truth table over overview, modifier key, grace period, UI input and game mode, and the overview and modifier keybinds. Also the profiler: nothing while off, its counters and summary lines, windows of frame time, empty windows, draw steps added up over a draw and recorded once, the per-marker figures, the start and stop lines, a restart opening a new window, the scan tier rates of a profiled update, and no counter handle read outside the frame it was taken in. |
 | `Radar_marker_projection_spec.lua` | Marker placement with the real runtime helpers and tracking modules: a target ahead is drawn straight up and the radar turns with the view, height and look pitch do not move a marker, a rotation without a usable direction leaves the radar north-up, targets beyond the range are dropped or, when range-exempt or in the overview, pinned to the circle or square edge in their direction, unusable input draws nothing, and 2,000 random targets land where the rule puts them. A target's heading turns with the view the same way, points where the target would move on the radar for 2,000 random cases, and gives no direction when it is missing or not finite. |
-| `Radar_marker_size_spec.lua` | How big a marker and its brackets are drawn and where, through the real HUD draw loop with the renderer, widget pool and map geometry swapped out: an item's marker and brackets scale with the radar size and their settings group within 10 to 48 and 10 to 64 pixels, an enemy's brackets follow its drawn marker within its category's limits, both boxes are centred on the marker's whole-pixel position, a changed slider reaches the markers when the settings are read again, only kinds starting with `enemy_` are drawn as enemies, and 6,000 random markers get the size and place the rules give them. A target with a heading gets its facing arrow after its marker, with the brackets, coherency frame, vertical arrow and texts it drew as the outline to clear, in the bracket color with the ability color first and the icon color without brackets. |
-| `Radar_marker_widget_apply_spec.lua` | How a pooled marker widget is styled for a target, with the real HUD element and widget modules against a fake UI stack: each layer a target shows is drawn in its own color and in pass order, an enemy pinned by a mastiff is drawn without fill on its icon and overlay, a layer the target does not show is left untouched, an enemy's vertical arrow sits on its brackets and takes its size from the overlay whether the overlay is shown or not, and over 600 random targets a widget handed from target to target draws exactly what a fresh widget draws. |
+| `Radar_marker_size_spec.lua` | How big a marker and its brackets are drawn and where, through the real HUD draw loop with the renderer, widget pool and map geometry swapped out: an item's marker and brackets scale with the radar size and their settings group within 10 to 48 and 10 to 64 pixels, an enemy's brackets follow its drawn marker within its category's limits, both boxes are centred on the marker's whole-pixel position, a changed slider reaches the markers when the settings are read again, only kinds starting with `enemy_` are drawn as enemies, and 6,000 random markers get the size and place the rules give them. A target with a heading gets its facing arrow after its marker, with the brackets, coherency frame, vertical arrow and texts it drew as the outline to clear, in the bracket color with the ability color first and the icon color without brackets. A target that fades with its height draws its brackets, facing arrow and texts with that share of their opacity, from copies that leave the shared colors untouched. |
+| `Radar_marker_widget_apply_spec.lua` | How a pooled marker widget is styled for a target, with the real HUD element and widget modules against a fake UI stack: each layer a target shows is drawn in its own color and in pass order, an enemy pinned by a mastiff is drawn without fill on its icon and overlay, a target that fades with its height draws every layer (glyph, coherency layers and marked ring included) with that share of its opacity while transparent layers stay transparent and shared colors are untouched, a layer the target does not show is left untouched, an enemy's vertical arrow sits on its brackets and takes its size from the overlay whether the overlay is shown or not, and over 600 random targets a widget handed from target to target draws exactly what a fresh widget draws. |
 | `Radar_marker_widget_draw_spec.lua` | The marker widget draw, with the real widget module against a fake UI stack: for every mix of visible texture layers it draws the same bitmaps, in pass order, at the same positions, sizes and colors as a model of the game's `UIWidget.draw`, leaves a shown marked ring or glyph, a draw without render settings and forced retained mode to `UIWidget.draw`, applies the renderer's alpha and color intensity multipliers only while the widget draws, and clears the widget's dirty flag. |
 | `Radar_martyr_skull_riddle_lifecycle_spec.lua` | The riddle coordinate-fallback lifecycle on `cm_habs`: fallbacks for buttons not yet observed, replacement by a live unit, retirement on use or on an active-to-inactive transition (including hot joins), conservative visibility when state is unknown or unreadable, persistence across point rebuilds and toggles, clearing on the runtime reset, and the solved latch suppressing every fallback. |
 | `Radar_mission_objective_interactable_spec.lua` | Objective discovery and lifecycle against fake objective systems: dedicated systems, scan zones and the client-side recovery, active-objective confirmation, appearance before the prompt, armed copies only, used and inactive retirement, category toggles, existing classifications preserved, puzzle colors, the start-marker, hint, world-marker, container and socket rules, growth recognition and tentacles, the eyes and objective props the outlines go on, the range exemption, and the debug lines. |

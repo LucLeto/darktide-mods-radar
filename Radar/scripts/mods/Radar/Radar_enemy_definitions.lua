@@ -508,6 +508,49 @@ return function(env)
         misc = "show_enemy_misc_facing",
     }
 
+    --- Elevation fade toggle of each marker category, by kind, by enemy category and by settings group.
+    -- A category is a settings section. The players group holds two sections, teammates and player
+    -- tags, so their kinds are listed by kind, as are the boss kinds; every other enemy follows its
+    -- definition's category, and every other kind its settings group. Unknown pickups, the debug
+    -- group's only kind, fade with the common pickups.
+    local ELEVATION_FADE_SETTING_BY_KIND = {
+        player_teammate = "elevation_fade_teammates",
+        location_attention = "elevation_fade_player_tags",
+        location_ping = "elevation_fade_player_tags",
+        location_threat = "elevation_fade_player_tags",
+        enemy_daemonhost = "elevation_fade_enemy_boss",
+        enemy_monstrosity = "elevation_fade_enemy_boss",
+        enemy_captain = "elevation_fade_enemy_boss",
+        enemy_karnak_twin = "elevation_fade_enemy_boss",
+    }
+
+    local ELEVATION_FADE_SETTING_BY_ENEMY_CATEGORY = {
+        special = "elevation_fade_enemy_special",
+        elite = "elevation_fade_enemy_elite",
+        shooter = "elevation_fade_enemy_shooter",
+        common = "elevation_fade_enemy_common",
+        horde = "elevation_fade_enemy_horde",
+        misc = "elevation_fade_enemy_misc",
+    }
+
+    local ELEVATION_FADE_SETTING_BY_GROUP = {
+        common_pickups_group = "elevation_fade_common_pickups",
+        materials_group = "elevation_fade_materials",
+        environment_group = "elevation_fade_environment",
+        deployables_group = "elevation_fade_deployables",
+        mission_objective_group = "elevation_fade_mission_objective",
+        primary_objective_group = "elevation_fade_primary_objective",
+        secondary_objective_group = "elevation_fade_secondary_objective",
+        martyr_s_skull_group = "elevation_fade_martyr_s_skull",
+        event_group = "elevation_fade_event",
+        expeditions_location_group = "elevation_fade_expeditions_location",
+        expeditions_specific_group = "elevation_fade_expeditions_specific",
+        player_companions_group = "elevation_fade_player_companions",
+        respawn_group = "elevation_fade_respawn",
+        saferoute_group = "elevation_fade_saferoute",
+        debug_group = "elevation_fade_common_pickups",
+    }
+
     --- Selection priority and render layer per enemy priority group and for other special kinds.
     -- Targets with a higher selection priority are drawn first when the radar sorts its
     -- targets, and so survive the marker limit; a higher render layer draws above lower ones.
@@ -1536,6 +1579,33 @@ return function(env)
         local setting_id = category and rawget(ENEMY_RADAR_FACING_SETTING_BY_CATEGORY, category) or nil
 
         return setting_id ~= nil and self:get(setting_id) == true
+    end
+
+    --- Returns the elevation fade toggle of a marker kind's category.
+    -- Teammates, player tags and bosses are matched by kind, other enemies by their definition's
+    -- category and every other kind by its settings group.
+    -- ?string: kind marker kind
+    -- treturn: ?string setting id, nil for kinds no category covers
+    function mod:get_elevation_fade_setting(kind)
+        if kind == nil then
+            return nil
+        end
+
+        local setting_id = rawget(ELEVATION_FADE_SETTING_BY_KIND, kind)
+
+        if setting_id ~= nil then
+            return setting_id
+        end
+
+        local definition = rawget(ENEMY_RADAR_DEFINITION_BY_KIND, kind)
+
+        if definition ~= nil then
+            return ELEVATION_FADE_SETTING_BY_ENEMY_CATEGORY[definition.category]
+        end
+
+        local group_name = MARKER_SCALE_GROUP_BY_KIND[kind]
+
+        return group_name and ELEVATION_FADE_SETTING_BY_GROUP[group_name] or nil
     end
 
     --- Returns the display mode of an enemy marker kind.

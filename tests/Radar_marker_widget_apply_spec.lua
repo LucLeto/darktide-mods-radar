@@ -1,9 +1,9 @@
 -- How a pooled marker widget is styled for a target.
 -- Loads the real HUD element and widget modules against a fake UI stack, takes
 -- `_apply_marker_widget` from the HUD draw's upvalues, and draws through the real
--- `draw_marker_widget`. Each layer a target shows is drawn in that target's colour, a widget the
--- pool hands from target to target draws exactly what a fresh widget draws, and a layer the
--- target does not show is left untouched.
+-- `draw_marker_widget`. Each layer a target shows is drawn in that target's colour, faded by the
+-- share of its opacity a target's height keeps, a widget the pool hands from target to target
+-- draws exactly what a fresh widget draws, and a layer the target does not show is left untouched.
 
 local HUD_PATH = "Radar/scripts/mods/Radar/ui/Radar_hud_element.lua"
 local UI_SCALE = 4 / 3
@@ -13,6 +13,7 @@ local ENEMY_KIND = "enemy_poxwalker"
 local BOSS_KIND = "enemy_captain"
 local ITEM_KIND = "pickup_ammo_small"
 local ARROW_UP = "content/ui/materials/icons/circumstances/more_resistance_01"
+local MARKED_RING = "content/ui/materials/backgrounds/scanner/scanner_map_marker"
 local ARROW_SIZE_RATIO = 0.34
 local ARROW_CENTRE_RATIO = 0.885
 local ARROW_MIN_SIZE = 6
@@ -304,8 +305,20 @@ local function apply(harness, widget, case)
 end
 
 --- The colour each layer is drawn in, by the marker's own rules.
+-- A target that fades with its height difference keeps that share of every layer's opacity,
+-- rounded to a whole alpha, after a mastiff pin has taken the fill.
 local function expected_colors(visual, target)
     local pinned = target ~= nil and target.disabled_by_mastiff == true
+    local elevation_alpha = target ~= nil and target.elevation_alpha or nil
+    local function scaled(color)
+        local copy = clone(color)
+
+        if elevation_alpha ~= nil then
+            copy[1] = math.max(0, math.min(255, math.floor(copy[1] * elevation_alpha + 0.5)))
+        end
+
+        return copy
+    end
     local function faded(color)
         local copy = clone(color)
 
@@ -313,18 +326,21 @@ local function expected_colors(visual, target)
             copy[1] = 0
         end
 
-        return copy
+        return scaled(copy)
     end
 
     return {
         icon = faded(visual.color or WHITE),
-        plate = visual.plate_color or WHITE,
+        plate = scaled(visual.plate_color or WHITE),
+        ring = scaled(visual.ring_color or WHITE),
+        flash = scaled(visual.flash_color or WHITE),
         overlay = faded(visual.overlay_color or WHITE),
-        title = visual.color or WHITE,
-        radius = visual.radius_color or visual.color or WHITE,
-        G = visual.color or WHITE,
-        [ARROW_UP] = ARROW_COLOR,
-        ["content/ui/materials/icons/circumstances/less_resistance_01"] = ARROW_COLOR,
+        title = scaled(visual.color or WHITE),
+        radius = scaled(visual.radius_color or visual.color or WHITE),
+        G = scaled(visual.color or WHITE),
+        [MARKED_RING] = scaled(WHITE),
+        [ARROW_UP] = scaled(ARROW_COLOR),
+        ["content/ui/materials/icons/circumstances/less_resistance_01"] = scaled(ARROW_COLOR),
     }
 end
 
@@ -384,6 +400,76 @@ test("an enemy pinned by a mastiff is drawn without fill", function()
     assert_equal("0,31,32,33", drawn_color(records, "overlay"), "overlay")
     assert_equal("254,21,22,23", drawn_color(records, "plate"), "plate keeps its fill")
     assert_equal("255,11,12,13", drawn_color(records, "title"), "title keeps its fill")
+end)
+
+test("a target that fades with its height draws every layer with that share of its opacity", function()
+    local harness = new_harness()
+    local case = full_case()
+    local widget = harness.new_widget(1)
+
+    case.visual.plate_color = { 0, 21, 22, 23 }
+    case.target.elevation_alpha = 0.675
+
+    local shared_visual = clone(case.visual)
+
+    apply(harness, widget, case)
+
+    local records = harness.draw(widget)
+
+    assert_equal("172,11,12,13", drawn_color(records, "icon"), "icon")
+    assert_equal("0,21,22,23", drawn_color(records, "plate"), "a transparent plate stays transparent")
+    assert_equal("171,31,32,33", drawn_color(records, "overlay"), "overlay")
+    assert_equal("172,11,12,13", drawn_color(records, "title"), "title")
+    assert_equal("170,41,42,43", drawn_color(records, "radius"), "radius ring")
+    assert_equal("135,10,20,30", drawn_color(records, ARROW_UP), "vertical arrow")
+    assert_equal(true, same_values(shared_visual, case.visual), "the shared visual's colours were changed")
+
+    -- The glyph, and the coherency backplate, frame and flash.
+    case.visual.glyph = "G"
+    apply(harness, widget, case)
+    assert_equal("172,11,12,13", drawn_color(harness.draw(widget), "G"), "glyph")
+
+    apply(harness, widget, {
+        visual = {
+            icon = "icon",
+            color = { 255, 4, 5, 6 },
+            size = 15,
+            plate_icon = "plate",
+            plate_color = { 200, 0, 0, 0 },
+            ring_icon = "ring",
+            ring_color = { 255, 4, 5, 6 },
+            flash_icon = "flash",
+            flash_color = { 120, 255, 255, 255 },
+        },
+        target = { kind = "player_teammate", elevation_alpha = 0.5 },
+        icon_size = 20,
+    })
+    records = harness.draw(widget)
+
+    assert_equal("100,0,0,0", drawn_color(records, "plate"), "coherency backplate")
+    assert_equal("128,4,5,6", drawn_color(records, "ring"), "coherency frame")
+    assert_equal("60,255,255,255", drawn_color(records, "flash"), "coherency flash")
+
+    -- A mastiff pin and the fade together leave no fill, and a marked ring fades through its colour.
+    case.visual.glyph = nil
+    case.visual.marked_player_slots_mask = 3
+    case.target = { kind = ENEMY_KIND, disabled_by_mastiff = true, elevation_alpha = 0.5 }
+    apply(harness, widget, case)
+    records = harness.draw(widget)
+
+    assert_equal("0,11,12,13", drawn_color(records, "icon"), "pinned and faded icon")
+    assert_equal("0,31,32,33", drawn_color(records, "overlay"), "pinned and faded overlay")
+    assert_equal("128,255,255,255", drawn_color(records, MARKED_RING), "marked ring")
+
+    -- The same widget, handed to a target at the player's height, draws at full opacity again.
+    case.target = { kind = ITEM_KIND, vertical_state = "up" }
+    apply(harness, widget, case)
+    records = harness.draw(widget)
+
+    assert_equal("255,11,12,13", drawn_color(records, "icon"), "icon after the fade")
+    assert_equal("252,41,42,43", drawn_color(records, "radius"), "radius ring after the fade")
+    assert_equal("200,10,20,30", drawn_color(records, ARROW_UP), "vertical arrow after the fade")
+    assert_equal("255,255,255,255", drawn_color(records, MARKED_RING), "marked ring after the fade")
 end)
 
 test("a layer the target does not show is left untouched", function()
@@ -639,6 +725,7 @@ test("a widget handed from target to target draws what a fresh widget draws", fu
                 kind = kind,
                 vertical_state = vertical or nil,
                 disabled_by_mastiff = chance(0.2),
+                elevation_alpha = chance(0.4) and (chance(0.1) and 0 or random()) or nil,
             } or nil,
             x = random() * 400,
             y = random() * 400,

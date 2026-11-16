@@ -915,11 +915,14 @@ local _draw_cache = {
     marker_distance_text_color = BOSS_DISTANCE_TEXT_WIDGET_COLOR,
 }
 --- Scratch tables reused by the text draws and the centre dot visual, so drawing text allocates nothing.
+-- `accent_color` holds the faded colour of the brackets and facing chevron of a marker that fades
+-- with its height difference, so a shared colour is never changed.
 local _marker_value_text_scratch = {
     position = { 0, 0, 0 },
     size = { 0, 0 },
     color = { 255, 255, 225, 0 },
     options = {},
+    accent_color = { 255, 255, 255, 255 },
 }
 local _overview_scale_text_scratch = {
     position = { 0, 0, 0 },
@@ -1598,12 +1601,13 @@ end
 -- ?string: value_text_anchor anchor
 -- ?number: value_text_offset_x extra horizontal offset
 -- ?number: value_text_offset_y extra vertical offset
+-- ?number: alpha_scale share of the colour's opacity to draw with, all of it when nil
 -- treturn: ?number left edge of the text's box, nil when nothing is drawn
 -- treturn: ?number top edge of that box
 -- treturn: ?number right edge of that box
 -- treturn: ?number bottom edge of that box
 local function _draw_marker_value_text(ui_renderer, value_text, x, y, z, icon_size, has_arrow, value_text_color,
-                                       value_text_anchor, value_text_offset_x, value_text_offset_y)
+                                       value_text_anchor, value_text_offset_x, value_text_offset_y, alpha_scale)
     if value_text == nil or value_text == "" then
         return
     end
@@ -1672,6 +1676,10 @@ local function _draw_marker_value_text(ui_renderer, value_text, x, y, z, icon_si
         color[2] = marker_value_color[2]
         color[3] = marker_value_color[3]
         color[4] = marker_value_color[4]
+    end
+
+    if alpha_scale ~= nil then
+        color[1] = _scaled_alpha(color[1], alpha_scale)
     end
 
     table_clear(options)
@@ -1878,13 +1886,15 @@ local function _clear_material_color(material_color)
 end
 
 --- Shows the segmented ring around an Expedition location, one segment per player who marked it.
--- The ring is cleared when no player marked the location.
+-- The ring is cleared when no player marked the location. Its opacity is set on every use, so a
+-- faded ring never carries over to the next target.
 -- tab: widget marker widget
 -- ?tab: visual target visual with `marked_player_slots_mask`
 -- tab: icon_offset marker icon offset
 -- number: icon_size marker size
 -- number: icon_z marker icon layer
-local function _apply_marker_marked_ring(widget, visual, icon_offset, icon_size, icon_z)
+-- ?number: alpha_scale share of the ring's opacity to draw with, all of it when nil
+local function _apply_marker_marked_ring(widget, visual, icon_offset, icon_size, icon_z, alpha_scale)
     local marked_ring_style = widget.style.marked_ring
     local marked_player_slots_mask = tonumber(visual and visual.marked_player_slots_mask)
 
@@ -1938,6 +1948,7 @@ local function _apply_marker_marked_ring(widget, visual, icon_offset, icon_size,
     marked_ring_style_size[1] = marked_ring_size
     marked_ring_style_size[2] = marked_ring_size
     material_values.display_mode = color_field_count
+    _style_color_table(marked_ring_style)[1] = _scaled_alpha(255, alpha_scale)
 
     if widget.content.marked_ring_slots_mask ~= marked_player_slots_mask
         or widget.content.marked_ring_size ~= marked_ring_size then
@@ -1959,8 +1970,10 @@ end
 -- ring; a flash left from an earlier target is never drawn without one, so a marker without a
 -- ring skips both. A layer without content keeps its
 -- old style, which no draw reads, and is styled again when a target shows it. An enemy pinned
--- by a mastiff is drawn without fill. The widget is marked dirty when its texts or cached sizes
--- change.
+-- by a mastiff is drawn without fill. A target that fades with its height difference draws every
+-- layer with that share of its colour's opacity, set on the widget's own colours after they are
+-- copied, so the shared colours stay as they are. The widget is marked dirty when its texts or
+-- cached sizes change.
 -- tab: widget marker widget
 -- ?tab: visual target visual
 -- number: x marker left edge
@@ -1986,6 +1999,7 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
     local overlay_icon = visual and visual.overlay_icon or nil
     local title_icon = visual and visual.title_icon or nil
     local suppress_enemy_fill = target and target.disabled_by_mastiff == true
+    local elevation_alpha = target and target.elevation_alpha or nil
     local color = _copy_into_widget_color(_style_color_table(icon_style), visual and visual.color or nil)
     local vertical_state = target and target.vertical_state or nil
     local arrow_icon = nil
@@ -1998,6 +2012,10 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
 
     if suppress_enemy_fill then
         color[1] = 0
+    end
+
+    if elevation_alpha ~= nil then
+        color[1] = _scaled_alpha(color[1], elevation_alpha)
     end
 
     local value_text = visual and visual.value_text or ""
@@ -2068,7 +2086,13 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
             plate_size_tbl[2] = size
         end
 
-        plate_icon_style.color = _copy_into_widget_color(_style_color_table(plate_icon_style), visual.plate_color)
+        local plate_color = _copy_into_widget_color(_style_color_table(plate_icon_style), visual.plate_color)
+
+        if elevation_alpha ~= nil then
+            plate_color[1] = _scaled_alpha(plate_color[1], elevation_alpha)
+        end
+
+        plate_icon_style.color = plate_color
     end
 
     if ring_icon ~= nil and ring_icon ~= "" then
@@ -2080,14 +2104,27 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
 
         RadarHudWidgets.centre_marker_layer(ring_icon_style, icon_offset[1], icon_offset[2], size,
             tonumber(visual.ring_base_size), layer_base_size, icon_z - 1)
-        ring_icon_style.color = _copy_into_widget_color(_style_color_table(ring_icon_style), visual.ring_color)
+        local ring_color = _copy_into_widget_color(_style_color_table(ring_icon_style), visual.ring_color)
+
+        if elevation_alpha ~= nil then
+            ring_color[1] = _scaled_alpha(ring_color[1], elevation_alpha)
+        end
+
+        ring_icon_style.color = ring_color
 
         if flash_icon ~= nil and flash_icon ~= "" then
             local flash_icon_style = style.flash_icon
 
             RadarHudWidgets.centre_marker_layer(flash_icon_style, icon_offset[1], icon_offset[2], size,
                 tonumber(visual.flash_base_size), layer_base_size, icon_z - 3)
-            flash_icon_style.color = _copy_into_widget_color(_style_color_table(flash_icon_style), visual.flash_color)
+
+            local flash_color = _copy_into_widget_color(_style_color_table(flash_icon_style), visual.flash_color)
+
+            if elevation_alpha ~= nil then
+                flash_color[1] = _scaled_alpha(flash_color[1], elevation_alpha)
+            end
+
+            flash_icon_style.color = flash_color
         end
     end
 
@@ -2102,10 +2139,17 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         radius_offset[3] = icon_z - 3
         radius_size_tbl[1] = radius_size
         radius_size_tbl[2] = radius_size
-        radius_icon_style.color = _copy_into_widget_color(
+
+        local radius_color = _copy_into_widget_color(
             _style_color_table(radius_icon_style),
             visual and visual.radius_color or visual and visual.color or nil
         )
+
+        if elevation_alpha ~= nil then
+            radius_color[1] = _scaled_alpha(radius_color[1], elevation_alpha)
+        end
+
+        radius_icon_style.color = radius_color
     end
 
     local glyph_icon_style = style.glyph_icon
@@ -2120,10 +2164,17 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         glyph_size[1] = size
         glyph_size[2] = size
         glyph_icon_style.font_size = size
-        glyph_icon_style.text_color = _copy_into_widget_color(glyph_icon_style.text_color, visual.color)
+
+        local glyph_color = _copy_into_widget_color(glyph_icon_style.text_color, visual.color)
+
+        if elevation_alpha ~= nil then
+            glyph_color[1] = _scaled_alpha(glyph_color[1], elevation_alpha)
+        end
+
+        glyph_icon_style.text_color = glyph_color
     end
 
-    _apply_marker_marked_ring(widget, visual, icon_offset, size, icon_z)
+    _apply_marker_marked_ring(widget, visual, icon_offset, size, icon_z, elevation_alpha)
 
     local arrow_icon_style = arrow_icon and style.arrow_icon or nil
     -- An enemy's vertical arrow sits on its brackets, sized from the overlay when it has one.
@@ -2211,6 +2262,10 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
                 overlay_color[1] = 0
             end
 
+            if elevation_alpha ~= nil then
+                overlay_color[1] = _scaled_alpha(overlay_color[1], elevation_alpha)
+            end
+
             overlay_icon_style.color = overlay_color
         end
 
@@ -2230,7 +2285,14 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         title_offset[3] = icon_z + 2
         title_size[1] = size
         title_size[2] = size
-        title_icon_style.color = _copy_into_widget_color(_style_color_table(title_icon_style), visual.color)
+
+        local title_color = _copy_into_widget_color(_style_color_table(title_icon_style), visual.color)
+
+        if elevation_alpha ~= nil then
+            title_color[1] = _scaled_alpha(title_color[1], elevation_alpha)
+        end
+
+        title_icon_style.color = title_color
     end
 
     if arrow_icon_style then
@@ -2254,10 +2316,17 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         arrow_offset[3] = icon_z + 3
         arrow_size_tbl[1] = arrow_size
         arrow_size_tbl[2] = arrow_size
-        arrow_icon_style.color = _copy_into_widget_color(
+
+        local arrow_color = _copy_into_widget_color(
             _style_color_table(arrow_icon_style),
             _configured_radar_color("vertical_arrow", VERTICAL_ARROW_WIDGET_COLOR)
         )
+
+        if elevation_alpha ~= nil then
+            arrow_color[1] = _scaled_alpha(arrow_color[1], elevation_alpha)
+        end
+
+        arrow_icon_style.color = arrow_color
     end
 end
 
@@ -3952,6 +4021,8 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
                 local bracket_z = z + 4 + render_layer
                 local icon_z = base_icon_z + render_layer
                 local bracket_color = _target_bracket_color(target, visual)
+                local accent_color = bracket_color or visual and visual.color or nil
+                local elevation_alpha = target.elevation_alpha
                 local visual_icon = visual and visual.icon or nil
                 local visual_title_icon = visual and visual.title_icon or nil
                 local value_text = visual and visual.value_text or nil
@@ -3965,6 +4036,15 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
                 local secondary_value_text_offset_x = visual and visual.secondary_value_text_offset_x or nil
                 local secondary_value_text_offset_y = visual and visual.secondary_value_text_offset_y or nil
                 local has_vertical_state = target.vertical_state ~= nil
+
+                if elevation_alpha ~= nil and accent_color ~= nil then
+                    accent_color = _copy_into_widget_color(_marker_value_text_scratch.accent_color, accent_color)
+                    accent_color[1] = _scaled_alpha(accent_color[1], elevation_alpha)
+
+                    if bracket_color ~= nil then
+                        bracket_color = accent_color
+                    end
+                end
 
                 if marker_mark then
                     marker_mark = profiler_accumulate(mod, "draw_marker_visual", marker_mark)
@@ -4028,7 +4108,8 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
                     value_text_color,
                     value_text_anchor,
                     value_text_offset_x,
-                    value_text_offset_y
+                    value_text_offset_y,
+                    elevation_alpha
                 )
 
                 local second_text_left, second_text_top, second_text_right, second_text_bottom = draw_marker_value_text(
@@ -4042,7 +4123,8 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
                     secondary_value_text_color,
                     secondary_value_text_anchor,
                     secondary_value_text_offset_x,
-                    secondary_value_text_offset_y
+                    secondary_value_text_offset_y,
+                    elevation_alpha
                 )
 
                 if marker_mark then
@@ -4090,7 +4172,7 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
                     end
 
                     draw_marker_facing_chevron(ui_renderer, draw_x + marker_size * 0.5, draw_y + marker_size * 0.5,
-                        bracket_z, bracket_size, bracket_color or visual and visual.color or nil, facing_x, facing_y)
+                        bracket_z, bracket_size, accent_color, facing_x, facing_y)
 
                     if marker_mark then
                         marker_mark = profiler_accumulate(mod, "draw_marker_brackets", marker_mark)
