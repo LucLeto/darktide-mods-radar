@@ -3,9 +3,10 @@
 -- styles, plus the rectangles and brackets the HUD element uses around markers and the chevron
 -- that shows which way a marker's target faces. All coordinates are unscaled UI pixels;
 -- `Gui.rect` positions are scaled by the renderer's UI scale and layered on top of
--- `render_settings.start_layer`, and so is the chevron through `UIRenderer`. Circles and
--- diagonal lines are worked out pixel by pixel, but neighbouring pixels in a row or column are
--- drawn as one rectangle, which covers the same pixels with far fewer engine calls.
+-- `render_settings.start_layer`, and so is the chevron, which makes the engine calls of
+-- `UIRenderer.draw_texture_rotated` itself. Circles and diagonal lines are worked out pixel by
+-- pixel, but neighbouring pixels in a row or column are drawn as one rectangle, which covers the
+-- same pixels with far fewer engine calls.
 --
 -- Explicit module loaded by `ui/Radar_hud_element.lua` through `mod:io_dofile`; the chunk
 -- returns a table of draw functions. Colours come from `mod:get_radar_color` when the colour
@@ -18,13 +19,16 @@
 -- module: Radar_hud_renderer
 -- author: LucLeto
 local mod = get_mod("Radar")
-local UIRenderer = require("scripts/managers/ui/ui_renderer")
 local UIWidget = require("scripts/managers/ui/ui_widget")
 local Color = Color
 local Gui = Gui
+local Gui2 = Gui2
+local GuiMaterialFlag = GuiMaterialFlag
 local Quaternion = Quaternion
+local Rotation2D = Rotation2D
 local Vector2 = Vector2
 local Vector3 = Vector3
+local bit_bor = bit.bor
 local pcall = pcall
 local rawget = rawget
 local tonumber = tonumber
@@ -45,8 +49,10 @@ local math_sqrt = math.sqrt
 local math_tan = math.tan
 local math_huge = math.huge
 local Gui_rect = Gui and Gui.rect
+local Gui2_bitmap_3d = Gui2 and Gui2.bitmap_3d
 local Quaternion_yaw = Quaternion and Quaternion.yaw
-local UIRenderer_draw_texture_rotated = UIRenderer.draw_texture_rotated
+local Rotation2D_translate = Rotation2D and Rotation2D.translate
+local Vector3_zero = Vector3 and Vector3.zero
 
 -- ----------------------------------------------------------------------------
 -- Constants
@@ -136,8 +142,9 @@ local AUSPEX_FRAME_OPTIONS_NO_OUTLINE_EFFECTS = {
 -- The outline is gathered per marker from `begin_facing_outline` on; a circle of `radius`, the
 -- teammate coherency frame, which the game draws as a circle reaching `frame_half_height_ratio`
 -- of the frame with side bars reaching `frame_half_width_ratio`, and up to `max_boxes` boxes
--- for the brackets, the vertical arrow and the texts, kept as flat edges. The size, pivot and
--- box tables are refilled for every marker, so drawing builds no tables.
+-- for the brackets, the vertical arrow and the texts, kept as flat edges. The box tables and the
+-- options table `gui_args` passed to `Gui2.bitmap_3d` are refilled for every marker, so drawing
+-- builds no tables; `hdr_render_passes` keeps the HDR name of each render pass once built.
 local FACING_CHEVRON = {
     material = "content/ui/materials/hud/interactions/frames/direction",
     uvs = { { 0.89, 0.414 }, { 1, 0.586 } },
@@ -155,8 +162,8 @@ local FACING_CHEVRON = {
     box_top = { 0, 0, 0, 0 },
     box_right = { 0, 0, 0, 0 },
     box_bottom = { 0, 0, 0, 0 },
-    size = { 0, 0 },
-    pivot = { 0, 0 },
+    gui_args = { color = false, uv00 = false, uv11 = false, size = false, snap_pixel_positions = false },
+    hdr_render_passes = {},
 }
 
 -- ----------------------------------------------------------------------------
@@ -389,7 +396,10 @@ end
 -- covers the marker, its frame, brackets, arrow or texts, nor moves out for what is beside it.
 -- The coherency frame's circle and side bars lie within an ellipse of the frame's half axes, so
 -- the chevron follows that ellipse round the frame. The arrow is turned to the heading and
--- leaves the render settings with material flags, like the marker widget draw.
+-- leaves the render settings with material flags, like the marker widget draw. It is drawn with
+-- the engine calls and arguments of `UIRenderer.draw_texture_rotated` for an unretained texture,
+-- but without that function's Lua steps. Its sizes are scaled as the game scales positive sizes,
+-- which they always are from `min_size` on.
 -- tab: ui_renderer active UI renderer
 -- number: center_x marker centre x
 -- number: center_y marker centre y
@@ -438,22 +448,65 @@ local function _draw_marker_facing_chevron(ui_renderer, center_x, center_y, z, s
     end
 
     local offset = reach + chevron.gap + along * 0.5
+    local scale = ui_renderer.scale
     local render_settings = ui_renderer.render_settings
-    local quad_size = chevron.size
-    local pivot = chevron.pivot
+    local gui_args = chevron.gui_args
+    local alpha_multiplier = 1
+    local intensity_multiplier = 1
+    local material_flags = nil
+    local snap_pixel_positions = false
+    local layer = math_max(z, 1)
 
-    if render_settings and render_settings.material_flags == nil then
-        render_settings.material_flags = 0
+    if render_settings then
+        if render_settings.material_flags == nil then
+            render_settings.material_flags = 0
+        end
+
+        alpha_multiplier = render_settings.alpha_multiplier or 1
+        intensity_multiplier = render_settings.color_intensity_multiplier or 1
+        material_flags = render_settings.material_flags
+        snap_pixel_positions = render_settings.snap_pixel_positions and scale >= 1 or false
+        layer = (render_settings.start_layer or 0) + layer
     end
 
-    quad_size[1] = along
-    quad_size[2] = across
-    pivot[1] = along * 0.5
-    pivot[2] = across * 0.5
+    if ui_renderer.render_pass_flag then
+        material_flags = bit_bor(material_flags, GuiMaterialFlag.GUI_RENDER_PASS_LAYER)
+    end
 
-    UIRenderer_draw_texture_rotated(ui_renderer, chevron.material, quad_size,
-        Vector3(center_x + direction_x * offset - along * 0.5, center_y + direction_y * offset - across * 0.5, z),
-        math_atan2(-direction_y, direction_x), pivot, color, chevron.uvs)
+    local render_pass = ui_renderer.base_render_pass
+
+    if render_pass and render_settings.hdr then
+        local hdr_render_passes = chevron.hdr_render_passes
+        local hdr_render_pass = hdr_render_passes[render_pass]
+
+        if hdr_render_pass == nil then
+            hdr_render_pass = render_pass .. "_hdr"
+            hdr_render_passes[render_pass] = hdr_render_pass
+        end
+
+        render_pass = hdr_render_pass
+    end
+
+    local uvs = chevron.uvs
+    local uv_min = uvs[1]
+    local uv_max = uvs[2]
+
+    gui_args.color = Color(color[1] * alpha_multiplier, color[2] * intensity_multiplier,
+        color[3] * intensity_multiplier, color[4] * intensity_multiplier)
+    gui_args.uv00 = Vector2(uv_min[1], uv_min[2])
+    gui_args.uv11 = Vector2(uv_max[1], uv_max[2])
+    gui_args.render_pass = render_pass
+    gui_args.size = Vector3(math_max(along * scale, 1), math_max(across * scale, 1), 0)
+    gui_args.snap_pixel_positions = snap_pixel_positions
+
+    local tm = Rotation2D(Vector3_zero(), math_atan2(-direction_y, direction_x),
+        Vector2(math_max(along * 0.5 * scale, 1), math_max(across * 0.5 * scale, 1), 0))
+
+    Gui2_bitmap_3d(ui_renderer.gui, chevron.material, material_flags,
+        Rotation2D_translate(tm,
+            Vector3(center_x + direction_x * offset - along * 0.5, center_y + direction_y * offset - across * 0.5, z),
+            scale),
+        layer, gui_args)
 end
 
 --- Fills a pixel-aligned circle with one horizontal span per row.

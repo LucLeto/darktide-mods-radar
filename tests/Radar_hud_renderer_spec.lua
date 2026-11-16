@@ -29,28 +29,15 @@ local function make_color(a, r, g, b)
     return setmetatable({ a, r, g, b }, color_meta)
 end
 
---- Loads the renderer with a recording `Gui.rect` and rotated texture draw and the given style settings.
+local GUI_RENDER_PASS_LAYER = 16
+
+--- Loads the renderer with a recording `Gui.rect` and `Gui2.bitmap_3d` and the given style settings.
+-- Each `Gui2.bitmap_3d` call is recorded with its transform taken apart: `Rotation2D` gives the
+-- angle, origin and pivot, `Rotation2D.translate` the unscaled position and the scale.
 local function load_renderer(settings)
     local recorded = {}
     local textures = {}
     local mod = {}
-    local ui_renderer_module = {
-        draw_texture_rotated = function(_, material, size, position, angle, pivot, color, uvs)
-            textures[#textures + 1] = {
-                material = material,
-                x = position[1],
-                y = position[2],
-                z = position[3],
-                width = size[1],
-                height = size[2],
-                angle = angle,
-                pivot_x = pivot[1],
-                pivot_y = pivot[2],
-                color = color,
-                uvs = uvs,
-            }
-        end,
-    }
 
     function mod:get(id)
         return settings[id]
@@ -72,11 +59,7 @@ local function load_renderer(settings)
         get_mod = function()
             return mod
         end,
-        require = function(name)
-            if name == "scripts/managers/ui/ui_renderer" then
-                return ui_renderer_module
-            end
-
+        require = function()
             return { draw = function() end }
         end,
         Gui = {
@@ -84,12 +67,57 @@ local function load_renderer(settings)
                 recorded[#recorded + 1] = { position[1], position[2], position[3], size[1], size[2], tostring(color) }
             end,
         },
+        Gui2 = {
+            bitmap_3d = function(gui, material, material_flags, tm, layer, args)
+                local rotation = tm.rotation
+                local position = tm.position
+                local size = args.size
+
+                textures[#textures + 1] = {
+                    gui = gui,
+                    material = material,
+                    material_flags = material_flags,
+                    layer = layer,
+                    origin = rotation.origin,
+                    angle = rotation.angle,
+                    pivot = rotation.pivot,
+                    x = position[1],
+                    y = position[2],
+                    z = position[3],
+                    scale = tm.scale,
+                    size = size,
+                    along = size[1] / tm.scale,
+                    across = size[2] / tm.scale,
+                    color = args.color,
+                    uv00 = args.uv00,
+                    uv11 = args.uv11,
+                    render_pass = args.render_pass,
+                    snap_pixel_positions = args.snap_pixel_positions,
+                }
+            end,
+        },
+        GuiMaterialFlag = { GUI_RENDER_PASS_LAYER = GUI_RENDER_PASS_LAYER },
+        Rotation2D = setmetatable({
+            translate = function(tm, position, scale)
+                return { rotation = tm, position = position, scale = scale }
+            end,
+        }, {
+            __call = function(_, origin, angle, pivot)
+                return { origin = origin, angle = angle, pivot = pivot }
+            end,
+        }),
         Color = make_color,
-        Vector3 = function(x, y, z)
+        Vector3 = setmetatable({
+            zero = function()
+                return { 0, 0, 0 }
+            end,
+        }, {
+            __call = function(_, x, y, z)
+                return { x, y, z }
+            end,
+        }),
+        Vector2 = function(x, y, z)
             return { x, y, z }
-        end,
-        Vector2 = function(x, y)
-            return { x, y }
         end,
         Quaternion = {
             yaw = function()
@@ -430,6 +458,17 @@ local function facing_ui_renderer(scale)
     return { gui = {}, scale = scale, render_settings = { start_layer = START_LAYER } }
 end
 
+local function assert_vector(expected_x, expected_y, expected_z, actual, message)
+    assert_near(expected_x, actual[1], message .. " x")
+    assert_near(expected_y, actual[2], message .. " y")
+
+    if expected_z == nil then
+        assert_equal(nil, actual[3], message .. " z")
+    else
+        assert_near(expected_z, actual[3], message .. " z")
+    end
+end
+
 --- Returns an angle in (-pi, pi].
 local function wrapped_angle(angle)
     while angle <= -math.pi do
@@ -443,14 +482,14 @@ local function wrapped_angle(angle)
     return angle
 end
 
---- The chevron the renderer drew; its back's distance from the centre along the heading, and its size.
+--- The chevron the renderer drew, and its back's distance from the centre along the heading.
 local function drawn_chevron(textures, center_x, center_y, direction_x, direction_y)
     local arrow = textures[1]
-    local mid_x = arrow.x + arrow.width * 0.5
-    local mid_y = arrow.y + arrow.height * 0.5
+    local mid_x = arrow.x + arrow.along * 0.5
+    local mid_y = arrow.y + arrow.across * 0.5
     local offset = (mid_x - center_x) * direction_x + (mid_y - center_y) * direction_y
 
-    return arrow, offset - arrow.width * 0.5
+    return arrow, offset - arrow.along * 0.5
 end
 
 local FACING_COLOR = { 180, 10, 20, 30 }
@@ -477,23 +516,29 @@ test("the facing chevron sits just beyond a round marker and points along the he
             local arrow, back = drawn_chevron(textures, 200.5, 80.5, direction_x, direction_y)
             local across = math.max(constants.min_size, math.floor(size * constants.size_ratio + 0.5))
             local along = across * constants.aspect
-            local mid_x = arrow.x + arrow.width * 0.5
-            local mid_y = arrow.y + arrow.height * 0.5
+            local mid_x = arrow.x + along * 0.5
+            local mid_y = arrow.y + across * 0.5
             local side = (mid_y - 80.5) * direction_x - (mid_x - 200.5) * direction_y
 
             assert_equal(0, #recorded, label .. " rectangles")
             assert_equal(1, #textures, label .. " arrows")
+            assert_equal(ui_renderer.gui, arrow.gui, label .. " gui")
             assert_equal(constants.material, arrow.material, label .. " material")
-            assert_equal(constants.uvs, arrow.uvs, label .. " crop")
-            assert_near(along, arrow.width, label .. " length along the heading")
-            assert_near(across, arrow.height, label .. " width across the heading")
-            assert_near(along * 0.5, arrow.pivot_x, label .. " pivot x")
-            assert_near(across * 0.5, arrow.pivot_y, label .. " pivot y")
+            assert_vector(constants.uvs[1][1], constants.uvs[1][2], nil, arrow.uv00, label .. " crop's first corner")
+            assert_vector(constants.uvs[2][1], constants.uvs[2][2], nil, arrow.uv11, label .. " crop's second corner")
+            assert_vector(along * 1.333, across * 1.333, 0, arrow.size, label .. " scaled size")
+            assert_vector(0, 0, 0, arrow.origin, label .. " rotation origin")
+            assert_vector(along * 0.5 * 1.333, across * 0.5 * 1.333, 0, arrow.pivot, label .. " scaled pivot")
+            assert_equal(1.333, arrow.scale, label .. " position scale")
             assert_near(size * 0.5 + constants.gap, back, label .. " back on the marker's edge", 1e-6)
             assert_near(0, side, label .. " centred on the heading", 1e-6)
             assert_near(0, wrapped_angle(arrow.angle - angle), label .. " turned along the heading", 1e-9)
-            assert_equal(9, arrow.z, label .. " layer")
-            assert_equal(FACING_COLOR, arrow.color, label .. " colour")
+            assert_equal(9, arrow.z, label .. " position layer")
+            assert_equal(START_LAYER + 9, arrow.layer, label .. " layer")
+            assert_equal(tostring(make_color(180, 10, 20, 30)), tostring(arrow.color), label .. " colour")
+            assert_equal(0, arrow.material_flags, label .. " material flags")
+            assert_equal(nil, arrow.render_pass, label .. " render pass")
+            assert_equal(false, arrow.snap_pixel_positions, label .. " pixel snapping")
             assert_equal(0, ui_renderer.render_settings.material_flags, label .. " material flags left unset")
         end
     end
@@ -621,6 +666,72 @@ test("the facing chevron keeps clear of the boxes within its width, and only of 
     renderer.draw_marker_facing_chevron(facing_ui_renderer(1), 100, 100, 5, 15, nil, 1, 0)
 
     assert_equal(3, #textures, "a chevron without a heading or a colour was drawn")
+end)
+
+test("the facing chevron draws with the render settings as the game's rotated texture draw does", function()
+    local renderer, _, textures = load_renderer({})
+    local ui_renderer = {
+        gui = {},
+        scale = 0.75,
+        render_settings = {
+            start_layer = 40,
+            alpha_multiplier = 0.5,
+            color_intensity_multiplier = 0.8,
+            material_flags = 3,
+            snap_pixel_positions = true,
+        },
+    }
+
+    renderer.begin_facing_outline(7.5)
+    renderer.draw_marker_facing_chevron(ui_renderer, 100, 100, 0, 15, FACING_COLOR, 1, 0)
+
+    local arrow = textures[1]
+
+    assert_equal(tostring(make_color(90, 8, 16, 24)), tostring(arrow.color), "colour multipliers")
+    assert_equal(41, arrow.layer, "layer below 1 on top of the start layer")
+    assert_equal(0, arrow.z, "position layer")
+    assert_equal(3, arrow.material_flags, "material flags from the render settings")
+    assert_equal(false, arrow.snap_pixel_positions, "pixel snapping below scale 1")
+    assert_equal(3, ui_renderer.render_settings.material_flags, "material flags changed")
+
+    ui_renderer.scale = 1
+    ui_renderer.render_settings.material_flags = nil
+    ui_renderer.render_settings.alpha_multiplier = nil
+    ui_renderer.render_settings.color_intensity_multiplier = nil
+    ui_renderer.render_pass_flag = "render_pass"
+    ui_renderer.base_render_pass = "hud_bloom"
+    renderer.draw_marker_facing_chevron(ui_renderer, 100, 100, 6, 15, FACING_COLOR, 1, 0)
+    arrow = textures[2]
+
+    assert_equal(tostring(make_color(180, 10, 20, 30)), tostring(arrow.color), "colour without multipliers")
+    assert_equal(46, arrow.layer, "layer on top of the start layer")
+    assert_equal(GUI_RENDER_PASS_LAYER, arrow.material_flags, "render pass layer flag")
+    assert_equal(0, ui_renderer.render_settings.material_flags, "material flags left unset")
+    assert_equal("hud_bloom", arrow.render_pass, "render pass")
+    assert_equal(true, arrow.snap_pixel_positions, "pixel snapping from scale 1")
+
+    ui_renderer.render_settings.hdr = true
+    renderer.draw_marker_facing_chevron(ui_renderer, 100, 100, 6, 15, FACING_COLOR, 1, 0)
+    renderer.draw_marker_facing_chevron(ui_renderer, 100, 100, 6, 15, FACING_COLOR, 1, 0)
+
+    assert_equal("hud_bloom_hdr", textures[3].render_pass, "HDR render pass")
+    assert_equal("hud_bloom_hdr", textures[4].render_pass, "HDR render pass drawn again")
+
+    ui_renderer.render_settings.hdr = nil
+    ui_renderer.render_pass_flag = nil
+    ui_renderer.base_render_pass = nil
+    renderer.draw_marker_facing_chevron(ui_renderer, 100, 100, 6, 15, FACING_COLOR, 1, 0)
+
+    assert_equal(nil, textures[5].render_pass, "render pass kept from an earlier draw")
+
+    ui_renderer.render_settings = nil
+    renderer.draw_marker_facing_chevron(ui_renderer, 100, 100, 0, 15, FACING_COLOR, 1, 0)
+    arrow = textures[6]
+
+    assert_equal(1, arrow.layer, "layer without render settings")
+    assert_equal(nil, arrow.material_flags, "material flags without render settings")
+    assert_equal(false, arrow.snap_pixel_positions, "pixel snapping without render settings")
+    assert_equal(tostring(make_color(180, 10, 20, 30)), tostring(arrow.color), "colour without render settings")
 end)
 
 local failures = {}
