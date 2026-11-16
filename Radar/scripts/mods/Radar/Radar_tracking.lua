@@ -173,6 +173,7 @@ return function(env)
     local _scratch_render_layer_cache = {}
     local _scratch_selection_priority_cache = {}
     local _scratch_priority_target_cache = {}
+    local _scratch_facing_kind_cache = {}
     local _scratch_seen_interactees = {}
 
     -- ----------------------------------------------------------------------------
@@ -217,6 +218,7 @@ return function(env)
         table_clear(_scratch_render_layer_cache)
         table_clear(_scratch_selection_priority_cache)
         table_clear(_scratch_priority_target_cache)
+        table_clear(_scratch_facing_kind_cache)
     end
 
     --- Grows the pool of reusable radar target tables to at least the given size.
@@ -1181,6 +1183,28 @@ return function(env)
         return meta ~= nil and meta.ability_marked == true
     end
 
+    --- Returns whether a kind's facing direction setting shows the chevron that points where it looks.
+    -- Teammates and the Cyber Mastiff have a setting each, on unless switched off; enemies have one
+    -- per category, off unless switched on.
+    -- treturn: bool
+    local function _kind_shows_facing(kind)
+        if kind == "player_teammate" then
+            return mod:get("show_player_facing") ~= false
+        end
+
+        if kind == "player_companion_dog" then
+            return mod:get("show_cyber_mastiff_facing") ~= false
+        end
+
+        if not _is_enemy_kind(kind) then
+            return false
+        end
+
+        local show_enemy_facing = mod.show_enemy_facing
+
+        return show_enemy_facing ~= nil and show_enemy_facing(mod, kind) == true
+    end
+
     --- Applies the "only tagged enemies" and "only tagged items" options to a target.
     -- Ability-outlined enemies pass the enemy filter too.
     -- treturn: bool
@@ -1911,6 +1935,7 @@ return function(env)
         local render_layer_cache = _scratch_render_layer_cache
         local selection_priority_cache = _scratch_selection_priority_cache
         local priority_target_cache = _scratch_priority_target_cache
+        local facing_kind_cache = _scratch_facing_kind_cache
         local get_target_render_layer = mod.get_target_render_layer
         local get_target_selection_priority = mod.get_target_selection_priority
         local is_event_marker_kind = mod.is_event_marker_kind
@@ -2007,7 +2032,21 @@ return function(env)
             return selection_priority
         end
 
+        local function _cached_shows_facing(kind)
+            local shows_facing = facing_kind_cache[kind]
+
+            if shows_facing == nil then
+                shows_facing = _kind_shows_facing(kind)
+                facing_kind_cache[kind] = shows_facing
+            end
+
+            return shows_facing
+        end
+
         --- Filters one tracked unit or point and appends it as a radar target.
+        -- A target whose facing direction setting is on also takes the direction its unit looks or
+        -- faces, except a teammate who is dead, waiting for rescue or captured; every other target,
+        -- reusing a pooled table, has its heading cleared.
         -- param: unit unit handle, or the point id
         -- tab: data tracked entry
         local function append_target(unit, data)
@@ -2149,6 +2188,14 @@ return function(env)
                 selection_priority = _cached_selection_priority(kind)
             end
 
+            local heading_x = nil
+            local heading_y = nil
+            local player_radar_state = meta and meta.player_radar_state or nil
+
+            if _cached_shows_facing(kind) and (player_radar_state == nil or player_radar_state == "luggable") then
+                heading_x, heading_y = _safe_target_heading_xy(unit, kind)
+            end
+
             target_count = target_count + 1
             local target = target_pool[target_count] or {}
             target_pool[target_count] = target
@@ -2167,6 +2214,8 @@ return function(env)
             target.selection_priority = selection_priority
             target.disabled_by_mastiff = mastiff_disabled_enemy_units[unit] == true
                 and _is_enemy_kind(kind)
+            target.heading_x = heading_x
+            target.heading_y = heading_y
 
             targets[target_count] = target
         end
@@ -3734,6 +3783,27 @@ return function(env)
         end
 
         return px, py
+    end
+
+    --- Turns a target's horizontal heading into a direction on the radar.
+    -- Uses the same view-aligned basis as `project_target_to_radar`, so a target moving along
+    -- its heading moves on the radar along the returned direction; screen y grows downward.
+    -- ?number: forward_x x of the direction from `radar_projection_forward`; north-up when nil
+    -- ?number: forward_y y of that direction
+    -- ?number: heading_x x of the target's normalised world heading
+    -- ?number: heading_y y of that heading
+    -- treturn: ?number x of the unit direction on the radar, nil without a heading
+    -- treturn: ?number y of that direction
+    function mod:project_heading_to_radar(forward_x, forward_y, heading_x, heading_y)
+        if not _is_finite_number(heading_x) or not _is_finite_number(heading_y) then
+            return nil, nil
+        end
+
+        if forward_x and forward_y then
+            return heading_x * forward_y - heading_y * forward_x, -(heading_x * forward_x + heading_y * forward_y)
+        end
+
+        return heading_x, -heading_y
     end
 
     -- ----------------------------------------------------------------------------

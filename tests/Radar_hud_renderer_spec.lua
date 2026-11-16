@@ -29,10 +29,28 @@ local function make_color(a, r, g, b)
     return setmetatable({ a, r, g, b }, color_meta)
 end
 
---- Loads the renderer with a recording `Gui.rect` and the given style settings.
+--- Loads the renderer with a recording `Gui.rect` and rotated texture draw and the given style settings.
 local function load_renderer(settings)
     local recorded = {}
+    local textures = {}
     local mod = {}
+    local ui_renderer_module = {
+        draw_texture_rotated = function(_, material, size, position, angle, pivot, color, uvs)
+            textures[#textures + 1] = {
+                material = material,
+                x = position[1],
+                y = position[2],
+                z = position[3],
+                width = size[1],
+                height = size[2],
+                angle = angle,
+                pivot_x = pivot[1],
+                pivot_y = pivot[2],
+                color = color,
+                uvs = uvs,
+            }
+        end,
+    }
 
     function mod:get(id)
         return settings[id]
@@ -54,7 +72,11 @@ local function load_renderer(settings)
         get_mod = function()
             return mod
         end,
-        require = function()
+        require = function(name)
+            if name == "scripts/managers/ui/ui_renderer" then
+                return ui_renderer_module
+            end
+
             return { draw = function() end }
         end,
         Gui = {
@@ -84,7 +106,7 @@ local function load_renderer(settings)
 
     setfenv(chunk, env)
 
-    return chunk(), recorded
+    return chunk(), recorded, textures
 end
 
 --- Draws one frame phase and returns the recorded rectangles.
@@ -377,6 +399,228 @@ test("a nearly horizontal guide line is drawn as runs, not pixels", function()
 
     assert_true(#recorded > 0 and #recorded * 3 < pixels,
         #recorded .. " rectangles for " .. pixels .. " guide pixels")
+end)
+
+-- ----------------------------------------------------------------------------
+-- Facing chevron
+-- ----------------------------------------------------------------------------
+
+local function assert_near(expected, actual, message, tolerance)
+    if type(actual) ~= "number" or math.abs(expected - actual) > (tolerance or 1e-9) then
+        error((message or "values differ") .. ": expected " .. tostring(expected) .. ", got " .. tostring(actual), 2)
+    end
+end
+
+--- Returns the renderer's facing chevron constants, read from the draw function's upvalues.
+local function facing_constants(renderer)
+    local draw = renderer.draw_marker_facing_chevron
+
+    for index = 1, 255 do
+        local name, value = debug.getupvalue(draw, index)
+
+        assert(name ~= nil, "missing upvalue `FACING_CHEVRON`")
+
+        if name == "FACING_CHEVRON" then
+            return value
+        end
+    end
+end
+
+local function facing_ui_renderer(scale)
+    return { gui = {}, scale = scale, render_settings = { start_layer = START_LAYER } }
+end
+
+--- Returns an angle in (-pi, pi].
+local function wrapped_angle(angle)
+    while angle <= -math.pi do
+        angle = angle + math.pi * 2
+    end
+
+    while angle > math.pi do
+        angle = angle - math.pi * 2
+    end
+
+    return angle
+end
+
+--- The chevron the renderer drew; its back's distance from the centre along the heading, and its size.
+local function drawn_chevron(textures, center_x, center_y, direction_x, direction_y)
+    local arrow = textures[1]
+    local mid_x = arrow.x + arrow.width * 0.5
+    local mid_y = arrow.y + arrow.height * 0.5
+    local offset = (mid_x - center_x) * direction_x + (mid_y - center_y) * direction_y
+
+    return arrow, offset - arrow.width * 0.5
+end
+
+local FACING_COLOR = { 180, 10, 20, 30 }
+
+--- How far the coherency frame's art reaches along a direction, as a share of the frame texture.
+-- Measured from the game's `mission_top` texture every 15 degrees from 3 o'clock to 12 o'clock;
+-- the side bars reach furthest at 3 and 9 o'clock, the circle from about 50 degrees on.
+local FRAME_ART_REACH = { 0.3119, 0.3044, 0.2929, 0.2626, 0.2538, 0.2535, 0.25 }
+
+test("the facing chevron sits just beyond a round marker and points along the heading", function()
+    for _, size in ipairs({ 6, 13, 15, 21, 40 }) do
+        for step = 0, 15 do
+            local angle = step * math.pi / 8
+            local direction_x, direction_y = math.cos(angle), -math.sin(angle)
+            local renderer, recorded, textures = load_renderer({})
+            local constants = facing_constants(renderer)
+            local ui_renderer = facing_ui_renderer(1.333)
+            local label = "size " .. size .. " step " .. step
+
+            renderer.begin_facing_outline(size * 0.5)
+            renderer.draw_marker_facing_chevron(ui_renderer, 200.5, 80.5, 9, size, FACING_COLOR, direction_x,
+                direction_y)
+
+            local arrow, back = drawn_chevron(textures, 200.5, 80.5, direction_x, direction_y)
+            local across = math.max(constants.min_size, math.floor(size * constants.size_ratio + 0.5))
+            local along = across * constants.aspect
+            local mid_x = arrow.x + arrow.width * 0.5
+            local mid_y = arrow.y + arrow.height * 0.5
+            local side = (mid_y - 80.5) * direction_x - (mid_x - 200.5) * direction_y
+
+            assert_equal(0, #recorded, label .. " rectangles")
+            assert_equal(1, #textures, label .. " arrows")
+            assert_equal(constants.material, arrow.material, label .. " material")
+            assert_equal(constants.uvs, arrow.uvs, label .. " crop")
+            assert_near(along, arrow.width, label .. " length along the heading")
+            assert_near(across, arrow.height, label .. " width across the heading")
+            assert_near(along * 0.5, arrow.pivot_x, label .. " pivot x")
+            assert_near(across * 0.5, arrow.pivot_y, label .. " pivot y")
+            assert_near(size * 0.5 + constants.gap, back, label .. " back on the marker's edge", 1e-6)
+            assert_near(0, side, label .. " centred on the heading", 1e-6)
+            assert_near(0, wrapped_angle(arrow.angle - angle), label .. " turned along the heading", 1e-9)
+            assert_equal(9, arrow.z, label .. " layer")
+            assert_equal(FACING_COLOR, arrow.color, label .. " colour")
+            assert_equal(0, ui_renderer.render_settings.material_flags, label .. " material flags left unset")
+        end
+    end
+
+    local cardinals = { { 1, 0, 0 }, { 0, -1, math.pi * 0.5 }, { -1, 0, math.pi }, { 0, 1, -math.pi * 0.5 } }
+
+    for _, case in ipairs(cardinals) do
+        local renderer, _, textures = load_renderer({})
+
+        renderer.begin_facing_outline(7.5)
+        renderer.draw_marker_facing_chevron(facing_ui_renderer(1), 100, 100, 3, 15, FACING_COLOR, case[1], case[2])
+
+        assert_near(0, wrapped_angle(textures[1].angle - case[3]), "cardinal angle " .. case[3], 1e-9)
+    end
+end)
+
+test("the facing chevron follows the coherency frame round its side bars", function()
+    for _, frame_size in ipairs({ 21, 31, 47, 97 }) do
+        for step = 0, 23 do
+            local angle = step * math.pi / 12
+            local direction_x, direction_y = math.cos(angle), -math.sin(angle)
+            local renderer, _, textures = load_renderer({})
+            local label = "frame " .. frame_size .. " step " .. step
+            local quadrant_step = step % 12
+            local reach_step = quadrant_step <= 6 and quadrant_step or 12 - quadrant_step
+
+            renderer.begin_facing_outline(frame_size * 0.25)
+            renderer.add_facing_outline_frame(frame_size)
+            renderer.draw_marker_facing_chevron(facing_ui_renderer(1), 300, 120, 11, 15, FACING_COLOR, direction_x,
+                direction_y)
+
+            local _, back = drawn_chevron(textures, 300, 120, direction_x, direction_y)
+
+            assert_true(back >= FRAME_ART_REACH[reach_step + 1] * frame_size - 1e-9,
+                label .. " chevron cuts into the frame's art")
+            assert_true(back <= FRAME_ART_REACH[reach_step + 1] * frame_size + 0.03 * frame_size,
+                label .. " chevron strays far from the frame")
+        end
+    end
+end)
+
+test("the facing chevron keeps clear of the boxes within its width, and only of those", function()
+    local seed = 271
+
+    local function random()
+        seed = (seed * 1103515245 + 12345) % 2147483648
+
+        return seed / 2147483648
+    end
+
+    for round = 1, 400 do
+        local renderer, _, textures = load_renderer({})
+        local constants = facing_constants(renderer)
+        local angle = random() * math.pi * 2
+        local direction_x, direction_y = math.cos(angle), -math.sin(angle)
+        local size = 10 + math.floor(random() * 30)
+        local across = math.max(constants.min_size, math.floor(size * constants.size_ratio + 0.5))
+        local half_width = across * 0.5
+        local boxes = {}
+
+        renderer.begin_facing_outline(size * 0.5)
+
+        for i = 1, 1 + math.floor(random() * constants.max_boxes) do
+            local left = 100 + (random() - 0.5) * size * 3
+            local top = 100 + (random() - 0.5) * size * 3
+            local box = { left, top, left + 2 + random() * size, top + 2 + random() * size * 0.6 }
+
+            boxes[i] = box
+            renderer.add_facing_outline_box(box[1], box[2], box[3], box[4])
+        end
+
+        renderer.draw_marker_facing_chevron(facing_ui_renderer(1), 100, 100, 5, size, FACING_COLOR, direction_x,
+            direction_y)
+
+        local _, back = drawn_chevron(textures, 100, 100, direction_x, direction_y)
+        local expected = size * 0.5
+
+        -- Every point of a box within the chevron's width, sampled finely, against the drawn back.
+        for _, box in ipairs(boxes) do
+            for a = 0, 60 do
+                for b = 0, 60 do
+                    local x = box[1] + (box[3] - box[1]) * a / 60 - 100
+                    local y = box[2] + (box[4] - box[2]) * b / 60 - 100
+                    local reach = x * direction_x + y * direction_y
+                    local beside = y * direction_x - x * direction_y
+
+                    if math.abs(beside) <= half_width and reach > expected then
+                        expected = reach
+                    end
+                end
+            end
+        end
+
+        assert_near(expected + constants.gap, back, "round " .. round .. " back of the chevron", 0.35)
+    end
+
+    local renderer, _, textures = load_renderer({})
+
+    renderer.begin_facing_outline(7.5)
+    renderer.add_facing_outline_box(80, 150, 120, 170)
+    renderer.add_facing_outline_box(90, 90, 110, 110)
+    renderer.begin_facing_outline(7.5)
+    renderer.add_facing_outline_box(110, 92, 113, 108)
+    renderer.draw_marker_facing_chevron(facing_ui_renderer(1), 100, 100, 5, 15, FACING_COLOR, 1, 0)
+
+    local _, back = drawn_chevron(textures, 100, 100, 1, 0)
+
+    assert_near(13, back, "a box from an earlier marker was kept, or the box ahead was missed", 1e-9)
+
+    renderer.begin_facing_outline(7.5)
+    renderer.add_facing_outline_box(80, 112, 120, 130)
+    renderer.draw_marker_facing_chevron(facing_ui_renderer(1), 100, 100, 5, 15, FACING_COLOR, 1, 0)
+
+    _, back = drawn_chevron({ textures[2] }, 100, 100, 1, 0)
+
+    assert_near(7.5, back, "a text below the marker pushed out a chevron pointing right", 1e-9)
+
+    renderer.draw_marker_facing_chevron(facing_ui_renderer(1), 100, 100, 5, 15, FACING_COLOR, 0, 1)
+
+    _, back = drawn_chevron({ textures[3] }, 100, 100, 0, 1)
+
+    assert_near(30, back, "a chevron pointing down does not clear the text below the marker", 1e-9)
+
+    renderer.draw_marker_facing_chevron(facing_ui_renderer(1), 100, 100, 5, 15, FACING_COLOR, nil, nil)
+    renderer.draw_marker_facing_chevron(facing_ui_renderer(1), 100, 100, 5, 15, nil, 1, 0)
+
+    assert_equal(3, #textures, "a chevron without a heading or a colour was drawn")
 end)
 
 local failures = {}
