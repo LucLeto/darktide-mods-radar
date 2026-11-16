@@ -117,7 +117,24 @@ Deployed Medical Crates add a circular healing-radius indicator behind the marke
 
 A small arrow beside a teammate, Cyber Mastiff or enemy marker points the way the target faces: where a teammate is looking (their view, not their walking direction), or the way a mastiff or an enemy is turned. It turns with your view exactly like the markers do and follows a target turning on the spot at the **Marker update rate**. The marker itself, its icon, dot or state icon, stays upright and keeps its display style; the arrow is a separate option and works with **Icon only** and **Marked icon** alike. It is the game's own world-marker direction arrow, in the marker's bracket color.
 
+<p>
+  <img src="doc/img/radar_facing_teammates.gif" width="320" alt="Three teammates following the player, each arrow turning with where that teammate looks" />
+  <img src="doc/img/radar_facing_camera_turn.gif" width="320" alt="Boss and enemy arrows turning with the camera" />
+</p>
+
+Left: teammates following you, each arrow turning with where that teammate looks. Right: bosses and enemies while you turn, each arrow still pointing the way its enemy faces.
+
 The arrow sits just beyond everything its marker draws in that direction: the brackets, the teammate coherency frame, whose side bars it swings round at 3 and 9 o'clock, the vertical arrow, and texts such as the boss distance. Only what lies in its path counts, so a text below the marker moves it only when it points down. A teammate who is dead, needs rescue or is captured shows no arrow, and neither does a target whose direction cannot be read.
+
+<p>
+  <img src="doc/img/player_teammate_facing_sample.png" width="80" alt="Teammate icon with its look direction arrow" />
+  <img src="doc/img/player_teammate_coherency_facing_sample.png" width="80" alt="Teammate in its coherency frame with its look direction arrow" />
+  <img src="doc/img/player_companion_cyber_mastiff_facing.png" width="80" alt="Cyber Mastiff in its coherency frame with its facing arrow" />
+  <img src="doc/img/enemy_facing_sample.png" width="80" alt="Enemy marker with its facing arrow" />
+  <img src="doc/img/enemy_monstrosity_facing.png" width="80" alt="Monstrosity with brackets and distance text, its facing arrow below the text" />
+</p>
+
+From left to right: a teammate with **Teammate coherency** off, a teammate in its coherency frame, a Cyber Mastiff in its coherency frame, an enemy, and a monstrosity whose arrow clears its brackets and distance text.
 
 **Teammate look direction** and **Cyber Mastiff facing direction** are on by default. Enemies have one option per category, off by default; see [Enemy facing direction controls](#enemy-facing-direction-controls).
 
@@ -763,6 +780,17 @@ Left to right:
 - **Dot only**
 - **Marked dot**
 
+Teammate coherency examples:
+
+<p>
+  <img src="doc/img/player_teammate_coherency_sample.png" width="80" alt="Teammate in coherency, its frame in its slot color" />
+  <img src="doc/img/player_teammate_coherency_out_sample.png" width="80" alt="Teammate out of coherency, its frame in the Frame color" />
+  <img src="doc/img/player_teammate_coherency_gained.gif" width="80" alt="Green flash growing outward as a teammate gains coherency" />
+  <img src="doc/img/player_teammate_coherency_lost.gif" width="80" alt="Red flash shrinking inward as a teammate loses coherency" />
+</p>
+
+From left to right: **In coherency**, **Out of coherency**, **Coherency gained**, **Coherency lost**. The arrows beside them show the [facing direction](#facing-direction).
+
 Contextual state icon examples:
 
 <p>
@@ -798,6 +826,15 @@ Radar detects friendly companions belonging to the local player and teammates. T
 | <img src="doc/img/player_companion_servo_skull.png" width="80" alt="Default Servo Skull companion marker" /> | Default / Hack Servo Skull | Uses the normal Servo Skull base marker. While actively solving a hacking puzzle, it adds a white auspex annotation and remains visible near its owner. |
 | <img src="doc/img/player_companion_medicae_servo_skull.png" width="80" alt="Medicae Servo Skull companion marker" /> | Medicae Servo Skull | Adds a green medkit annotation. It remains visible and is drawn above the player it is actively reviving. |
 | <img src="doc/img/player_companion_purgator_servo_skull.png" width="80" alt="Purgator Flamer Servo Skull companion marker" /> | Purgator / Flamer Servo Skull | Adds an orange flame annotation and remains visible near its owner while its flamethrower action is active. |
+
+Cyber Mastiff coherency and facing example:
+
+<p>
+  <img src="doc/img/player_companion_cyber_mastiff_coherency.png" width="80" alt="Cyber Mastiff in coherency, its frame in its owner's slot color" />
+  <img src="doc/img/player_companion_cyber_mastiff_facing.png" width="80" alt="Cyber Mastiff in coherency with its facing arrow" />
+</p>
+
+Left: **Cyber Mastiff coherency**, in its owner's color while it counts towards your coherency. Right: the same mastiff with **Cyber Mastiff facing direction**.
 
 Companion marker size is controlled by the **Icon size (%)** slider of the **Player Companions** group, with **100%** as the default. **Show Cyber Mastiff** and **Show Servo Skulls** control the two companion families independently.
 
