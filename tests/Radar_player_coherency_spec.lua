@@ -9,7 +9,9 @@
 -- the teammate's colour while in coherency, a flash when that changes between frames, and a
 -- player colour lightened where it would not read on the backplate. A cyber mastiff counts
 -- towards coherency only when its owner has the Part of the Squad aura, and then while the local
--- player's own coherency list holds it; it takes the same look in its owner's bright colour.
+-- player's own coherency list holds it; it takes the same look in its owner's slot colour, as the
+-- game's companion nameplate does, never in the bright slot colours, and a recoloured slot reaches
+-- every companion once the draw cache reads the colours again.
 
 local PLAYERS_PATH = "Radar/scripts/mods/Radar/Radar_players.lua"
 local HUD_PATH = "Radar/scripts/mods/Radar/ui/Radar_hud_element.lua"
@@ -765,7 +767,6 @@ local function new_draw_cache(style, slot_colors, draw_t)
         debug_mode = false,
         enemy_visual_by_kind = {},
         teammate_color_by_slot = {},
-        companion_color_by_slot = {},
         teammate_backplate_color = BACKPLATE_COLOR,
         teammate_frame_color = FRAME_COLOR,
         coherency_gained_flash_color = GAINED_FLASH_COLOR,
@@ -1024,12 +1025,13 @@ local function mastiff(in_coherency, unit, player_slot)
     }
 end
 
-test("a mastiff that can count towards coherency gets the teammate look in its owner's bright colour", function()
+test("a mastiff that can count towards coherency gets the teammate look in its owner's slot colour", function()
     local target_visual = load_target_visual()
     local before = target_visual(mastiff(nil, {}), new_draw_cache("marked_icon", nil, 10))
 
     assert_equal(MASTIFF_GLYPH, before.glyph, "the mastiff lost its glyph")
-    assert_true(same_values(BRIGHT_SLOT_COLORS[2], before.color), "the mastiff is not in its owner's bright colour")
+    assert_true(same_values(SLOT_COLORS[2], before.color), "the mastiff is not in its owner's slot colour")
+    assert_true(not same_values(BRIGHT_SLOT_COLORS[2], before.color), "the mastiff is in the bright slot colour")
     assert_true(target_visual(mastiff(nil, {}), new_draw_cache("marked_icon", nil, 10)) == before,
         "mastiffs without the aura no longer share their slot's visual")
 
@@ -1065,13 +1067,47 @@ test("a mastiff that can count towards coherency gets the teammate look in its o
     assert_true(same_values(GAINED_FLASH_COLOR, target_visual(mastiff(true, unit), draw_cache).flash_color),
         "the gained flash is not in the gained colour half way")
 
-    -- A teammate in the same slot keeps its own slot colour and its own visual.
+    -- Its owner in the same slot has the same colour, as on the game's nameplates, but its own visual.
     local teammate_visual = target_visual(teammate(true, {}, 2), draw_cache)
 
     assert_true(teammate_visual ~= inside, "the mastiff and its owner share one visual")
-    assert_true(same_values(SLOT_COLORS[2], teammate_visual.color), "the teammate took the bright colour")
-    assert_true(same_values(BRIGHT_SLOT_COLORS[2], target_visual(mastiff(true, unit), draw_cache).color),
-        "the mastiff took the teammate's slot colour")
+    assert_true(same_values(SLOT_COLORS[2], teammate_visual.color), "the teammate is not in its slot colour")
+    assert_true(same_values(teammate_visual.color, target_visual(mastiff(true, unit), draw_cache).color),
+        "the mastiff and its owner differ in colour")
+end)
+
+test("a recoloured player slot reaches companions once the colours are read again", function()
+    local target_visual = load_target_visual()
+    local slot_colors = clone(SLOT_COLORS)
+    local draw_cache = new_draw_cache("marked_icon", slot_colors, 10)
+    local skull = {
+        kind = "player_companion_servo_skull",
+        unit = {},
+        position = { x = 0, y = 0, z = 0 },
+        meta = { player_slot = 2 },
+    }
+
+    draw_cache.teammate_color_generation = 1
+
+    local visual = target_visual(skull, draw_cache)
+    local color = visual.color
+    local accent_color = visual.accent_color
+
+    assert_true(same_values(SLOT_COLORS[2], color), "the servo skull is not in its owner's slot colour")
+
+    -- Mods such as ColorSelection rewrite the slot colour table in place.
+    slot_colors[2] = { 255, 10, 200, 30 }
+
+    assert_true(same_values(SLOT_COLORS[2], target_visual(skull, draw_cache).color),
+        "the servo skull read the colours again before the draw cache did")
+
+    draw_cache.teammate_color_generation = 2
+    visual = target_visual(skull, draw_cache)
+
+    assert_true(same_values(slot_colors[2], visual.color), "the servo skull kept the old slot colour")
+    assert_true(visual.color == color and visual.accent_color == accent_color, "the colours were not refilled in place")
+    assert_equal(180, visual.accent_color[1], "the accent lost its opacity")
+    assert_equal(10, visual.accent_color[2], "the accent did not take the new colour")
 end)
 
 test("a mastiff's coherency visual allocates nothing from frame to frame", function()

@@ -619,7 +619,7 @@ Each marker has its own icon, frame and backplate color pickers, which are hidde
 ### Marker Rules
 
 - **Enemies**, **teammates**, **player companions**, and **player smart tags** each use their own display rules and settings. Teammates also have a **Teammate marker range** mode, an optional **Teammate state icons** override for disabled, rescue, luggable, and dead states, and an optional coherency annotation built from the game's own interaction marker backplate, ring and flash. The local **center dot** has its own toggle and always keeps its normal dot icon.
-- Companion markers use their owning player's bright slot color. Player markers take priority over following companions at the same position, while Servo Skulls performing an active task and Cyber Mastiffs pinning an enemy are drawn above the assisted or disabled unit.
+- Companion markers use their owning player's slot color, as the game's own companion nameplates do, so mods that recolor players recolor their companions too. Player markers take priority over following companions at the same position, while Servo Skulls performing an active task and Cyber Mastiffs pinning an enemy are drawn above the assisted or disabled unit.
 - Following Servo Skulls are hidden when they are very close to their visible owner marker. Hacking, reviving, and active Purgator/Flamer skulls remain visible near their owner.
 - While a Cyber Mastiff is mauling an enemy that uses Darktide's actual companion-disable behavior, that enemy's icon and background are made transparent so the Mastiff remains readable; enabled enemy marker brackets remain visible.
 - Supported enemies can also be surfaced through active ability-mark or smart-tag outline states when **Ability-marked enemies** is enabled.
@@ -790,7 +790,7 @@ From left to right: **Veteran**, **Zealot**, **Psyker**, **Ogryn**, **Arbitrator
 
 ### Player Companions
 
-Radar detects friendly companions belonging to the local player and teammates. Their base marker uses the owning player's bright slot color, making multiple companions easy to associate with their owner.
+Radar detects friendly companions belonging to the local player and teammates. Their base marker uses the owning player's slot color, the same color as that player's marker and as the game's companion nameplate, so each companion is easy to associate with its owner.
 
 | Preview | Companion | Notes |
 | --- | --- | --- |
@@ -1091,8 +1091,8 @@ The remaining formerly white pickup icons were recolored so marker families read
 
 | Marker element | Glyph or material | Color |
 | --- | --- | --- |
-| Cyber Mastiff | Companion glyph `U+E051` rendered with Darktide's `hud_body` font | Owning player's bright slot color |
-| Servo Skull base | `content/ui/materials/icons/abilities/default` | Owning player's bright slot color |
+| Cyber Mastiff | Companion glyph `U+E051` rendered with Darktide's `hud_body` font | Owning player's slot color |
+| Servo Skull base | `content/ui/materials/icons/abilities/default` | Owning player's slot color |
 | Active hacking annotation | `content/ui/materials/icons/pocketables/hud/auspex_scanner` | `(255, 255, 255, 255)` |
 | Medicae annotation | `content/ui/materials/hud/interactions/icons/pocketable_medkit` | `(255, 38, 205, 26)` |
 | Purgator / Flamer annotation | `content/ui/materials/icons/presets/preset_20` | `(255, 255, 102, 0)` |
@@ -1104,7 +1104,7 @@ Servo Skull role and activity annotations are placed at the bottom-right of the 
 Not every radar marker uses a configurable fixed ARGB color:
 
 - **Teammates** use the class icon for the detected archetype and take their color from the active HUD slot color at runtime. Enabled state icons retain the same slot color.
-- **Player companions** use their owner's bright HUD slot color. Servo Skull annotations retain their fixed semantic colors.
+- **Player companions** use their owner's HUD slot color, like the game's companion nameplates. Servo Skull annotations retain their fixed semantic colors.
 - **The radar center dot** also uses the local player's HUD color.
 - **Player smart tags** use their own tag presentations: attention and location tags follow player-slot colors, while threat tags keep their built-in warning color.
 
@@ -1686,7 +1686,7 @@ luajit tests/Radar_settings_menu_spec.lua
 | `Radar_mission_objective_wiring_spec.lua` | Module wiring. Installs the real definition and helper modules and checks that every objective kind is registered everywhere a kind must be (settings, scale groups, colors, highlights, presentations). Also checks the shared presentation rules, the respawn and SafeRoute registration and priorities, localization requirements, declaration order of shared locals, and headroom under LuaJIT's 200-local limit. |
 | `Radar_navmesh_prebuild_spec.lua` | The live navmesh build on entering a mission, with the real navmesh module against a fake GwNav database: built once with no second build on the first draw, the previous state handler called first, skipped for other state changes, other geometry sources, a disabled mod, disallowed game modes and game modes that spawn their navmesh later, failures kept inside the callback and retried by a radar draw after the cooldown, the next mission replacing the geometry, and the `profile build` line. |
 | `Radar_navmesh_renderer_spec.lua` | The live navmesh radar shape check, with the real renderer and clipper against a fake GUI: on circle, square and auspex radars, at several headings and ranges, a draw emits the same triangles in the same order as clipping every selected triangle, a triangle past the shape is dropped, and one crossing the shape, covering the whole radar or sitting in a square's corner is kept. |
-| `Radar_player_coherency_spec.lua` | Teammate and Cyber Mastiff coherency, from the scan to the marker. With the real players module against a fake game: the team panel's rule (a unit the local player owns in the teammate's coherency list, also their companion, while alive, not hogtied and with unit data), unreadable extensions counting as out of coherency, the setting and hidden teammates reading nothing, leaving coherency, replaced units and departed teammates; a mastiff counting only with its owner's Part of the Squad aura and then while the local player's own list holds it, directly or through a teammate, and reading nothing while its setting is off. With the real HUD element: the backplate, frame and flash for every teammate style and for a mastiff in its owner's bright colour, the look with the setting off, the contrast guard, the flash direction and colours, one visual per unit with no garbage per frame, the in-place colour refresh, and the text in every language. |
+| `Radar_player_coherency_spec.lua` | Teammate and Cyber Mastiff coherency, from the scan to the marker. With the real players module against a fake game: the team panel's rule (a unit the local player owns in the teammate's coherency list, also their companion, while alive, not hogtied and with unit data), unreadable extensions counting as out of coherency, the setting and hidden teammates reading nothing, leaving coherency, replaced units and departed teammates; a mastiff counting only with its owner's Part of the Squad aura and then while the local player's own list holds it, directly or through a teammate, and reading nothing while its setting is off. With the real HUD element: the backplate, frame and flash for every teammate style and for a mastiff in its owner's slot colour (never the bright slot colours), the look with the setting off, the contrast guard, the flash direction and colours, one visual per unit with no garbage per frame, the in-place colour refresh (also for a recoloured slot reaching servo skulls), and the text in every language. |
 | `Radar_respawn_rewind_spec.lua` | Compatibility behavior: role classification and its fallbacks, position copying, removed markers, a missing or disabled Respawn Rewind, malformed data, run-back offsets, the overview rule and the mission reset. |
 | `Radar_safe_route_spec.lua` | Compatibility behavior: role classification and its icon fallback, guide dots left out, position copying, removed markers, the once-per-mission branching road gate, a missing, disabled or late-loaded SafeRoute, malformed data and the mission reset. |
 | `Radar_target_heading_spec.lua` | Which way a target faces, with the real runtime helpers and tracking modules: a teammate's first person rotation, never its body, the root rotation of a Cyber Mastiff or an enemy, unreadable, infinite or dead units giving no heading, and, through the real collection, which targets take one (teammates and the mastiff unless switched off, enemies whose category is switched on) and which do not (servo skulls, pickups, other categories, and teammates who are dead, need rescue or are captured), and a pooled target never keeping an earlier target's heading. |

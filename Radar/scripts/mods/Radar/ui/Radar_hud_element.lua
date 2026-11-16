@@ -886,7 +886,6 @@ local _draw_cache = {
     nearby_highlight_enabled_by_kind = {},
     nearby_highlight_distance_text_enabled_by_kind = {},
     teammate_color_by_slot = {},
-    companion_color_by_slot = {},
     teammate_color_generation = 0,
     teammate_backplate_color = nil,
     teammate_frame_color = nil,
@@ -3311,8 +3310,11 @@ local function _coherency_marker_visual(target, draw_cache, icon, glyph, player_
 end
 
 --- Builds the visual of a player companion, cached per kind, role and player slot.
--- A servo skull shows its role or hacking action as a corner overlay. A mastiff that can count
--- towards coherency takes the coherency look of `_coherency_marker_visual` instead, kept per unit.
+-- A companion takes its owner's slot colour, as the game's companion nameplate does, so mods
+-- that recolour players recolour their companions too; a cached visual is refilled in place
+-- whenever the draw cache reads the colours again. A servo skull shows its role or hacking
+-- action as a corner overlay. A mastiff that can count towards coherency takes the coherency
+-- look of `_coherency_marker_visual` instead, kept per unit, with its owner's readable colour.
 local function _player_companion_visual(target, draw_cache)
     local kind = target and target.kind or nil
     local presentation = kind and PLAYER_COMPANION_PRESENTATIONS[kind] or nil
@@ -3326,13 +3328,11 @@ local function _player_companion_visual(target, draw_cache)
     local companion_in_coherency = meta and meta.companion_in_coherency
 
     if companion_in_coherency ~= nil then
-        local slot_colors = PLAYER_BRIGHT_SLOT_COLORS
-            or (draw_cache and draw_cache.slot_colors)
-            or (UISettings and UISettings.player_slot_colors)
+        local slot_colors = (draw_cache and draw_cache.slot_colors) or (UISettings and UISettings.player_slot_colors)
 
         return _coherency_marker_visual(target, draw_cache, presentation.icon, presentation.glyph,
             player_slot and slot_colors and slot_colors[player_slot] or nil, presentation.size, companion_in_coherency,
-            draw_cache and draw_cache.companion_color_by_slot or nil)
+            draw_cache and draw_cache.teammate_color_by_slot or nil)
     end
 
     local servo_skull_role = meta and meta.servo_skull_role or nil
@@ -3356,15 +3356,25 @@ local function _player_companion_visual(target, draw_cache)
 
     local slot_key = player_slot or 0
     local visual = role_cache[slot_key]
+    local color_generation = draw_cache and draw_cache.teammate_color_generation or nil
 
-    if visual then
+    if visual and visual.color_generation == color_generation then
         return visual
     end
 
-    local slot_colors = PLAYER_BRIGHT_SLOT_COLORS
-        or (draw_cache and draw_cache.slot_colors)
-        or (UISettings and UISettings.player_slot_colors)
+    local slot_colors = (draw_cache and draw_cache.slot_colors) or (UISettings and UISettings.player_slot_colors)
     local player_color = player_slot and slot_colors and slot_colors[player_slot] or nil
+
+    if visual then
+        local accent_color = _copy_into_widget_color(visual.accent_color, _copy_into_widget_color(visual.color,
+            player_color, WHITE_WIDGET_COLOR))
+
+        accent_color[1] = 180
+        visual.color_generation = color_generation
+
+        return visual
+    end
+
     local widget_color = _any_to_widget_color(player_color, WHITE_WIDGET_COLOR)
 
     visual = {
@@ -3373,6 +3383,7 @@ local function _player_companion_visual(target, draw_cache)
         color = widget_color,
         accent_color = _with_alpha_widget(widget_color, 180),
         size = presentation.size,
+        color_generation = color_generation,
     }
 
     if annotation then
