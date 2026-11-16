@@ -1249,6 +1249,16 @@ local function _enemy_vertical_arrows_checkbox(setting_id)
     }
 end
 
+--- Builds a facing direction checkbox for an enemy category, off by default.
+local function _enemy_facing_checkbox(setting_id)
+    return {
+        setting_id = setting_id,
+        tooltip = "show_enemy_facing_tooltip",
+        type = "checkbox",
+        default_value = false,
+    }
+end
+
 --- Maps a saved enemy setting (checkbox or dropdown value) to `icon_only`, `marked_icon` or `off`.
 local function _normalize_icon_marked_off_default(value, fallback)
     if value == false or value == "off" then
@@ -2449,6 +2459,7 @@ return {
                                     default_value = true,
                                 },
                                 _enemy_vertical_arrows_checkbox("show_enemy_boss_vertical_arrows"),
+                                _enemy_facing_checkbox("show_enemy_boss_facing"),
                             },
                         },
                         {
@@ -2463,6 +2474,7 @@ return {
                                     tooltip = "horde_tooltip",
                                 },
                                 _enemy_vertical_arrows_checkbox("show_enemy_horde_vertical_arrows"),
+                                _enemy_facing_checkbox("show_enemy_horde_facing"),
                             },
                         },
                         {
@@ -2475,11 +2487,13 @@ return {
                                 _icon_marked_off_dropdown("show_enemy_cultist_vanguard", common_enemy_display_default),
                                 _icon_marked_off_dropdown("show_enemy_renegade_vanguard", common_enemy_display_default),
                                 _enemy_vertical_arrows_checkbox("show_enemy_common_vertical_arrows"),
+                                _enemy_facing_checkbox("show_enemy_common_facing"),
                                 _icon_scale_slider("enemy_shooter_icon_scale", "enemy_shooter_icon_scale"),
                                 _icon_marked_off_dropdown("show_enemy_cultist_assault", shooter_enemy_display_default),
                                 _icon_marked_off_dropdown("show_enemy_renegade_assault", shooter_enemy_display_default),
                                 _icon_marked_off_dropdown("show_enemy_renegade_rifleman", shooter_enemy_display_default),
                                 _enemy_vertical_arrows_checkbox("show_enemy_shooter_vertical_arrows"),
+                                _enemy_facing_checkbox("show_enemy_shooter_facing"),
                             },
                         },
                         {
@@ -2499,6 +2513,7 @@ return {
                                 _icon_marked_off_dropdown("show_enemy_chaos_ogryn_executor", "icon_only"),
                                 _icon_marked_off_dropdown("show_enemy_chaos_ogryn_gunner", "icon_only"),
                                 _enemy_vertical_arrows_checkbox("show_enemy_elite_vertical_arrows"),
+                                _enemy_facing_checkbox("show_enemy_elite_facing"),
                             },
                         },
                         {
@@ -2517,6 +2532,7 @@ return {
                                 _icon_marked_off_dropdown("show_enemy_renegade_sniper", "icon_only"),
                                 _icon_marked_off_dropdown("show_enemy_renegade_netgunner", "marked_icon"),
                                 _enemy_vertical_arrows_checkbox("show_enemy_special_vertical_arrows"),
+                                _enemy_facing_checkbox("show_enemy_special_facing"),
                             },
                         },
                         {
@@ -2526,6 +2542,7 @@ return {
                                 _icon_scale_slider("enemy_misc_icon_scale", "enemy_misc_icon_scale"),
                                 _icon_marked_off_dropdown("show_enemy_cultist_ritualist", "icon_only"),
                                 _enemy_vertical_arrows_checkbox("show_enemy_misc_vertical_arrows"),
+                                _enemy_facing_checkbox("show_enemy_misc_facing"),
                             },
                         },
                     },
@@ -2566,6 +2583,12 @@ return {
                                             default_value = true,
                                         },
                                         {
+                                            setting_id = "show_player_facing",
+                                            tooltip = "show_player_facing_tooltip",
+                                            type = "checkbox",
+                                            default_value = true,
+                                        },
+                                        {
                                             setting_id = "player_marker_range_mode",
                                             type = "dropdown",
                                             default_value = "normal",
@@ -2597,6 +2620,12 @@ return {
                                         {
                                             setting_id = "show_cyber_mastiff_coherency",
                                             tooltip = "show_cyber_mastiff_coherency_tooltip",
+                                            type = "checkbox",
+                                            default_value = true,
+                                        },
+                                        {
+                                            setting_id = "show_cyber_mastiff_facing",
+                                            tooltip = "show_cyber_mastiff_facing_tooltip",
                                             type = "checkbox",
                                             default_value = true,
                                         },

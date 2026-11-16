@@ -3,7 +3,9 @@
 -- the widget pool and the map geometry swapped out through upvalues, so each marker's size, its
 -- brackets' size and both boxes' top left corners are read as the loop hands them on. A target's
 -- visual is the one the test gives it; the sizes follow from the radar size, the settings group
--- and enemy category sliders, and the size limits of an item or of an enemy's category.
+-- and enemy category sliders, and the size limits of an item or of an enemy's category. A target
+-- with a heading gets a facing chevron after its marker, clear of the brackets, the coherency
+-- frame, the vertical arrow and the texts its marker drew.
 
 local HUD_PATH = "Radar/scripts/mods/Radar/ui/Radar_hud_element.lua"
 local RADAR_X = 100
@@ -149,6 +151,11 @@ local function new_harness()
         return position[1], position[2]
     end
 
+    -- And its heading is already its direction on the radar.
+    function mod:project_heading_to_radar(_, _, heading_x, heading_y)
+        return heading_x, heading_y
+    end
+
     function mod:io_dofile(path)
         local chunk = assert(loadfile(path .. ".lua"))
 
@@ -219,7 +226,7 @@ local function new_harness()
 
     local HudElementRadar = chunk()
     local draw_internal
-    local records, brackets
+    local records, brackets, chevrons, outline
 
     for index = 1, 255 do
         local name, value = debug.getupvalue(HudElementRadar.draw, index)
@@ -251,6 +258,27 @@ local function new_harness()
         draw_marker_brackets = function(_, x, y, _, size)
             brackets[#brackets + 1] = { x = x, y = y, size = size }
         end,
+        begin_facing_outline = function(radius)
+            outline = { radius = radius, boxes = {} }
+        end,
+        add_facing_outline_box = function(left, top, right, bottom)
+            outline.boxes[#outline.boxes + 1] = { left, top, right, bottom }
+        end,
+        add_facing_outline_frame = function(frame_size)
+            outline.frame_size = frame_size
+        end,
+        draw_marker_facing_chevron = function(_, center_x, center_y, z, size, color, direction_x, direction_y)
+            chevrons[#chevrons + 1] = {
+                outline = outline,
+                center_x = center_x,
+                center_y = center_y,
+                z = z,
+                size = size,
+                color = color,
+                direction_x = direction_x,
+                direction_y = direction_y,
+            }
+        end,
     })
     replace("RadarStrikemapGeometry", {
         is_active = function()
@@ -265,7 +293,13 @@ local function new_harness()
     replace("_target_visual", function(target)
         return target.visual
     end)
-    replace("_apply_marker_widget", function(_, _, x, y, _, target, icon_size, bracket_x, bracket_y, bracket_size)
+    replace("_apply_marker_widget", function(widget, visual, x, y, _, target, icon_size, bracket_x, bracket_y,
+                                             bracket_size)
+        widget.content.ring_icon = visual and visual.ring_icon or nil
+        widget.style.ring_icon = visual and visual.ring_style or nil
+        widget.content.arrow_icon = visual and visual.arrow_style and "arrow" or nil
+        widget.style.arrow_icon = visual and visual.arrow_style or nil
+
         if target ~= nil then
             records[#records + 1] = {
                 target = target,
@@ -278,23 +312,27 @@ local function new_harness()
             }
         end
     end)
-    replace("_draw_marker_value_text", noop)
+    replace("_draw_marker_value_text", function(_, value_text)
+        if value_text ~= nil then
+            return value_text[1], value_text[2], value_text[3], value_text[4]
+        end
+    end)
     replace("_draw_overview_scale_overlay", noop)
     replace("_draw_screen_highlights", noop)
 
     local element = { _marker_widgets = {} }
 
     for i = 1, 301 do
-        element._marker_widgets[i] = {}
+        element._marker_widgets[i] = { content = {}, style = {} }
     end
 
     --- Draws one radar frame at time `t` and returns, per drawn target, what the loop handed to
-    -- its widget, and every bracket drawn.
+    -- its widget, every bracket drawn and every facing chevron with the outline it was given.
     function harness.draw(targets, t)
-        records, brackets = {}, {}
+        records, brackets, chevrons = {}, {}, {}
         draw_internal(element, {}, { player_position = { 0, 0, 0 }, targets = targets }, t, nil)
 
-        return records, brackets
+        return records, brackets, chevrons
     end
 
     --- Makes the next draw read the settings again, as a settings change does.
@@ -457,6 +495,87 @@ test("a marker box and its brackets are centred on the marker's whole-pixel posi
     assert_equal(250, brackets[1].x, "bracket x")
     assert_equal(159, brackets[1].y, "bracket y")
     assert_equal(21, brackets[1].size, "bracket size")
+end)
+
+test("a target with a heading gets a facing chevron clear of everything its marker drew", function()
+    local harness = new_harness()
+    local accent = { 180, 1, 2, 3 }
+    local ability = { 220, 9, 8, 7 }
+    local marked = target("enemy_poxwalker", { size = 14, accent_color = accent }, 20, 0)
+    local framed = target("player_teammate", {
+        size = 15,
+        accent_color = accent,
+        ring_icon = "content/ui/materials/hud/interactions/frames/mission_top",
+        ring_style = { offset = { 0, 0, 9 }, size = { 31, 31 } },
+    }, -20, 0)
+    local with_extras = target("enemy_poxwalker", {
+        size = 14,
+        accent_color = accent,
+        arrow_style = { offset = { 300, 200, 13 }, size = { 6, 6 } },
+        value_text = { 1, 2, 3, 4 },
+        secondary_value_text = { 5, 6, 7, 8 },
+    }, 0, 20)
+    local without_heading = target("enemy_poxwalker", { size = 14, accent_color = accent }, 0, -20)
+    local unframed = target("enemy_poxwalker", { size = 14, color = { 255, 4, 5, 6 } }, 40, 40)
+    local outlined = target("enemy_poxwalker", { size = 14, accent_color = accent }, -40, 40)
+
+    marked.heading_x, marked.heading_y = 0, -1
+    framed.heading_x, framed.heading_y = 1, 0
+    with_extras.heading_x, with_extras.heading_y = -0.6, 0.8
+    unframed.heading_x, unframed.heading_y = 1, 0
+    outlined.heading_x, outlined.heading_y = 0, 1
+    outlined.meta = { ability_outline_bracket_color = ability }
+
+    local records, _, chevrons = harness.draw({ marked, framed, with_extras, without_heading, unframed, outlined },
+        10)
+
+    assert_equal(6, #records, "drawn markers")
+    assert_equal(5, #chevrons, "drawn chevrons")
+
+    local function check(chevron, record, color, direction_x, direction_y, label)
+        local bracket_x, bracket_y, bracket_size = record.bracket_x, record.bracket_y, record.bracket_size
+
+        assert_equal(record.x + record.size * 0.5, chevron.center_x, label .. " centre x")
+        assert_equal(record.y + record.size * 0.5, chevron.center_y, label .. " centre y")
+        assert_equal(bracket_size, chevron.size, label .. " size")
+        assert_equal(14, chevron.z, label .. " layer")
+        assert_equal(color, chevron.color, label .. " colour")
+        assert_equal(direction_x, chevron.direction_x, label .. " direction x")
+        assert_equal(direction_y, chevron.direction_y, label .. " direction y")
+        assert_equal(bracket_size * 0.5, chevron.outline.radius, label .. " outline radius")
+
+        return bracket_x - 1, bracket_y - 1, bracket_x + bracket_size + 1, bracket_y + bracket_size + 1
+    end
+
+    local function check_box(box, left, top, right, bottom, label)
+        assert_equal(left, box[1], label .. " left")
+        assert_equal(top, box[2], label .. " top")
+        assert_equal(right, box[3], label .. " right")
+        assert_equal(bottom, box[4], label .. " bottom")
+    end
+
+    local left, top, right, bottom = check(chevrons[1], records[1], accent, 0, -1, "marked enemy")
+
+    assert_equal(1, #chevrons[1].outline.boxes, "marked enemy outline boxes")
+    check_box(chevrons[1].outline.boxes[1], left, top, right, bottom, "marked enemy brackets")
+    assert_equal(nil, chevrons[1].outline.frame_size, "marked enemy frame")
+
+    left, top, right, bottom = check(chevrons[2], records[2], accent, 1, 0, "teammate in its coherency frame")
+    check_box(chevrons[2].outline.boxes[1], left, top, right, bottom, "teammate brackets")
+    assert_equal(31, chevrons[2].outline.frame_size, "teammate frame")
+
+    left, top, right, bottom = check(chevrons[3], records[3], accent, -0.6, 0.8, "enemy with arrow and texts")
+    assert_equal(4, #chevrons[3].outline.boxes, "enemy with arrow and texts outline boxes")
+    check_box(chevrons[3].outline.boxes[1], left, top, right, bottom, "enemy brackets")
+    check_box(chevrons[3].outline.boxes[2], 300, 200, 306, 206, "vertical arrow")
+    check_box(chevrons[3].outline.boxes[3], 1, 2, 3, 4, "value text")
+    check_box(chevrons[3].outline.boxes[4], 5, 6, 7, 8, "second text")
+
+    check(chevrons[4], records[5], unframed.visual.color, 1, 0, "enemy without brackets")
+    assert_equal(0, #chevrons[4].outline.boxes, "enemy without brackets outline boxes")
+
+    left, top, right, bottom = check(chevrons[5], records[6], ability, 0, 1, "enemy outlined by an ability")
+    check_box(chevrons[5].outline.boxes[1], left, top, right, bottom, "outlined enemy brackets")
 end)
 
 test("a changed slider reaches the markers when the settings are read again", function()

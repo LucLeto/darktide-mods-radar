@@ -2,9 +2,9 @@
 -- Turns the radar snapshot published by `Radar_tracking.lua` into what the player sees; the
 -- frame and guides, the optional map geometry layer, one pooled marker widget per target
 -- (icon, backplate, overlay, title icon, vertical arrow, marked ring, radius icon), marker
--- brackets and value or distance texts, the player's centre dot, the overview scale legends,
--- the zoom factor indicator and the on-screen nearby highlight brackets. It owns the static
--- presentation of every marker kind and the rules that pick a visual for a target.
+-- brackets, value or distance texts and facing chevrons, the player's centre dot, the overview
+-- scale legends, the zoom factor indicator and the on-screen nearby highlight brackets. It owns
+-- the static presentation of every marker kind and the rules that pick a visual for a target.
 --
 -- Loaded by DMF from the `register_hud_element` call in `Radar_tracking.lua` and returned as
 -- the `HudElementRadar` class; it is not part of `shared_env` and reaches the runtime only
@@ -886,7 +886,6 @@ local _draw_cache = {
     nearby_highlight_enabled_by_kind = {},
     nearby_highlight_distance_text_enabled_by_kind = {},
     teammate_color_by_slot = {},
-    companion_color_by_slot = {},
     teammate_color_generation = 0,
     teammate_backplate_color = nil,
     teammate_frame_color = nil,
@@ -1599,6 +1598,10 @@ end
 -- ?string: value_text_anchor anchor
 -- ?number: value_text_offset_x extra horizontal offset
 -- ?number: value_text_offset_y extra vertical offset
+-- treturn: ?number left edge of the text's box, nil when nothing is drawn
+-- treturn: ?number top edge of that box
+-- treturn: ?number right edge of that box
+-- treturn: ?number bottom edge of that box
 local function _draw_marker_value_text(ui_renderer, value_text, x, y, z, icon_size, has_arrow, value_text_color,
                                        value_text_anchor, value_text_offset_x, value_text_offset_y)
     if value_text == nil or value_text == "" then
@@ -1684,6 +1687,8 @@ local function _draw_marker_value_text(ui_renderer, value_text, x, y, z, icon_si
         color,
         options
     )
+
+    return text_x, text_y, text_x + text_box_width, text_y + text_box_height
 end
 
 --- Returns the overview legend font size for a radar size (14 to 24).
@@ -3305,8 +3310,11 @@ local function _coherency_marker_visual(target, draw_cache, icon, glyph, player_
 end
 
 --- Builds the visual of a player companion, cached per kind, role and player slot.
--- A servo skull shows its role or hacking action as a corner overlay. A mastiff that can count
--- towards coherency takes the coherency look of `_coherency_marker_visual` instead, kept per unit.
+-- A companion takes its owner's slot colour, as the game's companion nameplate does, so mods
+-- that recolour players recolour their companions too; a cached visual is refilled in place
+-- whenever the draw cache reads the colours again. A servo skull shows its role or hacking
+-- action as a corner overlay. A mastiff that can count towards coherency takes the coherency
+-- look of `_coherency_marker_visual` instead, kept per unit, with its owner's readable colour.
 local function _player_companion_visual(target, draw_cache)
     local kind = target and target.kind or nil
     local presentation = kind and PLAYER_COMPANION_PRESENTATIONS[kind] or nil
@@ -3320,13 +3328,11 @@ local function _player_companion_visual(target, draw_cache)
     local companion_in_coherency = meta and meta.companion_in_coherency
 
     if companion_in_coherency ~= nil then
-        local slot_colors = PLAYER_BRIGHT_SLOT_COLORS
-            or (draw_cache and draw_cache.slot_colors)
-            or (UISettings and UISettings.player_slot_colors)
+        local slot_colors = (draw_cache and draw_cache.slot_colors) or (UISettings and UISettings.player_slot_colors)
 
         return _coherency_marker_visual(target, draw_cache, presentation.icon, presentation.glyph,
             player_slot and slot_colors and slot_colors[player_slot] or nil, presentation.size, companion_in_coherency,
-            draw_cache and draw_cache.companion_color_by_slot or nil)
+            draw_cache and draw_cache.teammate_color_by_slot or nil)
     end
 
     local servo_skull_role = meta and meta.servo_skull_role or nil
@@ -3350,15 +3356,25 @@ local function _player_companion_visual(target, draw_cache)
 
     local slot_key = player_slot or 0
     local visual = role_cache[slot_key]
+    local color_generation = draw_cache and draw_cache.teammate_color_generation or nil
 
-    if visual then
+    if visual and visual.color_generation == color_generation then
         return visual
     end
 
-    local slot_colors = PLAYER_BRIGHT_SLOT_COLORS
-        or (draw_cache and draw_cache.slot_colors)
-        or (UISettings and UISettings.player_slot_colors)
+    local slot_colors = (draw_cache and draw_cache.slot_colors) or (UISettings and UISettings.player_slot_colors)
     local player_color = player_slot and slot_colors and slot_colors[player_slot] or nil
+
+    if visual then
+        local accent_color = _copy_into_widget_color(visual.accent_color, _copy_into_widget_color(visual.color,
+            player_color, WHITE_WIDGET_COLOR))
+
+        accent_color[1] = 180
+        visual.color_generation = color_generation
+
+        return visual
+    end
+
     local widget_color = _any_to_widget_color(player_color, WHITE_WIDGET_COLOR)
 
     visual = {
@@ -3367,6 +3383,7 @@ local function _player_companion_visual(target, draw_cache)
         color = widget_color,
         accent_color = _with_alpha_widget(widget_color, 180),
         size = presentation.size,
+        color_generation = color_generation,
     }
 
     if annotation then
@@ -3747,12 +3764,14 @@ end
 --- Draws one radar frame; run inside `pcall` by `HudElementRadar.draw`.
 -- Draws the frame with the map geometry layer between its background and foreground when a
 -- geometry source is active, the centre dot, every target up to the marker limit (each
--- projected onto the radar, given a visual, brackets, a pooled widget and value texts), the
--- overview legends, the zoom indicator and the screen highlights, and finally clears the
--- widgets left over from the previous frame. While profiling, each of those steps is timed
+-- projected onto the radar, given a visual, brackets, a pooled widget, value texts and, with a
+-- heading, a facing chevron), the overview legends, the zoom indicator and the screen
+-- highlights, and finally clears the widgets left over from the previous frame. The chevron
+-- comes last, so it can keep clear of everything its marker drew; the brackets, the coherency
+-- frame, the vertical arrow and the texts. While profiling, each of those steps is timed
 -- through `mod:radar_profiler_lap`; the frame and the map geometry are timed apart, and each
--- marker's projection, visual, brackets, widget update, widget draw and texts are added up
--- over all markers through `mod:radar_profiler_accumulate`.
+-- marker's projection, visual, brackets and chevron, widget update, widget draw and texts are
+-- added up over all markers through `mod:radar_profiler_accumulate`.
 -- tab: self HUD element
 -- tab: ui_renderer active UI renderer
 -- ?tab: snapshot radar snapshot
@@ -3797,6 +3816,10 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
     local target_radius_icon_size = _target_radius_icon_size
     local should_draw_marker_brackets = _should_draw_marker_brackets
     local draw_marker_brackets = RadarHudRenderer.draw_marker_brackets
+    local begin_facing_outline = RadarHudRenderer.begin_facing_outline
+    local add_facing_outline_box = RadarHudRenderer.add_facing_outline_box
+    local add_facing_outline_frame = RadarHudRenderer.add_facing_outline_frame
+    local draw_marker_facing_chevron = RadarHudRenderer.draw_marker_facing_chevron
     local draw_marker_value_text = _draw_marker_value_text
     local snap_center = _snap_center
     local base_icon_z = z + 5
@@ -3852,6 +3875,7 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
         local targets = snapshot.targets or {}
         collected_marker_count = #targets
         local project_target_to_radar = mod.project_target_to_radar
+        local project_heading_to_radar = mod.project_heading_to_radar
         local forward_x, forward_y = mod:radar_projection_forward(projection_rotation)
         local profiler_accumulate = profile_mark and mod.radar_profiler_accumulate
 
@@ -3946,7 +3970,9 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
                     marker_mark = profiler_accumulate(mod, "draw_marker_visual", marker_mark)
                 end
 
-                if bracket_color and should_draw_marker_brackets(target, draw_cache) then
+                local draws_brackets = bracket_color and should_draw_marker_brackets(target, draw_cache)
+
+                if draws_brackets then
                     draw_marker_brackets(ui_renderer, bracket_x, bracket_y, bracket_z, bracket_size, bracket_color)
                 end
 
@@ -3991,7 +4017,7 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
                     marker_mark = profiler_accumulate(mod, "draw_marker_widget_draw", marker_mark)
                 end
 
-                draw_marker_value_text(
+                local text_left, text_top, text_right, text_bottom = draw_marker_value_text(
                     ui_renderer,
                     value_text,
                     draw_x,
@@ -4005,7 +4031,7 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
                     value_text_offset_y
                 )
 
-                draw_marker_value_text(
+                local second_text_left, second_text_top, second_text_right, second_text_bottom = draw_marker_value_text(
                     ui_renderer,
                     secondary_value_text,
                     draw_x,
@@ -4021,6 +4047,54 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
 
                 if marker_mark then
                     marker_mark = profiler_accumulate(mod, "draw_marker_text", marker_mark)
+                end
+
+                local heading_x = target.heading_x
+                local facing_x, facing_y = nil, nil
+
+                if heading_x ~= nil then
+                    facing_x, facing_y = project_heading_to_radar(mod, forward_x, forward_y, heading_x,
+                        target.heading_y)
+                end
+
+                if facing_x ~= nil then
+                    local widget_content = widget.content
+                    local widget_style = widget.style
+
+                    begin_facing_outline(bracket_size * 0.5)
+
+                    if draws_brackets then
+                        add_facing_outline_box(bracket_x - 1, bracket_y - 1, bracket_x + bracket_size + 1,
+                            bracket_y + bracket_size + 1)
+                    end
+
+                    if widget_content.ring_icon ~= nil then
+                        add_facing_outline_frame(widget_style.ring_icon.size[1])
+                    end
+
+                    if widget_content.arrow_icon ~= nil then
+                        local arrow_offset = widget_style.arrow_icon.offset
+                        local arrow_size = widget_style.arrow_icon.size
+
+                        add_facing_outline_box(arrow_offset[1], arrow_offset[2], arrow_offset[1] + arrow_size[1],
+                            arrow_offset[2] + arrow_size[2])
+                    end
+
+                    if text_left ~= nil then
+                        add_facing_outline_box(text_left, text_top, text_right, text_bottom)
+                    end
+
+                    if second_text_left ~= nil then
+                        add_facing_outline_box(second_text_left, second_text_top, second_text_right,
+                            second_text_bottom)
+                    end
+
+                    draw_marker_facing_chevron(ui_renderer, draw_x + marker_size * 0.5, draw_y + marker_size * 0.5,
+                        bracket_z, bracket_size, bracket_color or visual and visual.color or nil, facing_x, facing_y)
+
+                    if marker_mark then
+                        marker_mark = profiler_accumulate(mod, "draw_marker_brackets", marker_mark)
+                    end
                 end
 
                 next_widget_index = next_widget_index + 1

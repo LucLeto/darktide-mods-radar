@@ -356,6 +356,80 @@ test("random targets land where the rule puts them", function()
     end
 end)
 
+--- Turns a heading onto the radar the way the HUD does, for the player facing `rot`.
+local function project_heading(harness, rot, heading_x, heading_y)
+    local forward_x, forward_y = harness.mod:radar_projection_forward(rot)
+
+    return harness.mod:project_heading_to_radar(forward_x, forward_y, heading_x, heading_y)
+end
+
+test("a heading turns with the view like the markers do", function()
+    local harness = new_harness()
+    local cases = {
+        { NORTH, 0, 1, 0, -1, "north while facing north is up" },
+        { NORTH, 1, 0, 1, 0, "east while facing north is right" },
+        { NORTH, 0, -1, 0, 1, "south while facing north is down" },
+        { NORTH, -1, 0, -1, 0, "west while facing north is left" },
+        { EAST, 1, 0, 0, -1, "east while facing east is up" },
+        { EAST, 0, 1, -1, 0, "north while facing east is left" },
+        { EAST, 0, -1, 1, 0, "south while facing east is right" },
+        { nil, 0, 1, 0, -1, "north without a direction is up" },
+        { nil, 1, 0, 1, 0, "east without a direction is right" },
+    }
+
+    for i = 1, #cases do
+        local case = cases[i]
+        local x, y = project_heading(harness, case[1], case[2], case[3])
+
+        assert_near(case[4], x, case[6] .. " x")
+        assert_near(case[5], y, case[6] .. " y")
+    end
+end)
+
+test("a heading points where its target would move on the radar", function()
+    local harness = new_harness()
+    local seed = 1729
+
+    local function random()
+        seed = (seed * 1103515245 + 12345) % 2147483648
+
+        return seed / 2147483648
+    end
+
+    local function spread(size)
+        return (random() * 2 - 1) * size
+    end
+
+    for i = 1, 2000 do
+        local rot = random() < 0.1 and nil or rotation(spread(1), spread(1), spread(1))
+        local angle = random() * math.pi * 2
+        local heading_x, heading_y = math.cos(angle), math.sin(angle)
+        local player = point(spread(500), spread(500))
+        local target = point(player.x + spread(10), player.y + spread(10))
+        local moved = point(target.x + heading_x * 2, target.y + heading_y * 2)
+        local px, py = harness:project(player, rot, target, true)
+        local moved_x, moved_y = harness:project(player, rot, moved, true)
+        local x, y = project_heading(harness, rot, heading_x, heading_y)
+        local dx, dy = moved_x - px, moved_y - py
+        local length = math.sqrt(dx * dx + dy * dy)
+
+        assert_near(1, math.sqrt(x * x + y * y), "case " .. i .. " is not a unit direction")
+        assert_near(dx / length, x, "case " .. i .. " x")
+        assert_near(dy / length, y, "case " .. i .. " y")
+    end
+end)
+
+test("without a usable heading there is no direction", function()
+    local harness = new_harness()
+
+    for _, case in ipairs({ { nil, 1 }, { 1, nil }, { 0 / 0, 1 }, { 1, math.huge }, { "1", 0 } }) do
+        local x, y = project_heading(harness, NORTH, case[1], case[2])
+
+        assert_nil(x, "a direction from an unusable heading")
+        assert_nil(y, "a direction from an unusable heading")
+    end
+end)
+
 local failures = {}
 
 for i = 1, #tests do

@@ -1453,6 +1453,42 @@ return function(env)
         return _safe_world_rotation(player_unit, 1)
     end
 
+    --- Returns the horizontal direction a teammate looks, or an enemy or Cyber Mastiff faces, normalised.
+    -- A teammate's comes from its first person rotation only, which the game syncs to every
+    -- client, bots included. Its body turns towards where it moves, so it is no stand-in. An
+    -- enemy or a mastiff has no look direction of its own, so its root rotation, the way it
+    -- faces, is used. Unlike `_safe_player_rotation` the local camera is never read.
+    -- param: unit teammate, Cyber Mastiff or enemy unit
+    -- ?string: kind marker kind
+    -- treturn: ?number x, nil without a readable direction
+    -- treturn: ?number y
+    function _safe_target_heading_xy(unit, kind)
+        if not _safe_unit_alive(unit) then
+            return nil, nil
+        end
+
+        if kind ~= "player_teammate" then
+            return _safe_forward_xy(_safe_world_rotation(unit, 1))
+        end
+
+        local script_unit = ScriptUnit
+        local has_extension = script_unit and script_unit.has_extension
+        local unit_data_extension = has_extension and has_extension(unit, "unit_data_system") or nil
+        local read_component = unit_data_extension and unit_data_extension.read_component
+
+        if not read_component then
+            return nil, nil
+        end
+
+        local ok_component, first_person_component = pcall(read_component, unit_data_extension, "first_person")
+
+        if not ok_component or not first_person_component then
+            return nil, nil
+        end
+
+        return _safe_forward_xy(first_person_component.rotation)
+    end
+
     -- ----------------------------------------------------------------------------
     -- Game mode and runtime state
     -- ----------------------------------------------------------------------------
