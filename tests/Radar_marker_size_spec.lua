@@ -5,7 +5,9 @@
 -- visual is the one the test gives it; the sizes follow from the radar size, the settings group
 -- and enemy category sliders, and the size limits of an item or of an enemy's category. A target
 -- with a heading gets a facing chevron after its marker, clear of the brackets, the coherency
--- frame, the vertical arrow and the texts its marker drew.
+-- frame, the vertical arrow and the texts its marker drew. A target that fades with its height
+-- draws its brackets, chevron and texts with that share of their opacity, from copies of the
+-- shared colours.
 
 local HUD_PATH = "Radar/scripts/mods/Radar/ui/Radar_hud_element.lua"
 local RADAR_X = 100
@@ -226,7 +228,7 @@ local function new_harness()
 
     local HudElementRadar = chunk()
     local draw_internal
-    local records, brackets, chevrons, outline
+    local records, brackets, chevrons, texts, outline
 
     for index = 1, 255 do
         local name, value = debug.getupvalue(HudElementRadar.draw, index)
@@ -255,8 +257,8 @@ local function new_harness()
         draw_radar_frame_background = noop,
         draw_radar_frame_foreground = noop,
         draw_box = noop,
-        draw_marker_brackets = function(_, x, y, _, size)
-            brackets[#brackets + 1] = { x = x, y = y, size = size }
+        draw_marker_brackets = function(_, x, y, _, size, color)
+            brackets[#brackets + 1] = { x = x, y = y, size = size, color = color, color_value = clone(color) }
         end,
         begin_facing_outline = function(radius)
             outline = { radius = radius, boxes = {} }
@@ -275,6 +277,7 @@ local function new_harness()
                 z = z,
                 size = size,
                 color = color,
+                color_value = clone(color),
                 direction_x = direction_x,
                 direction_y = direction_y,
             }
@@ -312,8 +315,10 @@ local function new_harness()
             }
         end
     end)
-    replace("_draw_marker_value_text", function(_, value_text)
+    replace("_draw_marker_value_text", function(_, value_text, _, _, _, _, _, _, _, _, _, alpha_scale)
         if value_text ~= nil then
+            texts[#texts + 1] = { box = value_text, alpha_scale = alpha_scale }
+
             return value_text[1], value_text[2], value_text[3], value_text[4]
         end
     end)
@@ -327,12 +332,13 @@ local function new_harness()
     end
 
     --- Draws one radar frame at time `t` and returns, per drawn target, what the loop handed to
-    -- its widget, every bracket drawn and every facing chevron with the outline it was given.
+    -- its widget, every bracket drawn, every facing chevron with the outline it was given and
+    -- every text drawn with the share of its opacity.
     function harness.draw(targets, t)
-        records, brackets, chevrons = {}, {}, {}
+        records, brackets, chevrons, texts = {}, {}, {}, {}
         draw_internal(element, {}, { player_position = { 0, 0, 0 }, targets = targets }, t, nil)
 
-        return records, brackets, chevrons
+        return records, brackets, chevrons, texts
     end
 
     --- Makes the next draw read the settings again, as a settings change does.
@@ -576,6 +582,59 @@ test("a target with a heading gets a facing chevron clear of everything its mark
 
     left, top, right, bottom = check(chevrons[5], records[6], ability, 0, 1, "enemy outlined by an ability")
     check_box(chevrons[5].outline.boxes[1], left, top, right, bottom, "outlined enemy brackets")
+end)
+
+test("a target that fades with its height draws its brackets, chevron and texts with that share", function()
+    local harness = new_harness()
+    local accent = { 180, 1, 2, 3 }
+    local ability = { 220, 9, 8, 7 }
+    local icon_color = { 255, 4, 5, 6 }
+    local function color_text(color)
+        return table.concat(color, ",")
+    end
+    local faded = target("enemy_poxwalker", {
+        size = 14,
+        accent_color = accent,
+        value_text = { 1, 2, 3, 4 },
+        secondary_value_text = { 5, 6, 7, 8 },
+    }, 20, 0)
+    local outlined = target("enemy_poxwalker", { size = 14, accent_color = accent }, -20, 0)
+    local unframed = target("enemy_poxwalker", { size = 14, color = icon_color }, 0, 20)
+    local level = target("enemy_poxwalker", { size = 14, accent_color = accent, value_text = { 9, 9, 9, 9 } }, 0, -20)
+
+    faded.elevation_alpha = 0.5
+    outlined.elevation_alpha = 0.675
+    unframed.elevation_alpha = 0.35
+    faded.heading_x, faded.heading_y = 0, -1
+    outlined.heading_x, outlined.heading_y = 1, 0
+    unframed.heading_x, unframed.heading_y = 1, 0
+    level.heading_x, level.heading_y = 0, 1
+    outlined.meta = { ability_outline_bracket_color = ability }
+
+    local _, brackets, chevrons, texts = harness.draw({ faded, outlined, unframed, level }, 10)
+
+    assert_equal(3, #brackets, "drawn brackets")
+    assert_equal(4, #chevrons, "drawn chevrons")
+
+    assert_equal("90,1,2,3", color_text(brackets[1].color_value), "faded brackets")
+    assert_equal("90,1,2,3", color_text(chevrons[1].color_value), "faded chevron")
+    assert_equal("149,9,8,7", color_text(brackets[2].color_value), "faded ability brackets")
+    assert_equal("149,9,8,7", color_text(chevrons[2].color_value), "faded ability chevron")
+    assert_equal("89,4,5,6", color_text(chevrons[3].color_value), "faded chevron in the icon colour")
+
+    -- At the player's height the shared colours are handed on as they are.
+    assert_equal(accent, brackets[3].color, "brackets at the player's height")
+    assert_equal(accent, chevrons[4].color, "chevron at the player's height")
+
+    -- Fading copies the colours; the shared ones keep their opacity.
+    assert_equal("180,1,2,3", color_text(accent), "the shared accent colour was changed")
+    assert_equal("220,9,8,7", color_text(ability), "the ability colour was changed")
+    assert_equal("255,4,5,6", color_text(icon_color), "the icon colour was changed")
+
+    assert_equal(3, #texts, "drawn texts")
+    assert_equal(0.5, texts[1].alpha_scale, "faded value text")
+    assert_equal(0.5, texts[2].alpha_scale, "faded second text")
+    assert_equal(nil, texts[3].alpha_scale, "value text at the player's height")
 end)
 
 test("a changed slider reaches the markers when the settings are read again", function()

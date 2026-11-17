@@ -1259,6 +1259,16 @@ local function _enemy_facing_checkbox(setting_id)
     }
 end
 
+--- Builds the elevation fade checkbox of a marker category, on by default.
+local function _elevation_fade_category_checkbox(setting_id)
+    return {
+        setting_id = setting_id,
+        tooltip = "elevation_fade_category_tooltip",
+        type = "checkbox",
+        default_value = true,
+    }
+end
+
 --- Maps a saved enemy setting (checkbox or dropdown value) to `icon_only`, `marked_icon` or `off`.
 local function _normalize_icon_marked_off_default(value, fallback)
     if value == false or value == "off" then
@@ -1702,6 +1712,36 @@ return {
                                     type = "checkbox",
                                     default_value = false,
                                 },
+                                {
+                                    setting_id = "elevation_fade_group",
+                                    type = "group",
+                                    sub_widgets = {
+                                        {
+                                            setting_id = "elevation_fade_start",
+                                            type = "numeric",
+                                            default_value = 2,
+                                            range = { 0, 50 },
+                                            decimals_number = 0,
+                                            step_size_value = 1,
+                                        },
+                                        {
+                                            setting_id = "elevation_fade_end",
+                                            type = "numeric",
+                                            default_value = 8,
+                                            range = { 0, 50 },
+                                            decimals_number = 0,
+                                            step_size_value = 1,
+                                        },
+                                        {
+                                            setting_id = "elevation_fade_min_percent",
+                                            type = "numeric",
+                                            default_value = 35,
+                                            range = { 0, 100 },
+                                            decimals_number = 0,
+                                            step_size_value = 5,
+                                        },
+                                    },
+                                },
                             },
                         },
                         {
@@ -2003,6 +2043,7 @@ return {
                                 _icon_scale_slider("common_pickups_icon_scale", nil),
                                 _nearby_highlight_mode_dropdown("nearby_highlight_common_pickups"),
                                 _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_common_pickups"),
+                                _elevation_fade_category_checkbox("elevation_fade_common_pickups"),
                                 _artwork_icon_off_dropdown("show_crates"),
                                 {
                                     setting_id = "show_ammo_small",
@@ -2058,6 +2099,7 @@ return {
                                 _icon_scale_slider("materials_icon_scale", nil),
                                 _nearby_highlight_mode_dropdown("nearby_highlight_materials"),
                                 _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_materials"),
+                                _elevation_fade_category_checkbox("elevation_fade_materials"),
                                 _artwork_icon_off_dropdown("show_diamantine"),
                                 _artwork_icon_off_dropdown("show_plasteel"),
                             },
@@ -2069,6 +2111,7 @@ return {
                                 _icon_scale_slider("environment_icon_scale", nil),
                                 _nearby_highlight_mode_dropdown("nearby_highlight_environment"),
                                 _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_environment"),
+                                _elevation_fade_category_checkbox("elevation_fade_environment"),
                                 _icon_distance_off_dropdown("show_explosive_barrels", "icon_only"),
                                 _icon_distance_off_dropdown("show_fire_barrels", "icon_only"),
                                 {
@@ -2102,6 +2145,7 @@ return {
                                 _icon_scale_slider("deployables_icon_scale"),
                                 _nearby_highlight_mode_dropdown("nearby_highlight_deployables"),
                                 _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_deployables"),
+                                _elevation_fade_category_checkbox("elevation_fade_deployables"),
                                 {
                                     setting_id = "show_ammo_crate_deployable",
                                     type = "checkbox",
@@ -2141,6 +2185,7 @@ return {
                                 _nearby_highlight_mode_dropdown("nearby_highlight_mission_objective"),
                                 _nearby_highlight_radar_distance_text_checkbox(
                                     "nearby_highlight_distance_text_mission_objective"),
+                                _elevation_fade_category_checkbox("elevation_fade_mission_objective"),
                                 _icon_distance_off_dropdown("show_mission_objective_scanner", "icon_only"),
                                 _icon_distance_off_dropdown("show_mission_objective_hacking", "icon_only"),
                                 _icon_distance_off_dropdown("show_mission_objective_servo_skull", "icon_only"),
@@ -2157,6 +2202,7 @@ return {
                                 _nearby_highlight_mode_dropdown("nearby_highlight_primary_objective"),
                                 _nearby_highlight_radar_distance_text_checkbox(
                                     "nearby_highlight_distance_text_primary_objective"),
+                                _elevation_fade_category_checkbox("elevation_fade_primary_objective"),
                                 {
                                     setting_id = "show_power_cell_teal",
                                     type = "checkbox",
@@ -2207,6 +2253,7 @@ return {
                                 _nearby_highlight_mode_dropdown("nearby_highlight_secondary_objective"),
                                 _nearby_highlight_radar_distance_text_checkbox(
                                     "nearby_highlight_distance_text_secondary_objective"),
+                                _elevation_fade_category_checkbox("elevation_fade_secondary_objective"),
                                 {
                                     setting_id = "show_pocketable_grimoire",
                                     type = "checkbox",
@@ -2226,6 +2273,7 @@ return {
                                 _icon_scale_slider("martyr_s_skull_icon_scale", nil),
                                 _nearby_highlight_mode_dropdown("nearby_highlight_martyr_s_skull"),
                                 _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_martyr_s_skull"),
+                                _elevation_fade_category_checkbox("elevation_fade_martyr_s_skull"),
                                 {
                                     setting_id = "show_martyr_skull",
                                     type = "checkbox",
@@ -2250,6 +2298,7 @@ return {
                                 _icon_scale_slider("event_icon_scale", nil),
                                 _nearby_highlight_mode_dropdown("nearby_highlight_event"),
                                 _nearby_highlight_radar_distance_text_checkbox("nearby_highlight_distance_text_event"),
+                                _elevation_fade_category_checkbox("elevation_fade_event"),
                                 _artwork_icon_off_dropdown("show_tainted_skull", "artwork"),
                                 {
                                     setting_id = "show_dark_rites_totem",
@@ -2288,6 +2337,7 @@ return {
                                     type = "checkbox",
                                     default_value = true,
                                 },
+                                _elevation_fade_category_checkbox("elevation_fade_expeditions_location"),
                                 _expedition_marker_display_mode_dropdown(
                                     "show_expedition_objective_opportunity",
                                     "icon_distance"),
@@ -2350,6 +2400,7 @@ return {
                                         _nearby_highlight_mode_dropdown("nearby_highlight_expeditions_specific"),
                                         _nearby_highlight_radar_distance_text_checkbox(
                                             "nearby_highlight_distance_text_expeditions_specific"),
+                                        _elevation_fade_category_checkbox("elevation_fade_expeditions_specific"),
                                         _artwork_icon_off_dropdown("show_expeditions_currency"),
                                         {
                                             setting_id = "show_data_reliquaries",
@@ -2460,6 +2511,7 @@ return {
                                 },
                                 _enemy_vertical_arrows_checkbox("show_enemy_boss_vertical_arrows"),
                                 _enemy_facing_checkbox("show_enemy_boss_facing"),
+                                _elevation_fade_category_checkbox("elevation_fade_enemy_boss"),
                             },
                         },
                         {
@@ -2475,6 +2527,7 @@ return {
                                 },
                                 _enemy_vertical_arrows_checkbox("show_enemy_horde_vertical_arrows"),
                                 _enemy_facing_checkbox("show_enemy_horde_facing"),
+                                _elevation_fade_category_checkbox("elevation_fade_enemy_horde"),
                             },
                         },
                         {
@@ -2488,12 +2541,14 @@ return {
                                 _icon_marked_off_dropdown("show_enemy_renegade_vanguard", common_enemy_display_default),
                                 _enemy_vertical_arrows_checkbox("show_enemy_common_vertical_arrows"),
                                 _enemy_facing_checkbox("show_enemy_common_facing"),
+                                _elevation_fade_category_checkbox("elevation_fade_enemy_common"),
                                 _icon_scale_slider("enemy_shooter_icon_scale", "enemy_shooter_icon_scale"),
                                 _icon_marked_off_dropdown("show_enemy_cultist_assault", shooter_enemy_display_default),
                                 _icon_marked_off_dropdown("show_enemy_renegade_assault", shooter_enemy_display_default),
                                 _icon_marked_off_dropdown("show_enemy_renegade_rifleman", shooter_enemy_display_default),
                                 _enemy_vertical_arrows_checkbox("show_enemy_shooter_vertical_arrows"),
                                 _enemy_facing_checkbox("show_enemy_shooter_facing"),
+                                _elevation_fade_category_checkbox("elevation_fade_enemy_shooter"),
                             },
                         },
                         {
@@ -2514,6 +2569,7 @@ return {
                                 _icon_marked_off_dropdown("show_enemy_chaos_ogryn_gunner", "icon_only"),
                                 _enemy_vertical_arrows_checkbox("show_enemy_elite_vertical_arrows"),
                                 _enemy_facing_checkbox("show_enemy_elite_facing"),
+                                _elevation_fade_category_checkbox("elevation_fade_enemy_elite"),
                             },
                         },
                         {
@@ -2533,6 +2589,7 @@ return {
                                 _icon_marked_off_dropdown("show_enemy_renegade_netgunner", "marked_icon"),
                                 _enemy_vertical_arrows_checkbox("show_enemy_special_vertical_arrows"),
                                 _enemy_facing_checkbox("show_enemy_special_facing"),
+                                _elevation_fade_category_checkbox("elevation_fade_enemy_special"),
                             },
                         },
                         {
@@ -2543,6 +2600,7 @@ return {
                                 _icon_marked_off_dropdown("show_enemy_cultist_ritualist", "icon_only"),
                                 _enemy_vertical_arrows_checkbox("show_enemy_misc_vertical_arrows"),
                                 _enemy_facing_checkbox("show_enemy_misc_facing"),
+                                _elevation_fade_category_checkbox("elevation_fade_enemy_misc"),
                             },
                         },
                     },
@@ -2588,6 +2646,7 @@ return {
                                             type = "checkbox",
                                             default_value = true,
                                         },
+                                        _elevation_fade_category_checkbox("elevation_fade_teammates"),
                                         {
                                             setting_id = "player_marker_range_mode",
                                             type = "dropdown",
@@ -2612,6 +2671,7 @@ return {
                             type = "group",
                             sub_widgets = {
                                 _icon_scale_slider("player_companions_icon_scale", nil),
+                                _elevation_fade_category_checkbox("elevation_fade_player_companions"),
                                 {
                                     setting_id = "show_cyber_mastiff",
                                     type = "checkbox",
@@ -2668,6 +2728,7 @@ return {
                                                 },
                                             },
                                         },
+                                        _elevation_fade_category_checkbox("elevation_fade_player_tags"),
                                     },
                                 },
                             },
@@ -2680,6 +2741,7 @@ return {
                     type = "group",
                     sub_widgets = {
                         _icon_scale_slider("respawn_icon_scale", nil),
+                        _elevation_fade_category_checkbox("elevation_fade_respawn"),
                         _icon_distance_off_dropdown("show_respawn_active", "icon_distance"),
                         _respawn_runback_dropdown(),
                         _icon_distance_off_dropdown("show_respawn_practice_beacon", "off"),
@@ -2697,6 +2759,7 @@ return {
                     type = "group",
                     sub_widgets = {
                         _icon_scale_slider("saferoute_icon_scale", nil),
+                        _elevation_fade_category_checkbox("elevation_fade_saferoute"),
                         _icon_distance_off_dropdown("show_saferoute_safe", "icon_only"),
                         _icon_distance_off_dropdown("show_saferoute_wrong", "icon_only"),
                     },
