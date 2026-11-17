@@ -161,6 +161,13 @@ Markers on another floor fade with their height difference from you, so the mark
 | 5 m | 67.5 % |
 | 8 m and more | 35 % |
 
+<p>
+  <img src="doc/img/radar_elevation_fade_off.png" width="49%" alt="Radar with elevation fading off: markers on the ring structure above the player as bright as those on the player's floor" />
+  <img src="doc/img/radar_elevation_fade_on.png" width="49%" alt="The same view with the default elevation fading: markers on the ring structure above the player dimmed" />
+</p>
+
+Left: **Minimum elevation opacity** at 100 %, so nothing fades. Right: the same spot with the defaults. The enemies and items on the ring structure above you dim, while the ones on your floor and your teammates stay as they were.
+
 The opacity kept multiplies each color's own opacity, so a color you made partly transparent keeps its proportions and a fully transparent layer stays invisible. Everything that belongs to the marker fades together: its icon, artwork or glyph, backplate and overlays, the teammate coherency backplate, frame and flash, the healing radius ring, the Expedition player-marked ring, the brackets, the facing arrow, the vertical arrow, and its value and distance texts. Ability outline colors keep their precedence and fade the same way. Nearby highlights and outlines in the world, the map geometry, the radar frame and guides, and your own center dot keep their own presentation.
 
 Fading only changes how opaque a marker is. Whether a marker is drawn at all is still decided by its own settings, the radar range, the tag filters, the marker limit and **Hide vertical markers above/below (m)**, including their exemptions: a marker that is hidden stays hidden, and a marker exempt from hiding, such as a mission objective, a respawn marker or a target with **Infinite** range, still fades when its category does. Switching a category's fading off does not switch its height hiding off. Every category fades whether or not it shows vertical arrows, on the normal radar and in the centered overview, on every radar style, and also when it is pinned to the radar's edge. A target whose height cannot be read keeps its configured opacity.
