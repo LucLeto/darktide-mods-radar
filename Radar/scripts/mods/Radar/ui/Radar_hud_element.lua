@@ -3837,10 +3837,12 @@ end
 -- heading, a facing chevron), the overview legends, the zoom indicator and the screen
 -- highlights, and finally clears the widgets left over from the previous frame. The chevron
 -- comes last, so it can keep clear of everything its marker drew; the brackets, the coherency
--- frame, the vertical arrow and the texts. While profiling, each of those steps is timed
--- through `mod:radar_profiler_lap`; the frame and the map geometry are timed apart, and each
--- marker's projection, visual, brackets and chevron, widget update, widget draw and texts are
--- added up over all markers through `mod:radar_profiler_accumulate`.
+-- frame, the vertical arrow and the texts. When the snapshot's Radar player revision changes,
+-- every unit's coherency state starts over, so a new source never flashes a change. While
+-- profiling, each of those steps is timed through `mod:radar_profiler_lap`; the frame and the
+-- map geometry are timed apart, and each marker's projection, visual, brackets and chevron,
+-- widget update, widget draw and texts are added up over all markers through
+-- `mod:radar_profiler_accumulate`.
 -- tab: self HUD element
 -- tab: ui_renderer active UI renderer
 -- ?tab: snapshot radar snapshot
@@ -3854,10 +3856,12 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
     local cache_refresh_t = profile_mark and _draw_cache.next_refresh_t
     local draw_cache = _build_draw_cache(t)
     local coherency_state_by_unit = self._radar_coherency_state_by_unit
+    local player_revision = snapshot and snapshot.player_revision
 
-    if coherency_state_by_unit == nil then
+    if coherency_state_by_unit == nil or self._radar_coherency_player_revision ~= player_revision then
         coherency_state_by_unit = {}
         self._radar_coherency_state_by_unit = coherency_state_by_unit
+        self._radar_coherency_player_revision = player_revision
     end
 
     draw_cache.coherency_state_by_unit = coherency_state_by_unit
@@ -3916,7 +3920,7 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
                 projection_radius, range, projection_rotation, radar_style, t)
         else
             RadarNavmesh.draw(ui_renderer, t, snapshot and snapshot.player_position, projection_rotation,
-                center_x, center_y, projection_radius, range, z + 2)
+                center_x, center_y, projection_radius, range, z + 2, player_revision)
         end
 
         if profile_mark then

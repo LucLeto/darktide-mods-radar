@@ -203,9 +203,26 @@ local function new_harness(options)
 
     env._table_size = table_size
 
+    local radar_player = {
+        unit = { name = "player" },
+        position = { x = 0, y = 0, z = 0 },
+        mode = "local",
+        usable = true,
+        reason = "ok",
+        revision = 1,
+    }
+
     env._get_runtime_state = function()
-        return true, "ok", state.gameplay_t, "cm_habs", "mission", "adventure", { name = "player" },
-            { x = 0, y = 0, z = 0 }
+        return true, "ok", state.gameplay_t, "cm_habs", "mission", "adventure", radar_player.unit,
+            radar_player.position
+    end
+
+    env._radar_player = function()
+        return radar_player
+    end
+
+    env._cluster_expedition_loot_targets = function(targets)
+        return targets
     end
 
     -- Every other shared function belongs to a module this harness does not install. The update

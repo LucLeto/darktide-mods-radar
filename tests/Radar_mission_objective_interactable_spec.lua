@@ -236,8 +236,17 @@ local function new_harness()
         }
     end
 
-    env._player_unit = function()
-        return player_unit
+    local radar_player = {
+        unit = player_unit,
+        position = player_unit.position,
+        mode = "local",
+        usable = true,
+        reason = "ok",
+        revision = 1,
+    }
+
+    env._radar_player = function()
+        return radar_player
     end
 
     env._safe_unit_alive = function(unit)

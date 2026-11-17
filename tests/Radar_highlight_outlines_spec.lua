@@ -1136,8 +1136,8 @@ test("a group set to outlines outlines its units, and a target without a unit ke
     end
     env.NEARBY_HIGHLIGHT_EXCLUDED_KINDS = {}
     env.NEARBY_OUTLINE_OCCLUDED_MULTIPLIER = 0.6
-    env._player_unit = function()
-        return player
+    env._radar_player = function()
+        return { unit = player, position = player.position, mode = "local", usable = true, reason = "ok", revision = 1 }
     end
     env._safe_unit_position = function(unit)
         return unit and unit.position or nil

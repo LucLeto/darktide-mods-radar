@@ -1,10 +1,11 @@
 --- Teammates, player companions, player smart tags and ability-marked enemies.
--- Tracks the other players with their archetype, rescue/captured/luggable state and
--- coherency with the local player, the companions every player owns (cyber mastiff and
--- servo skull, with what they are doing, and whether a mastiff counts towards the local
--- player's coherency), and the location tags players place. It also
--- reads which enemies a player tagged and which ones an ability of the local player
--- outlines, and whether a player carries a luggable.
+-- Tracks every player but the Radar player (the local player, or the teammate the local
+-- player spectates) with their archetype, rescue/captured/luggable state and coherency with
+-- the Radar player, the companions every player owns (cyber mastiff and servo skull, with
+-- what they are doing, and whether a mastiff counts towards the Radar player's coherency),
+-- and the location tags players place. It also reads which enemies a player tagged and which
+-- ones an ability outlines in the Radar player's context, and whether a player carries a
+-- luggable. Who tagged a target and who owns a companion stay the actual players'.
 --
 -- Installer module, installed as the first feature module into Radar's shared runtime
 -- environment (see `Radar.lua`). Contributes `_refresh_player_units` and
@@ -56,7 +57,7 @@ return function(env)
     --- Ability outlines Radar recognises on enemies, with fallback bracket colours and priorities.
     -- The game's own outline settings take precedence when they carry a colour or priority.
     -- `special_target` has no colour of its own; it borrows the Executioner's Stance colour
-    -- and only counts while the local player is in that stance.
+    -- and only counts while the Radar player is in that stance.
     local ABILITY_OUTLINE_BRACKET_ALPHA = 220
     local SUPPORTED_ABILITY_OUTLINE_CONFIG_BY_NAME = {
         psyker_marked_target = {
@@ -182,7 +183,8 @@ return function(env)
         return SUPPORTED_ABILITY_OUTLINE_CONFIG_BY_NAME[tostring(outline_name)]
     end
 
-    --- Returns why the local player sees special target outlines, currently only the Veteran's Executioner's Stance.
+    --- Returns why the Radar player sees special target outlines, currently only the Veteran's Executioner's Stance.
+    -- The game syncs no stance keyword to a teammate's unit, so a spectated Veteran gives none.
     -- treturn: ?string
     local function _special_target_local_context(player_unit)
         if not _safe_unit_alive(player_unit) then
@@ -196,9 +198,9 @@ return function(env)
         return nil
     end
 
-    --- Returns the bracket colour of a special target outline in the local player's current context.
+    --- Returns the bracket colour of a special target outline in the Radar player's current context.
     local function _special_target_fallback_bracket_color()
-        local player_unit = _player_unit()
+        local player_unit = _radar_player().unit
         local local_context = _special_target_local_context(player_unit)
 
         if local_context == "veteran_executioners_stance" then
@@ -328,11 +330,12 @@ return function(env)
     end
 
     --- Reads the supported ability outlines currently on a unit.
+    -- A special target outline only counts in the Radar player's Executioner's Stance.
     -- treturn: ?tab names of the supported outlines, nil when there are none
     -- treturn: ?tab bracket colour of the highest priority outline that has one
     -- treturn: ?string name of the highest priority outline
     -- treturn: ?number its priority
-    local function _supported_ability_outline_state_for_unit(unit, outline_extension_map, local_player_unit)
+    local function _supported_ability_outline_state_for_unit(unit, outline_extension_map, radar_player_unit)
         local outline_extension = _safe_unit_outline_extension(unit, outline_extension_map)
 
         if type(outline_extension) ~= "table" then
@@ -351,7 +354,7 @@ return function(env)
         local primary_outline_name = nil
         local primary_outline_priority = -math_huge
         local bracket_outline_priority = -math_huge
-        local special_target_allowed = _special_target_local_context(local_player_unit) ~= nil
+        local special_target_allowed = _special_target_local_context(radar_player_unit) ~= nil
 
         for i = 1, #outlines do
             local outline = outlines[i]
@@ -395,23 +398,23 @@ return function(env)
 
     --- Returns whether and how an enemy is marked by an ability for the "ability-marked enemies" option.
     -- Supported ability outlines count for everyone; the Ogryn's taunt counts only while the
-    -- local player has the taunt shout equipped, since it leaves no outline.
+    -- Radar player has the taunt shout equipped, since it leaves no outline.
     -- param: unit enemy unit
     -- ?tab: outline_extension_map outline data by unit
-    -- param: local_player_unit local player unit
-    -- ?string: local_combat_ability_name local player's combat ability name
+    -- param: radar_player_unit the Radar player's unit
+    -- ?string: radar_combat_ability_name the Radar player's combat ability name
     -- treturn: ?tab marker names, nil when the enemy is not marked
     -- treturn: ?tab bracket colour
     -- treturn: ?string primary marker name
     -- treturn: ?number primary marker priority
-    function _supported_ability_marker_state_for_unit(unit, outline_extension_map, local_player_unit, local_combat_ability_name)
-        local marker_names, bracket_color, primary_marker_name, primary_marker_priority = _supported_ability_outline_state_for_unit(unit, outline_extension_map, local_player_unit)
+    function _supported_ability_marker_state_for_unit(unit, outline_extension_map, radar_player_unit, radar_combat_ability_name)
+        local marker_names, bracket_color, primary_marker_name, primary_marker_priority = _supported_ability_outline_state_for_unit(unit, outline_extension_map, radar_player_unit)
 
         if marker_names ~= nil then
             return marker_names, bracket_color, primary_marker_name, primary_marker_priority
         end
 
-        if local_combat_ability_name == OGRYN_TAUNT_SHOUT_ABILITY_NAME
+        if radar_combat_ability_name == OGRYN_TAUNT_SHOUT_ABILITY_NAME
             and _unit_has_supported_ogryn_taunt_marker(unit) then
             return { OGRYN_TAUNT_SHOUT_ABILITY_NAME }, nil, OGRYN_TAUNT_SHOUT_ABILITY_NAME, 0
         end
@@ -584,7 +587,7 @@ return function(env)
 
     --- Returns whether a player is carrying a luggable.
     -- True while the luggable slot is wielded with something equipped in it. The one reading
-    -- used for both the teammates' state and the local player.
+    -- used for both the teammates' state and the Radar player.
     -- param: unit player unit
     -- func: has_extension `ScriptUnit.has_extension`
     -- treturn: bool
@@ -643,17 +646,17 @@ return function(env)
         return nil
     end
 
-    --- Returns whether the team panel would show a teammate in coherency with the local player.
-    -- Follows the panel's own rule; the teammate's coherency extension lists a unit the local
+    --- Returns whether the team panel would show a teammate in coherency with the Radar player.
+    -- Follows the panel's own rule; the teammate's coherency extension lists a unit the Radar
     -- player owns (their player unit or their companion), while the teammate is alive, not
     -- hogtied and has unit data. Anything that cannot be read counts as out of coherency.
     -- param: unit teammate unit
     -- ?tab: unit_data_extension the teammate's unit data extension
     -- func: has_extension `ScriptUnit.has_extension`
-    -- tab: local_player local player
+    -- tab: reference_player the Radar player's player
     -- tab: player_unit_spawn `Managers.state.player_unit_spawn`
     -- treturn: bool
-    local function _player_in_coherency_with_local_player(unit, unit_data_extension, has_extension, local_player,
+    local function _player_in_coherency_with_radar_player(unit, unit_data_extension, has_extension, reference_player,
                                                           player_unit_spawn)
         if not unit_data_extension or _safe_health_alive(unit) ~= true then
             return false
@@ -682,7 +685,7 @@ return function(env)
         for coherency_unit in pairs(in_coherence_units) do
             local ok_owner, owner = pcall(owner_fn, player_unit_spawn, coherency_unit)
 
-            if ok_owner and owner == local_player then
+            if ok_owner and owner == reference_player then
                 return true
             end
         end
@@ -690,18 +693,19 @@ return function(env)
         return false
     end
 
-    --- Returns whether a cyber mastiff counts towards the local player's coherency.
+    --- Returns whether a cyber mastiff counts towards the Radar player's coherency.
     -- Only the mastiff of a player with the Part of the Squad aura, which carries the
     -- `adamant_dog_counts_towards_coherency` special rule, joins coherency at all, so any other
-    -- mastiff returns nil. The game lists a mastiff among the units in coherency with the local
-    -- player while it is chained to them; a list that cannot be read counts as out of coherency.
+    -- mastiff returns nil. The game lists a mastiff among the units in coherency with a player
+    -- while it is chained to them, on a spectated teammate's unit as on the local player's; a
+    -- list that cannot be read counts as out of coherency.
     -- param: owner_unit player unit of the mastiff's owner
     -- param: mastiff_unit mastiff unit
     -- func: has_extension `ScriptUnit.has_extension`
-    -- ?tab: local_coherence_units units in coherency with the local player
+    -- ?tab: reference_coherence_units units in coherency with the Radar player
     -- treturn: ?bool
-    local function _mastiff_in_coherency_with_local_player(owner_unit, mastiff_unit, has_extension,
-                                                           local_coherence_units)
+    local function _mastiff_in_coherency_with_radar_player(owner_unit, mastiff_unit, has_extension,
+                                                           reference_coherence_units)
         local talent_extension = has_extension(owner_unit, "talent_system")
         local has_special_rule_fn = talent_extension and talent_extension.has_special_rule
 
@@ -715,18 +719,20 @@ return function(env)
             return nil
         end
 
-        return local_coherence_units ~= nil and local_coherence_units[mastiff_unit] ~= nil
+        return reference_coherence_units ~= nil and reference_coherence_units[mastiff_unit] ~= nil
     end
 
     -- ----------------------------------------------------------------------------
     -- Player and companion scan
     -- ----------------------------------------------------------------------------
 
-    --- Tracks the other players and every player's companions.
-    -- Teammates are tracked with name, slot, archetype, state and whether they are in coherency
-    -- with the local player (nil while the coherency annotation is off or teammates are hidden);
+    --- Tracks every player but the Radar player, and every player's companions.
+    -- The Radar player is the centre of the radar, so it gets no teammate marker; while the
+    -- local player spectates, the local player is a teammate like any other. Teammates are
+    -- tracked with name, slot, archetype, state and whether they are in coherency with the
+    -- Radar player (nil while the coherency annotation is off or teammates are hidden);
     -- companions with their owner, whether a servo skull is following its owner, its talent role
-    -- and what it is doing, and whether a mastiff counts towards the local player's coherency
+    -- and what it is doing, and whether a mastiff counts towards the Radar player's coherency
     -- (nil while mastiff coherency is off or its owner lacks the aura).
     -- Mastiffs pinning a target are collected for `_mastiff_disabled_enemy_units`. A player
     -- whose unit changed or who left has the old unit removed.
@@ -739,7 +745,8 @@ return function(env)
             return
         end
 
-        local local_player = _local_player()
+        local reference = _radar_player()
+        local reference_player = reference.player
         local players = player_manager:players()
         local script_unit = ScriptUnit
         local has_extension = script_unit and script_unit.has_extension
@@ -748,7 +755,7 @@ return function(env)
         local show_players = mod:get_show_players()
         local scan_player_states = mod:get("show_player_state_icons") ~= false
             and show_players
-        local scan_player_coherency = local_player ~= nil
+        local scan_player_coherency = reference_player ~= nil
             and show_players
             and mod:get("show_player_coherency_annotation") ~= false
         local state = Managers and Managers.state
@@ -756,23 +763,24 @@ return function(env)
         local show_cyber_mastiff = mod:get("show_cyber_mastiff") ~= false
         local scan_player_companions = show_cyber_mastiff
             or mod:get("show_servo_skulls") ~= false
-        local scan_mastiff_coherency = local_player ~= nil
+        local scan_mastiff_coherency = reference_player ~= nil
             and show_cyber_mastiff
             and has_extension ~= nil
             and mod:get("show_cyber_mastiff_coherency") ~= false
-        local local_coherence_units = nil
+        local reference_coherence_units = nil
 
         if scan_mastiff_coherency then
-            local local_unit = local_player.player_unit
-            local local_coherency_extension = local_unit and _safe_unit_alive(local_unit)
-                and has_extension(local_unit, "coherency_system") or nil
-            local in_coherence_units_fn = local_coherency_extension and local_coherency_extension.in_coherence_units
+            local reference_unit = reference.unit
+            local reference_coherency_extension = reference_unit and _safe_unit_alive(reference_unit)
+                and has_extension(reference_unit, "coherency_system") or nil
+            local in_coherence_units_fn = reference_coherency_extension
+                and reference_coherency_extension.in_coherence_units
 
             if in_coherence_units_fn then
-                local ok_units, units = pcall(in_coherence_units_fn, local_coherency_extension)
+                local ok_units, units = pcall(in_coherence_units_fn, reference_coherency_extension)
 
                 if ok_units and type(units) == "table" then
-                    local_coherence_units = units
+                    reference_coherence_units = units
                 end
             end
         end
@@ -784,11 +792,11 @@ return function(env)
             local unit = player.player_unit
             local unit_alive = unit and _safe_unit_alive(unit)
             local player_radar_state = unit_alive
-                and player ~= local_player
+                and player ~= reference_player
                 and scan_player_states
                 and _player_radar_state(unit, has_extension) or nil
 
-            if player ~= local_player then
+            if player ~= reference_player then
                 seen_radar_players[player] = true
 
                 if unit_alive then
@@ -806,7 +814,7 @@ return function(env)
                 local player_slot = _safe_player_slot(player)
                 local owner_marker_visible
 
-                if player == local_player then
+                if player == reference_player then
                     owner_marker_visible = mod:get_show_player_center_dot()
                 else
                     owner_marker_visible = mod:get_show_players()
@@ -873,8 +881,8 @@ return function(env)
                                 end
                             elseif companion_kind == "player_companion_dog" then
                                 if scan_mastiff_coherency then
-                                    companion_in_coherency = _mastiff_in_coherency_with_local_player(unit, owned_unit,
-                                        has_extension, local_coherence_units)
+                                    companion_in_coherency = _mastiff_in_coherency_with_radar_player(unit, owned_unit,
+                                        has_extension, reference_coherence_units)
                                 end
 
                                 companion_action_target, companion_pounce_active =
@@ -914,7 +922,7 @@ return function(env)
                 end
             end
 
-            if unit_alive and player ~= local_player then
+            if unit_alive and player ~= reference_player then
                 local archetype_name = nil
                 local player_name = nil
                 local player_slot = _safe_player_slot(player)
@@ -941,8 +949,8 @@ return function(env)
 
                 if scan_player_coherency then
                     player_in_coherency = player_unit_spawn ~= nil
-                        and _player_in_coherency_with_local_player(unit, unit_data_extension, has_extension,
-                            local_player, player_unit_spawn)
+                        and _player_in_coherency_with_radar_player(unit, unit_data_extension, has_extension,
+                            reference_player, player_unit_spawn)
                 end
 
                 _track_unit(unit, "player_teammate", "player_manager", {
@@ -1172,7 +1180,7 @@ return function(env)
         return value ~= false and value ~= "off"
     end
 
-    --- Returns whether the local player's centre dot is drawn.
+    --- Returns whether the centre dot, the Radar player's own marker, is drawn.
     -- treturn: bool
     function mod:get_show_player_center_dot()
         local value = self:get("show_player_center_dot")
