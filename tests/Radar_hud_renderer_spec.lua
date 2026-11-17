@@ -2,7 +2,8 @@
 -- and the view guides with as few rectangles as it can; this spec draws the same shapes pixel by
 -- pixel with the reference algorithms (one span per row, the midpoint circle, Bresenham's line)
 -- and checks that both cover the same screen pixels with the same colours, the same number of
--- times, at several sizes, UI scales and draw phases.
+-- times, at several sizes, UI scales and draw phases. The view guides' cone comes from the fake
+-- mod's camera field of view, or spans 90 degrees without one.
 
 local RENDERER_PATH = "Radar/scripts/mods/Radar/ui/Radar_hud_renderer.lua"
 local START_LAYER = 100
@@ -33,7 +34,9 @@ local GUI_RENDER_PASS_LAYER = 16
 
 --- Loads the renderer with a recording `Gui.rect` and `Gui2.bitmap_3d` and the given style settings.
 -- Each `Gui2.bitmap_3d` call is recorded with its transform taken apart: `Rotation2D` gives the
--- angle, origin and pivot, `Rotation2D.translate` the unscaled position and the scale.
+-- angle, origin and pivot, `Rotation2D.translate` the unscaled position and the scale. The camera
+-- has the vertical field of view `settings.vertical_fov`, none when it is nil, and the screen the
+-- `RESOLUTION_LOOKUP` table `settings.resolution`.
 local function load_renderer(settings)
     local recorded = {}
     local textures = {}
@@ -55,10 +58,15 @@ local function load_renderer(settings)
         return settings.radar_style
     end
 
+    function mod:get_hud_player_vertical_fov()
+        return settings.vertical_fov
+    end
+
     local env = setmetatable({
         get_mod = function()
             return mod
         end,
+        RESOLUTION_LOOKUP = settings.resolution,
         require = function()
             return { draw = function() end }
         end,
@@ -244,6 +252,23 @@ local BACKGROUND = make_color(90, 0, 0, 0)
 local OUTLINE = make_color(255, 213, 226, 206)
 local GUIDES = make_color(90, 255, 255, 255)
 
+--- The view guides' half angle; half the camera's horizontal field of view, worked out from its
+-- vertical one and the screen's aspect ratio (16:9 without a screen) and kept within 15 to 85
+-- degrees, or half of 90 degrees without a camera.
+local function reference_half_angle(settings)
+    local vertical_fov = settings.vertical_fov
+
+    if not vertical_fov then
+        return math.rad(45)
+    end
+
+    local resolution = settings.resolution
+    local aspect_ratio = resolution and resolution.width / resolution.height or 16 / 9
+    local half_angle = math.atan(math.tan(vertical_fov * 0.5) * aspect_ratio)
+
+    return math.max(math.rad(15), math.min(math.rad(85), half_angle))
+end
+
 --- The circle frame as the renderer composes it, drawn with the reference shapes.
 local function reference_frame(settings, size, scale, x, y, phase)
     local out = {}
@@ -267,7 +292,7 @@ local function reference_frame(settings, size, scale, x, y, phase)
         end
 
         if settings.radar_guides == "view_guides" then
-            local half_angle = math.rad(45)
+            local half_angle = reference_half_angle(settings)
             local reach = radius - 1
 
             ref_line(out, cx, cy, cx + math.sin(-half_angle) * reach, cy - math.cos(-half_angle) * reach, 2, GUIDES, scale)
@@ -395,27 +420,15 @@ test("the circle background takes far fewer rectangles than pixels or rows", fun
 end)
 
 test("a nearly horizontal guide line is drawn as runs, not pixels", function()
-    local settings = { radar_style = "circle", radar_outline = "off", radar_guides = "view_guides" }
+    -- A 160 degree field of view gives an 80 degree half angle, so both guide lines run nearly flat.
+    local settings = {
+        radar_style = "circle",
+        radar_outline = "off",
+        radar_guides = "view_guides",
+        vertical_fov = 2 * math.atan(math.tan(math.rad(160) * 0.5) / (16 / 9)),
+    }
     local renderer, recorded = load_renderer(settings)
     local ui_renderer = { gui = {}, scale = 1, render_settings = { start_layer = START_LAYER } }
-
-    -- A 160 degree field of view gives an 80 degree half angle, so both guide lines run nearly flat.
-    local env = getfenv(renderer.draw_radar_frame)
-
-    env.Managers = {
-        state = {
-            player = {
-                local_player = function()
-                    return { viewport_name = "player1" }
-                end,
-            },
-            camera = {
-                fov = function()
-                    return 2 * math.atan(math.tan(math.rad(160) * 0.5) / (16 / 9))
-                end,
-            },
-        },
-    }
 
     renderer.draw_radar_frame_foreground({}, ui_renderer, 40, 220, 1, 300, nil)
 
@@ -427,6 +440,55 @@ test("a nearly horizontal guide line is drawn as runs, not pixels", function()
 
     assert_true(#recorded > 0 and #recorded * 3 < pixels,
         #recorded .. " rectangles for " .. pixels .. " guide pixels")
+end)
+
+--- Cameras for the view guides, each with its cone's half angle in degrees.
+local VIEW_GUIDE_CAMERAS = {
+    { name = "no camera", half_angle = 45 },
+    { name = "the default 65 degree camera", vertical_fov = math.rad(65), half_angle = 48.557 },
+    { name = "a weapon zoomed to 30 degrees", vertical_fov = math.rad(30), half_angle = 25.471 },
+    {
+        name = "the default camera on a 3440 by 1440 screen",
+        vertical_fov = math.rad(65),
+        resolution = { width = 3440, height = 1440 },
+        half_angle = 56.692,
+    },
+    { name = "a 10 degree camera, held at 15 degrees", vertical_fov = math.rad(10), half_angle = 15 },
+    { name = "a 170 degree camera, held at 85 degrees", vertical_fov = math.rad(170), half_angle = 85 },
+}
+
+test("the view guides follow the camera's field of view, and span 90 degrees without a camera", function()
+    local no_camera = { radar_style = "circle", radar_outline = "off", radar_guides = "view_guides" }
+    local no_camera_pixels = coverage(draw_frame(no_camera, 300, 1, 40, 220, "foreground"))
+
+    for _, camera in ipairs(VIEW_GUIDE_CAMERAS) do
+        local settings = {
+            radar_style = "circle",
+            radar_outline = "off",
+            radar_guides = "view_guides",
+            vertical_fov = camera.vertical_fov,
+            resolution = camera.resolution,
+        }
+        local half_angle = math.deg(reference_half_angle(settings))
+
+        assert_true(math.abs(half_angle - camera.half_angle) < 0.001,
+            camera.name .. " has a half angle of " .. half_angle .. " degrees")
+
+        for _, size in ipairs({ 150, 300, 601 }) do
+            for _, scale in ipairs({ 1, 4 / 3 }) do
+                local drawn = coverage(draw_frame(settings, size, scale, 40, 220, "foreground"))
+                local expected = coverage(reference_frame(settings, size, scale, 40, 220, "foreground"))
+
+                assert_true(drawn == expected,
+                    string.format("pixels differ for %s, size %d, scale %.3f", camera.name, size, scale))
+            end
+        end
+
+        if camera.vertical_fov then
+            assert_true(coverage(draw_frame(settings, 300, 1, 40, 220, "foreground")) ~= no_camera_pixels,
+                camera.name .. " draws the 90 degree cone of no camera")
+        end
+    end
 end)
 
 -- ----------------------------------------------------------------------------

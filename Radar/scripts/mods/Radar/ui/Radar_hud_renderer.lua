@@ -30,7 +30,6 @@ local Vector2 = Vector2
 local Vector3 = Vector3
 local bit_bor = bit.bor
 local pcall = pcall
-local rawget = rawget
 local tonumber = tonumber
 local tostring = tostring
 local type = type
@@ -165,6 +164,10 @@ local FACING_CHEVRON = {
     gui_args = { color = false, uv00 = false, uv11 = false, size = false, snap_pixel_positions = false },
     hdr_render_passes = {},
 }
+--- Bounds of the view guides' half angle, and the half angle of the 90 degree cone drawn without a camera.
+local VIEW_CONE_MIN_HALF_ANGLE = math_rad(15)
+local VIEW_CONE_MAX_HALF_ANGLE = math_rad(85)
+local VIEW_CONE_FALLBACK_HALF_ANGLE = math_rad(45)
 
 -- ----------------------------------------------------------------------------
 -- Drawing helpers
@@ -996,79 +999,29 @@ local function _draw_diagonal_line(ui_renderer, x1, y1, x2, y2, z, color)
     end
 end
 
---- Returns the local player through the player manager, or nil when it cannot be read.
--- treturn: ?tab player
-local function _safe_local_player()
-    local player_manager = Managers and Managers.state and Managers.state.player
-    if not player_manager then
-        return nil
-    end
+--- Returns half of the view cone angle drawn by the view guides, clamped to 15 to 85 degrees.
+-- `mod:get_hud_player_vertical_fov` reads the local camera's vertical field of view, so the cone
+-- follows the field of view setting and weapon zoom; the current resolution's aspect ratio (16:9
+-- when unknown) turns it into the horizontal one. Without a camera the cone spans 90 degrees.
+-- treturn: number half angle in radians
+local function _view_cone_half_angle()
+    local get_vertical_fov = mod.get_hud_player_vertical_fov
+    local vertical_fov = get_vertical_fov and get_vertical_fov(mod)
 
-    local getter = player_manager.local_player or player_manager.player
-    if type(getter) ~= "function" then
-        return nil
-    end
-
-    local ok, player = pcall(getter, player_manager, 1)
-
-    if ok then
-        return player
-    end
-
-    return nil
-end
-
---- Returns the local player's horizontal field of view in radians.
--- The camera manager reports the vertical field of view; it is converted with the current
--- resolution's aspect ratio (16:9 when unknown).
--- treturn: ?number horizontal field of view, or nil without a camera
-local function _safe_player_horizontal_fov()
-    local local_player = _safe_local_player()
-    if not local_player then
-        return nil
-    end
-
-    local viewport_name = local_player.viewport_name
-    if not viewport_name then
-        return nil
-    end
-
-    local camera_manager = Managers and Managers.state and Managers.state.camera
-    if not camera_manager or type(camera_manager.fov) ~= "function" then
-        return nil
-    end
-
-    if type(camera_manager.has_camera) == "function" then
-        local ok_has_camera, has_camera = pcall(camera_manager.has_camera, camera_manager, viewport_name)
-
-        if ok_has_camera and not has_camera then
-            return nil
-        end
-    end
-
-    local ok_fov, vertical_fov = pcall(camera_manager.fov, camera_manager, viewport_name)
-
-    vertical_fov = ok_fov and tonumber(vertical_fov) or nil
-    if not vertical_fov or vertical_fov <= 0 then
-        return nil
+    if not vertical_fov then
+        return VIEW_CONE_FALLBACK_HALF_ANGLE
     end
 
     local aspect_ratio = 16 / 9
-    if rawget(_G, "RESOLUTION_LOOKUP") and RESOLUTION_LOOKUP.width and RESOLUTION_LOOKUP.height and RESOLUTION_LOOKUP.height > 0 then
-        aspect_ratio = RESOLUTION_LOOKUP.width / RESOLUTION_LOOKUP.height
+    local resolution_lookup = RESOLUTION_LOOKUP
+    local height = resolution_lookup and resolution_lookup.height
+
+    if height and height > 0 and resolution_lookup.width then
+        aspect_ratio = resolution_lookup.width / height
     end
 
-    return 2 * math_atan(math_tan(vertical_fov * 0.5) * aspect_ratio)
-end
-
---- Returns half of the view cone angle drawn by the view guides, clamped to 15 to 85 degrees.
--- Falls back to a 90 degree field of view when the camera cannot be read.
--- treturn: number half angle in radians
-local function _view_cone_half_angle()
-    local horizontal_fov = _safe_player_horizontal_fov() or math_rad(90)
-    local half_angle = horizontal_fov * 0.5
-
-    return math_clamp(half_angle, math_rad(15), math_rad(85))
+    return math_clamp(math_atan(math_tan(vertical_fov * 0.5) * aspect_ratio), VIEW_CONE_MIN_HALF_ANGLE,
+        VIEW_CONE_MAX_HALF_ANGLE)
 end
 
 --- Returns the screen direction of a view cone edge; angle 0 points straight up.
