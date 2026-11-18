@@ -89,6 +89,10 @@ local safe_route_source =
     assert(io.open("Radar/scripts/mods/Radar/compatibility/Radar_safe_route.lua")):read("*a")
 local highlight_outlines_source =
     assert(io.open("Radar/scripts/mods/Radar/Radar_highlight_outlines.lua")):read("*a")
+local strikemap_source =
+    assert(io.open("Radar/scripts/mods/Radar/compatibility/Radar_strikemap.lua")):read("*a")
+local strikemap_geometry_source =
+    assert(io.open("Radar/scripts/mods/Radar/ui/Radar_strikemap_geometry.lua")):read("*a")
 local definitions_source = assert(io.open("Radar/scripts/mods/Radar/Radar_enemy_definitions.lua")):read("*a")
 
 local problems = {}
@@ -566,6 +570,19 @@ end
 
 check(hud_locals < 200,
     "Radar_hud_element.lua declares " .. hud_locals .. " file level locals; LuaJIT allows 200")
+
+for label, source in pairs({
+    ["compatibility/Radar_strikemap.lua"] = strikemap_source,
+    ["ui/Radar_strikemap_geometry.lua"] = strikemap_geometry_source,
+}) do
+    local count = 0
+
+    for _ in source:gmatch(LF .. "local [_%a]") do
+        count = count + 1
+    end
+
+    check(count < 200, label .. " declares " .. count .. " file level locals; LuaJIT allows 200")
+end
 
 -- The frame is the base layer and carries the family's identity, so it has a
 -- colour of its own; the marker colour, and any puzzle state colour, belongs to
@@ -1143,6 +1160,8 @@ check_declared_aliases(respawn_rewind_source, "compatibility/Radar_respawn_rewin
 check_declared_aliases(safe_route_source, "compatibility/Radar_safe_route.lua")
 check_declared_aliases(definitions_source, "Radar_enemy_definitions.lua")
 check_declared_aliases(highlight_outlines_source, "Radar_highlight_outlines.lua")
+check_declared_aliases(strikemap_source, "compatibility/Radar_strikemap.lua")
+check_declared_aliases(strikemap_geometry_source, "ui/Radar_strikemap_geometry.lua")
 
 -- With no interaction marker from the game -- always the case for a scan target
 -- -- the bracket is placed on the fallback position, not the anchor. Objectives
@@ -1238,6 +1257,8 @@ check_local_use_before_declaration(events_source, "Radar_events.lua")
 check_local_use_before_declaration(respawn_rewind_source, "compatibility/Radar_respawn_rewind.lua")
 check_local_use_before_declaration(safe_route_source, "compatibility/Radar_safe_route.lua")
 check_local_use_before_declaration(highlight_outlines_source, "Radar_highlight_outlines.lua")
+check_local_use_before_declaration(strikemap_source, "compatibility/Radar_strikemap.lua")
+check_local_use_before_declaration(strikemap_geometry_source, "ui/Radar_strikemap_geometry.lua")
 
 -- --------------------------------------------------------------------------------------------
 -- Respawn awareness, mirrored from the Respawn Rewind mod's world markers.

@@ -1,9 +1,20 @@
 --- Draws Strikemap's pre-baked floor plan as the radar's map layer.
 -- Draws the walkable triangles of the Strikemap map context in the same below, current and
--- above floor bands as the live navmesh layer, and optionally the vector details on top
--- (floor contours, stair ticks, slope marks and hatching of other floors). Geometry is
--- projected with the radar's own basis, range and centre so it stays aligned with the
--- markers, and is culled through spatial grids so only nearby cells are visited per frame.
+-- above floor bands as the live navmesh layer, and optionally the vector details (floor
+-- contours, stair ticks, slope marks and hatching of other floors). The bands are measured
+-- from the walkable floor under the Radar player instead of its raw height, eased, so a jump,
+-- a stair or a small height offset between the player and the floor plan never re-bands a
+-- whole walkway at once.
+--
+-- Each frame first sorts the triangles and vector segments in range into lists by floor band
+-- and line class, then draws them in a fixed order. On the geometry layer that is the floors
+-- below with their hatching and dashed outlines, the current floor and the faint floors above;
+-- one layer up the hatching of the floors above and the current floor's slope marks; two
+-- layers up the outlines of the floors above, the current floor's walls and its stair ticks.
+-- Lower floors therefore always sit beneath the current floor's fill, whatever order the
+-- spatial grid lists them in. Geometry is projected with the radar's own basis, range and
+-- centre so it stays aligned with the markers, and is culled through spatial grids so only
+-- nearby cells are visited per frame.
 --
 -- Explicit module loaded by `ui/Radar_hud_element.lua` through `mod:io_dofile`; the chunk
 -- returns `RadarStrikemapGeometry`. Contexts come from `compatibility/Radar_strikemap.lua`,
@@ -25,8 +36,12 @@ local pcall = pcall
 local tonumber = tonumber
 local tostring = tostring
 local type = type
+local math_abs = math.abs
+local math_ceil = math.ceil
+local math_exp = math.exp
 local math_floor = math.floor
 local math_huge = math.huge
+local math_log = math.log
 local math_max = math.max
 local math_min = math.min
 local math_sqrt = math.sqrt
@@ -52,6 +67,25 @@ local BAND_BELOW_FALLBACK_COLOR = { 55, 120, 98, 76 }
 local DEFAULT_RANGE_ABOVE = 7
 local DEFAULT_RANGE_BELOW = 7
 local OVERVIEW_RANGE = 30
+--- Floor reference tuning, a Radar heuristic after Strikemap's floor reference for maps without levels.
+-- The floor is picked from the triangles in the player's grid cell. A triangle under the player
+-- scores its height difference, `FLOOR_ABOVE_WEIGHT` times over when it lies above the feet, so
+-- the deck underfoot wins over an overhang during a jump. Without one, the triangle whose centre
+-- lies within `FLOOR_NEARBY_RADIUS_SQ` scores its squared distance. A pick more than
+-- `FLOOR_PIT_GUARD` metres off the feet gives way to the nearby pick and then to the raw height,
+-- so the floor of a pit never takes over while the player stands at its edge. The shown height
+-- eases towards the pick with time constant `FLOOR_EASE_SECONDS`, in steps of at most
+-- `FLOOR_MAX_EASE_STEP` seconds, and takes it at once after a pause longer than
+-- `FLOOR_STALE_SECONDS`. The pick is renewed once the player has moved the square root of
+-- `FLOOR_RESAMPLE_DISTANCE_SQ` from where it was taken.
+local FLOOR_ABOVE_WEIGHT = 1.6
+local FLOOR_NEARBY_RADIUS_SQ = 4 * 4
+local FLOOR_PIT_GUARD = 4
+local FLOOR_EASE_SECONDS = 0.24
+local FLOOR_MAX_EASE_STEP = 0.1
+local FLOOR_STALE_SECONDS = 0.5
+local FLOOR_RESAMPLE_DISTANCE_SQ = 0.25 * 0.25
+local POINT_IN_TRIANGLE_EPSILON = 0.0001
 --- Integer key packing for grid cells, `(cx + OFFSET) * STRIDE + cy + OFFSET`.
 -- `CULL_RANGE_FACTOR` widens the cull square to the radar's diagonal.
 local GRID_CELL_HASH_OFFSET = 4096
@@ -67,17 +101,29 @@ local SLOPE_STRIDE = 5
 local TRANSITION_STRIDE = 4
 local VECTOR_GRID_CELL = 16
 local VECTOR_INVERSE_GRID_CELL = 1 / VECTOR_GRID_CELL
---- Line drawing tuning in screen pixels; dashed lines draw `DASH_ON_PX` of every `DASH_PERIOD_PX`.
+--- Line drawing tuning; the minimum lengths are screen pixels, the dash period unscaled UI pixels.
+-- Dashes are anchored to the world. Their period is the power of two metres whose length on the
+-- radar first reaches `DASH_PERIOD_PX`, so it stays between one and two times that length at any
+-- zoom, and `DASH_ON_FRACTION` of every period is drawn.
 local MIN_SEGMENT_SCREEN_LENGTH_SQ = 1e-12
-local DASH_ON_PX = 4
+local MIN_DASH_SCREEN_LENGTH = 0.5
 local DASH_PERIOD_PX = 7
---- Stair tick filtering.
--- A tick is kept only within 10 m of a transition anchor whose chain is steep, and within
--- `CHAIN_Z_SLACK` metres of that chain's height range.
-local STAIR_ASSOC_RADIUS_SQ = 10 * 10
-local CHAIN_Z_SLACK = 2
+local DASH_ON_FRACTION = 4 / 7
+local INVERSE_LN2 = 1 / math_log(2)
+--- Line styles of `_emit_line`; a wall is extended by half its width at both ends so corners join.
+local LINE_SOLID = 1
+local LINE_WALL = 2
+local LINE_DASHED = 3
+--- Stair tick filtering, after Strikemap's tactical renderer.
+-- A tick is kept only when its midpoint lies within `STAIR_ANCHOR_REACH` metres of a transition
+-- anchor along both axes, the tick's height lies within `STAIR_ANCHOR_Z_SLACK` metres of the
+-- anchor's two heights, and the anchor's chain is steep. Kept ticks are drawn only within
+-- `STAIR_FLOOR_RANGE` metres of the floor reference.
+local STAIR_ANCHOR_REACH = 2.5
+local STAIR_ANCHOR_Z_SLACK = 1.4
+local STAIR_FLOOR_RANGE = 4
 local STEEP_CHAIN_MIN_STEEPNESS = 0.5
---- Vector layer draw modes and their line half widths, alpha multipliers and brightening towards white.
+--- Vector layer select modes and their line half widths, alpha multipliers and brightening towards white.
 local MODE_CONTOURS = 1
 local MODE_STAIRS = 2
 local MODE_HATCHES = 3
@@ -97,7 +143,7 @@ local CONTOUR_BELOW_BRIGHTEN = 0.15
 local STAIR_ALPHA_MULT = 2.2
 local STAIR_BRIGHTEN = 0.35
 local HATCH_ALPHA_MULT = 0.9
-local SLOPE_ALPHA_MULT = 1.3
+local SLOPE_ALPHA_MULT = 1.0
 local SLOPE_BRIGHTEN = 0.2
 
 -- ----------------------------------------------------------------------------
@@ -136,15 +182,106 @@ local _vectors = {
     hatches = nil,
     slopes = nil,
 }
---- Per-frame projection and style state shared with the vector line helpers, reused to avoid allocations.
-local _view = {}
-local _style = {}
+--- Floor reference the bands are measured from, and what it was derived from.
+-- `display_z` is the eased height in use and `target_z` the last pick, taken at `sample_x`,
+-- `sample_y` and `sample_z` from the grid of `sample_revision`. `triangles`, `tri_count` and
+-- `map_id` identify the source map and `player_revision` the Radar player, so a new mission,
+-- Expedition section or Radar player takes the pick at once instead of easing. `t` is the
+-- gameplay time of the last update.
+local _floor_state = {
+    display_z = nil,
+    target_z = nil,
+    sample_x = 0,
+    sample_y = 0,
+    sample_z = 0,
+    sample_revision = nil,
+    triangles = nil,
+    tri_count = 0,
+    map_id = nil,
+    player_revision = nil,
+    t = nil,
+}
+--- Per-frame selection, reused every frame; list entries past their count are stale.
+-- `below`, `current` and `above` hold triangle indices by floor band, the other lists vector
+-- segment indices by how they are drawn.
+local _bins = {
+    below = {},
+    below_n = 0,
+    current = {},
+    current_n = 0,
+    above = {},
+    above_n = 0,
+    below_hatches = {},
+    below_hatches_n = 0,
+    below_contours = {},
+    below_contours_n = 0,
+    above_hatches = {},
+    above_hatches_n = 0,
+    above_contours = {},
+    above_contours_n = 0,
+    slopes = {},
+    slopes_n = 0,
+    walls = {},
+    walls_n = 0,
+    stairs = {},
+    stairs_n = 0,
+}
+--- Per-frame projection, band and line style state shared by the select and draw steps, reused to avoid allocations.
+-- `ready` is set once the geometry step has selected this frame's triangles, and the later steps
+-- only run then. The projection basis is pre-scaled to unscaled UI pixels per metre.
+local _view = {
+    ready = false,
+    gui = false,
+    ui_scale = 1,
+    layer = 0,
+    center_x = 0,
+    center_y = 0,
+    screen_center_x = 0,
+    screen_center_y = 0,
+    ppx = 0,
+    ppy = 0,
+    ref_z = 0,
+    basis_ax = 0,
+    basis_ay = 0,
+    basis_bx = 0,
+    basis_by = 0,
+    limit = 0,
+    limit_sq = 0,
+    radar_scale = 0,
+    screen_px_per_m = 0,
+    is_circle = false,
+    range_above = 0,
+    range_below = 0,
+    current_color = false,
+    above_color = false,
+    below_color = false,
+    cull_min_x = 0,
+    cull_max_x = 0,
+    cull_min_y = 0,
+    cull_max_y = 0,
+    selected = 0,
+    in_shape = 0,
+    drawn = 0,
+    vector_frame_id = 0,
+    min_cx = 0,
+    max_cx = -1,
+    min_cy = 0,
+    max_cy = -1,
+    dash_period_m = 0,
+    dash_on_m = 0,
+}
+local _style = {
+    contour_current = false,
+    contour_above = false,
+    contour_below = false,
+    stair = false,
+    hatch_below = false,
+    hatch_above = false,
+    slope = false,
+}
 --- Context and revision last reported by the debug diagnostics.
 local _diag_context = nil
 local _diag_revision = nil
---- Scratch polygon buffers for square clipping; the result is left in `_poly_ax`/`_poly_ay`.
-local _poly_ax, _poly_ay = {}, {}
-local _poly_bx, _poly_by = {}, {}
 --- Whether `Gui.triangle` works in this game build; nil until probed on the first draw.
 local _triangle_supported = nil
 
@@ -180,6 +317,40 @@ local function _reset_vectors()
     _vectors.stairs = nil
     _vectors.hatches = nil
     _vectors.slopes = nil
+end
+
+--- Forgets the floor reference, so the next draw takes its pick at once.
+local function _reset_floor()
+    local floor = _floor_state
+
+    floor.display_z = nil
+    floor.target_z = nil
+    floor.sample_x = 0
+    floor.sample_y = 0
+    floor.sample_z = 0
+    floor.sample_revision = nil
+    floor.triangles = nil
+    floor.tri_count = 0
+    floor.map_id = nil
+    floor.player_revision = nil
+    floor.t = nil
+end
+
+--- Empties every per-frame selection list and marks the frame as not set up.
+local function _reset_bins()
+    local bins = _bins
+
+    bins.below_n = 0
+    bins.current_n = 0
+    bins.above_n = 0
+    bins.below_hatches_n = 0
+    bins.below_contours_n = 0
+    bins.above_hatches_n = 0
+    bins.above_contours_n = 0
+    bins.slopes_n = 0
+    bins.walls_n = 0
+    bins.stairs_n = 0
+    _view.ready = false
 end
 
 --- Returns the normalised horizontal forward direction of a rotation.
@@ -341,111 +512,153 @@ local function _parse_cell(cell_key)
     return bucket
 end
 
---- Clips a polygon against one side of the radar square (Sutherland-Hodgman step).
--- tab: src_x input x coordinates
--- tab: src_y input y coordinates
--- int: src_count number of input vertices
--- tab: dst_x receives the clipped x coordinates
--- tab: dst_y receives the clipped y coordinates
--- int: edge 1 right, 2 left, 3 bottom, 4 top
--- number: limit square half size
--- treturn: int number of output vertices
-local function _clip_edge(src_x, src_y, src_count, dst_x, dst_y, edge, limit)
-    local count = 0
-    local prev_x = src_x[src_count]
-    local prev_y = src_y[src_count]
-    local prev_inside
+--- Picks the floor height under a position from the triangles of its grid cell.
+-- Follows the rules described at `FLOOR_ABOVE_WEIGHT`. Reads only the cell cache, never the
+-- per-frame stamps, so it can run before the selection walk of the same frame.
+-- number: px player x
+-- number: py player y
+-- number: pz player z
+-- treturn: ?number floor height, or nil when no triangle qualifies
+local function _sample_floor_height(px, py, pz)
+    local inverse_grid_cell = _grid.inverse_grid_cell
+    local cell_key = (math_floor(px * inverse_grid_cell) + GRID_CELL_HASH_OFFSET) * GRID_CELL_HASH_STRIDE
+        + math_floor(py * inverse_grid_cell) + GRID_CELL_HASH_OFFSET
+    local bucket = _grid.cells[cell_key]
 
-    if edge == 1 then
-        prev_inside = prev_x <= limit
-    elseif edge == 2 then
-        prev_inside = prev_x >= -limit
-    elseif edge == 3 then
-        prev_inside = prev_y <= limit
-    else
-        prev_inside = prev_y >= -limit
+    if bucket == nil then
+        bucket = _parse_cell(cell_key)
     end
 
-    for i = 1, src_count do
-        local x = src_x[i]
-        local y = src_y[i]
-        local inside
+    if not bucket then
+        return nil
+    end
 
-        if edge == 1 then
-            inside = x <= limit
-        elseif edge == 2 then
-            inside = x >= -limit
-        elseif edge == 3 then
-            inside = y <= limit
-        else
-            inside = y >= -limit
-        end
+    local triangles = _grid.triangles
+    local stride = TRIANGLE_STRIDE
+    local above_weight = FLOOR_ABOVE_WEIGHT
+    local nearby_radius_sq = FLOOR_NEARBY_RADIUS_SQ
+    local epsilon = POINT_IN_TRIANGLE_EPSILON
+    local best_z = nil
+    local best_score = math_huge
+    local near_z = nil
+    local near_score = math_huge
 
-        if inside ~= prev_inside then
-            local t
+    for bucket_index = 1, #bucket do
+        local base = (bucket[bucket_index] - 1) * stride
+        local ax = triangles[base + 1]
+        local ay = triangles[base + 2]
+        local bx = triangles[base + 3]
+        local by = triangles[base + 4]
+        local cx = triangles[base + 5]
+        local cy = triangles[base + 6]
+        local tz = triangles[base + 7]
+        local dz = tz - pz
+        local d1 = (px - bx) * (ay - by) - (ax - bx) * (py - by)
+        local d2 = (px - cx) * (by - cy) - (bx - cx) * (py - cy)
+        local d3 = (px - ax) * (cy - ay) - (cx - ax) * (py - ay)
 
-            if edge == 1 then
-                t = (limit - prev_x) / (x - prev_x)
-            elseif edge == 2 then
-                t = (-limit - prev_x) / (x - prev_x)
-            elseif edge == 3 then
-                t = (limit - prev_y) / (y - prev_y)
-            else
-                t = (-limit - prev_y) / (y - prev_y)
+        if not ((d1 < -epsilon or d2 < -epsilon or d3 < -epsilon)
+                and (d1 > epsilon or d2 > epsilon or d3 > epsilon)) then
+            local score = dz >= 0 and dz * above_weight or -dz
+
+            if score < best_score then
+                best_score = score
+                best_z = tz
             end
+        else
+            local mx = (ax + bx + cx) / 3 - px
+            local my = (ay + by + cy) / 3 - py
+            local horizontal_sq = mx * mx + my * my
 
-            count = count + 1
-            dst_x[count] = prev_x + (x - prev_x) * t
-            dst_y[count] = prev_y + (y - prev_y) * t
+            if horizontal_sq <= nearby_radius_sq then
+                local score = horizontal_sq + dz * dz
+
+                if score < near_score then
+                    near_score = score
+                    near_z = tz
+                end
+            end
         end
-
-        if inside then
-            count = count + 1
-            dst_x[count] = x
-            dst_y[count] = y
-        end
-
-        prev_x = x
-        prev_y = y
-        prev_inside = inside
     end
 
-    return count
+    local pick = best_z or near_z
+
+    if best_z and near_z and math_abs(best_z - pz) > FLOOR_PIT_GUARD
+        and math_abs(near_z - pz) < math_abs(best_z - pz) then
+        pick = near_z
+    end
+
+    if pick and math_abs(pick - pz) > FLOOR_PIT_GUARD then
+        return nil
+    end
+
+    return pick
 end
 
---- Clips a radar-local triangle to the radar square; the polygon is left in `_poly_ax`/`_poly_ay`.
--- treturn: int number of polygon vertices, 0 when less than a triangle remains
-local function _clip_triangle_to_square(px1, py1, px2, py2, px3, py3, limit)
-    local ax, ay = _poly_ax, _poly_ay
-    local bx, by = _poly_bx, _poly_by
+--- Updates the floor reference for this frame and returns the height the bands are measured from.
+-- Runs right after `_ensure_grid`. A new source map (another triangle array, fewer triangles or
+-- another map id), a new Radar player, a missing or rewound gameplay time and a pause longer
+-- than `FLOOR_STALE_SECONDS` take the new pick at once; otherwise the shown height eases towards
+-- it. A live revision of the same map picks again from the new grid but keeps easing, as
+-- Strikemap does, so a growing Expedition map never flickers between floor treatments.
+-- tab: context validated map context
+-- param: revision geometry revision of the context
+-- !Vector3: player_pos Radar player position
+-- param: player_revision Radar player revision
+-- ?number: t gameplay time
+-- treturn: number floor reference height
+local function _update_floor_reference(context, revision, player_pos, player_revision, t)
+    local floor = _floor_state
+    local px = player_pos.x
+    local py = player_pos.y
+    local pz = player_pos.z or 0
+    local triangles = _grid.triangles
+    local tri_count = _grid.tri_count
+    local map_id = context.map_id or context.mission_name
+    local last_t = floor.t
+    local snap = floor.display_z == nil
+        or triangles ~= floor.triangles
+        or tri_count < floor.tri_count
+        or map_id ~= floor.map_id
+        or player_revision ~= floor.player_revision
+        or not t or not last_t or t < last_t or t - last_t > FLOOR_STALE_SECONDS
+    local target_z = floor.target_z
+    local dx = px - floor.sample_x
+    local dy = py - floor.sample_y
+    local dz = pz - floor.sample_z
 
-    ax[1], ay[1] = px1, py1
-    ax[2], ay[2] = px2, py2
-    ax[3], ay[3] = px3, py3
-
-    local count = 3
-
-    count = _clip_edge(ax, ay, count, bx, by, 1, limit)
-    if count < 3 then
-        return 0
+    if snap or target_z == nil or floor.sample_revision ~= revision
+        or dx * dx + dy * dy + dz * dz >= FLOOR_RESAMPLE_DISTANCE_SQ then
+        target_z = _sample_floor_height(px, py, pz) or pz
+        floor.target_z = target_z
+        floor.sample_x = px
+        floor.sample_y = py
+        floor.sample_z = pz
+        floor.sample_revision = revision
     end
 
-    count = _clip_edge(bx, by, count, ax, ay, 2, limit)
-    if count < 3 then
-        return 0
+    local display_z = floor.display_z
+
+    if snap then
+        display_z = target_z
+    else
+        local dt = t - last_t
+
+        if dt > FLOOR_MAX_EASE_STEP then
+            dt = FLOOR_MAX_EASE_STEP
+        end
+
+        display_z = display_z + (target_z - display_z) * (1 - math_exp(-dt / FLOOR_EASE_SECONDS))
     end
 
-    count = _clip_edge(ax, ay, count, bx, by, 3, limit)
-    if count < 3 then
-        return 0
-    end
+    floor.display_z = display_z
+    floor.triangles = triangles
+    floor.tri_count = tri_count
+    floor.map_id = map_id
+    floor.player_revision = player_revision
+    floor.t = t
 
-    count = _clip_edge(bx, by, count, ax, ay, 4, limit)
-    if count < 3 then
-        return 0
-    end
-
-    return count
+    return display_z
 end
 
 --- Checks once whether `Gui.triangle` can be called, with a transparent triangle off screen.
@@ -460,18 +673,6 @@ local function _probe_triangle(gui)
         Vector3(-40, 0, -40), Vector3(-39, 0, -40), Vector3(-40, 0, -39), 0, Color(0, 0, 0, 0))
 
     return ok == true
-end
-
---- Submits one screen-space triangle; `Gui.triangle` takes points as `Vector3(x, 0, y)`.
-local function _submit_triangle(gui, sx1, sy1, sx2, sy2, sx3, sy3, layer, color)
-    Gui_triangle(
-        gui,
-        Vector3(sx1, 0, sy1),
-        Vector3(sx2, 0, sy2),
-        Vector3(sx3, 0, sy3),
-        layer,
-        color
-    )
 end
 
 --- Returns the configured ARGB colour of a floor band, or the fallback before the colour runtime exists.
@@ -554,14 +755,77 @@ local function _configured_ranges()
         _clamp_band_range(mod:get("navmesh_range_below"), DEFAULT_RANGE_BELOW)
 end
 
---- Draws the map triangles within radar range in their floor band colours.
--- Visits the grid cells inside the cull square, projects each triangle once per frame,
--- rejects triangles outside the radar square and floor range, and clips the rest to the
--- radar shape. Runs inside `pcall` from `RadarStrikemapGeometry.draw`.
+--- Projects and draws one band's selected triangles, clipped to the radar shape.
+-- A triangle entirely beyond one side of the radar square is skipped before clipping.
+-- tab: indices triangle indices of the band
+-- int: count number of indices
+-- param: color engine `Color` of the band
+-- treturn: int triangles handed to the clipper
+-- treturn: int `Gui.triangle` calls made
+local function _draw_band(indices, count, color)
+    local view = _view
+    local triangles = _grid.triangles
+    local stride = TRIANGLE_STRIDE
+    local gui = view.gui
+    local layer = view.layer
+    local ppx = view.ppx
+    local ppy = view.ppy
+    local ax = view.basis_ax
+    local ay = view.basis_ay
+    local bx = view.basis_bx
+    local by = view.basis_by
+    local limit = view.limit
+    local limit_sq = view.limit_sq
+    local is_circle = view.is_circle
+    local ui_scale = view.ui_scale
+    local center_x = view.center_x
+    local center_y = view.center_y
+    local clip_and_emit = _clip_and_emit
+    local in_shape = 0
+    local drawn = 0
+
+    for k = 1, count do
+        local base = (indices[k] - 1) * stride
+        local dx = triangles[base + 1] - ppx
+        local dy = triangles[base + 2] - ppy
+        local px1 = dx * ax + dy * ay
+        local py1 = dx * bx + dy * by
+
+        dx = triangles[base + 3] - ppx
+        dy = triangles[base + 4] - ppy
+
+        local px2 = dx * ax + dy * ay
+        local py2 = dx * bx + dy * by
+
+        dx = triangles[base + 5] - ppx
+        dy = triangles[base + 6] - ppy
+
+        local px3 = dx * ax + dy * ay
+        local py3 = dx * bx + dy * by
+
+        if not ((px1 > limit and px2 > limit and px3 > limit)
+                or (px1 < -limit and px2 < -limit and px3 < -limit)
+                or (py1 > limit and py2 > limit and py3 > limit)
+                or (py1 < -limit and py2 < -limit and py3 < -limit)) then
+            in_shape = in_shape + 1
+            drawn = drawn + clip_and_emit(gui, layer, color, is_circle, limit, limit_sq, ui_scale, center_x, center_y,
+                px1, py1, px2, py2, px3, py3)
+        end
+    end
+
+    return in_shape, drawn
+end
+
+--- Sets up this frame's view, selects the map triangles in range by floor band and draws the floors below.
+-- Visits the grid cells inside the cull square once, measures each triangle against the floor
+-- reference and the floor range and lists it in `_bins` by band, then draws the floors below.
+-- `_draw_upper_fills` draws the rest after the lower vectors. Leaves `_view.ready` false when
+-- nothing can be drawn. Runs inside `pcall` from `RadarStrikemapGeometry.draw`.
 -- tab: ui_renderer active UI renderer
 -- tab: context validated map context
 -- param: revision geometry revision
--- !Vector3: player_pos player position
+-- !Vector3: player_pos Radar player position
+-- param: player_revision Radar player revision
 -- ?Quaternion: rotation camera rotation; the map stays north-up without one
 -- number: center_x radar centre x in unscaled UI pixels
 -- number: center_y radar centre y in unscaled UI pixels
@@ -569,8 +833,13 @@ end
 -- number: projection_radius radar radius in unscaled UI pixels
 -- number: range radar range in metres
 -- string: radar_style radar style
-local function _draw_geometry(ui_renderer, context, revision, player_pos, rotation, center_x, center_y, z,
-                              projection_radius, range, radar_style)
+-- ?number: t gameplay time
+local function _select_geometry(ui_renderer, context, revision, player_pos, player_revision, rotation, center_x,
+                                center_y, z, projection_radius, range, radar_style, t)
+    local view = _view
+
+    view.ready = false
+
     local current_color = _band_color("radar_navmesh", BAND_CURRENT_FALLBACK_COLOR)
     local above_color = _band_color("radar_navmesh_above", BAND_ABOVE_FALLBACK_COLOR)
     local below_color = _band_color("radar_navmesh_below", BAND_BELOW_FALLBACK_COLOR)
@@ -587,27 +856,54 @@ local function _draw_geometry(ui_renderer, context, revision, player_pos, rotati
         return
     end
 
-    local gui = ui_renderer.gui
+    local ref_z = _update_floor_reference(context, revision, player_pos, player_revision, t)
     local scale = ui_renderer.scale or 1
     local render_settings = ui_renderer.render_settings
-    local layer = (render_settings and render_settings.start_layer or 0) + z
-
     local ppx = player_pos.x
     local ppy = player_pos.y
-    local ppz = player_pos.z or 0
-
+    local radar_scale = projection_radius / range
     local forward_x, forward_y = _forward_xy(rotation)
-    local right_x, right_y
+
+    view.gui = ui_renderer.gui
+    view.ui_scale = scale
+    view.layer = (render_settings and render_settings.start_layer or 0) + z
+    view.center_x = center_x
+    view.center_y = center_y
+    view.screen_center_x = center_x * scale
+    view.screen_center_y = center_y * scale
+    view.ppx = ppx
+    view.ppy = ppy
+    view.ref_z = ref_z
 
     if forward_x and forward_y then
-        right_x = forward_y
-        right_y = -forward_x
+        view.basis_ax = forward_y * radar_scale
+        view.basis_ay = -forward_x * radar_scale
+        view.basis_bx = -forward_x * radar_scale
+        view.basis_by = -forward_y * radar_scale
+    else
+        view.basis_ax = radar_scale
+        view.basis_ay = 0
+        view.basis_bx = 0
+        view.basis_by = -radar_scale
     end
 
-    local limit = projection_radius
-    local limit_sq = limit * limit
-    local radar_scale = limit / range
-    local is_circle = radar_style == "circle"
+    view.limit = projection_radius
+    view.limit_sq = projection_radius * projection_radius
+    view.radar_scale = radar_scale
+    view.screen_px_per_m = radar_scale * scale
+    view.is_circle = radar_style == "circle"
+    view.range_above = range_above
+    view.range_below = range_below
+    view.current_color = current_color
+    view.above_color = above_color
+    view.below_color = below_color
+
+    local cull_range = range * CULL_RANGE_FACTOR
+
+    view.cull_min_x = ppx - cull_range
+    view.cull_max_x = ppx + cull_range
+    view.cull_min_y = ppy - cull_range
+    view.cull_max_y = ppy + cull_range
 
     local triangles = _grid.triangles
     local cells = _grid.cells
@@ -615,16 +911,22 @@ local function _draw_geometry(ui_renderer, context, revision, player_pos, rotati
     local frame_id = _grid.frame_id + 1
     _grid.frame_id = frame_id
 
-    local cull_range = range * CULL_RANGE_FACTOR
     local inverse_grid_cell = _grid.inverse_grid_cell
-    local min_cx = math_max(math_floor((ppx - cull_range) * inverse_grid_cell), _grid.min_cx)
-    local max_cx = math_min(math_floor((ppx + cull_range) * inverse_grid_cell), _grid.max_cx)
-    local min_cy = math_max(math_floor((ppy - cull_range) * inverse_grid_cell), _grid.min_cy)
-    local max_cy = math_min(math_floor((ppy + cull_range) * inverse_grid_cell), _grid.max_cy)
+    local min_cx = math_max(math_floor(view.cull_min_x * inverse_grid_cell), _grid.min_cx)
+    local max_cx = math_min(math_floor(view.cull_max_x * inverse_grid_cell), _grid.max_cx)
+    local min_cy = math_max(math_floor(view.cull_min_y * inverse_grid_cell), _grid.min_cy)
+    local max_cy = math_min(math_floor(view.cull_max_y * inverse_grid_cell), _grid.max_cy)
 
-    local screen_center_x = center_x * scale
-    local screen_center_y = center_y * scale
-    local clip_and_emit = _clip_and_emit
+    local bins = _bins
+    local below = bins.below
+    local current = bins.current
+    local above = bins.above
+    local below_n = 0
+    local current_n = 0
+    local above_n = 0
+    local selected = 0
+    local stride = TRIANGLE_STRIDE
+    local half = CURRENT_FLOOR_HALF_HEIGHT
 
     for cx = min_cx, max_cx do
         local row_key = (cx + GRID_CELL_HASH_OFFSET) * GRID_CELL_HASH_STRIDE
@@ -643,82 +945,24 @@ local function _draw_geometry(ui_renderer, context, revision, player_pos, rotati
 
                     if stamp[i] ~= frame_id then
                         stamp[i] = frame_id
+                        selected = selected + 1
 
-                        local base = (i - 1) * TRIANGLE_STRIDE
-                        local px1, py1, px2, py2, px3, py3
-                        local dx = triangles[base + 1] - ppx
-                        local dy = triangles[base + 2] - ppy
+                        local dz = triangles[i * stride] - ref_z
 
-                        if right_x then
-                            px1 = (dx * right_x + dy * right_y) * radar_scale
-                            py1 = -(dx * forward_x + dy * forward_y) * radar_scale
-                            dx = triangles[base + 3] - ppx
-                            dy = triangles[base + 4] - ppy
-                            px2 = (dx * right_x + dy * right_y) * radar_scale
-                            py2 = -(dx * forward_x + dy * forward_y) * radar_scale
-                            dx = triangles[base + 5] - ppx
-                            dy = triangles[base + 6] - ppy
-                            px3 = (dx * right_x + dy * right_y) * radar_scale
-                            py3 = -(dx * forward_x + dy * forward_y) * radar_scale
-                        else
-                            px1 = dx * radar_scale
-                            py1 = -dy * radar_scale
-                            dx = triangles[base + 3] - ppx
-                            dy = triangles[base + 4] - ppy
-                            px2 = dx * radar_scale
-                            py2 = -dy * radar_scale
-                            dx = triangles[base + 5] - ppx
-                            dy = triangles[base + 6] - ppy
-                            px3 = dx * radar_scale
-                            py3 = -dy * radar_scale
-                        end
-
-                        if not ((px1 > limit and px2 > limit and px3 > limit)
-                                or (px1 < -limit and px2 < -limit and px3 < -limit)
-                                or (py1 > limit and py2 > limit and py3 > limit)
-                                or (py1 < -limit and py2 < -limit and py3 < -limit)) then
-                            local dz = triangles[base + 7] - ppz
-                            local color = nil
-
-                            if dz <= range_above and dz >= -range_below then
-                                if dz > CURRENT_FLOOR_HALF_HEIGHT then
-                                    color = above_color
-                                elseif dz < -CURRENT_FLOOR_HALF_HEIGHT then
-                                    color = below_color
-                                else
-                                    color = current_color
+                        if dz <= range_above and dz >= -range_below then
+                            if dz > half then
+                                if above_color then
+                                    above_n = above_n + 1
+                                    above[above_n] = i
                                 end
-                            end
-
-                            if color then
-                                if is_circle then
-                                    clip_and_emit(gui, layer, color, true, limit, limit_sq, scale,
-                                        center_x, center_y, px1, py1, px2, py2, px3, py3)
-                                elseif px1 >= -limit and px1 <= limit and py1 >= -limit and py1 <= limit
-                                    and px2 >= -limit and px2 <= limit and py2 >= -limit and py2 <= limit
-                                    and px3 >= -limit and px3 <= limit and py3 >= -limit and py3 <= limit then
-                                    _submit_triangle(gui,
-                                        screen_center_x + px1 * scale, screen_center_y + py1 * scale,
-                                        screen_center_x + px2 * scale, screen_center_y + py2 * scale,
-                                        screen_center_x + px3 * scale, screen_center_y + py3 * scale,
-                                        layer, color)
-                                else
-                                    local clip_count = _clip_triangle_to_square(px1, py1, px2, py2, px3, py3, limit)
-
-                                    if clip_count >= 3 then
-                                        local ax, ay = _poly_ax, _poly_ay
-                                        local fx = screen_center_x + ax[1] * scale
-                                        local fy = screen_center_y + ay[1] * scale
-
-                                        for k = 2, clip_count - 1 do
-                                            _submit_triangle(gui, fx, fy,
-                                                screen_center_x + ax[k] * scale, screen_center_y + ay[k] * scale,
-                                                screen_center_x + ax[k + 1] * scale,
-                                                screen_center_y + ay[k + 1] * scale,
-                                                layer, color)
-                                        end
-                                    end
+                            elseif dz < -half then
+                                if below_color then
+                                    below_n = below_n + 1
+                                    below[below_n] = i
                                 end
+                            elseif current_color then
+                                current_n = current_n + 1
+                                current[current_n] = i
                             end
                         end
                     end
@@ -726,6 +970,45 @@ local function _draw_geometry(ui_renderer, context, revision, player_pos, rotati
             end
         end
     end
+
+    bins.below_n = below_n
+    bins.current_n = current_n
+    bins.above_n = above_n
+    view.selected = selected
+    view.in_shape = 0
+    view.drawn = 0
+    view.ready = true
+
+    if below_n > 0 then
+        view.in_shape, view.drawn = _draw_band(below, below_n, below_color)
+    end
+end
+
+--- Draws the current floor and then the floors above, after the lower vectors, and reports the profiler counts.
+-- Runs inside `pcall` from `RadarStrikemapGeometry.draw` once `_select_geometry` set the frame up.
+local function _draw_upper_fills()
+    local view = _view
+    local bins = _bins
+    local in_shape = view.in_shape
+    local drawn = view.drawn
+
+    if bins.current_n > 0 then
+        local band_in_shape, band_drawn = _draw_band(bins.current, bins.current_n, view.current_color)
+
+        in_shape = in_shape + band_in_shape
+        drawn = drawn + band_drawn
+    end
+
+    if bins.above_n > 0 then
+        local band_in_shape, band_drawn = _draw_band(bins.above, bins.above_n, view.above_color)
+
+        in_shape = in_shape + band_in_shape
+        drawn = drawn + band_drawn
+    end
+
+    mod:radar_profiler_value("draw_geometry_selected", view.selected)
+    mod:radar_profiler_value("draw_geometry_in_shape", in_shape)
+    mod:radar_profiler_value("draw_geometry_triangles", drawn)
 end
 
 --- Builds the grid index of one vector layer, registering each segment in every cell its bounds touch.
@@ -733,9 +1016,10 @@ end
 -- ?int: count number of records
 -- int: stride record length
 -- bool: z_last whether the height is the record's last field (otherwise two heights follow the points)
+-- ?tab: skip set of record indices to leave out, such as Strikemap's `dead_contours`
 -- treturn: tab layer index
 -- treturn: int number of cells used
-local function _build_segment_index(segments, count, stride, z_last)
+local function _build_segment_index(segments, count, stride, z_last, skip)
     local layer = {
         segments = segments,
         count = 0,
@@ -744,6 +1028,7 @@ local function _build_segment_index(segments, count, stride, z_last)
         cells = {},
         stamp = {},
         keep = nil,
+        skipped = 0,
         min_cx = 0,
         max_cx = -1,
         min_cy = 0,
@@ -759,6 +1044,7 @@ local function _build_segment_index(segments, count, stride, z_last)
     local cells = layer.cells
     local stamp = layer.stamp
     local cell_count = 0
+    local skipped = 0
     local layer_min_cx = math_huge
     local layer_max_cx = -math_huge
     local layer_min_cy = math_huge
@@ -767,62 +1053,68 @@ local function _build_segment_index(segments, count, stride, z_last)
     for i = 1, count do
         stamp[i] = 0
 
-        local base = (i - 1) * stride
-        local x1 = segments[base + 1]
-        local y1 = segments[base + 2]
-        local x2 = segments[base + 3]
-        local y2 = segments[base + 4]
+        if skip and skip[i] then
+            skipped = skipped + 1
+        else
+            local base = (i - 1) * stride
+            local x1 = segments[base + 1]
+            local y1 = segments[base + 2]
+            local x2 = segments[base + 3]
+            local y2 = segments[base + 4]
 
-        local min_x, max_x = x1, x2
+            local min_x, max_x = x1, x2
 
-        if min_x > max_x then
-            min_x, max_x = max_x, min_x
-        end
+            if min_x > max_x then
+                min_x, max_x = max_x, min_x
+            end
 
-        local min_y, max_y = y1, y2
+            local min_y, max_y = y1, y2
 
-        if min_y > max_y then
-            min_y, max_y = max_y, min_y
-        end
+            if min_y > max_y then
+                min_y, max_y = max_y, min_y
+            end
 
-        local min_cx = math_floor(min_x * VECTOR_INVERSE_GRID_CELL)
-        local max_cx = math_floor(max_x * VECTOR_INVERSE_GRID_CELL)
-        local min_cy = math_floor(min_y * VECTOR_INVERSE_GRID_CELL)
-        local max_cy = math_floor(max_y * VECTOR_INVERSE_GRID_CELL)
+            local min_cx = math_floor(min_x * VECTOR_INVERSE_GRID_CELL)
+            local max_cx = math_floor(max_x * VECTOR_INVERSE_GRID_CELL)
+            local min_cy = math_floor(min_y * VECTOR_INVERSE_GRID_CELL)
+            local max_cy = math_floor(max_y * VECTOR_INVERSE_GRID_CELL)
 
-        if min_cx < layer_min_cx then
-            layer_min_cx = min_cx
-        end
+            if min_cx < layer_min_cx then
+                layer_min_cx = min_cx
+            end
 
-        if max_cx > layer_max_cx then
-            layer_max_cx = max_cx
-        end
+            if max_cx > layer_max_cx then
+                layer_max_cx = max_cx
+            end
 
-        if min_cy < layer_min_cy then
-            layer_min_cy = min_cy
-        end
+            if min_cy < layer_min_cy then
+                layer_min_cy = min_cy
+            end
 
-        if max_cy > layer_max_cy then
-            layer_max_cy = max_cy
-        end
+            if max_cy > layer_max_cy then
+                layer_max_cy = max_cy
+            end
 
-        for cx = min_cx, max_cx do
-            local row_key = (cx + GRID_CELL_HASH_OFFSET) * GRID_CELL_HASH_STRIDE
+            for cx = min_cx, max_cx do
+                local row_key = (cx + GRID_CELL_HASH_OFFSET) * GRID_CELL_HASH_STRIDE
 
-            for cy = min_cy, max_cy do
-                local key = row_key + cy + GRID_CELL_HASH_OFFSET
-                local bucket = cells[key]
+                for cy = min_cy, max_cy do
+                    local key = row_key + cy + GRID_CELL_HASH_OFFSET
+                    local bucket = cells[key]
 
-                if not bucket then
-                    bucket = {}
-                    cells[key] = bucket
-                    cell_count = cell_count + 1
+                    if not bucket then
+                        bucket = {}
+                        cells[key] = bucket
+                        cell_count = cell_count + 1
+                    end
+
+                    bucket[#bucket + 1] = i
                 end
-
-                bucket[#bucket + 1] = i
             end
         end
     end
+
+    layer.skipped = skipped
 
     if cell_count > 0 then
         layer.min_cx = layer_min_cx
@@ -863,32 +1155,11 @@ local function _chain_is_steep(chain)
     return true
 end
 
---- Returns whether a stair tick at the given height belongs to a transition chain.
--- ?tab: chain transition chain, or nil when the anchor has none (always allowed)
--- number: tick_z tick height
--- treturn: bool
-local function _chain_allows_tick(chain, tick_z)
-    if type(chain) ~= "table" then
-        return true
-    end
-
-    if not _chain_is_steep(chain) then
-        return false
-    end
-
-    local z_min = tonumber(chain.min_z or chain.z_min)
-    local z_max = tonumber(chain.max_z or chain.z_max)
-
-    if z_min and z_max then
-        return tick_z >= z_min - CHAIN_Z_SLACK and tick_z <= z_max + CHAIN_Z_SLACK
-    end
-
-    return true
-end
-
---- Marks which stair ticks to draw, keeping only those near a steep transition at a matching height.
--- Stores the result as `stair_layer.keep`; without transitions the filter is left unset
--- and every tick is drawn.
+--- Marks which stair ticks to draw, keeping only those at an anchor of a steep chain at a matching height.
+-- A tick is kept when its midpoint lies within `STAIR_ANCHOR_REACH` of an anchor along both
+-- axes, its height lies within `STAIR_ANCHOR_Z_SLACK` of the anchor's two heights (in either
+-- order), and the anchor's chain is steep; an anchor without a chain counts as steep. Stores
+-- the result as `stair_layer.keep`. `_build_vectors` builds no stair index without transitions.
 -- tab: vector_context validated vector context
 -- tab: counts record count per layer
 -- tab: stair_layer stair layer index
@@ -922,6 +1193,8 @@ local function _build_stair_filter(vector_context, counts, stair_layer)
 
     local segments = stair_layer.segments
     local keep = {}
+    local reach = STAIR_ANCHOR_REACH
+    local z_slack = STAIR_ANCHOR_Z_SLACK
 
     for i = 1, stair_count do
         local base = (i - 1) * STAIR_STRIDE
@@ -945,21 +1218,30 @@ local function _build_stair_filter(vector_context, counts, stair_layer)
                         local dx = transitions[anchor_base + 1] - mx
                         local dy = transitions[anchor_base + 2] - my
 
-                        if dx * dx + dy * dy <= STAIR_ASSOC_RADIUS_SQ then
-                            local chain = nil
+                        if dx >= -reach and dx <= reach and dy >= -reach and dy <= reach then
+                            local z_low = transitions[anchor_base + 3]
+                            local z_high = transitions[anchor_base + 4]
 
-                            if transition_chain ~= nil and chains ~= nil then
-                                local chain_id = transition_chain[a]
-
-                                if chain_id ~= nil then
-                                    chain = chains[chain_id]
-                                end
+                            if z_low > z_high then
+                                z_low, z_high = z_high, z_low
                             end
 
-                            if _chain_allows_tick(chain, mz) then
-                                keep_tick = true
+                            if mz >= z_low - z_slack and mz <= z_high + z_slack then
+                                local chain = nil
 
-                                break
+                                if transition_chain ~= nil and chains ~= nil then
+                                    local chain_id = transition_chain[a]
+
+                                    if chain_id ~= nil then
+                                        chain = chains[chain_id]
+                                    end
+                                end
+
+                                if type(chain) ~= "table" or _chain_is_steep(chain) then
+                                    keep_tick = true
+
+                                    break
+                                end
                             end
                         end
                     end
@@ -982,25 +1264,33 @@ local function _build_stair_filter(vector_context, counts, stair_layer)
 end
 
 --- Rebuilds all vector layer indices and the stair filter for a vector context.
+-- Contours listed in `dead_contours` are left out. Without transitions there is no steep chain to
+-- place stair ticks at, so the stair layer stays empty instead of indexing every elevation step.
 local function _build_vectors(vector_context, counts, revision)
     _reset_vectors()
 
     local total_cells = 0
     local layer, cell_count
 
-    layer, cell_count = _build_segment_index(vector_context.contours, counts.contours, CONTOUR_STRIDE, true)
+    layer, cell_count = _build_segment_index(vector_context.contours, counts.contours, CONTOUR_STRIDE, true,
+        vector_context.dead_contours)
     _vectors.contours = layer
     total_cells = total_cells + cell_count
 
-    layer, cell_count = _build_segment_index(vector_context.stairs, counts.stairs, STAIR_STRIDE, false)
+    if (counts.transitions or 0) > 0 then
+        layer, cell_count = _build_segment_index(vector_context.stairs, counts.stairs, STAIR_STRIDE, false, nil)
+    else
+        layer, cell_count = _build_segment_index(nil, 0, STAIR_STRIDE, false, nil)
+    end
+
     _vectors.stairs = layer
     total_cells = total_cells + cell_count
 
-    layer, cell_count = _build_segment_index(vector_context.hatches, counts.hatches, HATCH_STRIDE, true)
+    layer, cell_count = _build_segment_index(vector_context.hatches, counts.hatches, HATCH_STRIDE, true, nil)
     _vectors.hatches = layer
     total_cells = total_cells + cell_count
 
-    layer, cell_count = _build_segment_index(vector_context.slopes, counts.slopes, SLOPE_STRIDE, true)
+    layer, cell_count = _build_segment_index(vector_context.slopes, counts.slopes, SLOPE_STRIDE, true, nil)
     _vectors.slopes = layer
     total_cells = total_cells + cell_count
 
@@ -1019,26 +1309,21 @@ local function _ensure_vectors(vector_context, counts, revision)
 end
 
 --- Draws a screen-space line segment as a quad of two triangles, offset by the normal `(nx, ny)`.
+-- The two corners both triangles share are built once.
 local function _submit_quad(gui, ax, ay, bx, by, nx, ny, layer, color)
-    Gui_triangle(
-        gui,
-        Vector3(ax + nx, 0, ay + ny),
-        Vector3(bx + nx, 0, by + ny),
-        Vector3(bx - nx, 0, by - ny),
-        layer,
-        color
-    )
-    Gui_triangle(
-        gui,
-        Vector3(ax + nx, 0, ay + ny),
-        Vector3(bx - nx, 0, by - ny),
-        Vector3(ax - nx, 0, ay - ny),
-        layer,
-        color
-    )
+    local start_corner = Vector3(ax + nx, 0, ay + ny)
+    local end_corner = Vector3(bx - nx, 0, by - ny)
+
+    Gui_triangle(gui, start_corner, Vector3(bx + nx, 0, by + ny), end_corner, layer, color)
+    Gui_triangle(gui, start_corner, end_corner, Vector3(ax - nx, 0, ay - ny), layer, color)
 end
 
 --- Projects a world-space segment with `_view`, clips it to the radar shape and draws it as a thick line.
+-- A wall is first extended by half its width at both ends, so neighbouring segments join at
+-- corners, and only then clipped, so it never reaches past the radar edge. A dashed line takes
+-- its dashes from the world (see `DASH_PERIOD_PX`), measured along the segment from its end with
+-- the lower x (the lower y when it runs along y), so the pattern does not depend on the
+-- segment's direction and never moves with clipping, rotation or zoom within one period step.
 -- number: wx1 start x in world space
 -- number: wy1 start y in world space
 -- number: wx2 end x in world space
@@ -1046,35 +1331,23 @@ end
 -- int: layer GUI layer
 -- param: color engine `Color`
 -- number: half_w half line width in unscaled pixels
--- ?bool: dashed draw as dashes instead of a solid line
-local function _emit_line(wx1, wy1, wx2, wy2, layer, color, half_w, dashed)
+-- int: line_style `LINE_SOLID`, `LINE_WALL` or `LINE_DASHED`
+local function _emit_line(wx1, wy1, wx2, wy2, layer, color, half_w, line_style)
     local view = _view
-    local radar_scale = view.radar_scale
-    local rx = view.rx
-    local px1, py1, px2, py2
+    local ax = view.basis_ax
+    local ay = view.basis_ay
+    local bx = view.basis_bx
+    local by = view.basis_by
     local dx = wx1 - view.ppx
     local dy = wy1 - view.ppy
+    local px1 = dx * ax + dy * ay
+    local py1 = dx * bx + dy * by
 
-    if rx then
-        local ry = view.ry
-        local fx = view.fx
-        local fy = view.fy
+    dx = wx2 - view.ppx
+    dy = wy2 - view.ppy
 
-        px1 = (dx * rx + dy * ry) * radar_scale
-        py1 = -(dx * fx + dy * fy) * radar_scale
-        dx = wx2 - view.ppx
-        dy = wy2 - view.ppy
-        px2 = (dx * rx + dy * ry) * radar_scale
-        py2 = -(dx * fx + dy * fy) * radar_scale
-    else
-        px1 = dx * radar_scale
-        py1 = -dy * radar_scale
-        dx = wx2 - view.ppx
-        dy = wy2 - view.ppy
-        px2 = dx * radar_scale
-        py2 = -dy * radar_scale
-    end
-
+    local px2 = dx * ax + dy * ay
+    local py2 = dx * bx + dy * by
     local limit = view.limit
 
     if (px1 > limit and px2 > limit) or (px1 < -limit and px2 < -limit)
@@ -1084,6 +1357,22 @@ local function _emit_line(wx1, wy1, wx2, wy2, layer, color, half_w, dashed)
 
     local ddx = px2 - px1
     local ddy = py2 - py1
+
+    if line_style == LINE_WALL then
+        local wall_length_sq = ddx * ddx + ddy * ddy
+
+        if wall_length_sq > MIN_SEGMENT_SCREEN_LENGTH_SQ then
+            local extend = half_w / math_sqrt(wall_length_sq)
+
+            px1 = px1 - ddx * extend
+            py1 = py1 - ddy * extend
+            px2 = px2 + ddx * extend
+            py2 = py2 + ddy * extend
+            ddx = px2 - px1
+            ddy = py2 - py1
+        end
+    end
+
     local t0 = 0
     local t1 = 1
 
@@ -1180,16 +1469,18 @@ local function _emit_line(wx1, wy1, wx2, wy2, layer, color, half_w, dashed)
     local ny2 = py1 + ddy * t1
 
     local ui_scale = view.ui_scale
-    local sx1 = view.screen_center_x + nx1 * ui_scale
-    local sy1 = view.screen_center_y + ny1 * ui_scale
-    local sx2 = view.screen_center_x + nx2 * ui_scale
-    local sy2 = view.screen_center_y + ny2 * ui_scale
+    local screen_center_x = view.screen_center_x
+    local screen_center_y = view.screen_center_y
+    local sx1 = screen_center_x + nx1 * ui_scale
+    local sy1 = screen_center_y + ny1 * ui_scale
+    local sx2 = screen_center_x + nx2 * ui_scale
+    local sy2 = screen_center_y + ny2 * ui_scale
 
     local sdx = sx2 - sx1
     local sdy = sy2 - sy1
     local length_sq = sdx * sdx + sdy * sdy
 
-    if length_sq <= MIN_SEGMENT_SCREEN_LENGTH_SQ then
+    if not (length_sq > MIN_SEGMENT_SCREEN_LENGTH_SQ) then
         return
     end
 
@@ -1199,62 +1490,121 @@ local function _emit_line(wx1, wy1, wx2, wy2, layer, color, half_w, dashed)
     local nxo = -sdy / length * half
     local nyo = sdx / length * half
     local gui = view.gui
+    local period = view.dash_period_m
 
-    if not dashed then
+    if line_style ~= LINE_DASHED or period <= 0 then
         _submit_quad(gui, sx1, sy1, sx2, sy2, nxo, nyo, layer, color)
 
         return
     end
 
-    local period = DASH_PERIOD_PX * ui_scale
-    local on_length = DASH_ON_PX * ui_scale
-    local inverse_length = 1 / length
-    local pos = 0
+    local screen_px_per_m = view.screen_px_per_m
+    local world_length = length / ((t1 - t0) * screen_px_per_m)
+    local inverse_world_length = 1 / world_length
+    local wdx = wx2 - wx1
+    local wdy = wy2 - wy1
+    local start_x = wx1
+    local start_y = wy1
+    local u0 = t0
+    local u1 = t1
+    local origin_x = screen_center_x + px1 * ui_scale
+    local origin_y = screen_center_y + py1 * ui_scale
+    local delta_x = ddx * ui_scale
+    local delta_y = ddy * ui_scale
 
-    while pos < length do
-        local dash_end = pos + on_length
+    if wdx < 0 or (wdx == 0 and wdy < 0) then
+        wdx = -wdx
+        wdy = -wdy
+        start_x = wx2
+        start_y = wy2
+        u0 = 1 - t1
+        u1 = 1 - t0
+        origin_x = origin_x + delta_x
+        origin_y = origin_y + delta_y
+        delta_x = -delta_x
+        delta_y = -delta_y
+    end
 
-        if dash_end > length then
-            dash_end = length
+    local along = (start_x * wdx + start_y * wdy) * inverse_world_length
+    local on_fraction = view.dash_on_m * inverse_world_length
+    local min_fraction = MIN_DASH_SCREEN_LENGTH / (world_length * screen_px_per_m)
+    local k = math_floor((along + u0 * world_length) / period)
+    local f0 = (k * period - along) * inverse_world_length
+
+    while f0 < u1 do
+        local f1 = f0 + on_fraction
+
+        if f0 < u0 then
+            f0 = u0
         end
 
-        if dash_end - pos >= 0.5 then
-            local f0 = pos * inverse_length
-            local f1 = dash_end * inverse_length
-
-            _submit_quad(gui, sx1 + sdx * f0, sy1 + sdy * f0, sx1 + sdx * f1, sy1 + sdy * f1, nxo, nyo, layer, color)
+        if f1 > u1 then
+            f1 = u1
         end
 
-        pos = pos + period
+        if f1 - f0 >= min_fraction then
+            _submit_quad(gui, origin_x + delta_x * f0, origin_y + delta_y * f0, origin_x + delta_x * f1,
+                origin_y + delta_y * f1, nxo, nyo, layer, color)
+        end
+
+        k = k + 1
+        f0 = (k * period - along) * inverse_world_length
     end
 end
 
---- Draws one vector layer's segments within the cull square.
--- Contours use the band of their height (dashed below the current floor), stairs and slopes
--- the current band colour within the floor range, and hatches mark other floors only (above
--- only when enabled). Each segment is drawn at most once per frame.
+--- Sorts one vector layer's segments within the cull square into the class lists of `_bins`.
+-- Contours split into below, above and current-band walls and hatches into below and above by
+-- floor band, slope marks keep only the current band and stair ticks only those within
+-- `STAIR_FLOOR_RANGE` of the floor reference; everything outside the floor range is dropped.
+-- Each segment is visited at most once per frame, and indices `dead` lists are skipped.
 -- tab: layer_data layer index
 -- int: mode `MODE_CONTOURS`, `MODE_STAIRS`, `MODE_HATCHES` or `MODE_SLOPES`
--- int: layer GUI layer
-local function _draw_layer(layer_data, mode, layer)
+-- ?tab: dead set of contour indices that are no longer walls
+-- treturn: int number of segments listed below
+-- treturn: int number of segments listed above
+-- treturn: int number of segments listed for the current floor
+local function _select_layer(layer_data, mode, dead)
     local count = layer_data.count
 
     if count <= 0 then
-        return
+        return 0, 0, 0
     end
 
     local view = _view
+    local bins = _bins
+    local style = _style
     local segments = layer_data.segments
     local stride = layer_data.stride
     local z_last = layer_data.z_last
     local cells = layer_data.cells
     local stamp = layer_data.stamp
     local keep = layer_data.keep
-    local style = _style
-    local frame_id = view.frame_id
-    local ppz = view.ppz
+    local frame_id = view.vector_frame_id
+    local ref_z = view.ref_z
     local range_above = view.range_above
     local range_below = view.range_below
+    local reach = CURRENT_FLOOR_HALF_HEIGHT
+    local below_list = nil
+    local above_list = nil
+    local current_list = nil
+
+    if mode == MODE_CONTOURS then
+        below_list = style.contour_below and bins.below_contours or nil
+        above_list = style.contour_above and bins.above_contours or nil
+        current_list = style.contour_current and bins.walls or nil
+    elseif mode == MODE_HATCHES then
+        below_list = style.hatch_below and bins.below_hatches or nil
+        above_list = style.hatch_above and bins.above_hatches or nil
+    elseif mode == MODE_SLOPES then
+        current_list = style.slope and bins.slopes or nil
+    else
+        current_list = style.stair and bins.stairs or nil
+        reach = STAIR_FLOOR_RANGE
+    end
+
+    local below_n = 0
+    local above_n = 0
+    local current_n = 0
 
     local min_cx = view.min_cx
     local max_cx = view.max_cx
@@ -1287,75 +1637,61 @@ local function _draw_layer(layer_data, mode, layer)
                 for bucket_index = 1, #bucket do
                     local i = bucket[bucket_index]
 
-                    if stamp[i] ~= frame_id and (keep == nil or keep[i]) then
+                    if stamp[i] ~= frame_id and (keep == nil or keep[i]) and not (dead and dead[i]) then
                         stamp[i] = frame_id
 
-                        local base = (i - 1) * stride
-                        local x1 = segments[base + 1]
-                        local y1 = segments[base + 2]
-                        local x2 = segments[base + 3]
-                        local y2 = segments[base + 4]
                         local dz
 
                         if z_last then
-                            dz = segments[base + stride] - ppz
+                            dz = segments[i * stride] - ref_z
                         else
-                            dz = (segments[base + 5] + segments[base + 6]) * 0.5 - ppz
+                            local base = (i - 1) * stride
+
+                            dz = (segments[base + 5] + segments[base + 6]) * 0.5 - ref_z
                         end
 
-                        local color, half_w, dashed
-
-                        if mode == MODE_CONTOURS then
-                            if dz >= -range_below and dz <= range_above then
-                                if dz > CURRENT_FLOOR_HALF_HEIGHT then
-                                    color = style.contour_above
-                                    half_w = CONTOUR_ABOVE_HALF_WIDTH
-                                elseif dz < -CURRENT_FLOOR_HALF_HEIGHT then
-                                    color = style.contour_below
-                                    half_w = CONTOUR_BELOW_HALF_WIDTH
-                                    dashed = true
-                                else
-                                    color = style.contour_current
-                                    half_w = CONTOUR_CURRENT_HALF_WIDTH
+                        if dz <= range_above and dz >= -range_below then
+                            if dz > reach then
+                                if above_list then
+                                    above_n = above_n + 1
+                                    above_list[above_n] = i
                                 end
-                            end
-                        elseif mode == MODE_STAIRS then
-                            if dz >= -range_below and dz <= range_above then
-                                color = style.stair
-                                half_w = STAIR_HALF_WIDTH
-                            end
-                        elseif mode == MODE_HATCHES then
-                            if dz < -CURRENT_FLOOR_HALF_HEIGHT then
-                                if dz >= -range_below then
-                                    color = style.hatch_below
-                                    half_w = HATCH_HALF_WIDTH
+                            elseif dz < -reach then
+                                if below_list then
+                                    below_n = below_n + 1
+                                    below_list[below_n] = i
                                 end
-                            elseif dz > CURRENT_FLOOR_HALF_HEIGHT and dz <= range_above then
-                                color = style.hatch_above
-                                half_w = HATCH_HALF_WIDTH
+                            elseif current_list then
+                                current_n = current_n + 1
+                                current_list[current_n] = i
                             end
-                        else
-                            if dz >= -range_below and dz <= range_above then
-                                color = style.slope
-                                half_w = SLOPE_HALF_WIDTH
-                            end
-                        end
-
-                        if color then
-                            _emit_line(x1, y1, x2, y2, layer, color, half_w, dashed)
                         end
                     end
                 end
             end
         end
     end
+
+    return below_n, above_n, current_n
 end
 
---- Draws the vector details above the map triangles.
--- Derives the line colours from the band colours, fills `_view` for the line helpers and
--- draws contours and stairs one layer above the slope and hatch marks. Runs inside `pcall`.
-local function _draw_vectors(ui_renderer, vector_context, counts, revision, player_pos, rotation, center_x, center_y,
-                             z, projection_radius, range, radar_style)
+--- Derives this frame's line colours and dash period and sorts the vector segments in range into `_bins`.
+-- Rebuilds the vector indices first when the context or revision changed. Runs inside `pcall`
+-- from `RadarStrikemapGeometry.draw` after `_select_geometry` set the frame up.
+-- tab: vector_context validated vector context
+-- tab: counts record count per layer
+-- param: revision geometry revision
+local function _select_vectors(vector_context, counts, revision)
+    local bins = _bins
+
+    bins.below_hatches_n = 0
+    bins.below_contours_n = 0
+    bins.above_hatches_n = 0
+    bins.above_contours_n = 0
+    bins.slopes_n = 0
+    bins.walls_n = 0
+    bins.stairs_n = 0
+
     _ensure_vectors(vector_context, counts, revision)
 
     local vectors = _vectors
@@ -1385,68 +1721,119 @@ local function _draw_vectors(ui_renderer, vector_context, counts, revision, play
     end
 
     local view = _view
-    local scale = ui_renderer.scale or 1
-    local render_settings = ui_renderer.render_settings
-    local base_layer = (render_settings and render_settings.start_layer or 0) + z
-    local ppx = player_pos.x
-    local ppy = player_pos.y
-
-    view.gui = ui_renderer.gui
-    view.ui_scale = scale
-    view.screen_center_x = center_x * scale
-    view.screen_center_y = center_y * scale
-    view.ppx = ppx
-    view.ppy = ppy
-    view.ppz = player_pos.z or 0
-
-    local forward_x, forward_y = _forward_xy(rotation)
-
-    if forward_x and forward_y then
-        view.fx = forward_x
-        view.fy = forward_y
-        view.rx = forward_y
-        view.ry = -forward_x
-    else
-        view.fx = nil
-        view.fy = nil
-        view.rx = nil
-        view.ry = nil
-    end
-
-    view.limit = projection_radius
-    view.limit_sq = projection_radius * projection_radius
-    view.radar_scale = projection_radius / range
-    view.is_circle = radar_style == "circle"
-    view.range_above, view.range_below = _configured_ranges()
-
     local frame_id = vectors.frame_id + 1
     vectors.frame_id = frame_id
-    view.frame_id = frame_id
+    view.vector_frame_id = frame_id
 
-    local cull_range = range * CULL_RANGE_FACTOR
+    view.min_cx = math_floor(view.cull_min_x * VECTOR_INVERSE_GRID_CELL)
+    view.max_cx = math_floor(view.cull_max_x * VECTOR_INVERSE_GRID_CELL)
+    view.min_cy = math_floor(view.cull_min_y * VECTOR_INVERSE_GRID_CELL)
+    view.max_cy = math_floor(view.cull_max_y * VECTOR_INVERSE_GRID_CELL)
 
-    view.min_cx = math_floor((ppx - cull_range) * VECTOR_INVERSE_GRID_CELL)
-    view.max_cx = math_floor((ppx + cull_range) * VECTOR_INVERSE_GRID_CELL)
-    view.min_cy = math_floor((ppy - cull_range) * VECTOR_INVERSE_GRID_CELL)
-    view.max_cy = math_floor((ppy + cull_range) * VECTOR_INVERSE_GRID_CELL)
+    local dash_period = 2 ^ math_ceil(math_log(DASH_PERIOD_PX / view.radar_scale) * INVERSE_LN2 - 1e-9)
 
-    local lines_layer = base_layer + 2
-    local marks_layer = base_layer + 1
+    if not (dash_period > 0 and dash_period < math_huge) then
+        dash_period = 0
+    end
+
+    view.dash_period_m = dash_period
+    view.dash_on_m = dash_period * DASH_ON_FRACTION
 
     if style.contour_current or style.contour_above or style.contour_below then
-        _draw_layer(vectors.contours, MODE_CONTOURS, lines_layer)
-    end
-
-    if style.stair then
-        _draw_layer(vectors.stairs, MODE_STAIRS, lines_layer)
-    end
-
-    if style.slope then
-        _draw_layer(vectors.slopes, MODE_SLOPES, marks_layer)
+        bins.below_contours_n, bins.above_contours_n, bins.walls_n =
+            _select_layer(vectors.contours, MODE_CONTOURS, vector_context.dead_contours)
     end
 
     if style.hatch_below or style.hatch_above then
-        _draw_layer(vectors.hatches, MODE_HATCHES, marks_layer)
+        bins.below_hatches_n, bins.above_hatches_n = _select_layer(vectors.hatches, MODE_HATCHES, nil)
+    end
+
+    if style.slope then
+        local _, _, slope_n = _select_layer(vectors.slopes, MODE_SLOPES, nil)
+
+        bins.slopes_n = slope_n
+    end
+
+    if style.stair then
+        local _, _, stair_n = _select_layer(vectors.stairs, MODE_STAIRS, nil)
+
+        bins.stairs_n = stair_n
+    end
+end
+
+--- Draws one class list of vector segments in one style.
+-- tab: indices segment indices
+-- int: count number of indices
+-- tab: layer_data vector layer index the indices point into
+-- int: layer GUI layer
+-- param: color engine `Color`
+-- number: half_w half line width in unscaled pixels
+-- int: line_style `LINE_SOLID`, `LINE_WALL` or `LINE_DASHED`
+local function _draw_segments(indices, count, layer_data, layer, color, half_w, line_style)
+    local segments = layer_data.segments
+    local stride = layer_data.stride
+    local emit_line = _emit_line
+
+    for k = 1, count do
+        local base = (indices[k] - 1) * stride
+
+        emit_line(segments[base + 1], segments[base + 2], segments[base + 3], segments[base + 4], layer, color,
+            half_w, line_style)
+    end
+end
+
+--- Draws the hatching and dashed outlines of the floors below on the geometry layer, before the current floor's fill.
+-- Runs inside `pcall` after `_select_vectors`.
+local function _draw_lower_vectors()
+    local bins = _bins
+    local style = _style
+    local layer = _view.layer
+
+    if bins.below_hatches_n > 0 then
+        _draw_segments(bins.below_hatches, bins.below_hatches_n, _vectors.hatches, layer, style.hatch_below,
+            HATCH_HALF_WIDTH, LINE_SOLID)
+    end
+
+    if bins.below_contours_n > 0 then
+        _draw_segments(bins.below_contours, bins.below_contours_n, _vectors.contours, layer, style.contour_below,
+            CONTOUR_BELOW_HALF_WIDTH, LINE_DASHED)
+    end
+end
+
+--- Draws the vector details above the fills.
+-- One layer up go the hatching of the floors above and the current floor's slope marks, two
+-- layers up the thin outlines of the floors above, then the current floor's walls and stair
+-- ticks over them. Runs inside `pcall` after `_draw_upper_fills`.
+local function _draw_upper_vectors()
+    local bins = _bins
+    local style = _style
+    local vectors = _vectors
+    local marks_layer = _view.layer + 1
+    local lines_layer = _view.layer + 2
+
+    if bins.above_hatches_n > 0 then
+        _draw_segments(bins.above_hatches, bins.above_hatches_n, vectors.hatches, marks_layer, style.hatch_above,
+            HATCH_HALF_WIDTH, LINE_SOLID)
+    end
+
+    if bins.slopes_n > 0 then
+        _draw_segments(bins.slopes, bins.slopes_n, vectors.slopes, marks_layer, style.slope, SLOPE_HALF_WIDTH,
+            LINE_DASHED)
+    end
+
+    if bins.above_contours_n > 0 then
+        _draw_segments(bins.above_contours, bins.above_contours_n, vectors.contours, lines_layer, style.contour_above,
+            CONTOUR_ABOVE_HALF_WIDTH, LINE_SOLID)
+    end
+
+    if bins.walls_n > 0 then
+        _draw_segments(bins.walls, bins.walls_n, vectors.contours, lines_layer, style.contour_current,
+            CONTOUR_CURRENT_HALF_WIDTH, LINE_WALL)
+    end
+
+    if bins.stairs_n > 0 then
+        _draw_segments(bins.stairs, bins.stairs_n, vectors.stairs, lines_layer, style.stair, STAIR_HALF_WIDTH,
+            LINE_SOLID)
     end
 end
 
@@ -1460,15 +1847,17 @@ local function _log_revision_diagnostics(context, vector_context, counts, revisi
     _diag_revision = revision
 
     local api_version = StrikemapCompatibility.get_api_version and StrikemapCompatibility:get_api_version() or nil
+    local contour_layer = _vectors.contours
 
     mod:info(string_format(
-        "[Radar] Strikemap geometry revision | api=%s map=%s revision=%s triangles=%d vector=%s contours=%d stairs=%d hatches=%d slopes=%d vector_cells=%d",
+        "[Radar] Strikemap geometry revision | api=%s map=%s revision=%s triangles=%d vector=%s contours=%d dead=%d stairs=%d hatches=%d slopes=%d vector_cells=%d",
         tostring(api_version),
         tostring(context.map_id or context.mission_name),
         tostring(revision),
         _grid.tri_count,
         vector_context ~= nil and "yes" or "no",
         counts and counts.contours or 0,
+        contour_layer and contour_layer.skipped or 0,
         counts and counts.stairs or 0,
         counts and counts.hatches or 0,
         counts and counts.slopes or 0,
@@ -1501,10 +1890,13 @@ end
 
 --- Draws the Strikemap map layer for one frame.
 -- Probes triangle support on first use and marks the integration unsupported when it is
--- missing. Triangle errors put the integration into its `error` status; vector errors only
--- disable vectors for the current revision.
+-- missing. The frame runs in four protected steps -- selecting the triangles and drawing the
+-- floors below, selecting the vector segments and drawing the lower floors' details, drawing
+-- the current floor and the floors above, and drawing the remaining details. Triangle errors
+-- put the integration into its `error` status; vector errors only disable vectors for the
+-- current revision, and a frame whose vector selection failed draws no later vectors.
 -- tab: ui_renderer active UI renderer
--- tab: snapshot radar snapshot providing `player_position`
+-- tab: snapshot radar snapshot providing `player_position` and `player_revision`
 -- number: center_x radar centre x in unscaled UI pixels
 -- number: center_y radar centre y in unscaled UI pixels
 -- number: z layer offset above the pass start layer
@@ -1556,8 +1948,12 @@ RadarStrikemapGeometry.draw = function(ui_renderer, snapshot, center_x, center_y
         return
     end
 
-    local ok, err = pcall(_draw_geometry, ui_renderer, context, revision, player_pos, rotation, center_x, center_y, z,
-        projection_radius, range, radar_style)
+    if (vector_context == nil or vector_counts == nil) and _vectors.context ~= nil then
+        _reset_vectors()
+    end
+
+    local ok, err = pcall(_select_geometry, ui_renderer, context, revision, player_pos, snapshot.player_revision,
+        rotation, center_x, center_y, z, projection_radius, range, radar_style, t)
 
     if not ok then
         StrikemapCompatibility:mark_error(err)
@@ -1565,18 +1961,40 @@ RadarStrikemapGeometry.draw = function(ui_renderer, snapshot, center_x, center_y
         return
     end
 
-    if vector_context ~= nil and vector_counts ~= nil then
-        if mod:get("strikemap_vector_details") ~= false then
-            local ok_vectors, vector_err = pcall(_draw_vectors, ui_renderer, vector_context, vector_counts, revision,
-                player_pos, rotation, center_x, center_y, z, projection_radius, range, radar_style)
+    if _view.ready then
+        local vectors_ok = vector_context ~= nil and vector_counts ~= nil
+            and mod:get("strikemap_vector_details") ~= false
+        local vector_err = nil
 
-            if not ok_vectors then
+        if vectors_ok then
+            vectors_ok, vector_err = pcall(_select_vectors, vector_context, vector_counts, revision)
+
+            if vectors_ok then
+                vectors_ok, vector_err = pcall(_draw_lower_vectors)
+            end
+
+            if not vectors_ok then
                 _reset_vectors()
                 StrikemapCompatibility:mark_vector_error(vector_err)
             end
         end
-    elseif _vectors.context ~= nil then
-        _reset_vectors()
+
+        ok, err = pcall(_draw_upper_fills)
+
+        if not ok then
+            StrikemapCompatibility:mark_error(err)
+
+            return
+        end
+
+        if vectors_ok then
+            vectors_ok, vector_err = pcall(_draw_upper_vectors)
+
+            if not vectors_ok then
+                _reset_vectors()
+                StrikemapCompatibility:mark_vector_error(vector_err)
+            end
+        end
     end
 
     if mod:get("debug_mode") == true then
@@ -1584,10 +2002,12 @@ RadarStrikemapGeometry.draw = function(ui_renderer, snapshot, center_x, center_y
     end
 end
 
---- Drops every cached grid and diagnostic state; called by `StrikemapCompatibility:reset`.
+--- Drops every cached grid, floor reference, selection and diagnostic state; called by `StrikemapCompatibility:reset`.
 mod._strikemap_geometry_renderer_reset = function()
     _reset_grid()
     _reset_vectors()
+    _reset_floor()
+    _reset_bins()
     _diag_context = nil
     _diag_revision = nil
 end
