@@ -191,8 +191,10 @@ local function new_harness()
         return nil
     end
 
-    env._player_unit = function()
-        return player_unit
+    local radar_player = { unit = player_unit, mode = "local", usable = true, reason = "ok", revision = 1 }
+
+    env._radar_player = function()
+        return radar_player
     end
 
     env._safe_unit_alive = function(unit)
@@ -268,6 +270,10 @@ local function new_harness()
 
     -- From the highlight outline module, which this harness does not install either.
     env._reset_highlight_outlines = function()
+    end
+
+    -- From the runtime helpers, like the probe reset above.
+    env._reset_radar_player = function()
     end
 
     install(TRACKING_PATH, env)

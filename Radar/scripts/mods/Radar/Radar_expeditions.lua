@@ -1128,14 +1128,15 @@ return function(env)
     -- ----------------------------------------------------------------------------
 
     --- Picks the player slot to colour a navigation point by, and builds the mask of every marking slot.
-    -- The local player's slot is preferred, then the lowest numeric slot.
+    -- The Radar player's slot is preferred, then the lowest numeric slot; the mask always holds
+    -- every player who marked the point.
     -- tab: marked_slots map from slot to marked level index
     -- param: marked_level_index level index to filter by, nil for all
     -- return: player slot, or nil
     -- treturn: ?int slot mask
     local function _marked_player_slots_result(marked_slots, marked_level_index)
-        local local_player_slot = tonumber(_safe_player_slot(_local_player()))
-        local preferred_local_slot = nil
+        local radar_player_slot = tonumber(_radar_player().slot)
+        local preferred_slot = nil
         local first_numeric_slot = nil
         local first_raw_slot = nil
         local marked_player_slots_mask = 0
@@ -1151,8 +1152,8 @@ return function(env)
                         first_numeric_slot = numeric_slot
                     end
 
-                    if numeric_slot == local_player_slot then
-                        preferred_local_slot = numeric_slot
+                    if numeric_slot == radar_player_slot then
+                        preferred_slot = numeric_slot
                     end
 
                     local slot_mask = PLAYER_SLOT_MASK_BY_SLOT[numeric_slot]
@@ -1164,7 +1165,7 @@ return function(env)
             end
         end
 
-        return preferred_local_slot or first_numeric_slot or first_raw_slot,
+        return preferred_slot or first_numeric_slot or first_raw_slot,
             marked_player_slots_mask ~= 0 and marked_player_slots_mask or nil
     end
 

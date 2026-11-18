@@ -1,21 +1,23 @@
 --- Generic runtime infrastructure shared by every Radar module.
 -- Provides defensive access to engine and game state (units, extensions, managers, the
--- player and camera), the rules that decide whether the radar may run at all, the radar
--- position maths, the game's world marker list, the world-to-screen projection and
--- occlusion test used by the HUD element, and the collection of nearby highlight targets.
+-- player and camera), the Radar player whose point of view the radar shows, the rules that
+-- decide whether the radar may run at all, the radar position maths, the game's world marker
+-- list, the world-to-screen projection and occlusion test used by the HUD element, and the
+-- collection of nearby highlight targets.
 -- Engine and extension calls are existence-checked and run through `pcall`, so a game
 -- patch that changes an API degrades a feature instead of raising in the update loop.
 --
 -- Installer module, installed second into Radar's shared runtime environment (see
 -- `Radar.lua`). Contributes the `_safe_*` accessors, player, mission, runtime state, colour
--- and world marker helpers, the radar position constants (`DEFAULT_RADAR_*`,
--- `RADAR_ANCHORS`) and `SCREEN_HIGHLIGHT_Z_OFFSET_BY_KIND`, plus the HUD projection `mod`
--- methods. It holds no feature-specific marker logic.
+-- and world marker helpers, the Radar player (`_radar_player`, `_reset_radar_player`), the
+-- radar position constants (`DEFAULT_RADAR_*`, `RADAR_ANCHORS`) and
+-- `SCREEN_HIGHLIGHT_Z_OFFSET_BY_KIND`, plus the HUD projection `mod` methods. It holds no
+-- feature-specific marker logic.
 --
--- Relies on the registries from `Radar_enemy_definitions.lua`, on the colour runtime, and
--- at call time on tracking state and methods (`mod._last_state_gameplay`,
--- `mod._logged_units`, the radar target lists and the nearby highlight settings getters)
--- from `Radar_tracking.lua`.
+-- Relies on the registries from `Radar_enemy_definitions.lua`, on the colour runtime, at
+-- call time on tracking state and methods (`mod._last_state_gameplay`, `mod._logged_units`,
+-- the radar target lists and the nearby highlight settings getters) from
+-- `Radar_tracking.lua`, and on `_safe_player_slot` from `Radar_players.lua`.
 -- module: Radar_runtime_helpers
 -- author: LucLeto
 return function(env)
@@ -180,6 +182,28 @@ return function(env)
     local _runtime_state_mechanism_name = nil
     local _runtime_state_player_unit = nil
     local _runtime_state_player_pos = nil
+
+    --- The Radar player, the actor whose point of view the radar shows.
+    -- In play it is the local player; while the local player is dead or captured it is the
+    -- teammate the game's spectator camera follows. `player` and `unit` name that actor,
+    -- `position` is the origin of every scan, distance, height and map, `view_rotation` the
+    -- camera basis the radar turns with and `slot` the actor's player slot. `mode` is `local`,
+    -- `spectating` or `unavailable`, `usable` and `reason` tell whether the radar may run
+    -- around the actor, and `revision` grows whenever the player, unit or mode changes and on
+    -- every reset. The viewport, camera, input and settings stay the local client's.
+    -- `_resolve_radar_player` publishes it once per gameplay time and `_reset_radar_player`
+    -- clears it; every other module reads it through `_radar_player`.
+    local RADAR_PLAYER = {
+        player = nil,
+        unit = nil,
+        position = nil,
+        view_rotation = nil,
+        slot = nil,
+        mode = "unavailable",
+        usable = false,
+        reason = "unresolved",
+        revision = 0,
+    }
 
     -- ----------------------------------------------------------------------------
     -- Generic helpers
@@ -775,7 +799,9 @@ return function(env)
     end
 
     --- Returns the name of the ability a unit has equipped in a slot.
-    -- For the combat ability the extension's current ability name is also tried.
+    -- Read from the unit's equipped abilities, which the game also syncs to a teammate's unit,
+    -- whose other name getters raise. Only when that list cannot be read are the slot's name
+    -- getter and, for the combat ability, the extension's current ability name tried.
     -- param: unit unit handle
     -- ?string: ability_type ability slot, such as `combat_ability`
     -- treturn: ?string ability name, nil when none is equipped
@@ -791,6 +817,23 @@ return function(env)
 
         if not ability_extension then
             return nil
+        end
+
+        local equipped_abilities = ability_extension.equipped_abilities
+
+        if ability_type ~= nil and equipped_abilities then
+            local ok_equipped, abilities = pcall(equipped_abilities, ability_extension)
+
+            if ok_equipped and type(abilities) == "table" then
+                local ability = abilities[ability_type]
+                local ability_name = type(ability) == "table" and ability.name or nil
+
+                if ability_name ~= nil and ability_name ~= "none" and ability_name ~= "not_equipped" then
+                    return ability_name
+                end
+
+                return nil
+            end
         end
 
         if ability_type ~= nil and ability_extension.ability_name then
@@ -1230,7 +1273,8 @@ return function(env)
         return nil
     end
 
-    --- Returns the local player's unit, which can be a teammate's while spectating.
+    --- Returns the local player's own unit, nil while the local player has none.
+    -- This is the client's own player; the actor the radar shows is `_radar_player`.
     -- return: unit handle, or nil
     function _player_unit()
         local local_player = _local_player()
@@ -1270,107 +1314,6 @@ return function(env)
     function _safe_player_character_state_name(player_unit)
         local character_state_component = _safe_player_character_state_component(player_unit)
         return character_state_component and character_state_component.state_name or nil
-    end
-
-    --- Returns the player that owns a player unit.
-    local function _player_for_unit(player_unit)
-        if not player_unit then
-            return nil
-        end
-
-        local player_manager = _player_manager()
-        local players_getter = player_manager and player_manager.players
-
-        if not players_getter then
-            return nil
-        end
-
-        local ok_players, players = pcall(players_getter, player_manager)
-
-        if not ok_players or type(players) ~= "table" then
-            return nil
-        end
-
-        for _, player in pairs(players) do
-            if player and player.player_unit == player_unit then
-                return player
-            end
-        end
-
-        return nil
-    end
-
-    --- Returns whether the local player's unit belongs to another player, as while spectating a teammate.
-    -- treturn: bool
-    function _is_local_player_using_foreign_unit(player_unit)
-        local local_player = _local_player()
-
-        if not local_player or not player_unit then
-            return false
-        end
-
-        local owning_player = _player_for_unit(player_unit)
-
-        return owning_player ~= nil and owning_player ~= local_player
-    end
-
-    --- Returns whether a player unit is still a live unit.
-    -- treturn: ?bool
-    function _is_player_unit_alive(player_unit)
-        return _safe_unit_alive(player_unit)
-    end
-
-    --- Returns whether a player unit is captured (hogtied).
-    -- treturn: bool
-    function _is_player_unit_captured(player_unit)
-        if not _safe_unit_alive(player_unit) or not PlayerUnitStatus then
-            return false
-        end
-
-        local character_state_component = _safe_player_character_state_component(player_unit)
-
-        if not character_state_component then
-            return false
-        end
-
-        local state_name = character_state_component.state_name
-
-        if state_name == "hogtied" then
-            return true
-        end
-
-        local is_hogtied = PlayerUnitStatus.is_hogtied
-        if not is_hogtied then
-            return false
-        end
-
-        local ok, captured = pcall(is_hogtied, character_state_component)
-
-        return ok and captured == true or false
-    end
-
-    --- Returns whether the local player is alive in their own unit.
-    -- treturn: bool
-    function _is_local_player_alive()
-        local player_unit = _player_unit()
-
-        if _is_local_player_using_foreign_unit(player_unit) then
-            return false
-        end
-
-        return _is_player_unit_alive(player_unit)
-    end
-
-    --- Returns whether the local player is captured in their own unit.
-    -- treturn: bool
-    function _is_local_player_captured()
-        local player_unit = _player_unit()
-
-        if _is_local_player_using_foreign_unit(player_unit) then
-            return false
-        end
-
-        return _is_player_unit_captured(player_unit)
     end
 
     --- Returns the rotation of the local player's camera, or nil without a visible camera.
@@ -1415,8 +1358,9 @@ return function(env)
     end
 
     --- Returns the rotation the radar is aligned to.
-    -- Prefers the camera, then the player's first person rotation, and finally the unit's root rotation.
-    -- param: player_unit local player unit
+    -- Prefers the local camera, which follows a spectated teammate's view too, then the
+    -- player's first person rotation, and finally the unit's root rotation.
+    -- param: player_unit the Radar player's unit
     -- return: rotation, or nil
     function _safe_player_rotation(player_unit)
         local camera_rotation = _safe_camera_rotation()
@@ -1487,6 +1431,195 @@ return function(env)
         end
 
         return _safe_forward_xy(first_person_component.rotation)
+    end
+
+    -- ----------------------------------------------------------------------------
+    -- Radar player
+    -- ----------------------------------------------------------------------------
+
+    --- Returns the unit the local player's spectator camera follows, nil while it is not spectating.
+    -- The game's own camera handler decides who is watched. `is_observing` holds while a dead or
+    -- captured player watches a teammate or their own captured unit, and `camera_follow_unit`
+    -- names the unit; the game's outline buffs ask the same two questions.
+    -- tab: local_player local player
+    -- return: followed unit, or nil
+    local function _safe_spectated_unit(local_player)
+        local camera_handler = local_player.camera_handler
+        local is_observing = camera_handler and camera_handler.is_observing
+        local camera_follow_unit = camera_handler and camera_handler.camera_follow_unit
+
+        if not is_observing or not camera_follow_unit then
+            return nil
+        end
+
+        local ok_observing, observing = pcall(is_observing, camera_handler)
+
+        if not ok_observing or not observing then
+            return nil
+        end
+
+        local ok_unit, unit = pcall(camera_follow_unit, camera_handler)
+
+        if ok_unit then
+            return unit
+        end
+
+        return nil
+    end
+
+    --- Returns the player that owns a unit, according to the player unit spawn manager.
+    -- param: unit unit handle
+    -- treturn: ?tab player
+    local function _safe_player_unit_owner(unit)
+        local state = Managers and Managers.state
+        local player_unit_spawn = state and state.player_unit_spawn
+        local owner = player_unit_spawn and player_unit_spawn.owner
+
+        if not owner then
+            return nil
+        end
+
+        local ok, player = pcall(owner, player_unit_spawn, unit)
+
+        if ok then
+            return player
+        end
+
+        return nil
+    end
+
+    --- Returns why a player unit cannot be the Radar player, or nil when it can.
+    -- One rule for the local player's unit and a spectated teammate's. A dead unit, by its
+    -- state or its health, and a captured (hogtied) one cannot; a knocked down, ledge hanging
+    -- or otherwise disabled one still can, as in normal play.
+    -- param: unit player unit
+    -- treturn: ?string `player_not_alive` or `player_captured`
+    local function _radar_player_unit_block_reason(unit)
+        if not _safe_unit_alive(unit) then
+            return "player_not_alive"
+        end
+
+        local state_name = _safe_player_character_state_name(unit)
+
+        if state_name == "dead" or _safe_health_alive(unit) == false then
+            return "player_not_alive"
+        end
+
+        if state_name == "hogtied" then
+            return "player_captured"
+        end
+
+        return nil
+    end
+
+    --- Resolves the Radar player for this gameplay time and publishes it in `RADAR_PLAYER`.
+    -- Without a block reason the source is the unit the game's spectator camera follows, else
+    -- the local player's own unit. A followed unit of another player makes that player the
+    -- Radar player (`spectating`), the local player's own unit makes the local player it
+    -- (`local`). The source is never guessed from where the camera is; a followed unit no
+    -- player owns, and a local player whose unit belongs to someone else while nobody is
+    -- watched, leave the radar without one. The unit must then be alive, not captured and have
+    -- a readable position. Anything else publishes `unavailable` with its reason and clears
+    -- every field, so nothing of an earlier source survives. The revision grows whenever the
+    -- player, unit or mode changes.
+    -- ?string: block_reason runtime gate that stops the radar, such as `loading`
+    -- treturn: tab `RADAR_PLAYER`
+    local function _resolve_radar_player(block_reason)
+        local radar_player = RADAR_PLAYER
+        local reason = block_reason
+        local player = nil
+        local unit = nil
+        local mode = "unavailable"
+        local position = nil
+
+        if reason == nil then
+            local local_player = _local_player()
+
+            if not local_player then
+                reason = "no_local_player"
+            else
+                local own_unit = local_player.player_unit
+                local followed_unit = _safe_spectated_unit(local_player)
+
+                unit = followed_unit or own_unit
+
+                local owner = unit ~= nil and _safe_player_unit_owner(unit) or nil
+
+                if unit == nil then
+                    reason = "no_player_unit"
+                elseif owner == nil or owner == local_player then
+                    if unit == own_unit then
+                        player = local_player
+                        mode = "local"
+                    else
+                        reason = "no_spectator_target"
+                    end
+                elseif followed_unit ~= nil and owner.player_unit == unit then
+                    player = owner
+                    mode = "spectating"
+                elseif followed_unit ~= nil then
+                    reason = "no_spectator_target"
+                else
+                    reason = "foreign_player_unit"
+                end
+
+                if reason == nil then
+                    reason = _radar_player_unit_block_reason(unit)
+                end
+
+                if reason == nil then
+                    position = _safe_unit_position(unit)
+
+                    if not position then
+                        reason = "no_player_position"
+                    end
+                end
+            end
+        end
+
+        if reason ~= nil then
+            player = nil
+            unit = nil
+            mode = "unavailable"
+        end
+
+        if player ~= radar_player.player or unit ~= radar_player.unit or mode ~= radar_player.mode then
+            radar_player.revision = radar_player.revision + 1
+        end
+
+        radar_player.player = player
+        radar_player.unit = unit
+        radar_player.position = position
+        radar_player.view_rotation = reason == nil and _safe_player_rotation(unit) or nil
+        radar_player.slot = reason == nil and _safe_player_slot(player) or nil
+        radar_player.mode = mode
+        radar_player.usable = reason == nil
+        radar_player.reason = reason or "ok"
+
+        return radar_player
+    end
+
+    --- Returns the Radar player as last resolved, which callers must only read.
+    -- `_get_runtime_state` resolves it once per gameplay time, before anything is scanned, so
+    -- the scans, the target collection and the snapshot of one update share one source.
+    -- treturn: tab `{ player, unit, position, view_rotation, slot, mode, usable, reason, revision }`
+    function _radar_player()
+        return RADAR_PLAYER
+    end
+
+    --- Clears the Radar player for a new mission; the revision grows so nothing keyed to the old one is kept.
+    function _reset_radar_player()
+        local radar_player = RADAR_PLAYER
+
+        radar_player.player = nil
+        radar_player.unit = nil
+        radar_player.position = nil
+        radar_player.view_rotation = nil
+        radar_player.slot = nil
+        radar_player.mode = "unavailable"
+        radar_player.usable = false
+        radar_player.reason = "unresolved"
+        radar_player.revision = radar_player.revision + 1
     end
 
     -- ----------------------------------------------------------------------------
@@ -1632,16 +1765,19 @@ return function(env)
     end
 
     --- Evaluates whether the radar may run right now, cached per gameplay time.
-    -- treturn: bool allowed
+    -- The game state comes first (loading, hub, mission, onboarding, game mode), and only once
+    -- it lets the radar run is the Radar player resolved, so nothing is read for it in the hub.
+    -- The Radar player is published either way, unusable while anything blocks the radar.
+    -- treturn: bool allowed, whether the Radar player is usable
     -- treturn: string reason, `ok` when allowed; otherwise such as `loading`, `hub_runtime`,
-    --   `game_mode_disabled`, `spectating_teammate`, `no_player_unit`, `player_not_alive` or
-    --   `player_captured`
+    --   `game_mode_disabled`, or the Radar player's own, such as `no_player_unit`,
+    --   `player_not_alive`, `player_captured` or `no_spectator_target`
     -- treturn: ?number gameplay time
     -- treturn: ?string mission name
     -- treturn: ?string presence activity
     -- treturn: ?string mechanism name
-    -- return: local player unit, or nil
-    -- treturn: ?tab local player position
+    -- return: the Radar player's unit, or nil
+    -- treturn: ?tab the Radar player's position
     function _get_runtime_state()
         local gameplay_t = _safe_gameplay_time()
 
@@ -1654,71 +1790,28 @@ return function(env)
         local mission_name = _safe_mission_name()
         local activity = _safe_presence_activity()
         local mechanism_name = _safe_mechanism_name()
-        local player_unit = _player_unit()
-        local player_pos = _safe_unit_position(player_unit)
+        local block_reason = nil
 
         if activity == "loading" then
-            return _store_runtime_state(false, "loading", gameplay_t, mission_name, activity, mechanism_name,
-                player_unit, player_pos)
+            block_reason = "loading"
+        elseif mechanism_name == "left_session" or mechanism_name == "hub" then
+            block_reason = "hub_mechanism"
+        elseif not mission_name then
+            block_reason = "no_mission"
+        elseif mission_name == "hub_ship" then
+            block_reason = "hub_mission"
+        elseif mechanism_name == "onboarding" and mission_name ~= "tg_shooting_range" then
+            block_reason = "onboarding_non_psykhanium"
+        elseif _is_hub_runtime(mission_name, activity, mechanism_name) then
+            block_reason = "hub_runtime"
+        elseif not mod:is_radar_runtime_game_mode_allowed() then
+            block_reason = "game_mode_disabled"
         end
 
-        if mechanism_name == "left_session" or mechanism_name == "hub" then
-            return _store_runtime_state(false, "hub_mechanism", gameplay_t, mission_name, activity, mechanism_name,
-                player_unit, player_pos)
-        end
+        local radar_player = _resolve_radar_player(block_reason)
 
-        if not mission_name then
-            return _store_runtime_state(false, "no_mission", gameplay_t, mission_name, activity, mechanism_name,
-                player_unit, player_pos)
-        end
-
-        if mission_name == "hub_ship" then
-            return _store_runtime_state(false, "hub_mission", gameplay_t, mission_name, activity, mechanism_name,
-                player_unit, player_pos)
-        end
-
-        if mechanism_name == "onboarding" and mission_name ~= "tg_shooting_range" then
-            return _store_runtime_state(false, "onboarding_non_psykhanium", gameplay_t, mission_name, activity,
-                mechanism_name, player_unit, player_pos)
-        end
-
-        if _is_hub_runtime(mission_name, activity, mechanism_name) then
-            return _store_runtime_state(false, "hub_runtime", gameplay_t, mission_name, activity, mechanism_name,
-                player_unit, player_pos)
-        end
-
-        if not mod:is_radar_runtime_game_mode_allowed() then
-            return _store_runtime_state(false, "game_mode_disabled", gameplay_t, mission_name, activity, mechanism_name,
-                player_unit, player_pos)
-        end
-
-        if _is_local_player_using_foreign_unit(player_unit) then
-            return _store_runtime_state(false, "spectating_teammate", gameplay_t, mission_name, activity, mechanism_name,
-                player_unit, player_pos)
-        end
-
-        if not player_unit then
-            return _store_runtime_state(false, "no_player_unit", gameplay_t, mission_name, activity, mechanism_name,
-                player_unit, player_pos)
-        end
-
-        if not _is_player_unit_alive(player_unit) then
-            return _store_runtime_state(false, "player_not_alive", gameplay_t, mission_name, activity, mechanism_name,
-                player_unit, player_pos)
-        end
-
-        if _is_player_unit_captured(player_unit) then
-            return _store_runtime_state(false, "player_captured", gameplay_t, mission_name, activity, mechanism_name,
-                player_unit, player_pos)
-        end
-
-        if not player_pos then
-            return _store_runtime_state(false, "no_player_position", gameplay_t, mission_name, activity, mechanism_name,
-                player_unit, player_pos)
-        end
-
-        return _store_runtime_state(true, "ok", gameplay_t, mission_name, activity, mechanism_name, player_unit,
-            player_pos)
+        return _store_runtime_state(radar_player.usable, radar_player.reason, gameplay_t, mission_name, activity,
+            mechanism_name, radar_player.unit, radar_player.position)
     end
 
     --- Returns whether the radar may run right now.
@@ -2665,8 +2758,9 @@ return function(env)
 
     --- Collects the radar targets that get a nearby highlight bracket this frame.
     -- Considers the highlight source targets kept by tracking (falling back to the unclustered
-    -- and then the drawn radar targets) that lie within the highlight range, belong to a settings
-    -- group with highlights enabled and are not of an excluded kind. Each entry carries the anchor and
+    -- and then the drawn radar targets) that lie within the highlight range of the Radar player,
+    -- belong to a settings group with highlights enabled and are not of an excluded kind; without
+    -- a usable Radar player there are none. Each entry carries the anchor and
     -- fallback positions, the highlight colour (following the marker's puzzle state colour), the
     -- colour used while occluded and whether a player has tagged the target. The output list is
     -- reused between frames. A target of a group set to outlines is handed to
@@ -2682,17 +2776,13 @@ return function(env)
             return highlights
         end
 
-        local player_unit = _player_unit()
+        local radar_player = _radar_player()
 
-        if not _safe_unit_alive(player_unit) then
+        if not radar_player.usable then
             return highlights
         end
 
-        local player_pos = _safe_unit_position(player_unit)
-
-        if not player_pos then
-            return highlights
-        end
+        local player_pos = radar_player.position
 
         local get_setting = mod.get
         local get_marker_scale_group = mod.get_marker_scale_group

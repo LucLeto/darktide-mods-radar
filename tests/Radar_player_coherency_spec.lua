@@ -1,14 +1,15 @@
--- Whether a teammate is in coherency with the local player, from the scan to the marker.
+-- Whether a teammate is in coherency with the Radar player, from the scan to the marker.
 -- Installs the players module alone against a fake player manager, extensions and owner map,
--- runs `_refresh_player_units` and reads the meta each teammate is tracked with. The team panel's
--- rule decides; the teammate's coherency extension lists a unit the local player owns while the
+-- runs `_refresh_player_units` and reads the meta each teammate is tracked with. The Radar player
+-- is the local player, or the teammate the local player spectates. The team panel's rule
+-- decides; the teammate's coherency extension lists a unit the Radar player owns while the
 -- teammate is alive, not hogtied and has unit data, and anything unreadable counts as out of
 -- coherency, reported as `false`, and an annotation that is off reports nil. Then loads the HUD
 -- element against a fake UI stack and checks the coherency look `_target_visual` gives every
 -- teammate style; the game's interaction marker backplate in its configured colour, the ring in
 -- the teammate's colour while in coherency, a flash when that changes between frames, and a
 -- player colour lightened where it would not read on the backplate. A cyber mastiff counts
--- towards coherency only when its owner has the Part of the Squad aura, and then while the local
+-- towards coherency only when its owner has the Part of the Squad aura, and then while the Radar
 -- player's own coherency list holds it; it takes the same look in its owner's slot colour, as the
 -- game's companion nameplate does, never in the bright slot colours, and a recoloured slot reaches
 -- every companion once the draw cache reads the colours again.
@@ -183,8 +184,17 @@ local function new_players_harness()
                 end,
             }
         end,
-        _local_player = function()
-            return harness.local_player
+        -- The local player, unless a test spectates someone else.
+        _radar_player = function()
+            local player = harness.reference_player or harness.local_player
+
+            return {
+                player = player,
+                unit = player and player.player_unit or nil,
+                mode = player and "local" or "unavailable",
+                usable = player ~= nil,
+                revision = 1,
+            }
         end,
         _safe_unit_alive = function(unit)
             return unit ~= nil and world.alive[unit] == true
@@ -552,6 +562,57 @@ test("a replaced unit or a departed teammate leaves nothing behind", function()
     assert_equal(1, #cleared, "cleared units after the teammate left")
     assert_true(cleared[1].unit == new_unit, "the departed teammate's unit was not cleared")
     assert_nil(tracked[new_unit], "the departed teammate was tracked")
+end)
+
+test("while the local player spectates, coherency and the markers follow the spectated teammate", function()
+    local harness = new_players_harness()
+    local teammate_mastiff = harness.add_mastiff("teammate mastiff", harness.teammate, true)
+    local other_mastiff = harness.add_mastiff("other mastiff", harness.other, true)
+
+    -- Captured, the local player watches the teammate; tag and owner slots stay the players' own.
+    harness.settings.show_player_center_dot = false
+    harness.world.extensions[harness.local_unit].unit_data_system = new_unit_data("hogtied")
+    harness.reference_player = harness.teammate
+    harness.set_coherency(harness.local_unit, { harness.local_unit, harness.teammate_unit })
+    harness.set_coherency(harness.other_unit, { harness.other_unit, harness.teammate_unit })
+    harness.set_coherency(harness.teammate_unit, { harness.teammate_unit, harness.other_unit, other_mastiff })
+
+    local tracked = harness.scan()
+    local local_meta = teammate_meta(tracked, harness.local_unit)
+
+    assert_nil(tracked[harness.teammate_unit], "the spectated teammate got a marker besides the centre")
+    assert_equal("rescue", local_meta.player_radar_state, "the captured local player is not a teammate to rescue")
+    assert_equal(false, local_meta.player_in_coherency, "the hogtied local player counts as in coherency")
+    assert_equal(1, local_meta.player_slot, "the local player lost their own slot")
+    assert_true(teammate_meta(tracked, harness.other_unit).player_in_coherency,
+        "coherency with the spectated teammate is not shown")
+    assert_true(mastiff_meta(tracked, other_mastiff).companion_in_coherency,
+        "a mastiff in the spectated teammate's list is out of coherency")
+    assert_equal(false, mastiff_meta(tracked, teammate_mastiff).companion_in_coherency,
+        "a mastiff outside the spectated teammate's list is in coherency")
+    assert_equal(3, mastiff_meta(tracked, other_mastiff).player_slot, "a mastiff lost its owner's slot")
+    assert_equal(false, mastiff_meta(tracked, teammate_mastiff).owner_marker_visible,
+        "the spectated teammate's mastiff does not sit under the centre dot")
+    assert_true(mastiff_meta(tracked, other_mastiff).owner_marker_visible,
+        "another teammate's mastiff sits under the centre dot")
+
+    -- Rescued, the local player is the centre again and the teammate a teammate.
+    harness.reference_player = nil
+    harness.world.extensions[harness.local_unit].unit_data_system = new_unit_data()
+    harness.set_coherency(harness.teammate_unit, { harness.teammate_unit, harness.local_unit })
+
+    local cleared
+
+    tracked, cleared = harness.scan()
+
+    assert_nil(tracked[harness.local_unit], "the local player kept a teammate marker after the rescue")
+    assert_equal(1, #cleared, "cleared units after returning to the local player")
+    assert_true(cleared[1].unit == harness.local_unit and cleared[1].source == "player_manager",
+        "the local player's teammate marker was not cleared")
+    assert_true(teammate_meta(tracked, harness.teammate_unit).player_in_coherency,
+        "the teammate in the local player's list is out of coherency")
+    assert_equal(false, teammate_meta(tracked, harness.other_unit).player_in_coherency,
+        "coherency still follows the spectated teammate")
 end)
 
 test("a mastiff counts towards coherency only with Part of the Squad, by the local player's own list", function()

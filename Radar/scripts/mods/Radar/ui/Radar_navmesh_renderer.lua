@@ -10,8 +10,9 @@
 -- Explicit module loaded by `ui/Radar_hud_element.lua` through `mod:io_dofile`; the chunk
 -- returns `RadarNavmesh`. The geometry itself comes from `mod:ensure_navmesh_geometry`
 -- and `mod:get_navmesh_nearby_buckets`. The visible set is cached and only rebuilt when
--- the player moves, the range or style changes or the geometry is rebuilt, and a failing
--- draw pauses the layer for a few seconds instead of interrupting the marker draw.
+-- the player moves, the Radar player changes, the range or style changes or the geometry is
+-- rebuilt, and a failing draw pauses the layer for a few seconds instead of interrupting the
+-- marker draw.
 -- module: Radar_navmesh_renderer
 -- alias: RadarNavmesh
 -- author: dreams
@@ -69,6 +70,7 @@ local METRICS_LOG_INTERVAL = 5
 local _visible = {}
 local _visible_count = 0
 local _sel_revision = -1
+local _sel_origin_revision = nil
 local _sel_origin_x = math_huge
 local _sel_origin_y = math_huge
 local _sel_origin_z = math_huge
@@ -264,14 +266,16 @@ local function _refresh_selection(geometry, origin_x, origin_y, origin_z, select
 end
 
 --- Returns whether the cached visible set can still be used for this frame.
--- treturn: bool false when the geometry, style or floor ranges changed, time went
---   backwards, or a refresh interval elapsed with the range or player position changed enough
-local function _selection_current(geometry, t, origin_x, origin_y, origin_z, range, style, range_above, range_below)
+-- treturn: bool false when the geometry, the Radar player, style or floor ranges changed, time
+--   went backwards, or a refresh interval elapsed with the range or player position changed enough
+local function _selection_current(geometry, t, origin_x, origin_y, origin_z, range, style, range_above, range_below,
+                                  origin_revision)
     if geometry.revision ~= _sel_revision then
         return false
     end
 
-    if style ~= _sel_style or range_above ~= _sel_range_above or range_below ~= _sel_range_below then
+    if style ~= _sel_style or range_above ~= _sel_range_above or range_below ~= _sel_range_below
+        or origin_revision ~= _sel_origin_revision then
         return false
     end
 
@@ -354,7 +358,9 @@ end
 -- number: projection_radius radar radius in unscaled UI pixels
 -- number: range radar range in metres
 -- ?number: z layer offset above the pass start layer
-local function _draw_geometry(ui_renderer, t, player_pos, rotation, center_x, center_y, projection_radius, range, z)
+-- ?number: origin_revision Radar player revision of `player_pos`
+local function _draw_geometry(ui_renderer, t, player_pos, rotation, center_x, center_y, projection_radius, range, z,
+                              origin_revision)
     if not player_pos or not rotation then
         return
     end
@@ -401,7 +407,7 @@ local function _draw_geometry(ui_renderer, t, player_pos, rotation, center_x, ce
     local debug_mode = mod:get("debug_mode") == true
 
     if not _selection_current(geometry, t, origin_x, origin_y, origin_z, range, radar_style,
-            range_above, range_below) then
+            range_above, range_below, origin_revision) then
         local selection_start = debug_mode and os_clock and os_clock() or nil
 
         local select_range = (is_circle and range or range * SQUARE_RANGE_MULT) + SELECTION_RANGE_SLACK
@@ -409,6 +415,7 @@ local function _draw_geometry(ui_renderer, t, player_pos, rotation, center_x, ce
         _refresh_selection(geometry, origin_x, origin_y, origin_z, select_range, range_above, range_below)
 
         _sel_revision = geometry.revision
+        _sel_origin_revision = origin_revision
         _sel_origin_x = origin_x
         _sel_origin_y = origin_y
         _sel_origin_z = origin_z
@@ -596,7 +603,9 @@ end
 -- number: projection_radius radar radius in unscaled UI pixels
 -- number: range radar range in metres
 -- ?number: z layer offset above the pass start layer
-function RadarNavmesh.draw(ui_renderer, t, player_pos, rotation, center_x, center_y, projection_radius, range, z)
+-- ?number: origin_revision Radar player revision of `player_pos`; a new one selects again at once
+function RadarNavmesh.draw(ui_renderer, t, player_pos, rotation, center_x, center_y, projection_radius, range, z,
+                           origin_revision)
     if not Gui_triangle or not ui_renderer then
         return
     end
@@ -620,7 +629,7 @@ function RadarNavmesh.draw(ui_renderer, t, player_pos, rotation, center_x, cente
     end
 
     local ok, err = pcall(_draw_geometry, ui_renderer, t, player_pos, rotation, center_x, center_y, projection_radius,
-        range, z)
+        range, z, origin_revision)
 
     if not ok then
         _failed_until_t = t + DRAW_FAILURE_COOLDOWN

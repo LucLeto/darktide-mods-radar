@@ -1337,10 +1337,10 @@ return function(env)
     end
 
     --- Tracks every live enemy with a radar definition from the unit data system.
-    -- An enemy is tracked while its kind is enabled or while an ability of the local player
-    -- outlines it (when that option is on); otherwise it is removed from tracking. The meta
-    -- records the breed, the player slot that tagged it (when only tagged enemies are shown)
-    -- and the ability outline state.
+    -- An enemy is tracked while its kind is enabled or while an ability outlines it in the
+    -- Radar player's context (when that option is on); otherwise it is removed from tracking.
+    -- The meta records the breed, the player slot that tagged it (when only tagged enemies are
+    -- shown) and the ability outline state.
     function _scan_minions()
         local unit_data_map = _safe_unit_to_extension_map("unit_data_system")
         if not unit_data_map then
@@ -1350,9 +1350,9 @@ return function(env)
         local track_enemy_tags = mod:get_show_only_tagged_enemies()
         local show_ability_marked_enemies = mod:get_show_ability_marked_enemies()
         local outline_extension_map = show_ability_marked_enemies and _safe_outline_extension_data_map() or nil
-        local local_player_unit = show_ability_marked_enemies and _player_unit() or nil
-        local local_combat_ability_name = show_ability_marked_enemies
-            and _safe_unit_ability_name(local_player_unit, "combat_ability")
+        local radar_player_unit = show_ability_marked_enemies and _radar_player().unit or nil
+        local radar_combat_ability_name = show_ability_marked_enemies
+            and _safe_unit_ability_name(radar_player_unit, "combat_ability")
             or nil
         local kind_enabled_cache = _scratch_minion_kind_enabled_cache
         table_clear(kind_enabled_cache)
@@ -1383,8 +1383,8 @@ return function(env)
                                 ability_marker_bracket_color = _supported_ability_marker_state_for_unit(
                                         unit,
                                         outline_extension_map,
-                                        local_player_unit,
-                                        local_combat_ability_name
+                                        radar_player_unit,
+                                        radar_combat_ability_name
                                     )
                             end
 

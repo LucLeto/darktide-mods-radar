@@ -181,13 +181,21 @@ local function new_harness()
     install(TRACKING_PATH, env)
 
     local player_unit = { position = { x = 0, y = 0, z = 0 } }
+    local radar_player = {
+        unit = player_unit,
+        position = player_unit.position,
+        mode = "local",
+        usable = true,
+        reason = "ok",
+        revision = 1,
+    }
 
     alive[player_unit] = true
 
     -- What the scans around the collection would decide; here every kind is enabled and
     -- every unit still alive is trackable.
-    env._player_unit = function()
-        return player_unit
+    env._radar_player = function()
+        return radar_player
     end
     env._safe_unit_position = function(unit)
         return type(unit) == "table" and unit.position or nil

@@ -1,6 +1,7 @@
 -- Dropping navmesh triangles before projection must never change what the radar draws.
 -- Installs the real navmesh renderer and triangle clipper against a fake GUI and a generated
--- mesh, and compares every draw with the clipper run directly on all selected triangles.
+-- mesh, and compares every draw with the clipper run directly on all selected triangles. A new
+-- Radar player revision selects the triangles around the new origin at once.
 
 local RENDERER_PATH = "Radar/scripts/mods/Radar/ui/Radar_navmesh_renderer.lua"
 local CLIPPER_PATH = "Radar/scripts/mods/Radar/ui/Radar_triangle_clipper.lua"
@@ -117,6 +118,8 @@ local function new_harness(geometry, style)
     function mod:get_navmesh_nearby_buckets(_, _, _, out_buckets)
         local n = 0
 
+        harness.selections = (harness.selections or 0) + 1
+
         for _, bucket in pairs(harness.geometry.buckets) do
             n = n + 1
             out_buckets[n] = bucket
@@ -158,10 +161,10 @@ local function new_harness(geometry, style)
 
     rawset(_G, "get_mod", previous_get_mod)
 
-    function harness.draw(t, player, range)
+    function harness.draw(t, player, range, origin_revision)
         harness.emitted = {}
         harness.renderer.draw({ gui = {}, scale = UI_SCALE, render_settings = { start_layer = 100 } }, t, player, {},
-            CENTER_X, CENTER_Y, PROJECTION_RADIUS, range, 3)
+            CENTER_X, CENTER_Y, PROJECTION_RADIUS, range, 3, origin_revision)
 
         return harness.emitted
     end
@@ -350,6 +353,30 @@ test("the rotated square keeps its corners and drops what lies past its sides", 
     harness.draw(2, { x = 0, y = 0, z = 0 }, 25)
 
     assert_equal(1, harness.values.draw_geometry_in_shape, "turned 45 degrees, the other one is left")
+end)
+
+test("a new Radar player selects the geometry around it at once, the same one keeps its selection", function()
+    local harness = new_harness(new_geometry(random_triangles(4)), "circle")
+    local home = { x = 0, y = 0, z = 0 }
+    local teammate = { x = 30, y = -20, z = 0 }
+
+    harness.draw(1, home, 25, 7)
+    assert_equal(1, harness.selections, "the first draw selects")
+
+    harness.draw(1.05, home, 25, 7)
+    assert_equal(1, harness.selections, "the same place reselected")
+
+    -- Spectating a teammate moves the origin before the move check is due.
+    harness.draw(1.1, teammate, 25, 7)
+    assert_equal(1, harness.selections, "a move inside the refresh interval reselected")
+
+    local actual = harness.draw(1.15, teammate, 25, 8)
+
+    assert_equal(2, harness.selections, "a new Radar player kept the old selection")
+    assert_same_emission(expected_emission(harness, teammate, 25, true, 25 + 4), actual, "around the teammate")
+
+    harness.draw(1.2, teammate, 25, 8)
+    assert_equal(2, harness.selections, "the same Radar player reselected")
 end)
 
 local failures = {}

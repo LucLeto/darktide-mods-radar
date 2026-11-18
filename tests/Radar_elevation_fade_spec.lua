@@ -191,13 +191,24 @@ local function new_harness()
 
     local player_unit = { position = { x = 0, y = 0, z = 0 } }
     local extra_targets = {}
+    local radar_player = {
+        unit = player_unit,
+        position = player_unit.position,
+        mode = "local",
+        usable = true,
+        reason = "ok",
+        revision = 1,
+    }
 
     alive[player_unit] = true
 
     -- What the scans around the collection would decide; here every kind is enabled, every unit
-    -- still alive is trackable and objective kinds are the objectives.
-    env._player_unit = function()
-        return player_unit
+    -- still alive is trackable and objective kinds are the objectives. The Radar player reads
+    -- its unit's position on every update, as the resolver does.
+    env._radar_player = function()
+        radar_player.position = player_unit.position
+
+        return radar_player
     end
     env._safe_unit_position = function(unit)
         return type(unit) == "table" and unit.position or nil

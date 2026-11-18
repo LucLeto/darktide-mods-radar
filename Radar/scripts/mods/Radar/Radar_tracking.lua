@@ -2,7 +2,8 @@
 -- Owns what the radar knows about the world and when it looks. It keeps the registry of
 -- tracked units and positions, schedules the scans in three rates, dispatches interactees
 -- to the feature classifiers, filters tracked entries into radar targets (enablement,
--- range, floor, tags, marker limit) and publishes the snapshot the HUD element draws. It
+-- range, floor, tags, marker limit) around the Radar player from the runtime helpers, starts
+-- over when that source changes, and publishes the snapshot the HUD element draws. It
 -- also owns overview mode, radar zoom and position, the input capture for zoom keys, the
 -- settings getters the HUD reads, the mission reset, the hooks and DMF callbacks and the
 -- opt-in performance profiler, and registers the HUD element. Feature modules decide what a
@@ -150,13 +151,15 @@ return function(env)
     -- `last_seen_t`) and `_tracked_points` an id to a position-only entry. `_radar_targets` are
     -- the targets to draw after clustering, sorting and the marker limit;
     -- `_unclustered_radar_targets` and `_highlight_source_radar_targets` keep the list before
-    -- clustering for highlights. `_radar_snapshot` is what the HUD element reads each frame.
+    -- clustering for highlights. `_radar_snapshot` is what the HUD element reads each frame, and
+    -- `_radar_player_revision` the Radar player revision the tracked units were found for.
     mod._next_scan_t = 0
     mod._tracked_units = {}
     mod._tracked_points = {}
     mod._logged_units = {}
     mod._radar_targets = {}
     mod._radar_snapshot = nil
+    mod._radar_player_revision = nil
     mod._gameplay_run = false
     mod._last_update_t = nil
     mod._last_scan_signature = nil
@@ -938,18 +941,18 @@ return function(env)
     -- ----------------------------------------------------------------------------
 
     --- Scans the interactee system and tracks the interactables and pickups the radar shows.
-    -- Reads each interactee's active, used and prompt state, feeds the mission objective
-    -- lifecycle, classifies usable interactees through the feature modules and drops units that
-    -- stopped being interactees. Hidden objective and Martyr's Skull riddle interactables are
-    -- classified even before the game shows their prompt. Finishes with the mission objective
-    -- target scan.
+    -- Reads each interactee's active, used and prompt state, the prompt as the Radar player
+    -- would get it, feeds the mission objective lifecycle, classifies usable interactees
+    -- through the feature modules and drops units that stopped being interactees. Hidden
+    -- objective and Martyr's Skull riddle interactables are classified even before the game
+    -- shows their prompt. Finishes with the mission objective target scan.
     local function _scan_interactees()
         local interactee_map = _safe_unit_to_extension_map("interactee_system")
         if not interactee_map then
             return
         end
 
-        local player_unit = _player_unit()
+        local player_unit = _radar_player().unit
         local tracked_units = mod._tracked_units
         local seen_interactees = _scratch_seen_interactees
         local martyr_skull_riddle_fallback_mission_name = _martyr_skull_riddle_fallback_mission_name()
@@ -1179,7 +1182,7 @@ return function(env)
         return meta ~= nil and meta.marked_by_player_slot ~= nil
     end
 
-    --- Returns whether an enemy is outlined by a supported ability of the local player.
+    --- Returns whether an enemy is outlined by a supported ability in the Radar player's context.
     -- treturn: bool
     local function _target_has_ability_outline_mark(meta)
         return meta ~= nil and meta.ability_marked == true
@@ -1925,22 +1928,23 @@ return function(env)
     --- Builds the list of radar targets to draw from the tracked units and points.
     -- Every entry passes kind enablement, the companion and tag filters, the container filter,
     -- the range rules (with the exemptions for tags, ability marks, objectives the game points
-    -- at and sockets while carrying a luggable) and the floor rules, and is written into a
-    -- pooled target table with its distances, height difference, vertical arrow state, render
-    -- layer and selection priority. The unclustered list is kept for highlights; Tech-Remnants are
-    -- then clustered, the list sorted and cut to the marker limit. Last, each target left gets the
-    -- share of its opacity its category's elevation fade keeps, `elevation_alpha`, nil for all of it.
+    -- at and sockets while the Radar player carries a luggable) and the floor rules, and is
+    -- written into a pooled target table with its distances and height difference from the
+    -- Radar player, vertical arrow state, render layer and selection priority. The unclustered
+    -- list is kept for highlights; Tech-Remnants are then clustered, the list sorted and cut to
+    -- the marker limit. Last, each target left gets the share of its opacity its category's
+    -- elevation fade keeps, `elevation_alpha`, nil for all of it. Without a usable Radar player
+    -- the list is empty.
     -- treturn: tab radar targets
     local function _collect_radar_targets()
-        local player_unit = _player_unit()
-        if not _safe_unit_alive(player_unit) then
+        local radar_player = _radar_player()
+
+        if not radar_player.usable then
             return _reuse_or_new_table(mod._radar_targets)
         end
 
-        local player_pos = _safe_unit_position(player_unit)
-        if not player_pos then
-            return _reuse_or_new_table(mod._radar_targets)
-        end
+        local player_unit = radar_player.unit
+        local player_pos = radar_player.position
 
         local max_range = mod:get_radar_collection_range()
         local max_range_sq = max_range * max_range
@@ -2320,44 +2324,35 @@ return function(env)
         return targets
     end
 
-    --- Refreshes the reused radar snapshot with the player's state and the current targets.
+    --- Refreshes the reused radar snapshot with the Radar player and the current targets.
+    -- The player fields are the Radar player's, the camera basis as `player_rotation`, and
+    -- `player_revision` tells the HUD when the source changed.
     -- treturn: tab snapshot (`player_unit`, `player_position`, `player_rotation`, `player_slot`,
-    --   `targets`, `screen_highlights`)
-    local function _write_radar_snapshot(player_unit, player_pos)
-        local local_player = _local_player()
+    --   `player_revision`, `targets`, `screen_highlights`)
+    local function _write_radar_snapshot()
+        local radar_player = _radar_player()
         local snapshot = mod._radar_snapshot or {}
 
-        snapshot.player_unit = player_unit
-        snapshot.player_position = player_pos
-        snapshot.player_rotation = _safe_player_rotation(player_unit)
-        snapshot.player_slot = _safe_player_slot(local_player)
+        snapshot.player_unit = radar_player.unit
+        snapshot.player_position = radar_player.position
+        snapshot.player_rotation = radar_player.view_rotation
+        snapshot.player_slot = radar_player.slot
+        snapshot.player_revision = radar_player.revision
         snapshot.targets = mod._radar_targets
         snapshot.screen_highlights = mod._screen_highlight_targets
 
         return snapshot
     end
 
-    --- Returns a refreshed snapshot, or nil without a live, positioned local player.
-    local function _collect_radar_snapshot()
-        local player_unit = _player_unit()
-        if not _safe_unit_alive(player_unit) then
-            return nil
-        end
-
-        local player_pos = _safe_unit_position(player_unit)
-        if not player_pos then
-            return nil
-        end
-
-        return _write_radar_snapshot(player_unit, player_pos)
-    end
-
     --- Logs tracked counts, scan cost and runtime context in debug mode whenever they change.
+    -- The context includes the Radar player's mode and slot, so a switch to spectating or to
+    -- another spectated teammate shows up.
     local function _debug_log_scan()
         if mod:get("debug_mode") ~= true then
             return
         end
 
+        local radar_player = _radar_player()
         local counts = {
             enemies = 0,
             players = 0,
@@ -2403,6 +2398,8 @@ return function(env)
             tostring(_safe_presence_activity()),
             tostring(_safe_mechanism_name()),
             tostring(_safe_player_character_state_name(_player_unit())),
+            tostring(radar_player.mode),
+            tostring(radar_player.slot),
         }, "|")
 
         if signature == mod._last_scan_signature then
@@ -2412,7 +2409,7 @@ return function(env)
         mod._last_scan_signature = signature
 
         mod:info(string_format(
-            "Radar scan | enemies=%d players=%d ammo=%d crates=%d pocketables=%d materials=%d generic=%d tracked=%d radar_targets=%d scan_ms=%.2f mission=%s activity=%s mechanism=%s player_state=%s",
+            "Radar scan | enemies=%d players=%d ammo=%d crates=%d pocketables=%d materials=%d generic=%d tracked=%d radar_targets=%d scan_ms=%.2f mission=%s activity=%s mechanism=%s player_state=%s source=%s source_slot=%s",
             counts.enemies,
             counts.players,
             counts.ammo,
@@ -2426,7 +2423,9 @@ return function(env)
             tostring(_safe_mission_name()),
             tostring(_safe_presence_activity()),
             tostring(_safe_mechanism_name()),
-            tostring(_safe_player_character_state_name(_player_unit()))
+            tostring(_safe_player_character_state_name(_player_unit())),
+            tostring(radar_player.mode),
+            tostring(radar_player.slot)
         ))
     end
 
@@ -2482,11 +2481,14 @@ return function(env)
 
     --- Runs one radar update; the entry point of every scan.
     -- Called from the `StateGameplay.update` hook and from `mod.update`, and runs at most once
-    -- per gameplay time. With the radar disabled (and overview off) or the runtime not allowed
-    -- it clears the outputs and returns; tracked units are also dropped while the local player
-    -- has no unit, is dead, captured or spectating. Otherwise the snapshot is refreshed every frame, and
-    -- when the scan is due the scans run in a fixed order for their tier, followed by pruning,
-    -- target collection, highlight collection, the outline sync and the final snapshot.
+    -- per gameplay time. With the radar disabled (and overview off) it clears the outputs and
+    -- returns. While the runtime is not allowed, which includes having no usable Radar player,
+    -- it also drops the tracked units and closes overview. When the Radar player's source
+    -- changes (another player, unit or mode) the tracked units are dropped and every scan tier
+    -- runs in this update, so nothing found around the previous source is kept; overview stays
+    -- open. Otherwise the snapshot is refreshed every frame, and when the scan is due the scans
+    -- run in a fixed order for their tier, followed by pruning, target collection, highlight
+    -- collection, the outline sync and the final snapshot.
     -- While profiling, the update and each scan tier are timed without changing the scan order.
     -- ?number: t time passed by the caller, used when no gameplay time is available
     local function _update_internal(t)
@@ -2502,7 +2504,7 @@ return function(env)
             return
         end
 
-        local allowed, reason, gameplay_t, mission_name, activity, mechanism_name, player_unit, player_pos = _get_runtime_state()
+        local allowed, reason, gameplay_t, mission_name, activity, mechanism_name = _get_runtime_state()
         local scan_clock = gameplay_t or t or 0
 
         if mod._last_update_t and scan_clock and scan_clock == mod._last_update_t then
@@ -2515,12 +2517,7 @@ return function(env)
         mod._last_update_t = scan_clock
 
         if not allowed then
-            if reason == "player_not_alive"
-                or reason == "player_captured"
-                or reason == "no_player_unit"
-                or reason == "spectating_teammate" then
-                _reset_tracked_units_table()
-            end
+            _reset_tracked_units_table()
 
             if mod:is_overview_mode_active() then
                 mod:set_overview_mode_active(false)
@@ -2536,8 +2533,18 @@ return function(env)
             return
         end
 
+        local radar_player_revision = _radar_player().revision
+
+        if radar_player_revision ~= mod._radar_player_revision then
+            mod._radar_player_revision = radar_player_revision
+            _reset_tracked_units_table()
+            mod._next_scan_t = 0
+            mod._next_droppable_scan_t = 0
+            mod._next_static_scan_t = 0
+        end
+
         mod._last_block_signature = nil
-        mod._radar_snapshot = _write_radar_snapshot(player_unit, player_pos)
+        mod._radar_snapshot = _write_radar_snapshot()
 
         local profile_mark = profile_start and _profile_lap("update_runtime", profile_start)
 
@@ -2634,7 +2641,7 @@ return function(env)
         mod._radar_targets = _collect_radar_targets()
         mod._screen_highlight_targets = _collect_screen_highlight_targets()
         _sync_highlight_outlines()
-        mod._radar_snapshot = _collect_radar_snapshot()
+        mod._radar_snapshot = _write_radar_snapshot()
 
         if scan_start_time then
             mod._last_scan_cost_ms = (os_clock() - scan_start_time) * 1000
@@ -2652,7 +2659,8 @@ return function(env)
     -- ----------------------------------------------------------------------------
 
     --- Resets all tracking, scan scheduling, overview and feature module state for a new mission.
-    -- Also resets the Strikemap integration and rebuilds the input capture.
+    -- Also clears the Radar player, resets the Strikemap integration and rebuilds the input
+    -- capture.
     local function _reset_runtime_state()
         mod._screen_highlight_targets = {}
         mod._unclustered_radar_targets = {}
@@ -2662,6 +2670,8 @@ return function(env)
         mod._next_static_scan_t = 0
         mod._last_scan_cost_ms = nil
         _invalidate_runtime_state_cache()
+        _reset_radar_player()
+        mod._radar_player_revision = nil
         mod._tracked_units = {}
         mod._tracked_points = {}
         mod._logged_units = {}
@@ -3013,17 +3023,11 @@ return function(env)
     end
 
     --- Returns whether the HUD element should draw the radar this frame.
+    -- Only the radar's own switch and the runtime state decide; the runtime state includes
+    -- whether the Radar player is usable, so a usable spectated teammate is drawn too.
     -- treturn: bool
     function mod:should_draw_radar()
         if self:get("enable_radar") == false and not self:is_overview_mode_active() then
-            return false
-        end
-
-        if not _is_local_player_alive() then
-            return false
-        end
-
-        if _is_local_player_captured() then
             return false
         end
 
