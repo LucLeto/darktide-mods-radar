@@ -1199,7 +1199,7 @@ This section is for anyone reading or changing Radar's Lua code. All paths below
 
 ### The shared installer environment
 
-`Radar.lua` builds one table, `shared_env`, and runs every runtime module inside it. `shared_env` is preloaded with `mod` and four game modules (`Pickups`, `PlayerUnitStatus`, `PlayerUnitVisualLoadout`, `CompanionServoSkullSettings`), and its metatable falls back to `_G`:
+`Radar.lua` builds one table, `shared_env`, and runs every runtime module inside it. `shared_env` is preloaded with `mod` and three game modules (`Pickups`, `PlayerUnitVisualLoadout`, `CompanionServoSkullSettings`), and its metatable falls back to `_G`:
 
 ```lua
 local shared_env = { mod = mod, Pickups = Pickups, ... }
