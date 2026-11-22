@@ -93,6 +93,8 @@ local strikemap_source =
     assert(io.open("Radar/scripts/mods/Radar/compatibility/Radar_strikemap.lua")):read("*a")
 local strikemap_geometry_source =
     assert(io.open("Radar/scripts/mods/Radar/ui/Radar_strikemap_geometry.lua")):read("*a")
+local stair_treads_source =
+    assert(io.open("Radar/scripts/mods/Radar/ui/Radar_stair_treads.lua")):read("*a")
 local definitions_source = assert(io.open("Radar/scripts/mods/Radar/Radar_enemy_definitions.lua")):read("*a")
 
 local problems = {}
@@ -574,6 +576,7 @@ check(hud_locals < 200,
 for label, source in pairs({
     ["compatibility/Radar_strikemap.lua"] = strikemap_source,
     ["ui/Radar_strikemap_geometry.lua"] = strikemap_geometry_source,
+    ["ui/Radar_stair_treads.lua"] = stair_treads_source,
 }) do
     local count = 0
 
@@ -1162,6 +1165,7 @@ check_declared_aliases(definitions_source, "Radar_enemy_definitions.lua")
 check_declared_aliases(highlight_outlines_source, "Radar_highlight_outlines.lua")
 check_declared_aliases(strikemap_source, "compatibility/Radar_strikemap.lua")
 check_declared_aliases(strikemap_geometry_source, "ui/Radar_strikemap_geometry.lua")
+check_declared_aliases(stair_treads_source, "ui/Radar_stair_treads.lua")
 
 -- With no interaction marker from the game -- always the case for a scan target
 -- -- the bracket is placed on the fallback position, not the anchor. Objectives
@@ -1259,6 +1263,7 @@ check_local_use_before_declaration(safe_route_source, "compatibility/Radar_safe_
 check_local_use_before_declaration(highlight_outlines_source, "Radar_highlight_outlines.lua")
 check_local_use_before_declaration(strikemap_source, "compatibility/Radar_strikemap.lua")
 check_local_use_before_declaration(strikemap_geometry_source, "ui/Radar_strikemap_geometry.lua")
+check_local_use_before_declaration(stair_treads_source, "ui/Radar_stair_treads.lua")
 
 -- --------------------------------------------------------------------------------------------
 -- Respawn awareness, mirrored from the Respawn Rewind mod's world markers.

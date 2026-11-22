@@ -76,8 +76,10 @@ end
 
 --- Loads a fresh renderer and clipper against the given geometry and style.
 local function new_harness(geometry, style)
-    local harness = { emitted = {}, values = {}, geometry = geometry }
+    local harness = { emitted = {}, values = {}, geometry = geometry, settings = {}, logs = {} }
     local mod = {}
+
+    harness.mod = mod
     local previous_get_mod = rawget(_G, "get_mod")
     local previous = { Gui = rawget(_G, "Gui"), Vector3 = rawget(_G, "Vector3"), Color = rawget(_G, "Color"),
         Quaternion = rawget(_G, "Quaternion") }
@@ -90,10 +92,11 @@ local function new_harness(geometry, style)
             return style
         end
 
-        return nil
+        return harness.settings[id]
     end
 
-    function mod:info()
+    function mod:info(message)
+        harness.logs[#harness.logs + 1] = message
     end
 
     function mod:is_overview_mode_active()
@@ -119,6 +122,10 @@ local function new_harness(geometry, style)
     function mod:get_navmesh_nearby_buckets(_, _, _, out_buckets)
         local n = 0
 
+        if harness.bucket_failure then
+            error(harness.bucket_failure)
+        end
+
         harness.selections = (harness.selections or 0) + 1
 
         for _, bucket in pairs(harness.geometry.buckets) do
@@ -133,34 +140,39 @@ local function new_harness(geometry, style)
         return assert(loadfile(path .. ".lua"))()
     end
 
-    rawset(_G, "get_mod", function()
-        return mod
-    end)
-    rawset(_G, "Vector3", function(x, _, z)
-        return { x, z }
-    end)
-    rawset(_G, "Color", function(a, r, g, b)
-        return a * 16777216 + r * 65536 + g * 256 + b
-    end)
-    rawset(_G, "Quaternion", {
-        forward = function()
-            return forward
-        end,
-    })
-    rawset(_G, "Gui", {
-        triangle = function(_, a, b, c, layer, color)
-            harness.emitted[#harness.emitted + 1] = { a[1], a[2], b[1], b[2], c[1], c[2], layer, color }
-        end,
-    })
+    --- Runs the renderer file against the fakes and the same mod, as DMF does for every HUD it creates.
+    function harness.reload()
+        rawset(_G, "get_mod", function()
+            return mod
+        end)
+        rawset(_G, "Vector3", function(x, _, z)
+            return { x, z }
+        end)
+        rawset(_G, "Color", function(a, r, g, b)
+            return a * 16777216 + r * 65536 + g * 256 + b
+        end)
+        rawset(_G, "Quaternion", {
+            forward = function()
+                return forward
+            end,
+        })
+        rawset(_G, "Gui", {
+            triangle = function(_, a, b, c, layer, color)
+                harness.emitted[#harness.emitted + 1] = { a[1], a[2], b[1], b[2], c[1], c[2], layer, color }
+            end,
+        })
 
-    harness.renderer = assert(loadfile(RENDERER_PATH))()
-    harness.clip_and_emit = assert(loadfile(CLIPPER_PATH))()
+        harness.renderer = assert(loadfile(RENDERER_PATH))()
+        harness.clip_and_emit = assert(loadfile(CLIPPER_PATH))()
 
-    for name, value in pairs(previous) do
-        rawset(_G, name, value)
+        for name, value in pairs(previous) do
+            rawset(_G, name, value)
+        end
+
+        rawset(_G, "get_mod", previous_get_mod)
     end
 
-    rawset(_G, "get_mod", previous_get_mod)
+    harness.reload()
 
     function harness.draw(t, player, range, origin_revision)
         harness.emitted = {}
@@ -411,6 +423,123 @@ test("zooming the normal radar out selects the wider ring at once, the overview'
     harness.draw(2.15, player, 75)
     assert_equal(4, harness.selections, "not selected once the interval passed")
     assert_equal(3, harness.values.draw_geometry_in_shape, "the floor 60 m away")
+end)
+
+--- A floor around the origin with a 4 m flight and a landing north of it, whose marks take six frames to build.
+local function stair_scene()
+    local triangles = {}
+
+    for x = -8, 6, 2 do
+        for y = -8, 6, 2 do
+            triangles[#triangles + 1] = { x, y, 0, x + 2, y, 0, x + 2, y + 2, 0 }
+            triangles[#triangles + 1] = { x, y, 0, x + 2, y + 2, 0, x, y + 2, 0 }
+        end
+    end
+
+    triangles[#triangles + 1] = { 2, 8, 0, 4, 8, 0, 4, 14, 4 }
+    triangles[#triangles + 1] = { 2, 8, 0, 4, 14, 4, 2, 14, 4 }
+    triangles[#triangles + 1] = { 2, 14, 4, 4, 14, 4, 4, 16, 4 }
+    triangles[#triangles + 1] = { 2, 14, 4, 4, 16, 4, 2, 16, 4 }
+
+    return new_geometry(triangles)
+end
+
+test("stair marks follow the fills on the same layer in the chosen style, and their setting turns them off",
+    function()
+        local harness = new_harness(stair_scene(), "square")
+        local player = { x = 0, y = 0, z = 0 }
+        local actual
+
+        for frame = 1, 6 do
+            actual = harness.draw(frame * 0.01, player, 25)
+        end
+
+        local fills = expected_emission(harness, player, 25, false, 25 * 1.4143 + 4)
+
+        assert_equal(#fills + 16, #actual, "the flight's 8 lines were not drawn after the fills")
+        assert_same_emission(fills, { unpack(actual, 1, #fills) }, "the fills before the stair lines")
+
+        for i = #fills + 1, #actual do
+            assert_equal(LAYER, actual[i][7], "a stair line left the geometry layer")
+        end
+
+        local marks = {}
+
+        for _, style in ipairs({ "stripes", "shading" }) do
+            harness.settings.map_geometry_stairs = style
+            actual = harness.draw(0.07, player, 25)
+            marks[style] = #actual - #fills
+            assert_same_emission(fills, { unpack(actual, 1, #fills) }, "the fills before the " .. style)
+
+            for i = #fills + 1, #actual do
+                assert_equal(LAYER, actual[i][7], "a band left the geometry layer")
+            end
+        end
+
+        assert_true(marks.stripes > 0, "no stripes were drawn")
+        assert_true(marks.shading > marks.stripes, "shading did not fill every band")
+
+        -- The top band, 3.75 m up, takes the floor-above colour, brightened a fifth of the way to white.
+        local top_band = 80 * 16777216 + 147 * 65536 + 171 * 256 + 199
+        local found = false
+
+        for i = #fills + 1, #actual do
+            found = found or actual[i][8] == top_band
+        end
+
+        assert_true(found, "the shading did not take the floor-above colour")
+
+        harness.settings.map_geometry_stairs = "off"
+        assert_same_emission(fills, harness.draw(1, player, 25), "with the stair marks off")
+        harness.settings.map_geometry_stairs = nil
+
+        for frame = 1, 5 do
+            actual = harness.draw(1 + frame * 0.01, player, 25)
+            assert_same_emission(fills, actual, "the marks came back before they were built again")
+        end
+
+        actual = harness.draw(1.06, player, 25)
+        assert_equal(#fills + 16, #actual, "the lines did not come back")
+    end)
+
+test("stair marks built on entering a mission show on the first draw of the HUD created after it, unless their"
+    .. " setting is off or the build fails", function()
+    local player = { x = 0, y = 0, z = 0 }
+    local harness = new_harness(stair_scene(), "square")
+    local fills = expected_emission(harness, player, 25, false, 25 * 1.4143 + 4)
+
+    -- The previous HUD's renderer offers the build; DMF then loads the file again for the mission's HUD.
+    harness.settings.debug_mode = true
+    harness.mod._navmesh_stairs_prebuild(harness.geometry)
+    assert_true(tostring(harness.logs[#harness.logs]):find("built on entering the mission", 1, true) ~= nil,
+        "the prebuild was not logged in debug mode")
+    harness.reload()
+    assert_equal(#fills + 16, #harness.draw(0.01, player, 25), "the prebuilt lines were not drawn on the first draw")
+    harness.reload()
+    assert_equal(#fills + 16, #harness.draw(0.02, player, 25), "the lines were not drawn on a new HUD's first draw")
+
+    local off = new_harness(stair_scene(), "square")
+
+    off.settings.map_geometry_stairs = "off"
+    off.mod._navmesh_stairs_prebuild(off.geometry)
+    off.settings.map_geometry_stairs = nil
+    assert_same_emission(fills, off.draw(0.01, player, 25), "the marks were built while their setting was off")
+
+    for frame = 2, 6 do
+        off.draw(frame * 0.01, player, 25)
+    end
+
+    assert_equal(#fills + 16, #off.draw(0.07, player, 25), "the draws did not build the marks")
+
+    local failing = new_harness(stair_scene(), "square")
+
+    failing.bucket_failure = "probe failure"
+    failing.mod._navmesh_stairs_prebuild(failing.geometry)
+    failing.bucket_failure = nil
+
+    for frame = 1, 10 do
+        assert_same_emission(fills, failing.draw(frame * 0.01, player, 25), "marks of a failed build were drawn")
+    end
 end)
 
 local failures = {}

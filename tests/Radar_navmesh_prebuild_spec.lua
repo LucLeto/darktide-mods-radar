@@ -201,6 +201,34 @@ test("entering a mission builds the navmesh once, before any draw", function()
     assert_equal(1, harness.calls.visual, "later draws must not build again")
 end)
 
+test("the stair marks are built right after the navmesh on entering, once the renderer offers it", function()
+    local harness = new_harness()
+    local calls = {}
+
+    harness.enter_mission()
+    assert_equal(1, harness.calls.visual, "without the renderer's hook the build still runs")
+
+    harness.mod._navmesh_stairs_prebuild = function(geometry)
+        calls[#calls + 1] = { geometry = geometry, count = geometry.count, visual = harness.calls.visual }
+    end
+    harness.nav_mesh._nav_world = new_nav_world()
+    harness.enter_mission()
+
+    assert_equal(1, #calls, "the stair marks were not built on entering")
+    assert_equal(2, calls[1].visual, "the stair marks were built before the navmesh")
+    assert_equal(2, calls[1].count, "the stair marks did not get the new navmesh")
+    assert_true(calls[1].geometry == harness.draw(5), "the stair marks got another geometry than the draws")
+    assert_equal(1, #calls, "a draw built the stair marks again")
+
+    local auto = new_harness({ source = "auto" })
+
+    auto.mod._navmesh_stairs_prebuild = function()
+        calls[#calls + 1] = {}
+    end
+    auto.enter_mission()
+    assert_equal(1, #calls, "the stair marks were built on entering without a navmesh build")
+end)
+
 test("the previous handler runs first and receives the arguments", function()
     local harness = new_harness()
 

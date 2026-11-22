@@ -1980,6 +1980,17 @@ return {
                                     step_size_value = 1,
                                 },
                                 {
+                                    setting_id = "map_geometry_stairs",
+                                    type = "dropdown",
+                                    default_value = "lines",
+                                    options = {
+                                        _dropdown_option("map_geometry_stairs_lines", "lines"),
+                                        _dropdown_option("map_geometry_stairs_stripes", "stripes"),
+                                        _dropdown_option("map_geometry_stairs_shading", "shading"),
+                                        _dropdown_option("radar_outline_off", "off"),
+                                    },
+                                },
+                                {
                                     setting_id = "strikemap_geometry_in_overview",
                                     type = "checkbox",
                                     default_value = true,

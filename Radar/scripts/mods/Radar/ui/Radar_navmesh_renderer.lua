@@ -5,11 +5,16 @@
 -- radar shape, so a triangle that cannot touch the shape is dropped before it is projected.
 -- The others are binned into below, current and above floor bands, drawn in that order with
 -- their own configurable colours, so lower floors sit under the current floor and the floor
--- above veils it.
+-- above veils it. Unless the stairs setting is off, `Radar_stair_treads.lua` then marks the
+-- stairs and ramps near the player's height on the same layer, as lines, stripes or shading.
 --
 -- Explicit module loaded by `ui/Radar_hud_element.lua` through `mod:io_dofile`; the chunk
 -- returns `RadarNavmesh`. The geometry itself comes from `mod:ensure_navmesh_geometry`
--- and `mod:get_navmesh_nearby_buckets`. The visible set is cached and only rebuilt when
+-- and `mod:get_navmesh_nearby_buckets`, and `mod._navmesh_stairs_prebuild` lets
+-- `Radar_navmesh.lua` build the stair marks with it. DMF runs the HUD element file again for
+-- every HUD the game creates (each mission, the spectator HUD), and this chunk with it, so the
+-- stair marks module is loaded once and kept as `mod._navmesh_stair_treads`; marks built when a
+-- mission starts or before a HUD change stay with the new HUD. The visible set is cached and only rebuilt when
 -- the player moves, the Radar player changes, the range or style changes or the geometry is
 -- rebuilt, and a failing draw pauses the layer for a few seconds instead of interrupting the
 -- marker draw. While debug logs are on, the live floor probe logs on every zoom where the nearby
@@ -20,6 +25,9 @@
 -- author: LucLeto
 local mod = get_mod("Radar")
 local _clip_and_emit = mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_triangle_clipper")
+local RadarStairTreads = mod._navmesh_stair_treads or mod:io_dofile("Radar/scripts/mods/Radar/ui/Radar_stair_treads")
+
+mod._navmesh_stair_treads = RadarStairTreads
 
 local Color = Color
 local Quaternion = Quaternion
@@ -865,8 +873,10 @@ end
 -- radar shape is dropped, which the clipper would have done at a much higher cost. The rest
 -- have their vertices projected onto the camera's right and forward axes, scaled by
 -- `projection_radius / range` and clipped to the radar shape; bands with a zero alpha colour
--- are skipped. In debug mode, a draw that `_probe_phase` picks also writes the live floor probe
--- with the same axes.
+-- are skipped. Unless the stairs setting is off, each frame also advances the stair marks' build
+-- and draws them after the fills in the chosen style, each in its own `pcall`, so a failing
+-- build or draw only stops the stair marks until the navmesh changes. In debug mode, a draw that
+-- `_probe_phase` picks also writes the live floor probe with the same axes.
 -- tab: ui_renderer active UI renderer
 -- number: t gameplay time
 -- !Vector3: player_pos player position
@@ -927,7 +937,19 @@ local function _draw_geometry(ui_renderer, t, player_pos, rotation, center_x, ce
     local down_x = -forward_x * radar_scale
     local down_y = -forward_y * radar_scale
     local debug_mode = mod:get("debug_mode") == true
+    local stair_style = mod:get("map_geometry_stairs")
+    local stairs_shown = stair_style ~= "off"
     local refreshed = false
+
+    if stairs_shown then
+        local built, failure = pcall(RadarStairTreads.update, geometry)
+
+        if not built then
+            RadarStairTreads.fail(failure)
+        end
+    else
+        RadarStairTreads.reset()
+    end
 
     if not _selection_current(geometry, t, origin_x, origin_y, origin_z, range, radar_style,
             range_above, range_below, origin_revision) then
@@ -1075,6 +1097,16 @@ local function _draw_geometry(ui_renderer, t, player_pos, rotation, center_x, ce
         end
     end
 
+    if stairs_shown then
+        local marks_ok, failure = pcall(RadarStairTreads.draw, gui, layer, stair_style, cur, above, below, refreshed,
+            origin_x, origin_y, origin_z, right_x, right_y, down_x, down_y, radar_scale, is_circle, limit, ui_scale,
+            center_x, center_y, range)
+
+        if not marks_ok then
+            RadarStairTreads.fail(failure)
+        end
+    end
+
     mod:radar_profiler_value("draw_geometry_selected", visible_count)
     mod:radar_profiler_value("draw_geometry_in_shape", below_n + current_n + above_n)
     mod:radar_profiler_value("draw_geometry_triangles", drawn)
@@ -1102,7 +1134,7 @@ local RadarNavmesh = {}
 --- Returns whether the navmesh layer should draw this frame.
 -- The layer is active for the `live` geometry source, or for `auto` while Strikemap is not
 -- drawing, and only while `Gui.triangle` exists and a band is visible. When the layer turns
--- inactive the cached navmesh geometry is released and the selection dropped.
+-- inactive the cached navmesh geometry and the stair marks are released and the selection dropped.
 -- bool: suppressed true while the Strikemap layer owns the geometry slot
 -- treturn: bool
 function RadarNavmesh.is_active(suppressed)
@@ -1115,6 +1147,7 @@ function RadarNavmesh.is_active(suppressed)
             mod:clear_navmesh_geometry()
         end
 
+        RadarStairTreads.reset()
         _invalidate_selection()
         _reset_probe()
     end
@@ -1179,6 +1212,27 @@ function RadarNavmesh.draw(ui_renderer, t, player_pos, rotation, center_x, cente
                     DRAW_FAILURE_COOLDOWN, message))
             end
         end
+    end
+end
+
+--- Builds the stair marks in one go; called by `Radar_navmesh.lua` right after it built the navmesh on entering a mission.
+-- That frame is the one the loading screen closes on, so the marks are ready on the first radar draw
+-- instead of about 100 drawn frames later. Skipped while the stairs setting is off; a failed build stops
+-- the marks until the navmesh changes, as a failed update would.
+-- tab: geometry navmesh geometry
+mod._navmesh_stairs_prebuild = function(geometry)
+    if mod:get("map_geometry_stairs") == "off" or not geometry or geometry.count == 0 then
+        return
+    end
+
+    local start = mod:get("debug_mode") == true and os_clock and os_clock() or nil
+    local built, failure = pcall(RadarStairTreads.build_now, geometry)
+
+    if not built then
+        RadarStairTreads.fail(failure)
+    elseif start then
+        mod:info(string_format("[Radar] navmesh stair marks built on entering the mission | build_ms=%.2f",
+            (os_clock() - start) * 1000))
     end
 end
 

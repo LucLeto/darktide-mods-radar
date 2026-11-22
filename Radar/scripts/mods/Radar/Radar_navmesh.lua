@@ -437,7 +437,8 @@ return function(env)
     --- Builds the navmesh on entering a mission when the first radar draw would build it anyway.
     -- Applies to the `live` source only, since `auto` may leave the slot to Strikemap, and not to
     -- game modes that spawn their navmesh during the mission (expeditions), whose data may still
-    -- be incomplete. Every other case keeps building on the first draw.
+    -- be incomplete. Every other case keeps building on the first draw. The navmesh renderer's
+    -- `mod._navmesh_stairs_prebuild`, once its module is loaded, then builds the stair marks too.
     local function _prebuild_geometry()
         if not mod:is_enabled() or mod:get_map_geometry_source() ~= "live" then
             return
@@ -450,15 +451,20 @@ return function(env)
             return
         end
 
-        mod:ensure_navmesh_geometry()
+        local built = mod:ensure_navmesh_geometry()
+        local prebuild_stairs = mod._navmesh_stairs_prebuild
+
+        if prebuild_stairs then
+            prebuild_stairs(built)
+        end
     end
 
     local previous_on_game_state_changed = mod.on_game_state_changed
 
     --- Starts the navmesh build as the mission state begins, after the previous handler.
-    -- A build stalls its frame for tens of milliseconds. On the first radar draw that frame falls
-    -- in the first seconds of play; here it is the one the loading screen closes on. A failed
-    -- build stays pending for the radar draw to retry.
+    -- A build, with the stair marks' build after it, stalls its frame for tens of milliseconds. On
+    -- the first radar draw that frame falls in the first seconds of play; here it is the one the
+    -- loading screen closes on. A failed build stays pending for the radar draw to retry.
     -- string: status `enter` or `exit`
     -- string: state_name game state class name
     mod.on_game_state_changed = function(status, state_name)
