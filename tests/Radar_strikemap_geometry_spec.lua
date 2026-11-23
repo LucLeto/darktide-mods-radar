@@ -351,6 +351,10 @@ local function new_harness(options)
     harness.floor = upvalue(update_floor, "_floor_state")
     harness.sample = upvalue(update_floor, "_sample_floor_height")
     harness.vectors = upvalue(draw, "_vectors")
+    harness.bins = upvalue(select_geometry, "_bins")
+    harness.pieces = upvalue(select_geometry, "_pieces")
+    harness.build_budget = upvalue(upvalue(upvalue(select_geometry, "_ensure_pieces"), "_build_pieces_step"),
+        "PIECE_BUILD_BUDGET")
 
     --- Publishes contexts the way Strikemap does: the status names the context's revision.
     function harness.publish(context, vector_context)
@@ -584,7 +588,7 @@ for _, style in ipairs({ "circle", "square" }) do
                 local expected_layers = {
                     below_fill = LAYER, current_fill = LAYER, above_fill = LAYER, below_hatch = LAYER,
                     below_contour = LAYER, above_hatch = LAYER + 1, slope = LAYER + 1, above_contour = LAYER + 2,
-                    wall = LAYER + 2, stair = LAYER + 2,
+                    wall = LAYER + 2,
                 }
 
                 for name, layer in pairs(expected_layers) do
@@ -592,6 +596,8 @@ for _, style in ipairs({ "circle", "square" }) do
                     assert_equal(count_class(emitted, classes, name), count_class(emitted, classes, name, layer),
                         name .. " landed on another layer")
                 end
+
+                assert_equal(0, count_class(emitted, classes, "stair"), "a stair record was drawn")
 
                 local _, below_fill_last = span(emitted, classes, "below_fill", LAYER)
                 local below_hatch_first, below_hatch_last = span(emitted, classes, "below_hatch", LAYER)
@@ -607,12 +613,10 @@ for _, style in ipairs({ "circle", "square" }) do
                 local _, above_hatch_last = span(emitted, classes, "above_hatch", LAYER + 1)
                 local slope_first = span(emitted, classes, "slope", LAYER + 1)
                 local _, above_contour_last = span(emitted, classes, "above_contour", LAYER + 2)
-                local wall_first, wall_last = span(emitted, classes, "wall", LAYER + 2)
-                local stair_first = span(emitted, classes, "stair", LAYER + 2)
+                local wall_first = span(emitted, classes, "wall", LAYER + 2)
 
                 assert_true(above_hatch_last < slope_first, "upper hatching was drawn over the slope marks")
                 assert_true(above_contour_last < wall_first, "upper outlines were drawn over the walls")
-                assert_true(wall_last < stair_first, "the stair ticks were drawn under the walls")
 
                 local signature = layer_signature(emitted, LAYER) .. "#" .. layer_signature(emitted, LAYER + 1)
                     .. "#" .. layer_signature(emitted, LAYER + 2)
@@ -988,57 +992,41 @@ test("vectors are optional, and dead contours are skipped, also when the set gro
     harness.close()
 end)
 
-test("stair ticks need a steep chain's anchor at a matching height near the current floor", function()
+test("stair records are never drawn, not even at a steep chain's anchor on the current floor", function()
     local player = { x = 0, y = 0, z = 0.1 }
     local ticks = {
         near = { 1, -0.5, 3, -0.5, -0.3, 0.3 },
-        far = { 4.5, 6, 5.5, 6, -0.3, 0.3 },
-        high = { -1, -6, 1, -6, 5.5, 6.5 },
-        gentle = { -6, 2, -4, 2, -0.3, 0.3 },
+        across = { -1, 2, 1, 4, -0.2, 0.6 },
         deep = { 7, -7, 9, -7, -5.5, -4.5 },
     }
-    local layers = {
-        stairs = { ticks.near, ticks.far, ticks.high, ticks.gentle, ticks.deep },
-        transitions = { { 0, 0, 0.5, -0.5 }, { 2, 6, -0.5, 0.5 }, { 0, -6, -0.5, 0.5 }, { -5, 2, -0.5, 0.5 },
-            { 8, -7, -5.5, -4.5 } },
-        transition_chain = { 1, 1, 1, 2, 1 },
-        chains = { { zlo = -6, zhi = 6, steep = true }, { zlo = -0.5, zhi = 0.5, steep = false } },
-    }
 
-    local harness = new_harness()
-    local context, vector_context = wall_scene(1, layers)
+    for _, with_anchors in ipairs({ true, false }) do
+        local layers = { stairs = { ticks.near, ticks.across, ticks.deep } }
 
-    harness.settings.navmesh_range_below = 10
-    harness.publish(context, vector_context)
+        if with_anchors then
+            layers.transitions = { { 0, 0, 0.5, -0.5 }, { 0, 3, -0.5, 0.5 }, { 8, -7, -5.5, -4.5 } }
+            layers.transition_chain = { 1, 1, 1 }
+            layers.chains = { { zlo = -6, zhi = 6, steep = true } }
+        end
 
-    local emitted = harness.draw(1, player)
-    local classes = classify_lines(emitted, ticks, player)
+        local harness = new_harness()
+        local context, vector_context = wall_scene(1, layers)
 
-    assert_true(count_class(emitted, classes, "near", LAYER + 2) > 0, "a tick at a steep anchor was dropped")
-    assert_equal(0, count_class(emitted, classes, "far"), "a tick 2.5 m past its anchor was drawn")
-    assert_equal(0, count_class(emitted, classes, "high"), "a tick far above its anchor's heights was drawn")
-    assert_equal(0, count_class(emitted, classes, "gentle"), "a tick at a gentle chain was drawn")
-    assert_equal(0, count_class(emitted, classes, "deep"), "a tick more than 4 m from the floor was drawn")
+        harness.settings.navmesh_range_below = 10
+        harness.publish(context, vector_context)
 
-    local keep = harness.vectors.stairs.keep
+        local emitted = harness.draw(1, player)
+        local classes = classify_lines(emitted, ticks, player)
 
-    assert_true(keep[1] == true, "the near tick was not kept")
-    assert_true(keep[2] == false, "a tick 2.5 m past its anchor was kept")
-    assert_true(keep[3] == false, "a tick far above its anchor's heights was kept")
-    assert_true(keep[4] == false, "a tick at a gentle chain was kept")
-    assert_true(keep[5] == true, "the deep tick was not kept by its anchor")
-    harness.close()
+        for name in pairs(ticks) do
+            assert_equal(0, count_class(emitted, classes, name), "the " .. name .. " stair record was drawn")
+        end
 
-    harness = new_harness()
-    layers.transitions = nil
-    layers.transition_chain = nil
-    layers.chains = nil
-    context, vector_context = wall_scene(1, layers)
-    harness.publish(context, vector_context)
-    emitted = harness.draw(1, player)
-    assert_equal(0, count_layer(emitted, LAYER + 2), "ticks were drawn without any transition")
-    assert_equal(0, harness.vectors.stairs.count, "the stair index was built without any transition")
-    harness.close()
+        assert_equal(0, count_layer(emitted, LAYER + 2), "a line was drawn on the top layer without walls")
+        assert_equal(nil, harness.vectors.stairs, "the stair records got an index")
+        assert_true(harness.vectors.contours ~= nil, "the vector layers were not built")
+        harness.close()
+    end
 end)
 
 test("slope marks stay on the current floor and upper decks are hatched only with the toggle", function()
@@ -1563,6 +1551,337 @@ test("without a rotation the map stays north-up", function()
         assert_true(oy < 0, "a floor north of the player was drawn below the centre")
     end
 end)
+
+-- ----------------------------------------------------------------------------
+-- Floor pieces
+-- ----------------------------------------------------------------------------
+
+--- Baked maps export stair transitions and no hatching; this far-away anchor makes a map one.
+local BAKED_TRANSITIONS = { { 500, 500, 0, 1 } }
+
+--- A walkway climbing 1 m per 2 m step from z 0 to 9 along x (triangles 1 to 20), a deck 4 m over
+-- its start with corners of its own (21, 22) and a room at the walkway's start height, apart
+-- from it (23, 24).
+local function piece_scene()
+    local tris = {}
+
+    for step = 0, 9 do
+        rect(tris, -2 + step * 2, 0, step * 2, 4, step)
+    end
+
+    rect(tris, -1.9, 0.1, -0.1, 3.9, 4)
+    rect(tris, -2, 10, 2, 14, 0)
+
+    return tris
+end
+
+local PIECE_WALLS = {
+    top = { 14, 0, 16, 0, 8 },
+    room = { -2, 10, 2, 10, 0 },
+    deck = { -1.9, 0.1, -0.1, 0.1, 4 },
+    loose = { 5, 20, 7, 20, 0 },
+    span = { -2, 4, 2, 4, 0.5 },
+    part = { -1.5, 0, -0.5, 0, 0 },
+}
+local PIECE_WALL_ORDER = { "top", "room", "deck", "loose", "span", "part" }
+
+local function piece_walls()
+    local list = {}
+
+    for i = 1, #PIECE_WALL_ORDER do
+        list[i] = PIECE_WALLS[PIECE_WALL_ORDER[i]]
+    end
+
+    return list
+end
+
+--- The sorted entries of a selection list, as a string.
+local function listed(list, count)
+    local items = {}
+
+    for k = 1, count do
+        items[k] = list[k]
+    end
+
+    table.sort(items)
+
+    return table.concat(items, ",")
+end
+
+local function range_list(first, last, extra)
+    local items = {}
+
+    for i = first, last do
+        items[#items + 1] = i
+    end
+
+    for i = 1, #(extra or {}) do
+        items[#items + 1] = extra[i]
+    end
+
+    table.sort(items)
+
+    return table.concat(items, ",")
+end
+
+test("on a baked map the connected floor under the player is the current floor, beyond the band and the floor range",
+    function()
+        local player = { x = -1, y = 1, z = 0.1 }
+        local harness = new_harness()
+
+        harness.settings.debug_mode = true
+        harness.publish(make_context(piece_scene(), 1), make_vectors(1, { transitions = BAKED_TRANSITIONS }))
+        harness.draw(1, player)
+
+        local bins = harness.bins
+        local pieces = harness.pieces
+
+        assert_equal(2, pieces.status, "the pieces of a small baked map were not ready on the first frame")
+        assert_equal(3, pieces.count, "piece count")
+        assert_equal(range_list(1, 20), listed(bins.current, bins.current_n),
+            "the whole walkway, 9 m up and past the 7 m floor range, is not the current floor")
+        assert_equal(range_list(21, 24), listed(bins.above, bins.above_n),
+            "the deck above and the room apart at the same height are not floors above")
+        assert_equal(0, bins.below_n, "a floor below was listed")
+        assert_true(pieces.vertex_ids == nil and pieces.edge_last == nil and pieces.slot_next == nil
+            and pieces.corner == nil, "the build tables outlived the build")
+
+        local logged = false
+
+        for i = 1, #harness.infos do
+            if harness.infos[i]:find("floor pieces ready", 1, true) and harness.infos[i]:find("pieces=3", 1, true) then
+                logged = true
+            end
+        end
+
+        assert_true(logged, "the finished build was not logged in debug mode")
+
+        harness.draw(1.1, { x = -1, y = 7, z = 0.1 })
+        assert_equal(range_list(1, 20), listed(bins.current, bins.current_n),
+            "a step off the floor plan, with no triangle in reach, lost the floor shown")
+        harness.close()
+
+        -- Expedition layers hatch their triangles and Strikemap bands them by height, so Radar does too.
+        harness = new_harness()
+        harness.settings.debug_mode = true
+        harness.publish(make_context(piece_scene(), 1), make_vectors(1, {
+            transitions = BAKED_TRANSITIONS,
+            hatches = { { 300, 300, 302, 300, 0 } },
+        }))
+        harness.draw(1, player)
+        bins = harness.bins
+        assert_equal(0, harness.pieces.status, "pieces were built for a hatched map")
+        assert_equal(range_list(1, 6, { 23, 24 }), listed(bins.current, bins.current_n),
+            "the hatched map's current floor is not the height band")
+        assert_equal(range_list(7, 16, { 21, 22 }), listed(bins.above, bins.above_n),
+            "the hatched map's floors above are not the height band")
+
+        logged = false
+
+        for i = 1, #harness.infos do
+            if harness.infos[i]:find("floor pieces off", 1, true) then
+                logged = true
+            end
+        end
+
+        assert_true(logged, "the band fallback was not logged in debug mode")
+        harness.close()
+
+        for _, layers in ipairs({ {}, false }) do
+            harness = new_harness()
+            harness.publish(make_context(piece_scene(), 1), layers and make_vectors(1, layers) or nil)
+            harness.draw(1, player)
+            bins = harness.bins
+            assert_equal(0, harness.pieces.status, "pieces were built without transitions or vectors")
+            assert_equal(range_list(1, 6, { 23, 24 }), listed(bins.current, bins.current_n),
+                "a map without transitions or vectors lost the height band")
+            harness.close()
+        end
+    end)
+
+test("steps over 3 m and decks stacked on the same corners stay apart, and the floor shown wins near a landing",
+    function()
+        local function pieces_of(tris, contours)
+            local harness = new_harness()
+
+            harness.publish(make_context(tris, 1),
+                make_vectors(1, { transitions = BAKED_TRANSITIONS, contours = contours }))
+            harness.draw(1, { x = tris[1][1] + 0.3, y = tris[1][2] + 0.2, z = tris[1][7] })
+
+            local piece, wall_piece = harness.pieces.piece, harness.pieces.wall_piece
+
+            harness.close()
+
+            return piece, wall_piece
+        end
+
+        local piece = pieces_of(rect(rect({}, 0, 0, 2, 4, 0), 2, 0, 4, 4, 3))
+
+        assert_true(piece[1] == piece[3], "a 3 m step split a floor")
+        piece = pieces_of(rect(rect({}, 0, 0, 2, 4, 0), 2, 0, 4, 4, 3.5))
+        assert_true(piece[1] ~= piece[3], "a 3.5 m step joined two floors")
+
+        local stacked = rect(rect(rect({}, 0, 0, 4, 4, 0), 0, 0, 4, 4, 4), 4, 0, 8, 4, 0)
+        local wall_piece
+
+        piece, wall_piece = pieces_of(stacked, {
+            { 0, 0, 4, 0, 4 },
+            { 0, 0, 4, 0, 0 },
+            { 0, 0, 8, 0, 0 },
+            { 0, 4, 8, 4, 4 },
+        })
+        assert_true(piece[1] == piece[2] and piece[1] == piece[5] and piece[1] == piece[6],
+            "the lower deck and its neighbour are not one floor")
+        assert_true(piece[3] == piece[4], "the upper deck, on the same corners as the lower one, fell apart")
+        assert_true(piece[3] ~= piece[1], "decks 4 m apart on the same corners were joined")
+        assert_equal(piece[3], wall_piece[1], "an upper deck edge went to the deck below it")
+        assert_equal(piece[1], wall_piece[2], "a lower deck edge went to the deck above it")
+        assert_equal(piece[1], wall_piece[3], "a contour over two lower edges lost its deck")
+        assert_equal(piece[3], wall_piece[4], "an upper contour took its end points' lower triangles")
+
+        -- This contour crosses a triangle, so only its end points name its floor.
+        piece, wall_piece = pieces_of({ { 0, 0, 8, 0, 0, 6, 0 }, { 8, 0, 4, 6, 0, 6, 0 } }, { { 0, 0, 4, 6, 0 } })
+        assert_true(piece[1] == piece[2], "two triangles sharing an edge are not one floor")
+        assert_equal(piece[1], wall_piece[1], "a contour between two corners of one floor lost its floor")
+
+        -- A low landing at 0.8 m overlaps the floor's end without sharing an edge with it.
+        local tris = rect(rect({}, 0, 0, 6, 4, 0), 4, 0.1, 10, 3.9, 0.8)
+        local harness = new_harness()
+        local t = 1
+
+        harness.publish(make_context(tris, 1), make_vectors(1, { transitions = BAKED_TRANSITIONS }))
+
+        local function stand(x, z)
+            t = t + 0.1
+            harness.draw(t, { x = x, y = 2, z = z })
+
+            return harness.pieces.piece[harness.floor.triangle]
+        end
+
+        local floor_piece = stand(1, 0)
+        local landing_piece = harness.pieces.piece[3]
+
+        assert_true(floor_piece ~= landing_piece, "the landing joined the floor")
+        assert_equal(floor_piece, stand(5, 0.5), "walking onto the overlap left the floor shown")
+        assert_equal(landing_piece, stand(8, 0.8), "the landing past the overlap was not picked")
+        assert_equal(landing_piece, stand(5, 0.5), "walking back onto the overlap left the landing")
+        harness.close()
+
+        harness = new_harness()
+        harness.publish(make_context(tris, 1), make_vectors(1, { transitions = BAKED_TRANSITIONS }))
+        harness.draw(1, { x = 5, y = 2, z = 0.5 })
+        assert_equal(landing_piece, harness.pieces.piece[harness.floor.triangle],
+            "without a floor shown so far the nearer landing did not win")
+        harness.close()
+    end)
+
+test("walls follow the lit piece by edge, end points or midpoint, and other pieces' outlines go by height", function()
+    local player = { x = -1, y = 1, z = 0.1 }
+
+    for _, baked in ipairs({ true, false }) do
+        local harness = new_harness()
+
+        harness.publish(make_context(piece_scene(), 1), make_vectors(1, {
+            contours = piece_walls(),
+            transitions = baked and BAKED_TRANSITIONS or nil,
+        }))
+
+        local emitted = harness.draw(1, player)
+        local classes = classify_lines(emitted, PIECE_WALLS, player)
+        local bins = harness.bins
+
+        if baked then
+            local piece = harness.pieces.piece
+            local wall_piece = harness.pieces.wall_piece
+            local expected = { piece[1], piece[23], piece[21], 0, piece[1], piece[1] }
+
+            for j = 1, #PIECE_WALL_ORDER do
+                assert_equal(expected[j], wall_piece[j], PIECE_WALL_ORDER[j] .. " contour piece")
+            end
+
+            assert_equal("1,4,5,6", listed(bins.walls, bins.walls_n),
+                "the lit piece's contours and the one without a piece are not the walls")
+            assert_equal("2,3", listed(bins.above_contours, bins.above_contours_n),
+                "the room's and the deck's outlines are not outlines of floors above")
+            assert_true(count_class(emitted, classes, "top", LAYER + 2) > 0,
+                "the walkway's top wall, 8 m up, was not drawn")
+        else
+            assert_equal("2,4,5,6", listed(bins.walls, bins.walls_n), "the band walls changed without pieces")
+            assert_equal("3", listed(bins.above_contours, bins.above_contours_n),
+                "the band outlines above changed without pieces")
+            assert_equal(0, count_class(emitted, classes, "top"), "a wall past the floor range was drawn")
+        end
+
+        harness.close()
+    end
+end)
+
+test("the pieces build a budget of triangles per frame, the band rules until they are ready, and a new map starts over",
+    function()
+        local harness = new_harness()
+        local budget = harness.build_budget
+        local tris = piece_scene()
+
+        for k = 0, math.ceil(budget * 1.1) - 1 do
+            rect(tris, 200 + k, 0, 201 + k, 1, 0)
+        end
+
+        local tri_count = #tris
+        local player = { x = -1, y = 1, z = 0.1 }
+        local vectors = make_vectors(1, { transitions = BAKED_TRANSITIONS })
+
+        harness.publish(make_context(tris, 1), vectors)
+
+        local frames = 0
+        local done = 0
+
+        repeat
+            frames = frames + 1
+            harness.draw(frames * 0.1, player)
+
+            local pieces = harness.pieces
+            local now_done = pieces.status == 2 and tri_count * 3
+                or math.min(3, pieces.phase - 1) * tri_count + (pieces.phase <= 3 and pieces.cursor or 0)
+
+            assert_true(now_done - done <= budget, "a frame handled more than the budget")
+            done = now_done
+
+            if harness.pieces.status ~= 2 then
+                assert_equal(range_list(1, 6, { 23, 24 }), listed(harness.bins.current, harness.bins.current_n),
+                    "the floor was not the height band while the pieces were building")
+            end
+        until harness.pieces.status ~= 1 or frames > 50
+
+        assert_equal(2, harness.pieces.status, "the build did not finish")
+        assert_equal(math.ceil(tri_count * 3 / budget), frames, "frames the build took")
+        assert_equal(range_list(1, 20), listed(harness.bins.current, harness.bins.current_n),
+            "the walkway was not lit once the pieces were ready")
+
+        local first_piece = harness.pieces.piece
+        local vectors_2 = make_vectors(2, { transitions = BAKED_TRANSITIONS })
+
+        harness.publish(make_context(piece_scene(), 2), vectors_2)
+        harness.draw(frames * 0.1 + 0.3, player)
+        assert_equal(2, harness.pieces.status, "the new map's pieces were not built")
+        assert_true(harness.pieces.piece ~= first_piece, "the old map's pieces were kept")
+        assert_equal(24, harness.pieces.tri_count, "the pieces belong to the old map")
+
+        local same_size = make_context(piece_scene(), 3)
+        local vectors_3 = make_vectors(3, { transitions = BAKED_TRANSITIONS })
+
+        vectors_3.contours = vectors_2.contours
+        first_piece = harness.pieces.piece
+        harness.publish(same_size, vectors_3)
+        harness.draw(frames * 0.1 + 0.6, player)
+        assert_true(harness.pieces.triangles == same_size.triangles and harness.pieces.piece ~= first_piece,
+            "a new map of the same size kept the old map's pieces")
+
+        harness.mod._strikemap_geometry_renderer_reset()
+        assert_equal(0, harness.pieces.status, "the integration reset kept the pieces")
+        assert_true(harness.pieces.piece == nil and harness.pieces.triangles == nil, "the reset kept piece data")
+        assert_true(harness.floor.triangle == nil, "the reset kept the floor triangle")
+        harness.close()
+    end)
 
 -- ----------------------------------------------------------------------------
 -- Runner
