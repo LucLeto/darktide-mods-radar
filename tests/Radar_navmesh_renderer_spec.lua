@@ -1,7 +1,8 @@
 -- Dropping navmesh triangles before projection must never change what the radar draws.
 -- Installs the real navmesh renderer and triangle clipper against a fake GUI and a generated
 -- mesh, and compares every draw with the clipper run directly on all selected triangles. A new
--- Radar player revision selects the triangles around the new origin at once.
+-- Radar player revision selects the triangles around the new origin at once, and so does
+-- zooming the normal radar out.
 
 local RENDERER_PATH = "Radar/scripts/mods/Radar/ui/Radar_navmesh_renderer.lua"
 local CLIPPER_PATH = "Radar/scripts/mods/Radar/ui/Radar_triangle_clipper.lua"
@@ -96,7 +97,7 @@ local function new_harness(geometry, style)
     end
 
     function mod:is_overview_mode_active()
-        return false
+        return harness.overview == true
     end
 
     function mod:get_map_geometry_source()
@@ -377,6 +378,39 @@ test("a new Radar player selects the geometry around it at once, the same one ke
 
     harness.draw(1.2, teammate, 25, 8)
     assert_equal(2, harness.selections, "the same Radar player reselected")
+end)
+
+test("zooming the normal radar out selects the wider ring at once, the overview's zoom keeps its interval", function()
+    local harness = new_harness(new_geometry({
+        { 2, 2, 0, 3, 2, 0, 2, 3, 0 },
+        { 20, 0, 0, 21, 0, 0, 20, 1, 0 },
+        { 60, 0, 0, 61, 0, 0, 60, 1, 0 },
+    }), "circle")
+    local player = { x = 0, y = 0, z = 0 }
+
+    harness.draw(1, player, 10)
+    assert_equal(1, harness.selections, "the first draw selects")
+    assert_equal(1, harness.values.draw_geometry_in_shape, "only the near floor at 10 m")
+
+    harness.draw(1.02, player, 25)
+    assert_equal(2, harness.selections, "zooming out inside the refresh interval selected later")
+    assert_equal(2, harness.values.draw_geometry_in_shape, "the floor 20 m away is drawn at once")
+
+    harness.draw(1.04, player, 10)
+    assert_equal(2, harness.selections, "zooming in did not keep the wider selection")
+    assert_equal(1, harness.values.draw_geometry_in_shape, "zoomed in")
+
+    harness.overview = true
+    harness.draw(2, player, 25)
+    assert_equal(3, harness.selections, "opening the overview changes the floor window")
+
+    harness.draw(2.02, player, 75)
+    assert_equal(3, harness.selections, "the overview's animated zoom selected inside the interval")
+    assert_equal(2, harness.values.draw_geometry_in_shape, "the floor 60 m away waits for the next selection")
+
+    harness.draw(2.15, player, 75)
+    assert_equal(4, harness.selections, "not selected once the interval passed")
+    assert_equal(3, harness.values.draw_geometry_in_shape, "the floor 60 m away")
 end)
 
 local failures = {}

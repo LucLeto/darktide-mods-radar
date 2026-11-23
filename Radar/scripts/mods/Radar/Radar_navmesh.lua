@@ -6,10 +6,11 @@
 --
 -- Every `GwNavWorld` call is existence-checked and runs inside `pcall`, coordinates are
 -- validated, and the engine's temporary allocator is rewound after each triangle. The
--- geometry is cleared and rebuilt whenever the nav world changes, so a previous mission's
--- layout never persists, and a failed build is retried after a short cooldown. With the `live`
--- source the build runs as the mission state starts, not on the first radar draw, so the
--- frame it stalls is the one the loading screen closes on.
+-- geometry is cleared and rebuilt whenever the nav world changes, and in an Expedition whenever
+-- a section's navmesh replaces the previous one inside the same nav world, so an earlier
+-- mission's or section's layout never persists, and a failed build is retried after a short
+-- cooldown. With the `live` source the build runs as the mission state starts, not on the
+-- first radar draw, so the frame it stalls is the one the loading screen closes on.
 --
 -- Installer module, installed last into Radar's shared runtime environment (see
 -- `Radar.lua`). It shares nothing through `shared_env`; its interface is a set of `mod`
@@ -65,10 +66,12 @@ return function(env)
         build_ms = nil,
     }
 
-    --- Rebuild state; `dirty` requests a rebuild, and the last nav world and failure message are remembered.
+    --- Rebuild state; `dirty` requests a rebuild, and the last nav world, Expedition section navmesh and
+    -- failure message are remembered.
     local dirty = true
     local last_gen_t = nil
     local last_nav_world = nil
+    local last_nav_data = nil
     local last_logged_failure = nil
 
     --- Returns whether a vertex coordinate is a number within the plausible world bounds.
@@ -80,11 +83,56 @@ return function(env)
 
     --- Returns the active GwNav world from the nav mesh manager, or nil outside a mission.
     -- return: GwNav world handle, or nil outside a mission
+    -- return: nav mesh manager, or nil outside a mission
     local function _current_nav_world()
         local state_manager = Managers and Managers.state
         local nav_mesh = state_manager and state_manager.nav_mesh
 
-        return nav_mesh and nav_mesh._nav_world or nil
+        return nav_mesh and nav_mesh._nav_world or nil, nav_mesh
+    end
+
+    --- Returns the navmesh the current Expedition section baked, in game modes that spawn their navmesh during the mission.
+    -- An Expedition removes a section's navmesh and bakes the next one inside the same nav world,
+    -- so the nav world alone does not show that the triangles changed. The handle is read from the
+    -- game mode's level spawner and only counts once its bake has finished.
+    -- param: nav_mesh nav mesh manager
+    -- return: nil when the navmesh stays the same through the mission or the level spawner cannot be
+    --   read, false while no finished section navmesh exists, else the section's nav data handle
+    local function _dynamic_nav_data(nav_mesh)
+        if not nav_mesh or not nav_mesh._dynamic_mesh_spawning or not _safe_game_mode then
+            return nil
+        end
+
+        local game_mode = _safe_game_mode()
+        local logic = type(game_mode) == "table" and rawget(game_mode, "_game_mode_logic") or nil
+        local spawner = type(logic) == "table" and rawget(logic, "_levels_spawner") or nil
+
+        if type(spawner) ~= "table" then
+            return nil
+        end
+
+        if rawget(spawner, "_async_navmesh_generation_job_id") ~= nil then
+            return false
+        end
+
+        return rawget(spawner, "_nav_data_created") or false
+    end
+
+    --- Returns whether a section's navmesh has reached the nav world's database, the game's own check before using it.
+    -- Missing engine support or a failing check counts as ready, which builds as before.
+    -- param: nav_data nav data handle
+    -- treturn: bool
+    local function _nav_data_ready(nav_data)
+        local gw_nav_data = GwNavData
+        local is_alive_in_database = gw_nav_data and gw_nav_data.is_alive_in_database
+
+        if type(is_alive_in_database) ~= "function" then
+            return true
+        end
+
+        local ok, alive = pcall(is_alive_in_database, nav_data)
+
+        return not ok or alive == true
     end
 
     --- Empties the geometry and bumps its revision, unless it is already empty.
@@ -329,36 +377,43 @@ return function(env)
     function mod:clear_navmesh_geometry()
         _reset_geometry()
         last_nav_world = nil
+        last_nav_data = nil
         last_gen_t = nil
         dirty = true
     end
 
     --- Returns the navmesh geometry for the active nav world, building it when needed.
-    -- Clears the geometry outside a mission and whenever the nav world changes. A pending build
-    -- is attempted at most once per cooldown; a gameplay time lower than the last attempt
-    -- (a new session) allows an immediate retry.
+    -- Clears the geometry outside a mission, whenever the nav world changes and whenever an
+    -- Expedition section's navmesh replaces the previous one. Nothing is built while a section's
+    -- navmesh is still baking or not yet in the database, so a stale floor is dropped rather than
+    -- read again. A pending build is attempted at most once per cooldown; a gameplay time lower
+    -- than the last attempt (a new session) allows an immediate retry.
     -- ?number: t gameplay time, nil when building on entering a mission
     -- treturn: tab geometry, possibly empty
     function mod:ensure_navmesh_geometry(t)
-        local nav_world = _current_nav_world()
+        local nav_world, nav_mesh = _current_nav_world()
 
         if not nav_world then
             _reset_geometry()
             last_nav_world = nil
+            last_nav_data = nil
             last_gen_t = nil
             dirty = true
 
             return geometry
         end
 
-        if nav_world ~= last_nav_world then
+        local nav_data = _dynamic_nav_data(nav_mesh)
+
+        if nav_world ~= last_nav_world or nav_data ~= last_nav_data then
             _reset_geometry()
             last_nav_world = nav_world
+            last_nav_data = nav_data
             last_gen_t = nil
             dirty = true
         end
 
-        if dirty then
+        if dirty and nav_data ~= false and (nav_data == nil or _nav_data_ready(nav_data)) then
             local trigger = t and "draw" or "state_entry"
 
             t = tonumber(t) or 0
