@@ -207,6 +207,10 @@ The floor plan is shaded in three height bands relative to your current position
 
 Each band has its own ARGB color picker under **Map Geometry**, shown while a geometry source is selected; its **A** channel is that band's opacity, and **0** hides the band entirely. On the normal radar, **Floors Above Range** and **Floors Below Range** (in meters) limit how far up and down geometry is shown. The defaults, **7 m** above and **7 m** below, are tuned for stacked interiors; on open terrain with large height differences, such as Expedition canyons, raise them (for example **15 m**) to keep ramps and upper areas visible. Centered overview mode ignores both sliders and always uses **30 m** above and below.
 
+With the **Strikemap floor plan**, "your height" is the walkable floor under you rather than your raw height, the same reference Strikemap's own minimap uses. Where decks stack, it is the one under your feet, so an overhang you jump under does not take over. Standing at the edge of a pit, it stays your floor until you actually drop in. The reference eases over about a quarter of a second, so jumping, climbing stairs or a small height offset between you and the floor plan does not re-band whole walkways at once. It switches immediately when the mission, the Expedition section or the spectated teammate changes. The live scan still measures from your own height.
+
+On Strikemap's mission maps, **your floor is the whole connected floor you stand on** rather than a 2.5 m band. Radar joins the floor plan's pieces wherever they meet with a small step, so a walkway lights up with its ramps and stairs even where they climb past the band or beyond the floor ranges, while a deck stacked above or below stays a floor of its own. Every other floor in range is shown as a floor above or below by its height. Radar works this out in about a second after the floor plan arrives; until then, and on Expedition maps, the bands apply.
+
 On the compact radar, the floor plan stays beneath the regular marker presentation, so pickups, tagged targets, teammates, and distance text render unchanged on top of the geometry:
 
 <p>
@@ -220,6 +224,28 @@ On the compact radar, the floor plan stays beneath the regular marker presentati
 - Radar remains responsible for all displayed markers, filtering, and interaction; only the floor plan comes from Strikemap. No Strikemap map data or assets are bundled with Radar, and no additional entity scans are added.
 - The integration fails safely: if Strikemap is missing, disabled, still loading, has no map for the current mission, or exposes an incompatible API version, Radar falls back to its standard background, or to the live scan when the source is **Auto**, and logs the reason once.
 - **Show geometry in overview mode** controls whether the Strikemap floor plan is also drawn in the centered overview.
+- Floors are drawn in a fixed order, so the picture no longer depends on how the map data is stored:
+  - floors below, then their hatching and dashed outlines;
+  - your floor;
+  - the faint floors above;
+  - the hatching of upper decks and the slope marks of your floor;
+  - the thin outlines of upper floors, then your floor's walls.
+
+  Details of lower floors therefore stay beneath your floor's fill instead of being drawn across it, and holes in your floor show what lies below.
+- **Strikemap tactical detail lines** (on by default) adds Strikemap's vector details, filtered to your floor:
+  - walls of your floor, extended slightly so corners join;
+  - thin outlines of the floors above, and dashed outlines and hatching of the floors below;
+  - light dashed slope marks on your floor's ramps;
+  - on Expedition maps that are still growing, edges Strikemap has since closed off are skipped.
+
+  Dashes stay fixed in the world instead of crawling while you move, turn or zoom. **Hatch upper decks** (off by default) also hatches the decks above you. Your colors, opacities and floor ranges apply to all of it; Strikemap's own palette and settings are never read.
+- Your floor is lit as a whole, like in Strikemap's own minimap, and its walls are drawn wherever it reaches. Radar derives the floors from the shape of the floor plan alone (see [Floor bands](#floor-bands)). They match Strikemap's closely but not exactly: Strikemap also lights a few neighbouring floors together with yours, and Radar shows those as floors above or below.
+- Some of Strikemap's own presentation needs data its compatibility API does not provide yet:
+  - the neighbouring floors Strikemap lights together with yours;
+  - open doorways;
+  - the stair flights, which Strikemap marks with a step symbol.
+
+  Doorway edges are drawn as walls. The stair data Strikemap does share marks the edges where its finer source mesh changes height. Those edges run at any angle to the steps, so drawn as they are they looked like scratches rather than stairs, and Radar does not draw them. On Expedition maps, which Strikemap builds while you play, Radar keeps the height bands, as Strikemap itself does. The details are listed under [Strikemap](#strikemap).
 - Strikemap's own mission recording and report browser keep working alongside the integration, and its optional geometry-only settings let it hand the live minimap over to Radar entirely.
 - How the integration is loaded and how it fails safe is covered in [Compatibility Integrations](#strikemap).
 
@@ -376,6 +402,8 @@ Also for reference **Show tech-remnant value text** is set to **true**.
 | Floors Above Range | Adjustable from **1 m** to **30 m** for the normal radar. Geometry more than this far above you is hidden; centered overview always uses **30 m**. |
 | Floors Below Range | Adjustable from **1 m** to **30 m** for the normal radar. Geometry more than this far below you is hidden; centered overview always uses **30 m**. |
 | Show geometry in overview mode | Also draws the Strikemap floor plan while centered overview mode is active. |
+| Strikemap tactical detail lines | Draws Strikemap's vector details: your floor's walls and slope marks, plus outlines and hatching of other floors. On by default; needs a Strikemap version that provides vector geometry. |
+| Hatch upper decks | Also hatches the decks above you. Decks below are always hatched while detail lines are on. Off by default. |
 | Nearby highlight range (m) | Adjustable from **5 m** to **20 m**. Controls how close supported items must be before their bracket highlights or outlines appear. |
 | Nearby highlight thickness | Adjusts the line thickness used by nearby screen-space highlight brackets, from **0** to **6**. **0**, the default, keeps the adaptive thickness. |
 | Only highlight visible targets | Hides nearby highlight brackets and outlines while level geometry blocks the view of their target, instead of dimming them. Items a player has tagged are still highlighted through walls. Off by default. |
@@ -1351,7 +1379,7 @@ The Radar player is the actor whose point of view the radar shows: the local pla
 
 `_get_runtime_state` resolves it once per gameplay time, after the game state checks. The source is the unit `local_player.camera_handler` follows while `is_observing()` holds, else the local player's own unit, and its owner comes from `Managers.state.player_unit_spawn:owner`; it is never guessed from where the camera is. One rule decides for the local player's unit and a spectated teammate's alike: a dead unit, by its state or its health, and a captured (hogtied) one are no source, while a knocked down or otherwise disabled one is, as in normal play. A followed unit no player owns, and a local player whose unit belongs to someone else while nobody is spectated, leave the radar without a source. Anything unusable publishes `unavailable` with every field cleared.
 
-Every player-relative consumer reads the table instead of the local player: target collection and clustering, the interactee prompt (`show_marker`), the luggable socket rule, nearby highlights, teammates and companions (the Radar player gets no teammate marker, and coherency is relative to it), ability marks, the Expedition ring's preferred slot, the snapshot and the map layers. Tag authorship and companion ownership stay the actual players'. The client's own identity still supplies the viewport, camera, field of view, input, settings and debug logs. When the revision changes, `_update_internal` drops the tracked units and runs every scan tier in that update, the navmesh layer selects its triangles again and the HUD element starts its coherency flashes over, while overview stays open. While the radar may not run, tracked units, outputs, highlights and outlines are dropped and overview closes.
+Every player-relative consumer reads the table instead of the local player: target collection and clustering, the interactee prompt (`show_marker`), the luggable socket rule, nearby highlights, teammates and companions (the Radar player gets no teammate marker, and coherency is relative to it), ability marks, the Expedition ring's preferred slot, the snapshot and the map layers. Tag authorship and companion ownership stay the actual players'. The client's own identity still supplies the viewport, camera, field of view, input, settings and debug logs. When the revision changes, `_update_internal` drops the tracked units and runs every scan tier in that update, the navmesh layer selects its triangles again, the Strikemap layer takes the new player's floor at once instead of easing to it, and the HUD element starts its coherency flashes over, while overview stays open. While the radar may not run, tracked units, outputs, highlights and outlines are dropped and overview closes.
 
 While spectating, the game replaces the player HUD with a spectator HUD for the spectated player. DMF injects `HudElementRadar` into it as well, and its `alive` visibility group then checks the spectated player, so the registration needs no extra group. That HUD has no world marker element, so `request_world_markers_list` goes unanswered and the world marker inputs fall back as they do without a HUD. A spectated teammate's unit is a husk, whose ability name getters raise, so `_safe_unit_ability_name` reads the synced `equipped_abilities()` first.
 
@@ -1645,6 +1673,56 @@ The label is never read, because SafeRoute localizes it. A marker that neither s
 - **Callbacks.** The module chains `mod.on_setting_changed` and `mod.on_disabled`, and adds `mod:reset_strikemap_integration`, which the mission reset in `Radar_tracking.lua` calls.
 - **Ownership.** Only the floor plan is imported. Every marker, filter and interaction stays Radar's own.
 
+`ui/Radar_strikemap_geometry.lua` draws the floor plan from those contexts.
+
+- **Floor reference.** The bands are measured from a floor height picked in the Radar player's grid cell. The pick works like Strikemap's own reference for maps without levels:
+  - the triangle under the player wins, scored by its height difference, 1.6 times over above the feet;
+  - otherwise the nearest triangle centre within 4 m;
+  - pits are guarded: a pick more than 4 m off falls back to the nearby pick, then to the raw height.
+
+  The shown height eases with a 0.24 s time constant, and the pick is renewed after 0.25 m of movement or a new revision. It snaps for:
+  - another source map (a new triangle array, fewer triangles or another map id);
+  - another Radar player revision;
+  - a missing or rewound gameplay time;
+  - a pause over 0.5 s.
+
+  A live revision of the same map keeps easing, as Strikemap does, so a growing Expedition map never flickers between treatments.
+- **Floor pieces.** On a baked mission map the current floor is a connected piece of the floor plan instead of the ±2.5 m band. A map counts as baked when its vector context has stair transitions and no deck hatching, because API v1 has no flag for it; Strikemap's runtime-built Expedition layers hatch every triangle and have no transitions. Without a vector context the bands apply.
+  - Triangle corners are matched at 1 cm, and triangles sharing an edge with at most 3 m between their heights join one piece (union-find). Triangles on the same edge key are chained, so decks stacked on the same corners stay apart.
+  - The build handles 2,048 triangles per frame and then 256 contours per frame. With the JIT off that is at most about 1.2 ms in a frame and 4 to 27 ms in all on the shipped maps, measured offline. Until it is done the bands apply.
+  - The floor pick records its triangle, and a triangle of the current piece scores 1.2 less, as in Strikemap's level picker, so a landing never flips the floor.
+  - The lit piece is the current fill whatever its height or the floor ranges. Every other triangle in range is a floor below or above by the sign of its height difference.
+  - A contour takes the piece of the triangle on its edge with the closest height within 1.5 m, else the piece its end points' first triangles share, else that of a triangle with an edge through its midpoint. The lit piece's contours are walls, other pieces' contours are outlines above or below, and contours without a piece keep the bands.
+
+  Checked offline against Strikemap's own baked levels, with the map files read only for that check: on all 25 shipped maps the lit area matched Strikemap's at 92 % on average within 30 m (75.6 % with the bands), and on `fm_resurgence`, through this module, at 96.5 % within 25 m (74.5 %). The misses are the companion levels Strikemap lights with yours, which overlap your floor and cannot be derived from the triangles.
+- **Composition.** Each frame first lists the triangles and vector segments in range by band and line class, then draws them in a fixed order on the three layers above the pass layer:
+  - the geometry layer gets the below fill, below hatching, dashed below contours, the current fill and the above fill, relying on submission order within a layer, as the live navmesh layer does;
+  - one layer up gets above hatching and slope marks;
+  - two layers up gets above contours and walls.
+
+  Four `pcall` steps keep the error isolation:
+  - selecting geometry and drawing the below fill;
+  - selecting vectors and drawing the lower vectors;
+  - drawing the current and above fills;
+  - drawing the upper vectors.
+
+  A geometry error is the sticky `error` status. A vector error disables vectors for the revision, and a failed vector selection skips the upper vectors of that frame. Triangles go through the shared `ui/Radar_triangle_clipper.lua` for every radar shape.
+- **Vector filters.**
+  - `dead_contours` entries are left out of the contour index and checked again while selecting, because the set grows in place.
+  - Walls are the lit piece's contours, or the current band's without floor pieces, extended by half their width before clipping.
+  - Stair records (`stairs`) are neither indexed nor drawn. They are the edges where Strikemap's finer source mesh steps in height, not edges of the exported triangles: none of `fm_resurgence`'s 786 records lies on an exported corner, and their angle to the climbing direction is spread evenly from 0 to 90°. Drawn as they are, they read as scratches. Three offline attempts to rebuild stairs from API v1 data alone (averaged corner heights, one plane per stair region, flights clustered from the records) gave zig-zags, hatched open halls or, at best, lines at 70 % of Strikemap's flights with 23 % of them misplaced, so none of them shipped.
+  - Slope marks keep to the current band, dashed.
+  - Dashes are anchored to the world: a power-of-two period in metres at least 7 unscaled pixels long, phased along each line from its lower-x end.
+- **Caches.** The triangle grid and the vector indices are keyed by context table and revision. The floor pieces are keyed by the triangle and contour arrays, which Strikemap hands out with every context of a map. The floor reference is keyed by source map and Radar player. `mod._strikemap_geometry_renderer_reset` clears all of them with the per-frame lists.
+- **Not possible with API v1.** These need data Strikemap uses internally but does not export. They are the request list for a later conversation with Strikemap's author, not dependencies:
+  1. Level metadata: triangle-to-level membership, contour level and wall/doorway relations, level bounds and companion levels. Radar's floor pieces approximate the levels, but only this data lights companion levels together, keeps doorways open and would remove the need to infer which maps are baked.
+  2. Stair-flight records `cx, cy, dx, dy, zlo, zhi, level`, with each flight's length along its climb and width across it, so Radar can mark the flights on the floor plan. Strikemap draws its step symbol from these records.
+  3. A spatial index for the flights, or stable ids to build one.
+  4. A documented capability and revision lifecycle contract for those additions.
+
+  Two more gaps would help. API v1 cannot tell runtime-built layers from baked ones, which a wall classifier for Expedition edges would need and which the floor pieces infer from transitions and hatching. And in Strikemap's geometry-only mode, runtime vector layers grow by at most 1,500 triangles per revision, so Expedition contours can lag behind the triangles.
+- **Tests.** `tests/Radar_strikemap_geometry_spec.lua`.
+
 ## Settings and Migration
 
 3.0.0 moves the menu from the Radar-specific integration with Alf's Mod Settings Extensions to DMF's native options API. Radar no longer uses per-widget `tab`, `tab_overrides`, `get` or `change` fields, and `Radar.mod` no longer loads after Alf's extensions.
@@ -1738,7 +1816,7 @@ Every 5 seconds of frame time, Radar writes a summary, six lines starting with `
 | `profile input` | Action reads through the `InputService` hook per second, how many were zoom scroll actions (`candidates`), how many of those were swallowed, and the time of the capture check for other actions and for candidates. |
 | `profile update` | Tracking updates per second, and updates skipped as same-timestamp duplicates, blocked (no usable Radar player, such as while dead, captured or with nobody to spectate, the hub, a disabled game mode) or disabled (radar off). `runtime_ms` is the runtime check and snapshot refresh every update pays; `scan_ms` is a whole scan update. Then scans per second for each tier. |
 | `profile scan` | Time per scan of the moving tier (enemies, teammates, companions), the droppable tier (interactees, smart tags, tracked points) and the static tier (chests, destructibles, hazards), and of the collection after them (pruning, target filtering, clustering and sorting, highlights, outlines, snapshot). Per scan, the collected targets, the targets left after the marker limit, the screen highlights and the tracked units. |
-| `profile draw` | HUD draws per second and the draw time: total, the draw check (`gate`), scenegraph and pass setup, the draw cache with its refreshes per second, the radar size, range, rotation and geometry checks (`layout`), the radar frame and guides (`frame`), the map geometry layer (`geometry`, only while one is drawn), the markers with the markers drawn, the overview legends and zoom indicator, the screen highlights, and the widget cleanup and pass end (`finish`). For the live navmesh, per draw, the selected triangles, those left after the radar shape check (`geometry_in_shape`) and the `Gui.triangle` calls (`geometry_triangles`). |
+| `profile draw` | HUD draws per second and the draw time: total, the draw check (`gate`), scenegraph and pass setup, the draw cache with its refreshes per second, the radar size, range, rotation and geometry checks (`layout`), the radar frame and guides (`frame`), the map geometry layer (`geometry`, only while one is drawn), the markers with the markers drawn, the overview legends and zoom indicator, the screen highlights, and the widget cleanup and pass end (`finish`). For either map geometry source, per draw, the triangles selected around the player, those left after the radar shape check (`geometry_in_shape`) and the `Gui.triangle` calls of the floor fills (`geometry_triangles`). |
 | `profile markers` | The marker step split into its parts, each added up over all markers of a draw: projecting the target onto the radar (`project`, also for targets that end up off the radar), picking its visual and sizes (`visual`), drawing brackets and the facing arrow (`brackets`), updating the pooled widget (`widget`), drawing it (`widget_draw`) and drawing its value and distance texts (`text`). Each part is given per draw as `avg/p95/max`, then as microseconds per drawn marker. The radar's facing direction, read once per draw before the markers, counts towards the marker step but not towards any part. While profiling, each part adds two clock reads per marker. |
 
 Each successful navmesh build also writes one `[Radar] profile build` line, outside the 5 second summary: where it ran (`state_entry` on entering the mission, `draw` on a radar draw), its total time split into the engine's visual representation build (`visual_ms`), reading the triangles (`triangles_ms`) and building the bucket grid (`buckets_ms`), and the number of tiles and triangles.
@@ -1789,6 +1867,7 @@ luajit tests/Radar_settings_menu_spec.lua
 | `Radar_target_heading_spec.lua` | Which way a target faces, with the real runtime helpers and tracking modules: a teammate's first person rotation, never its body, the root rotation of a Cyber Mastiff or an enemy, unreadable, infinite or dead units giving no heading, and, through the real collection, which targets take one (teammates and the mastiff unless switched off, enemies whose category is switched on) and which do not (servo skulls, pickups, other categories, and teammates who are dead, need rescue or are captured), and a pooled target never keeping an earlier target's heading. |
 | `Radar_screen_highlight_anchor_spec.lua` | Screen highlight placement with the real runtime helpers: objective box centers, pickups on their origin, the barrel `c_explosion` → tracked position → origin order, every engine failure path, and which world markers count as the game marking an objective. |
 | `Radar_settings_menu_spec.lua` | The settings schema and migrations: `Radar.mod` packages and no Alf dependency, the ten tabs and their order, native color widgets and their placement, `show_widgets`, a fresh profile saving nothing, the per-group nearby highlight dropdowns and the visible-only option, a profile saved by the previous release migrating its channel colors, teammate, map geometry and checkbox settings (including the old nearby highlight checkboxes, a ticked one becoming outlines, and Deployed Items staying off for them) (old keys deleted, unrelated settings untouched, a second build changing nothing), live dropdown tinting, and the runtime highlight and bracket color migrations. |
+| `Radar_strikemap_geometry_spec.lua` | The Strikemap floor plan, with the real renderer, compatibility module and clipper against a fake GUI, a fake Strikemap API and a fake mod.<br>**Draw order.** Floors below, their hatching and dashed outlines come before the current floor's fill on the geometry layer, the floors above after it, upper hatching and slope marks one layer up, upper outlines and walls two layers up. Each layer gets the same triangles whatever the triangle and grid order. The fills equal the shared clipper run over each band in band order, on circle, square and Auspex radars.<br>**Floor reference.** It picks the deck underfoot over a stacked deck, an overhang during a jump, a pit floor at the edge and the raw height. It picks again after a quarter metre and eases, and snaps for a new Radar player, a new source map, fewer triangles and a pause, while a live revision of the same map picks again and keeps easing.<br>**Floor pieces.** On a baked map the whole connected floor under the player is the current floor, past the band and the floor ranges, while a deck stacked above and a room apart at the same height are floors above. Hatched maps and maps without transitions or vectors keep the bands. Steps over 3 m and decks stacked on the same corners stay apart, the floor shown wins over a landing it overlaps, and a step off the floor plan keeps it. Walls follow the lit piece by edge, end points or midpoint, at their own height. The build keeps to its budget per frame, the bands apply until it is done, a new map starts over, and the reset clears it.<br>**Vectors and failures.** Vectors are optional. Dead contours are skipped, also once the set grows in place, and a malformed set is rejected. Stair records are never drawn or indexed, not even at a steep chain's anchor on the current floor. Slope marks stay on the current floor, and upper decks are hatched only with the toggle. Triangles and segments added in place are drawn after a revision, and the reset clears the floor. A failing vector step keeps the fills and a failing geometry step stops the layer.<br>**Dashes and shapes.** Dashes keep their world positions under clipping, rotation, reversed direction, a collinear split and zoom within one period step, and need no more quads than before. Walls reach half their width past their ends, every shape keeps fills and lines inside, and the map stays north-up without a rotation. |
 
 Some checks in the wiring spec read the production source as text, for example to pin a condition, an upvalue name or the declaration order of a local. A refactor that moves such code has to update the spec deliberately.
 

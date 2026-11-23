@@ -286,8 +286,8 @@ local function _validate_map_context(context)
 end
 
 --- Validates a Strikemap vector context against the map revision and the known layer specs.
--- Checks each layer's stride and that its array is at least as long as its count, and that
--- every transition chain reference exists.
+-- Checks each layer's stride and that its array is at least as long as its count, that every
+-- transition chain reference exists, and that the optional `dead_contours` set is a table.
 -- param: vector_context value returned by `get_vector_context`
 -- param: map_revision revision of the validated map context, may be nil
 -- treturn: ?tab the vector context when it is usable
@@ -345,6 +345,12 @@ local function _validate_vector_context(vector_context, map_revision)
 
             counts[spec.array_field] = count
         end
+    end
+
+    local dead_contours = vector_context.dead_contours
+
+    if dead_contours ~= nil and type(dead_contours) ~= "table" then
+        return nil, "the Strikemap vector context dead_contours field is not a table"
     end
 
     local chains = vector_context.chains
