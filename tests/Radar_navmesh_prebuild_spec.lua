@@ -1,7 +1,9 @@
 -- Building the live navmesh as a mission starts instead of on the first radar draw.
 -- Installs the real navmesh module against a fake GwNav database and sends it the game state
 -- changes DMF sends. The build must run once, only when the first draw would have built the same
--- thing, and every case it skips or that fails must still build on a radar draw as before.
+-- thing, and every case it skips or that fails must still build on a radar draw as before. In an
+-- Expedition, each section's navmesh replaces the previous one inside the same nav world, and the
+-- floor must follow it.
 
 local NAVMESH_PATH = "Radar/scripts/mods/Radar/Radar_navmesh.lua"
 
@@ -45,8 +47,10 @@ local function new_harness(options)
     options = options or {}
 
     local harness = {
-        calls = { visual = 0, previous = {} },
+        calls = { visual = 0, previous = {}, game_mode = 0 },
         info = {},
+        spawner = options.spawner,
+        alive = nil,
         nav_mesh = {
             _nav_world = options.nav_world or new_nav_world(),
             _dynamic_mesh_spawning = options.dynamic_mesh_spawning == true,
@@ -127,6 +131,12 @@ local function new_harness(options)
                 return entry[1], entry[2], entry[3]
             end,
         },
+        -- A section's navmesh is in the database unless the test lists which ones are.
+        GwNavData = {
+            is_alive_in_database = function(nav_data)
+                return harness.alive == nil or harness.alive[nav_data] == true
+            end,
+        },
         Managers = { state = { nav_mesh = harness.nav_mesh } },
         Script = {
             temp_byte_count = function()
@@ -136,6 +146,15 @@ local function new_harness(options)
             end,
         },
     }, { __index = _G })
+
+    -- The Expedition game mode keeps its level spawner on its logic; `false` stands for one without.
+    if options.spawner ~= nil then
+        env._safe_game_mode = function()
+            calls.game_mode = calls.game_mode + 1
+
+            return { _game_mode_logic = harness.spawner and { _levels_spawner = harness.spawner } or {} }
+        end
+    end
 
     local previous_get_mod = rawget(_G, "get_mod")
 
@@ -318,6 +337,94 @@ test("the next mission replaces the previous mission's geometry on entering", fu
     assert_equal(100, geometry.ax[1], "the new mission's vertex")
     assert_equal(0, harness.mod:get_navmesh_nearby_buckets(0, 0, 16, {}), "no old cells left")
     assert_true(geometry.revision > revision, "consumers see the change")
+end)
+
+test("an Expedition section's new navmesh replaces the old floor on the next draw", function()
+    local nav_world = new_nav_world()
+    local harness = new_harness({
+        nav_world = nav_world,
+        dynamic_mesh_spawning = true,
+        spawner = { _nav_data_created = "section 1" },
+    })
+
+    local geometry = harness.draw(5)
+    local revision = geometry.revision
+
+    assert_equal(1, harness.calls.visual, "the first section is built on the first draw")
+    assert_equal(2, geometry.count)
+
+    harness.draw(5.1)
+    assert_equal(1, harness.calls.visual, "the same section is not built again")
+
+    -- The game removes the old section's navmesh and bakes the next one in the same nav world.
+    nav_world.tiles = { { triangle(300, 300, 9) } }
+    harness.spawner._nav_data_created = "section 2"
+    geometry = harness.draw(5.2)
+
+    assert_equal(2, harness.calls.visual, "built at once, inside the retry cooldown")
+    assert_equal(1, geometry.count, "only the new section's triangle")
+    assert_equal(300, geometry.ax[1], "the new section's vertex")
+    assert_equal(0, harness.mod:get_navmesh_nearby_buckets(0, 0, 16, {}), "no old cells left")
+    assert_true(geometry.revision > revision, "consumers see the change")
+
+    harness.draw(6)
+    assert_equal(2, harness.calls.visual, "the new section is not built again")
+
+    harness.mod:clear_navmesh_geometry()
+    assert_equal(1, harness.draw(7).count, "a cleared layer builds the current section again")
+    assert_equal(3, harness.calls.visual)
+end)
+
+test("nothing is built while an Expedition section's navmesh is missing, baking or not in the database", function()
+    local nav_world = new_nav_world()
+    local harness = new_harness({
+        nav_world = nav_world,
+        dynamic_mesh_spawning = true,
+        spawner = { _nav_data_created = "section 1" },
+    })
+
+    assert_equal(2, harness.draw(5).count)
+
+    harness.spawner._nav_data_created = nil
+
+    local geometry = harness.draw(6)
+
+    assert_equal(0, geometry.count, "the removed section's floor is dropped")
+    assert_equal(1, harness.calls.visual, "and its triangles are not read again")
+
+    nav_world.tiles = { { triangle(300, 300, 9) } }
+    harness.spawner._nav_data_created = "section 2"
+    harness.spawner._async_navmesh_generation_job_id = 4
+    assert_equal(0, harness.draw(7).count, "nothing while the next section bakes")
+
+    harness.spawner._async_navmesh_generation_job_id = nil
+    harness.alive = {}
+    assert_equal(0, harness.draw(8).count, "nothing before the database has the new navmesh")
+    assert_equal(1, harness.calls.visual)
+
+    harness.alive["section 2"] = true
+    geometry = harness.draw(8.1)
+
+    assert_equal(2, harness.calls.visual, "built as soon as the game would use it")
+    assert_equal(1, geometry.count)
+    assert_equal(300, geometry.ax[1])
+end)
+
+test("a normal mission never reads the game mode, an unreadable level spawner builds as before", function()
+    local harness = new_harness({ spawner = { _nav_data_created = "unused" } })
+
+    harness.enter_mission()
+    harness.draw(5)
+    harness.draw(6)
+    assert_equal(1, harness.calls.visual, "built once on entering")
+    assert_equal(0, harness.calls.game_mode, "a static navmesh needs no section check")
+
+    local without_spawner = new_harness({ dynamic_mesh_spawning = true, spawner = false })
+
+    assert_equal(2, without_spawner.draw(5).count, "built on the first draw")
+    without_spawner.draw(6)
+    assert_equal(1, without_spawner.calls.visual, "and only once")
+    assert_true(without_spawner.calls.game_mode > 0, "the section check ran")
 end)
 
 test("while profiling a build logs where it ran and its parts", function()
