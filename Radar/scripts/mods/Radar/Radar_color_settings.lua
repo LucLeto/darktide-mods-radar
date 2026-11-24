@@ -378,6 +378,19 @@ _add_anchor("show_enemy_horde", {
     tooltip = "enemy_marker_color_slider_tooltip",
 })
 
+-- The threat awareness layers every enemy category shares, in a group of their own. The frame
+-- around an enemy that does not target the Radar player takes the objective frame's tint of the
+-- game's HUD, like the teammate frame; the frame while it does, the backplate and the flash when it
+-- starts all default to the enemy background red, each a setting of its own.
+_add_radar_color("enemy_threat_colors_group", "enemy_threat_neutral_frame", VANILLA_OBJECTIVE,
+    "enemy_threat_neutral_frame_color", "enemy_threat_neutral_frame_color_slider_tooltip")
+_add_radar_color("enemy_threat_colors_group", "enemy_threat_targeting_frame", default_by_prefix.enemy_background_marker,
+    "enemy_threat_targeting_frame_color", "enemy_threat_targeting_frame_color_slider_tooltip")
+_add_radar_color("enemy_threat_colors_group", "enemy_threat_backplate", default_by_prefix.enemy_background_marker,
+    "enemy_threat_backplate_color", "enemy_threat_backplate_color_slider_tooltip")
+_add_radar_color("enemy_threat_colors_group", "enemy_threat_acquisition_flash", default_by_prefix.enemy_background_marker,
+    "enemy_threat_acquisition_flash_color", "enemy_threat_acquisition_flash_color_slider_tooltip")
+
 -- Which enemy kinds use which enemy icon colour.
 _add_enemy_kinds("enemy_scab_marker", {
     "enemy_renegade_grenadier",

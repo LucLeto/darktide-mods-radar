@@ -208,6 +208,13 @@ local function new_players_harness()
         _clear_tracked_unit_from_source = function(unit, source)
             cleared[#cleared + 1] = { unit = unit, source = source }
         end,
+        -- The runtime helpers' networked game object reads; there is no game session here.
+        _safe_unit_game_object_field = function()
+            return nil
+        end,
+        _safe_unit_from_game_object_id = function()
+            return nil
+        end,
     }, { __index = _G })
     local installer = assert(loadfile(PLAYERS_PATH))()
 

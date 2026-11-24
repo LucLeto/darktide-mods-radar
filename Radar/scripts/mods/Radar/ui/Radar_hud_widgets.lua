@@ -31,9 +31,9 @@ local WHITE_WIDGET_COLOR = { 255, 255, 255, 255 }
 local MAX_RADAR_MARKERS = 301
 --- The plain texture layers of a marker widget, in pass order, which `_draw_marker_widget` draws itself.
 -- The marker definition's other two layers, the marked ring (a texture with material values) and
--- the glyph (a text pass), are left to `UIWidget.draw`. A teammate's coherency frame and flash are
--- only in the second list, which a widget is drawn from while it shows the frame, so every other
--- marker loops over the six layers it can have.
+-- the glyph (a text pass), are left to `UIWidget.draw`. A teammate's coherency frame and an enemy's
+-- threat frame, each with its flash, are only in the second list, which a widget is drawn from
+-- while it shows a frame, so every other marker loops over the six layers it can have.
 local MARKER_TEXTURE_LAYERS = {
     "radius_icon",
     "plate_icon",
@@ -99,7 +99,7 @@ end
 --- Visibility functions for the optional widget passes.
 -- A pass is drawn only while its content value is a non-empty string, so the HUD element
 -- turns layers on and off by assigning or clearing content fields instead of rebuilding
--- widgets. The coherency flash also needs the coherency frame, which it belongs to.
+-- widgets. A flash also needs the frame it belongs to, the coherency or the threat frame.
 local WidgetVisibility = {
     has_icon = function(content)
         return content.icon ~= nil and content.icon ~= ""
@@ -312,8 +312,9 @@ end
 -- Passes are listed bottom to top by layer offset; radius icon, flash, marked ring, backplate,
 -- ring, base icon or glyph, overlay icon, title icon and vertical arrow. The backplate sits below
 -- the base icon and only draws for markers that name one, so enemy markers, which build
--- their own background into the base icon, are unaffected. The flash and the ring are the
--- teammate coherency layers, drawn below the base icon as well.
+-- their own background into the base icon, are unaffected unless their category shows threat
+-- awareness. The flash and the ring are the teammate coherency and enemy threat layers, drawn
+-- below the base icon as well.
 -- treturn: tab widget definition
 local function _marker_definition()
     return UIWidget.create_definition({
@@ -603,8 +604,8 @@ end
 -- through the passes of every marker. Like `UIWidget.draw`, the renderer's alpha and colour
 -- intensity multipliers apply while the widget draws, and the render settings are left with
 -- material flags. A widget showing its marked ring or its glyph, or a draw without render
--- settings or in forced retained mode, goes through `UIWidget.draw`. Only a widget showing the
--- coherency frame steps through the coherency layers.
+-- settings or in forced retained mode, goes through `UIWidget.draw`. Only a widget showing a
+-- coherency or threat frame steps through the frame layers.
 -- tab: widget marker widget
 -- tab: ui_renderer active UI renderer
 local function _draw_marker_widget(widget, ui_renderer)

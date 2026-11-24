@@ -105,6 +105,15 @@ local PLAYER_STATE_ICONS = {
     coherency_ring = "content/ui/materials/hud/interactions/frames/mission_top",
     coherency_flash = "content/ui/materials/hud/interactions/frames/mission_tag",
 }
+--- The enemy threat awareness layers, from the same interaction marker set as the coherency layers.
+-- The game draws the pickup frame and backplate around its point of interest markers and the
+-- critical tag as the ping of its critical ones; here a backplate and a frame around every enemy
+-- of a category with threat awareness on, and a flash when it starts targeting the Radar player.
+local ENEMY_THREAT_ICONS = {
+    backplate = "content/ui/materials/hud/interactions/frames/pickup_back",
+    frame = "content/ui/materials/hud/interactions/frames/pickup_top",
+    flash = "content/ui/materials/hud/interactions/frames/critical_tag",
+}
 local PLAYER_SMART_TAG_PRESENTATIONS = {
     location_attention = {
         icon = "content/ui/materials/hud/interactions/icons/attention",
@@ -191,7 +200,8 @@ local OBJECTIVE_FRAME_ICON = "content/ui/materials/hud/interactions/frames/point
 
 --- The plate the game draws behind that frame, and the shared frame size.
 -- Opt-in per marker; naming the plate is what turns the extra layer on, so enemy markers,
--- which build their own coloured background into the base layer, are untouched.
+-- which build their own coloured background into the base layer, are untouched unless threat
+-- awareness gives them a backplate of its own.
 local OBJECTIVE_PLATE_ICON = "content/ui/materials/hud/interactions/frames/point_of_interest_back"
 local OBJECTIVE_FRAME_SIZE = 26
 
@@ -869,8 +879,8 @@ local ENEMY_PREFIX_BY_KIND = {}
 -- Rebuilt every `DRAW_CACHE_REFRESH_INTERVAL` seconds or when a setting changes the colour
 -- cache generation. The per-kind tables are filled lazily while drawing. The teammate colours
 -- made readable on the coherency backplate are kept per player slot and worked out again in
--- place after each refresh. The draw time and the drawing HUD element's coherency state are
--- set by `_draw_internal` every frame.
+-- place after each refresh. The draw time and the drawing HUD element's coherency and enemy
+-- threat states are set by `_draw_internal` every frame.
 local _draw_cache = {
     valid = false,
     color_generation = nil,
@@ -892,6 +902,11 @@ local _draw_cache = {
     coherency_gained_flash_color = nil,
     coherency_lost_flash_color = nil,
     coherency_state_by_unit = nil,
+    enemy_threat_neutral_frame_color = nil,
+    enemy_threat_targeting_frame_color = nil,
+    enemy_threat_backplate_color = nil,
+    enemy_threat_acquisition_flash_color = nil,
+    threat_state_by_unit = nil,
     draw_t = nil,
     show_player_tag_distance_text = false,
     show_respawn_runback_offset = false,
@@ -1235,6 +1250,14 @@ local function _build_draw_cache(t)
         or RadarColorSettings.default_color("player_coherency_gained_flash")
     draw_cache.coherency_lost_flash_color = _configured_radar_color("player_coherency_lost_flash")
         or RadarColorSettings.default_color("player_coherency_lost_flash")
+    draw_cache.enemy_threat_neutral_frame_color = _configured_radar_color("enemy_threat_neutral_frame")
+        or RadarColorSettings.default_color("enemy_threat_neutral_frame")
+    draw_cache.enemy_threat_targeting_frame_color = _configured_radar_color("enemy_threat_targeting_frame")
+        or RadarColorSettings.default_color("enemy_threat_targeting_frame")
+    draw_cache.enemy_threat_backplate_color = _configured_radar_color("enemy_threat_backplate")
+        or RadarColorSettings.default_color("enemy_threat_backplate")
+    draw_cache.enemy_threat_acquisition_flash_color = _configured_radar_color("enemy_threat_acquisition_flash")
+        or RadarColorSettings.default_color("enemy_threat_acquisition_flash")
     draw_cache.debug_mode = get(mod, "debug_mode") == true
     draw_cache.marker_value_text_color = _configured_radar_color("marker_value_text", MARKER_VALUE_TEXT_WIDGET_COLOR)
     draw_cache.marker_distance_text_color = _configured_radar_color("marker_distance_text",
@@ -1966,7 +1989,9 @@ end
 -- icon (centred by ratio of the base size, or anchored to the bottom right corner), the title
 -- icon and the vertical arrow. A teammate's coherency layers are centred on the icon and drawn
 -- below it, by the ratio of their base sizes to the icon's; the flash at the bottom, then the
--- backplate, then the ring, which shares the brackets' layer. The flash is only set with the
+-- backplate, then the ring, which shares the brackets' layer. An enemy's threat layers are
+-- placed the same way, lowered by the visual's `decoration_layer_drop` (its render layer) so they
+-- stay below every marker's icon. The flash is only set with the
 -- ring; a flash left from an earlier target is never drawn without one, so a marker without a
 -- ring skips both. A layer without content keeps its
 -- old style, which no draw reads, and is styled again when a target shows it. An enemy pinned
@@ -2047,6 +2072,7 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
     local icon_offset = icon_style.offset
     local icon_size_tbl = icon_style.size
     local icon_z = math_floor((z or 0) + 0.5)
+    local decoration_z = icon_z - (visual and visual.decoration_layer_drop or 0)
     local arrow_anchor_x = nil
     local arrow_anchor_y = nil
     local arrow_anchor_size = nil
@@ -2065,8 +2091,9 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
 
     -- An opt-in layer behind the base icon, for markers that want a backplate
     -- under their art. A marker enables it purely by naming a `plate_icon`; kinds
-    -- that do not name one -- every enemy marker among them, which composes its
-    -- own background into the base layer instead -- are drawn exactly as before.
+    -- that do not name one -- every enemy marker among them unless its category
+    -- shows threat awareness, as an enemy composes its own background into the
+    -- base layer instead -- are drawn exactly as before.
     local plate_icon_style = style.plate_icon
 
     if plate_icon_style and plate_icon ~= nil and plate_icon ~= "" then
@@ -2074,14 +2101,14 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
 
         if plate_base_size then
             RadarHudWidgets.centre_marker_layer(plate_icon_style, icon_offset[1], icon_offset[2], size,
-                plate_base_size, tonumber(visual.background_base_size or visual.size), icon_z - 2)
+                plate_base_size, tonumber(visual.background_base_size or visual.size), decoration_z - 2)
         else
             local plate_offset = plate_icon_style.offset
             local plate_size_tbl = plate_icon_style.size
 
             plate_offset[1] = icon_offset[1]
             plate_offset[2] = icon_offset[2]
-            plate_offset[3] = icon_z - 1
+            plate_offset[3] = decoration_z - 1
             plate_size_tbl[1] = size
             plate_size_tbl[2] = size
         end
@@ -2103,7 +2130,7 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         content.flash_icon = flash_icon
 
         RadarHudWidgets.centre_marker_layer(ring_icon_style, icon_offset[1], icon_offset[2], size,
-            tonumber(visual.ring_base_size), layer_base_size, icon_z - 1)
+            tonumber(visual.ring_base_size), layer_base_size, decoration_z - 1)
         local ring_color = _copy_into_widget_color(_style_color_table(ring_icon_style), visual.ring_color)
 
         if elevation_alpha ~= nil then
@@ -2116,7 +2143,7 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
             local flash_icon_style = style.flash_icon
 
             RadarHudWidgets.centre_marker_layer(flash_icon_style, icon_offset[1], icon_offset[2], size,
-                tonumber(visual.flash_base_size), layer_base_size, icon_z - 3)
+                tonumber(visual.flash_base_size), layer_base_size, decoration_z - 3)
 
             local flash_color = _copy_into_widget_color(_style_color_table(flash_icon_style), visual.flash_color)
 
@@ -3378,6 +3405,144 @@ local function _coherency_marker_visual(target, draw_cache, icon, glyph, player_
     return visual
 end
 
+--- Returns the threat awareness look of an enemy marker, kept and refilled per unit.
+-- The enemy keeps its own look and sits on the threat backplate inside the threat frame, both
+-- twice the marker's visible size (its bracket size), so the frame wraps the marker inside its
+-- brackets and the backplate fills the frame. The visible size, not the marker's box, because an
+-- enemy's background disc covers well under half of its texture box. The frame takes the
+-- targeting colour while the enemy targets the Radar player, and the neutral colour while it
+-- targets someone else, nobody, or a target that cannot be read. An enemy seen targeting someone
+-- else or nobody that then targets the Radar player, between frames close together, starts a
+-- short flash that grows outward; a unit seen for the first time, back on the radar after a
+-- while, coming from a target that could not be read, or seen anew for a new Radar player (whose
+-- state table starts empty) does not flash, and a flash ends once the enemy turns away. The three
+-- layers sit below every marker's icon, whatever the enemy's render layer, and an enemy a Cyber
+-- Mastiff pins keeps its fill suppressed, so it shows no backplate. Each frame the fields of the
+-- visual it decorates, per-target texts included, are copied by name into the unit's own table,
+-- so shared visuals are never changed and drawing allocates nothing.
+-- tab: target radar target with a `threat_state`
+-- ?tab: draw_cache draw cache
+-- tab: base_visual the enemy's visual as it is drawn without threat awareness
+-- treturn: tab visual
+local function _enemy_threat_visual(target, draw_cache, base_visual)
+    if draw_cache == nil then
+        return base_visual
+    end
+
+    local targeting = target.threat_state == "targeting_source"
+    local size = base_visual.size or 14
+    local extent = base_visual.bracket_base_size or size
+    local now = draw_cache.draw_t
+    local state_by_unit = draw_cache.threat_state_by_unit
+    local unit = target.unit
+    local state = nil
+    local flash_color = nil
+    local flash_base_size = nil
+
+    if now ~= nil and state_by_unit ~= nil and unit ~= nil then
+        state = state_by_unit[unit]
+
+        if state == nil then
+            state = {
+                threat_state = target.threat_state,
+                seen_t = now,
+                changed_t = nil,
+                flash_color = { 0, 255, 255, 255 },
+                visual = {
+                    icon = nil,
+                    color = nil,
+                    overlay_icon = nil,
+                    overlay_color = nil,
+                    background_base_size = nil,
+                    overlay_base_size = nil,
+                    bracket_base_size = nil,
+                    accent_color = nil,
+                    size = size,
+                    value_text = nil,
+                    value_text_color = nil,
+                    value_text_anchor = nil,
+                    value_text_offset_x = nil,
+                    value_text_offset_y = nil,
+                    secondary_value_text = nil,
+                    secondary_value_text_color = nil,
+                    secondary_value_text_anchor = nil,
+                    secondary_value_text_offset_x = nil,
+                    secondary_value_text_offset_y = nil,
+                    plate_icon = nil,
+                    plate_color = nil,
+                    plate_base_size = nil,
+                    ring_icon = ENEMY_THREAT_ICONS.frame,
+                    ring_color = nil,
+                    ring_base_size = nil,
+                    flash_icon = nil,
+                    flash_color = nil,
+                    flash_base_size = nil,
+                    decoration_layer_drop = 0,
+                },
+            }
+            state_by_unit[unit] = state
+        else
+            if not targeting then
+                state.changed_t = nil
+            elseif state.threat_state == "not_targeting_source" and now - state.seen_t < 0.5 then
+                state.changed_t = now
+            end
+
+            state.threat_state = target.threat_state
+            state.seen_t = now
+        end
+
+        local changed_t = state.changed_t
+        local progress = changed_t and (now - changed_t) / 0.8 or 1
+
+        if progress >= 0 and progress < 1 then
+            local configured_flash_color = draw_cache.enemy_threat_acquisition_flash_color or WHITE_WIDGET_COLOR
+
+            flash_color = state.flash_color
+            flash_color[1] = math_floor((configured_flash_color[1] or 255) * math.sin(progress * math.pi) + 0.5)
+            flash_color[2] = configured_flash_color[2] or 255
+            flash_color[3] = configured_flash_color[3] or 255
+            flash_color[4] = configured_flash_color[4] or 255
+            flash_base_size = extent * (2 + 0.5 * progress)
+        end
+    end
+
+    local visual = state and state.visual or {}
+
+    visual.icon = base_visual.icon
+    visual.color = base_visual.color
+    visual.overlay_icon = base_visual.overlay_icon
+    visual.overlay_color = base_visual.overlay_color
+    visual.background_base_size = base_visual.background_base_size
+    visual.overlay_base_size = base_visual.overlay_base_size
+    visual.bracket_base_size = base_visual.bracket_base_size
+    visual.accent_color = base_visual.accent_color
+    visual.size = size
+    visual.value_text = base_visual.value_text
+    visual.value_text_color = base_visual.value_text_color
+    visual.value_text_anchor = base_visual.value_text_anchor
+    visual.value_text_offset_x = base_visual.value_text_offset_x
+    visual.value_text_offset_y = base_visual.value_text_offset_y
+    visual.secondary_value_text = base_visual.secondary_value_text
+    visual.secondary_value_text_color = base_visual.secondary_value_text_color
+    visual.secondary_value_text_anchor = base_visual.secondary_value_text_anchor
+    visual.secondary_value_text_offset_x = base_visual.secondary_value_text_offset_x
+    visual.secondary_value_text_offset_y = base_visual.secondary_value_text_offset_y
+    visual.plate_icon = target.disabled_by_mastiff ~= true and ENEMY_THREAT_ICONS.backplate or nil
+    visual.plate_color = draw_cache.enemy_threat_backplate_color
+    visual.plate_base_size = extent * 2
+    visual.ring_icon = ENEMY_THREAT_ICONS.frame
+    visual.ring_color = targeting and draw_cache.enemy_threat_targeting_frame_color
+        or draw_cache.enemy_threat_neutral_frame_color
+    visual.ring_base_size = extent * 2
+    visual.flash_icon = flash_color and ENEMY_THREAT_ICONS.flash or nil
+    visual.flash_color = flash_color
+    visual.flash_base_size = flash_base_size
+    visual.decoration_layer_drop = tonumber(target.render_layer) or 0
+
+    return visual
+end
+
 --- Builds the visual of a player companion, cached per kind, role and player slot.
 -- A companion takes its owner's slot colour, as the game's companion nameplate does, so mods
 -- that recolour players recolour their companions too; a cached visual is refilled in place
@@ -3474,7 +3639,9 @@ end
 -- pickup presentation, then applies the per-target overrides. Presentations are shared
 -- tables; their colours are rewritten here for every target (for framed objective markers
 -- the frame, icon and backplate colours) before use. While the coherency annotation is on, a
--- teammate takes the coherency look of `_coherency_marker_visual`.
+-- teammate takes the coherency look of `_coherency_marker_visual`, and an enemy with a
+-- `threat_state` (its category shows threat awareness) takes the look of `_enemy_threat_visual`
+-- over its finished visual, bosses included.
 -- tab: target radar target
 -- tab: draw_cache draw cache
 -- treturn: ?tab visual
@@ -3487,7 +3654,13 @@ local function _target_visual(target, draw_cache)
     local enemy_visual = _enemy_radar_visual(target, draw_cache)
 
     if enemy_visual then
-        return _apply_target_specific_visual_overrides(target, enemy_visual, draw_cache)
+        enemy_visual = _apply_target_specific_visual_overrides(target, enemy_visual, draw_cache)
+
+        if target.threat_state ~= nil then
+            return _enemy_threat_visual(target, draw_cache, enemy_visual)
+        end
+
+        return enemy_visual
     end
 
     local debug_mode = draw_cache and draw_cache.debug_mode or mod:get("debug_mode")
@@ -3637,6 +3810,11 @@ local function _target_visual(target, draw_cache)
         end
 
         presentation.accent_color = _configured_marker_background_color(target_kind, presentation.accent_color)
+
+        if target.threat_state ~= nil then
+            return _enemy_threat_visual(target, draw_cache,
+                _apply_target_specific_visual_overrides(target, presentation, draw_cache))
+        end
 
         return _apply_target_specific_visual_overrides(target, presentation, draw_cache)
     end
@@ -3837,8 +4015,10 @@ end
 -- heading, a facing chevron), the overview legends, the zoom indicator and the screen
 -- highlights, and finally clears the widgets left over from the previous frame. The chevron
 -- comes last, so it can keep clear of everything its marker drew; the brackets, the coherency
--- frame, the vertical arrow and the texts. When the snapshot's Radar player revision changes,
--- every unit's coherency state starts over, so a new source never flashes a change. While
+-- or threat frame, the vertical arrow and the texts. When the snapshot's Radar player revision
+-- changes, every unit's coherency and threat states start over, so a new source never flashes a
+-- change; the threat states are also swept, at each draw cache refresh, of enemies not drawn for
+-- more than a second, so dead and departed enemies are not kept for the mission. While
 -- profiling, each of those steps is timed through `mod:radar_profiler_lap`; the frame and the
 -- map geometry are timed apart, and each marker's projection, visual, brackets and chevron,
 -- widget update, widget draw and texts are added up over all markers through
@@ -3864,7 +4044,26 @@ local function _draw_internal(self, ui_renderer, snapshot, t, profile_mark)
         self._radar_coherency_player_revision = player_revision
     end
 
+    local threat_state_by_unit = self._radar_threat_state_by_unit
+    local next_refresh_t = draw_cache.next_refresh_t
+
+    if threat_state_by_unit == nil or self._radar_threat_player_revision ~= player_revision then
+        threat_state_by_unit = {}
+        self._radar_threat_state_by_unit = threat_state_by_unit
+        self._radar_threat_player_revision = player_revision
+    elseif next_refresh_t ~= self._radar_threat_sweep_refresh_t then
+        local forget_before_t = (tonumber(t) or 0) - 1
+
+        for unit, state in pairs(threat_state_by_unit) do
+            if state.seen_t < forget_before_t then
+                threat_state_by_unit[unit] = nil
+            end
+        end
+    end
+
+    self._radar_threat_sweep_refresh_t = next_refresh_t
     draw_cache.coherency_state_by_unit = coherency_state_by_unit
+    draw_cache.threat_state_by_unit = threat_state_by_unit
     draw_cache.draw_t = tonumber(t)
 
     if profile_mark then

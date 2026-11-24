@@ -508,6 +508,23 @@ return function(env)
         misc = "show_enemy_misc_facing",
     }
 
+    --- Threat awareness settings for the boss kinds and for each enemy category but Misc.
+    -- Misc holds only the Ritualists, who target their ritual and never a player, so it has no setting.
+    local ENEMY_RADAR_THREAT_SETTING_BY_KIND = {
+        enemy_daemonhost = "show_enemy_boss_threat",
+        enemy_monstrosity = "show_enemy_boss_threat",
+        enemy_captain = "show_enemy_boss_threat",
+        enemy_karnak_twin = "show_enemy_boss_threat",
+    }
+
+    local ENEMY_RADAR_THREAT_SETTING_BY_CATEGORY = {
+        special = "show_enemy_special_threat",
+        elite = "show_enemy_elite_threat",
+        shooter = "show_enemy_shooter_threat",
+        common = "show_enemy_common_threat",
+        horde = "show_enemy_horde_threat",
+    }
+
     --- Elevation fade toggle of each marker category, by kind, by enemy category and by settings group.
     -- A category is a settings section. The players group holds two sections, teammates and player
     -- tags, so their kinds are listed by kind, as are the boss kinds; every other enemy follows its
@@ -1577,6 +1594,30 @@ return function(env)
 
         local category = definition.category
         local setting_id = category and rawget(ENEMY_RADAR_FACING_SETTING_BY_CATEGORY, category) or nil
+
+        return setting_id ~= nil and self:get(setting_id) == true
+    end
+
+    --- Returns whether the threat awareness setting of an enemy's category is on.
+    -- Boss kinds use the boss setting; every other enemy uses its definition's category, so each
+    -- kind follows its category's checkbox. Misc enemies, which have none, never show it.
+    -- param: kind_or_breed marker kind or breed name
+    -- treturn: bool
+    function mod:show_enemy_threat(kind_or_breed)
+        local direct_setting_id = rawget(ENEMY_RADAR_THREAT_SETTING_BY_KIND, kind_or_breed)
+
+        if direct_setting_id ~= nil then
+            return self:get(direct_setting_id) == true
+        end
+
+        local definition = self:get_enemy_radar_definition(kind_or_breed)
+
+        if not definition then
+            return false
+        end
+
+        local category = definition.category
+        local setting_id = category and rawget(ENEMY_RADAR_THREAT_SETTING_BY_CATEGORY, category) or nil
 
         return setting_id ~= nil and self:get(setting_id) == true
     end

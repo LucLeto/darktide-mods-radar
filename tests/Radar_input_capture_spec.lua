@@ -531,6 +531,30 @@ test("toggling the teammate state icons, coherency annotation or mastiff coheren
     assert_equal(1000, harness.mod._next_scan_t, "an unrelated setting rescanned")
 end)
 
+test("toggling an enemy category's threat awareness rescans and reads the threat states at once", function()
+    local harness = new_harness()
+
+    for _, category in ipairs({ "boss", "horde", "common", "shooter", "elite", "special" }) do
+        local setting_id = "show_enemy_" .. category .. "_threat"
+
+        for _, value in ipairs({ true, false }) do
+            harness.mod._next_scan_t = 1000
+            harness.mod._next_enemy_threat_t = 1000
+            harness:change_setting(setting_id, value)
+            assert_equal(0, harness.mod._next_scan_t, setting_id .. " set to " .. tostring(value) .. " did not rescan")
+            assert_equal(0, harness.mod._next_enemy_threat_t,
+                setting_id .. " set to " .. tostring(value) .. " did not read the threat states")
+        end
+    end
+
+    -- A threat colour changes how the states look, not the states.
+    harness.mod._next_scan_t = 1000
+    harness.mod._next_enemy_threat_t = 1000
+    harness:change_setting("enemy_threat_targeting_frame_color", { 255, 0, 0, 255 })
+    assert_equal(1000, harness.mod._next_scan_t, "a threat colour rescanned")
+    assert_equal(1000, harness.mod._next_enemy_threat_t, "a threat colour read the threat states")
+end)
+
 test("profiling is off by default and logs nothing", function()
     local harness = new_harness()
 

@@ -664,6 +664,106 @@ test("a teammate's coherency layers are centred on the icon, by their ratio, bel
     assert_equal(1, #harness.draw(widget), "a flash without its frame was drawn")
 end)
 
+test("an enemy's threat layers are centred on its icon by their ratio, below every marker's icon", function()
+    local harness = new_harness()
+
+    for _, render_layer in ipairs({ 0, 1, 4, 5 }) do
+        for _, icon_size in ipairs({ 6, 10, 17, 40 }) do
+            local widget = harness.new_widget(1)
+            local label = "render layer " .. render_layer .. ", size " .. icon_size
+
+            apply(harness, widget, {
+                visual = {
+                    icon = "icon",
+                    color = { 220, 255, 0, 0 },
+                    overlay_icon = "overlay",
+                    overlay_color = { 255, 1, 2, 3 },
+                    background_base_size = 12,
+                    overlay_base_size = 8,
+                    size = 12,
+                    plate_icon = "plate",
+                    plate_color = { 200, 120, 5, 6 },
+                    plate_base_size = 21,
+                    ring_icon = "ring",
+                    ring_color = { 255, 216, 229, 207 },
+                    ring_base_size = 24,
+                    flash_icon = "flash",
+                    flash_color = { 120, 255, 40, 30 },
+                    flash_base_size = 27,
+                    decoration_layer_drop = render_layer,
+                },
+                target = { kind = ENEMY_KIND, render_layer = render_layer },
+                icon_size = icon_size,
+                z = 10 + render_layer,
+            })
+
+            for layer, base_size in pairs({ plate_icon = 21, ring_icon = 24, flash_icon = 27 }) do
+                local layer_style = widget.style[layer]
+                local margin = math.floor(icon_size * (base_size / 12 - 1) * 0.5 + 0.5)
+
+                assert_equal(icon_size + margin * 2, layer_style.size[1], label .. " " .. layer .. " width")
+                assert_equal(layer_style.size[1], layer_style.size[2], label .. " " .. layer .. " is not square")
+                assert_equal(100 * 2 + icon_size, layer_style.offset[1] * 2 + layer_style.size[1],
+                    label .. " " .. layer .. " is off centre")
+                assert_equal(200 * 2 + icon_size, layer_style.offset[2] * 2 + layer_style.size[2],
+                    label .. " " .. layer .. " is off centre vertically")
+            end
+
+            -- The threat layers keep the layers of an enemy without a render layer, under every icon.
+            assert_equal(7, widget.style.flash_icon.offset[3], label .. " flash layer")
+            assert_equal(8, widget.style.plate_icon.offset[3], label .. " backplate layer")
+            assert_equal(9, widget.style.ring_icon.offset[3], label .. " frame layer")
+            assert_equal(10 + render_layer, widget.style.icon.offset[3], label .. " icon layer")
+            assert_equal(11 + render_layer, widget.style.overlay_icon.offset[3], label .. " overlay layer")
+
+            local records = harness.draw(widget)
+            local order = { "flash", "plate", "ring", "icon", "overlay" }
+
+            assert_equal(#order, #records, label .. " bitmap count")
+
+            for i = 1, #order do
+                assert_equal(order[i], records[i]:match("^bitmap (%S+)"), label .. " layer " .. i)
+            end
+
+            assert_equal("120,255,40,30", drawn_color(records, "flash"), label .. " flash colour")
+            assert_equal("200,120,5,6", drawn_color(records, "plate"), label .. " backplate colour")
+            assert_equal("255,216,229,207", drawn_color(records, "ring"), label .. " frame colour")
+            assert_equal("220,255,0,0", drawn_color(records, "icon"), label .. " background colour")
+            assert_equal("255,1,2,3", drawn_color(records, "overlay"), label .. " icon colour")
+        end
+    end
+
+    -- The same widget handed on to the enemy without threat awareness draws its own two layers again.
+    local widget = harness.new_widget(1)
+
+    apply(harness, widget, {
+        visual = {
+            icon = "icon",
+            size = 12,
+            ring_icon = "ring",
+            ring_base_size = 24,
+            plate_icon = "plate",
+            plate_base_size = 21,
+            decoration_layer_drop = 4,
+        },
+        target = { kind = ENEMY_KIND, render_layer = 4 },
+        icon_size = 12,
+        z = 14,
+    })
+    apply(harness, widget, {
+        visual = { icon = "icon", overlay_icon = "overlay", size = 12, background_base_size = 12, overlay_base_size = 8 },
+        target = { kind = ENEMY_KIND, render_layer = 4 },
+        icon_size = 12,
+        z = 14,
+    })
+
+    local records = harness.draw(widget)
+
+    assert_equal(2, #records, "a reused widget kept the threat layers")
+    assert_equal("icon", records[1]:match("^bitmap (%S+)"), "the icon")
+    assert_equal("overlay", records[2]:match("^bitmap (%S+)"), "the overlay")
+end)
+
 test("a widget handed from target to target draws what a fresh widget draws", function()
     local harness = new_harness()
     local reused = harness.new_widget(1)
@@ -705,6 +805,7 @@ test("a widget handed from target to target draws what a fresh widget draws", fu
             flash_icon = chance(0.3) and "flash" or (chance(0.2) and "" or nil),
             flash_color = chance(0.7) and random_color() or nil,
             flash_base_size = chance(0.5) and random_int(8, 48) or nil,
+            decoration_layer_drop = chance(0.3) and random_int(0, 6) or nil,
             overlay_icon = chance(0.4) and "overlay" or (chance(0.2) and "" or nil),
             overlay_color = chance(0.7) and random_color() or nil,
             overlay_base_size = chance(0.4) and random_int(4, 30) or nil,

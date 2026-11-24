@@ -478,6 +478,82 @@ check(parent_id("show_cyber_mastiff_coherency") == "show_cyber_mastiff"
     and (widget_by_id.show_cyber_mastiff_coherency or {}).tooltip == "show_cyber_mastiff_coherency_tooltip",
     "mastiff coherency is not a Cyber Mastiff checkbox that is on by default")
 
+-- Every enemy category but Misc, whose Ritualists never target a player, has a threat awareness
+-- checkbox of its own, off by default, right after its fade toggle; the four colours they all share
+-- sit together in a group of their own.
+local THREAT_TOGGLES = {
+    { "show_enemy_boss_threat", "enemy_bosses_group", "elevation_fade_enemy_boss" },
+    { "show_enemy_horde_threat", "enemy_horde_group", "elevation_fade_enemy_horde" },
+    { "show_enemy_common_threat", "enemy_common_shooters_group", "elevation_fade_enemy_common" },
+    { "show_enemy_shooter_threat", "enemy_common_shooters_group", "elevation_fade_enemy_shooter" },
+    { "show_enemy_elite_threat", "enemy_elites_group", "elevation_fade_enemy_elite" },
+    { "show_enemy_special_threat", "enemy_specials_group", "elevation_fade_enemy_special" },
+}
+local THREAT_COLORS = {
+    "enemy_threat_neutral_frame_color",
+    "enemy_threat_targeting_frame_color",
+    "enemy_threat_backplate_color",
+    "enemy_threat_acquisition_flash_color",
+}
+local threat_toggle_count = 0
+local threat_color_count = 0
+
+for setting_id, widget in pairs(widget_by_id) do
+    if widget.type == "checkbox" and setting_id:find("threat", 1, true) then
+        threat_toggle_count = threat_toggle_count + 1
+    elseif widget.type == "color" and setting_id:find("threat", 1, true) then
+        threat_color_count = threat_color_count + 1
+    end
+end
+
+check(threat_toggle_count == #THREAT_TOGGLES,
+    threat_toggle_count .. " threat awareness checkboxes instead of " .. #THREAT_TOGGLES)
+check(widget_by_id.show_enemy_misc_threat == nil, "Misc enemies have a threat awareness checkbox")
+check(threat_color_count == #THREAT_COLORS, threat_color_count .. " threat awareness colours instead of 4")
+
+for i = 1, #THREAT_TOGGLES do
+    local setting_id, group_id, fade_id = THREAT_TOGGLES[i][1], THREAT_TOGGLES[i][2], THREAT_TOGGLES[i][3]
+    local widget = widget_by_id[setting_id] or {}
+    local siblings = (parent_by_id[setting_id] or {}).sub_widgets or {}
+    local position = nil
+
+    for j = 1, #siblings do
+        if siblings[j].setting_id == setting_id then
+            position = j
+        end
+    end
+
+    check(widget.type == "checkbox" and widget.default_value == false and widget.tooltip == "show_enemy_threat_tooltip",
+        setting_id .. " is not a category checkbox that is off by default")
+    check(parent_id(setting_id) == group_id, setting_id .. " is not in " .. group_id)
+    check(position ~= nil and position > 1 and siblings[position - 1].setting_id == fade_id,
+        setting_id .. " does not follow " .. fade_id)
+end
+
+local threat_colors_group = widget_by_id.enemy_threat_colors_group or {}
+local threat_color_widgets = threat_colors_group.sub_widgets or {}
+
+check(threat_colors_group.type == "group" and parent_id("enemy_threat_colors_group") == "enemies_group",
+    "the threat awareness colours are not a group of the Enemies tab")
+check(#threat_color_widgets == #THREAT_COLORS, "the threat awareness colour group holds other settings")
+
+for i = 1, #THREAT_COLORS do
+    check((threat_color_widgets[i] or {}).setting_id == THREAT_COLORS[i],
+        THREAT_COLORS[i] .. " is not colour " .. i .. " of the threat awareness group")
+end
+
+-- The neutral frame looks like the objective frame; the other three start as the enemy background
+-- red, each a setting of its own.
+check(same_color((widget_by_id.enemy_threat_neutral_frame_color or {}).default_value,
+    (widget_by_id.mission_objective_frame_marker_color or {}).default_value),
+    "the neutral threat frame does not default to the objective frame colour")
+
+for i = 2, #THREAT_COLORS do
+    check(same_color((widget_by_id[THREAT_COLORS[i]] or {}).default_value,
+        (widget_by_id.enemy_background_marker_color or {}).default_value),
+        THREAT_COLORS[i] .. " does not default to the enemy background colour")
+end
+
 check(parent_id("show_player_tag_distance_text") == "show_player_tags"
     and parent_id("player_tag_display_style") == "show_player_tags",
     "the player tag settings do not follow the player tag toggle")

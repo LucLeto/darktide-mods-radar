@@ -8,7 +8,8 @@
 -- patch that changes an API degrades a feature instead of raising in the update loop.
 --
 -- Installer module, installed second into Radar's shared runtime environment (see
--- `Radar.lua`). Contributes the `_safe_*` accessors, player, mission, runtime state, colour
+-- `Radar.lua`). Contributes the `_safe_*` accessors (networked game object fields and the
+-- target a minion's perception replicates among them), player, mission, runtime state, colour
 -- and world marker helpers, the Radar player (`_radar_player`, `_reset_radar_player`), the
 -- radar position constants (`DEFAULT_RADAR_*`, `RADAR_ANCHORS`) and
 -- `SCREEN_HIGHLIGHT_Z_OFFSET_BY_KIND`, plus the HUD projection `mod` methods. It holds no
@@ -24,6 +25,7 @@ return function(env)
     setfenv(1, env)
 
     local mod = mod
+    local GameSession = GameSession
     local PhysicsWorld = PhysicsWorld
     local pcall = pcall
     local pairs = pairs
@@ -1008,6 +1010,134 @@ return function(env)
         end
 
         return nil
+    end
+
+    --- Returns the game session and the unit spawner that networked game object fields are read through.
+    -- Read once for a pass over many units, which then pass both on to the field reads, and never
+    -- kept past the update they were read in.
+    -- return: game session, or nil while there is none
+    -- treturn: ?tab unit spawner manager
+    function _safe_game_object_access()
+        local state = Managers and Managers.state
+        local game_session_manager = state and state.game_session
+        local unit_spawner_manager = state and state.unit_spawner
+        local game_session_fn = game_session_manager and game_session_manager.game_session
+
+        if not game_session_fn or not unit_spawner_manager or not GameSession then
+            return nil, nil
+        end
+
+        local ok_session, game_session = pcall(game_session_fn, game_session_manager)
+
+        if not ok_session or not game_session then
+            return nil, nil
+        end
+
+        return game_session, unit_spawner_manager
+    end
+
+    --- Reads a networked game object field of a unit; called through `pcall`, which catches whatever is missing.
+    -- A unit without a game object, or one whose game object is already gone, reads nil.
+    -- param: game_session game session
+    -- tab: unit_spawner_manager unit spawner manager
+    -- param: unit unit handle
+    -- string: field_name game object field
+    -- return: field value
+    local function _unit_game_object_field(game_session, unit_spawner_manager, unit, field_name)
+        local game_object_id = unit_spawner_manager:game_object_id(unit)
+
+        if game_object_id == nil then
+            return nil
+        end
+
+        local game_object_exists = GameSession.game_object_exists
+
+        if game_object_exists and not game_object_exists(game_session, game_object_id) then
+            return nil
+        end
+
+        return GameSession.game_object_field(game_session, game_object_id, field_name)
+    end
+
+    --- Reads a networked game object field of a unit through the game session.
+    -- param: unit unit handle
+    -- string: field_name game object field
+    -- return: field value, or nil when it cannot be read
+    function _safe_unit_game_object_field(unit, field_name)
+        local game_session, unit_spawner_manager = _safe_game_object_access()
+
+        if not game_session then
+            return nil
+        end
+
+        local ok_field, value = pcall(_unit_game_object_field, game_session, unit_spawner_manager, unit, field_name)
+
+        return ok_field and value or nil
+    end
+
+    --- Returns the live unit of a networked game object id.
+    function _safe_unit_from_game_object_id(game_object_id)
+        if game_object_id == nil then
+            return nil
+        end
+
+        local state = Managers and Managers.state
+        local unit_spawner_manager = state and state.unit_spawner
+        local unit_fn = unit_spawner_manager and unit_spawner_manager.unit
+
+        if not unit_fn then
+            return nil
+        end
+
+        local ok_unit, unit = pcall(unit_fn, unit_spawner_manager, game_object_id)
+
+        return ok_unit and _safe_unit_alive(unit) and unit or nil
+    end
+
+    --- Returns the networked game object id of a unit, the id every peer knows the unit by.
+    -- param: unit unit handle
+    -- treturn: ?number game object id, nil for a unit without one
+    function _safe_unit_game_object_id(unit)
+        local state = Managers and Managers.state
+        local unit_spawner_manager = state and state.unit_spawner
+        local game_object_id_fn = unit_spawner_manager and unit_spawner_manager.game_object_id
+
+        if unit == nil or not game_object_id_fn then
+            return nil
+        end
+
+        local ok_id, game_object_id = pcall(game_object_id_fn, unit_spawner_manager, unit)
+
+        return ok_id and game_object_id or nil
+    end
+
+    --- Returns whether a minion targets the unit of a game object id, by the minion's replicated target.
+    -- The server's perception writes the minion's `target_unit_id` game object field whenever the
+    -- minion picks a new target, and `NetworkConstants.invalid_game_object_id` when it has none, so
+    -- the host and every client read the same value; the game's own client code reads it the same
+    -- way to tell whether a special targets the local player. Ids are compared, so the target unit
+    -- need not be alive, and the id of a despawned unit is never the given unit's. A breed whose
+    -- real target the field does not hold would be handled here, in one place. One `pcall` per
+    -- minion; the session and spawner come from `_safe_game_object_access`, read once per pass.
+    -- param: unit minion unit
+    -- ?number: game_object_id game object id of the unit to compare with
+    -- param: game_session game session, nil while there is none
+    -- ?tab: unit_spawner_manager unit spawner manager
+    -- treturn: ?bool true while the minion targets that unit, false while it targets another unit
+    --   or none, nil when the field cannot be read
+    function _safe_minion_targets_game_object_id(unit, game_object_id, game_session, unit_spawner_manager)
+        if game_object_id == nil or not game_session then
+            return nil
+        end
+
+        local ok_field, target_unit_id = pcall(_unit_game_object_field, game_session, unit_spawner_manager, unit,
+            "target_unit_id")
+
+        if not ok_field or type(target_unit_id) ~= "number" then
+            return nil
+        end
+
+        return target_unit_id == game_object_id
     end
 
     --- Returns the outline system's per-unit outline data, read raw from its private field.
