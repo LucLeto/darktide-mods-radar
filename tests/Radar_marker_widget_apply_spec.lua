@@ -671,8 +671,7 @@ test("an enemy's threat layers are centred on its icon by their ratio, below eve
         for _, icon_size in ipairs({ 6, 10, 17, 40 }) do
             local widget = harness.new_widget(1)
             local label = "render layer " .. render_layer .. ", size " .. icon_size
-
-            apply(harness, widget, {
+            local case = {
                 visual = {
                     icon = "icon",
                     color = { 220, 255, 0, 0 },
@@ -695,7 +694,9 @@ test("an enemy's threat layers are centred on its icon by their ratio, below eve
                 target = { kind = ENEMY_KIND, render_layer = render_layer },
                 icon_size = icon_size,
                 z = 10 + render_layer,
-            })
+            }
+
+            apply(harness, widget, case)
 
             for layer, base_size in pairs({ plate_icon = 21, ring_icon = 24, flash_icon = 27 }) do
                 local layer_style = widget.style[layer]
@@ -730,6 +731,33 @@ test("an enemy's threat layers are centred on its icon by their ratio, below eve
             assert_equal("255,216,229,207", drawn_color(records, "ring"), label .. " frame colour")
             assert_equal("220,255,0,0", drawn_color(records, "icon"), label .. " background colour")
             assert_equal("255,1,2,3", drawn_color(records, "overlay"), label .. " icon colour")
+
+            -- An enemy whose background became the backplate draws no disc, and everything else where it was.
+            local traded = harness.new_widget(1)
+
+            case.visual.icon = nil
+            case.visual.plate_color = case.visual.color
+            apply(harness, traded, case)
+
+            local traded_records = harness.draw(traded)
+            local traded_order = { "flash", "plate", "ring", "overlay" }
+
+            assert_equal(#traded_order, #traded_records, label .. " bitmap count without the disc")
+
+            for i = 1, #traded_order do
+                assert_equal(traded_order[i], traded_records[i]:match("^bitmap (%S+)"),
+                    label .. " layer " .. i .. " without the disc")
+            end
+
+            assert_equal("220,255,0,0", drawn_color(traded_records, "plate"), label .. " backplate colour without the disc")
+            assert_equal(records[2]:gsub(" colour %S+", ""), traded_records[2]:gsub(" colour %S+", ""),
+                label .. " backplate moved without the disc")
+
+            for _, i in ipairs({ 1, 3 }) do
+                assert_equal(records[i], traded_records[i], label .. " " .. traded_order[i] .. " moved without the disc")
+            end
+
+            assert_equal(records[5], traded_records[4], label .. " icon moved without the disc")
         end
     end
 

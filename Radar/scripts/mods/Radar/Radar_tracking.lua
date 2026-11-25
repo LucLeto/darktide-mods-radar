@@ -2060,17 +2060,18 @@ return function(env)
 
     --- Builds the list of radar targets to draw from the tracked units and points.
     -- Every entry passes kind enablement, the companion and tag filters, the container filter,
-    -- the range rules (with the exemptions for tags, ability marks, objectives the game points
-    -- at and sockets while the Radar player carries a luggable) and the floor rules, and is
-    -- written into a pooled target table with its distances and height difference from the
-    -- Radar player, vertical arrow state, render layer and selection priority. An enemy whose
-    -- category shows threat awareness also takes its `threat_state` from the last threat pass. The
-    -- unclustered list is kept for highlights; Tech-Remnants are then clustered, the list sorted
-    -- and cut to the marker limit. Last, each target left gets the share of its opacity its
-    -- category's elevation fade keeps, `elevation_alpha`, nil for all of it, and an enemy the
-    -- threat pass has not seen yet reads its threat state at once, so a new enemy shows its frame
-    -- right away and one the marker limit cuts is never read. Without a usable Radar player the
-    -- list is empty.
+    -- the range rules (with the exemptions for tags, ability marks, a Cyber Mastiff on its target,
+    -- objectives the game points at and sockets while the Radar player carries a luggable) and the
+    -- floor rules, and is written into a pooled target table with its distances and height
+    -- difference from the Radar player, vertical arrow state, render layer and selection
+    -- priority. A target whose facing setting is on also takes its heading, unless it is an enemy
+    -- a Cyber Mastiff pins or the mastiff pinning it. An enemy whose category shows threat
+    -- awareness also takes its `threat_state` from the last threat pass. The unclustered list is
+    -- kept for highlights; Tech-Remnants are then clustered, the list sorted and cut to the marker
+    -- limit. Last, each target left gets the share of its opacity its category's elevation fade
+    -- keeps, `elevation_alpha`, nil for all of it, and an enemy the threat pass has not seen yet
+    -- reads its threat state at once, so a new enemy shows its frame right away and one the marker
+    -- limit cuts is never read. Without a usable Radar player the list is empty.
     -- treturn: tab radar targets
     local function _collect_radar_targets()
         local radar_player = _radar_player()
@@ -2245,10 +2246,10 @@ return function(env)
 
         --- Filters one tracked unit or point and appends it as a radar target.
         -- A target whose facing direction setting is on also takes the direction its unit looks or
-        -- faces, except a teammate who is dead, waiting for rescue or captured; every other target,
-        -- reusing a pooled table, has its heading cleared. Likewise an enemy whose category shows
-        -- threat awareness takes the threat state the last pass read for it, if any, and every
-        -- other target none.
+        -- faces, except a teammate who is dead, waiting for rescue or captured, and a Cyber Mastiff
+        -- pinning an enemy and the enemy it pins; every other target, reusing a pooled table, has
+        -- its heading cleared. Likewise an enemy whose category shows threat awareness takes the
+        -- threat state the last pass read for it, if any, and every other target none.
         -- param: unit unit handle, or the point id
         -- tab: data tracked entry
         local function append_target(unit, data)
@@ -2304,6 +2305,13 @@ return function(env)
             local ignore_range = infinite_range or _cached_ignore_radar_range(kind)
 
             if explicitly_tagged_target or ability_marked_enemy then
+                ignore_range = true
+            end
+
+            -- A mastiff on its target stays on the radar however far away, so the enemy it pins,
+            -- often one an attack order tagged and so kept at the edge, never shows the marker it
+            -- cleared for the mastiff without the mastiff drawn over it.
+            if companion_action_active and kind == "player_companion_dog" then
                 ignore_range = true
             end
 
@@ -2391,8 +2399,12 @@ return function(env)
             local heading_x = nil
             local heading_y = nil
             local player_radar_state = meta and meta.player_radar_state or nil
+            local disabled_by_mastiff = mastiff_disabled_enemy_units[unit] == true and _is_enemy_kind(kind)
 
-            if _cached_shows_facing(kind) and (player_radar_state == nil or player_radar_state == "luggable") then
+            if _cached_shows_facing(kind)
+                and not disabled_by_mastiff
+                and not (companion_action_active and mastiff_disabled_enemy_units[meta.companion_action_target])
+                and (player_radar_state == nil or player_radar_state == "luggable") then
                 heading_x, heading_y = _safe_target_heading_xy(unit, kind)
             end
 
@@ -2418,8 +2430,7 @@ return function(env)
             target.ignore_radar_range = ignore_range
             target.render_layer = render_layer
             target.selection_priority = selection_priority
-            target.disabled_by_mastiff = mastiff_disabled_enemy_units[unit] == true
-                and _is_enemy_kind(kind)
+            target.disabled_by_mastiff = disabled_by_mastiff
             target.heading_x = heading_x
             target.heading_y = heading_y
             target.threat_state = threat_state

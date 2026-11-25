@@ -6,7 +6,8 @@
 -- points, and a mastiff or an enemy faces where its root points; a target only takes a heading
 -- while its facing direction setting is on (teammates and the mastiff unless switched off,
 -- enemies per category once switched on), a teammate who is dead, waiting for rescue or captured
--- takes none, and a pooled target table never keeps the heading of the target it held before.
+-- takes none, nor does an enemy a Cyber Mastiff pins, and a pooled target table never keeps the
+-- heading of the target it held before.
 
 local HELPERS_PATH = "Radar/scripts/mods/Radar/Radar_runtime_helpers.lua"
 local TRACKING_PATH = "Radar/scripts/mods/Radar/Radar_tracking.lua"
@@ -82,6 +83,7 @@ local function new_harness()
     }
     local world = {
         enemy_facing = {},
+        pinned = {},
     }
     local mod = {
         _tracked_units = {},
@@ -192,8 +194,8 @@ local function new_harness()
 
     alive[player_unit] = true
 
-    -- What the scans around the collection would decide; here every kind is enabled and
-    -- every unit still alive is trackable.
+    -- What the scans around the collection would decide; here every kind is enabled, every
+    -- unit still alive is trackable, and the player scan found a mastiff pinning each `pinned` unit.
     env._radar_player = function()
         return radar_player
     end
@@ -207,7 +209,7 @@ local function new_harness()
         return true
     end
     env._mastiff_disabled_enemy_units = function()
-        return {}
+        return world.pinned
     end
     env._cluster_expedition_loot_targets = function(targets)
         return targets
@@ -445,6 +447,28 @@ test("only targets whose facing setting is on take a heading", function()
     _, by_unit = harness:collect()
 
     check(teammate, 0, 1, "a teammate with the setting back on")
+end)
+
+test("an enemy a Cyber Mastiff pins takes no heading while it is pinned", function()
+    local harness = new_harness()
+
+    harness.world.enemy_facing.enemy_renegade_gunner = true
+
+    local gunner = harness:unit({ root = NORTH })
+
+    harness:track(gunner, "enemy_renegade_gunner", {})
+    harness.world.pinned[gunner] = true
+
+    local _, by_unit = harness:collect()
+
+    assert_equal(true, by_unit[gunner].disabled_by_mastiff, "the gunner is not pinned")
+    assert_nil(by_unit[gunner].heading_x, "a pinned enemy took a heading")
+    assert_nil(by_unit[gunner].heading_y, "a pinned enemy took a heading")
+
+    harness.world.pinned[gunner] = nil
+    _, by_unit = harness:collect()
+
+    assert_near(1, by_unit[gunner].heading_y, "a freed enemy took no heading")
 end)
 
 test("a pooled target never keeps the heading of the target it held before", function()

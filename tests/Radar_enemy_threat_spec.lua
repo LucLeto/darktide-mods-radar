@@ -7,10 +7,11 @@
 -- read, once per pass and never when the marker limit cuts them, that a new Radar player is read
 -- against at once, that every category off costs nothing, that a pooled target never keeps a
 -- state, and that the states go when the radar stops or the mission ends. Last, loads the HUD
--- element against a fake UI stack and checks the look `_target_visual` gives an enemy; the
--- backplate and the frame in the four shared colours, the frame in the targeting colour only while
--- the enemy targets the Radar player, a flash only on a confirmed acquisition, the layers below
--- every icon, one visual per unit with no garbage per frame, and the texts in every language.
+-- element against a fake UI stack and checks the look `_target_visual` gives an enemy; its own
+-- background as the backplate, or the shared backplate colour where it has none, the frame in the
+-- shared colours and in the targeting colour only while the enemy targets the Radar player, a flash
+-- only on a confirmed acquisition, the layers below every icon, one visual per unit with no garbage
+-- per frame, and the texts in every language.
 
 local HELPERS_PATH = "Radar/scripts/mods/Radar/Radar_runtime_helpers.lua"
 local TRACKING_PATH = "Radar/scripts/mods/Radar/Radar_tracking.lua"
@@ -1049,7 +1050,7 @@ test("with threat awareness off, an enemy marker looks exactly as before", funct
     assert_nil(next(draw_cache.threat_state_by_unit), "an enemy without threat awareness kept a threat state")
 end)
 
-test("an enemy sits on the backplate inside the frame, in the targeting colour only while it targets the Radar player",
+test("an enemy sits on a backplate inside the frame, in the targeting colour only while it targets the Radar player",
     function()
         local hud = load_hud()
         local draw_cache = new_draw_cache(hud, 10)
@@ -1062,15 +1063,16 @@ test("an enemy sits on the backplate inside the frame, in the targeting colour o
                 local label = kind .. " / " .. threat_state
                 local visual = hud.target_visual(enemy_target(kind, {}, threat_state), draw_cache)
 
+                -- The background disc and the backplate's colour are the next test's.
                 for f = 1, #BASE_FIELDS do
                     local field = BASE_FIELDS[f]
 
-                    assert_true(same_values(before[field], visual[field]), label .. " changed the marker's " .. field)
+                    if field ~= "icon" then
+                        assert_true(same_values(before[field], visual[field]), label .. " changed the marker's " .. field)
+                    end
                 end
 
                 assert_equal(BACKPLATE, visual.plate_icon, label .. " backplate")
-                assert_true(visual.plate_color == draw_cache.enemy_threat_backplate_color
-                    and same_values(BACKPLATE_COLOR, visual.plate_color), label .. " backplate colour")
                 assert_equal(extent * 2, visual.plate_base_size, label .. " backplate size")
                 assert_equal(FRAME, visual.ring_icon, label .. " frame")
                 assert_equal(extent * 2, visual.ring_base_size, label .. " frame size")
@@ -1093,6 +1095,65 @@ test("an enemy sits on the backplate inside the frame, in the targeting colour o
             assert_nil(hud.presentations[MONSTROSITY][THREAT_FIELDS[f]],
                 "the monstrosity presentation took " .. THREAT_FIELDS[f])
         end
+    end)
+
+test("an enemy with a background draws it as the backplate in its own colour, hordes and bosses on the backplate colour",
+    function()
+        local _, definition_env = load_definitions({})
+        local definitions = definition_env.ENEMY_RADAR_DEFINITION_BY_KIND
+        local hud = load_hud(nil, definitions)
+        local draw_cache = new_draw_cache(hud, 10)
+        local traded, kept = 0, 0
+
+        for kind, definition in pairs(definitions) do
+            local before = hud.target_visual(enemy_target(kind, {}, nil), draw_cache)
+            local has_background = definition.background_color ~= nil and definition.category ~= "horde"
+
+            if has_background then
+                traded = traded + 1
+                assert_equal(definition.background_icon, before.icon, kind .. " draws no background disc")
+            else
+                kept = kept + 1
+            end
+
+            for _, threat_state in ipairs({ "targeting_source", "not_targeting_source", "unknown" }) do
+                local label = kind .. " / " .. threat_state
+                local visual = hud.target_visual(enemy_target(kind, {}, threat_state), draw_cache)
+
+                assert_equal(before.overlay_icon, visual.overlay_icon, label .. " changed its icon")
+
+                if has_background then
+                    assert_nil(visual.icon, label .. " kept its background disc inside the frame")
+                    assert_true(visual.plate_color == before.color, label .. " backplate is not its background colour")
+                else
+                    assert_equal(before.icon, visual.icon, label .. " lost its icon")
+                    assert_true(visual.plate_color == draw_cache.enemy_threat_backplate_color,
+                        label .. " backplate is not in the backplate colour")
+                end
+            end
+        end
+
+        assert_true(traded > 0 and kept > 0, "the definitions hold no enemy with a background, or none without")
+
+        for _, kind in ipairs(BOSS_KINDS) do
+            local before = hud.target_visual(enemy_target(kind, {}, nil), draw_cache)
+            local visual = hud.target_visual(enemy_target(kind, {}, "targeting_source"), draw_cache)
+
+            assert_equal(before.icon, visual.icon, kind .. " lost its emblem")
+            assert_true(visual.plate_color == draw_cache.enemy_threat_backplate_color
+                and same_values(BACKPLATE_COLOR, visual.plate_color), kind .. " backplate colour")
+        end
+
+        local recoloured = { [GUNNER] = clone(definitions[GUNNER]) }
+
+        recoloured[GUNNER].background_color = { 180, 10, 200, 30 }
+
+        local recoloured_hud = load_hud(nil, recoloured)
+        local recoloured_visual = recoloured_hud.target_visual(enemy_target(GUNNER, {}, "unknown"),
+            new_draw_cache(recoloured_hud, 10))
+
+        assert_true(same_values({ 180, 10, 200, 30 }, recoloured_visual.plate_color),
+            "the backplate did not follow a changed background colour")
     end)
 
 test("the frame and backplate are drawn twice the brackets, the marker's visible size, not twice its background box",
@@ -1283,20 +1344,30 @@ test("the flash runs on every frame between threat reads, and a colour change do
     end
 end)
 
-test("an enemy a Cyber Mastiff pins keeps its fill suppressed: the frame stays, the backplate goes", function()
+test("an enemy a Cyber Mastiff pins is drawn as without threat awareness until it is freed", function()
     local hud = load_hud()
     local draw_cache = new_draw_cache(hud, 10)
-    local target = enemy_target(GUNNER, {}, "targeting_source")
 
-    target.disabled_by_mastiff = true
+    for _, kind in ipairs({ GUNNER, POXWALKER }) do
+        local before = hud.target_visual(enemy_target(kind, {}, nil), draw_cache)
+        local target = enemy_target(kind, {}, "targeting_source")
 
-    local visual = hud.target_visual(target, draw_cache)
+        target.disabled_by_mastiff = true
 
-    assert_nil(visual.plate_icon, "a pinned enemy shows a backplate")
-    assert_equal(FRAME, visual.ring_icon, "a pinned enemy lost its frame")
+        assert_true(hud.target_visual(target, draw_cache) == before,
+            kind .. " pinned is drawn with a backplate or frame under the mastiff")
 
-    target.disabled_by_mastiff = false
-    assert_equal(BACKPLATE, hud.target_visual(target, draw_cache).plate_icon, "a freed enemy got no backplate back")
+        target.disabled_by_mastiff = false
+
+        local freed = hud.target_visual(target, draw_cache)
+        local expected_color = kind == GUNNER and before.color or draw_cache.enemy_threat_backplate_color
+
+        assert_equal(BACKPLATE, freed.plate_icon, kind .. " freed did not get its backplate back")
+        assert_true(freed.plate_color == expected_color, kind .. " freed did not get its backplate colour back")
+        assert_equal(FRAME, freed.ring_icon, kind .. " freed did not get its frame back")
+        assert_true(same_values(TARGETING_FRAME_COLOR, freed.ring_color),
+            kind .. " freed frame is not in the targeting colour")
+    end
 end)
 
 test("the threat layers drop by the enemy's render layer, below every marker's icon", function()

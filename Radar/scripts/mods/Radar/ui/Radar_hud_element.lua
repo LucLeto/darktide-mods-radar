@@ -2099,7 +2099,7 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
     -- under their art. A marker enables it purely by naming a `plate_icon`; kinds
     -- that do not name one -- every enemy marker among them unless its category
     -- shows threat awareness, as an enemy composes its own background into the
-    -- base layer instead -- are drawn exactly as before.
+    -- base layer instead and moves it here only then -- are drawn exactly as before.
     local plate_icon_style = style.plate_icon
 
     if plate_icon_style and plate_icon ~= nil and plate_icon ~= "" then
@@ -3423,34 +3423,40 @@ local function _coherency_marker_visual(target, draw_cache, icon, glyph, player_
 end
 
 --- Returns the threat awareness look of an enemy marker, kept and refilled per unit.
--- The enemy keeps its own look and sits on the threat backplate inside the threat frame, both
--- twice the marker's visible size (its bracket size), so the frame wraps the marker inside its
--- brackets and the backplate fills the frame. The visible size, not the marker's box, because an
--- enemy's background disc covers well under half of its texture box. An icon whose art fills its
--- whole box, the Havoc emblems of some bosses, is drawn by its presentation's `threat_icon_scale`
--- so it clears the frame as the other icons do. The frame takes the
+-- The enemy sits on the threat backplate inside the threat frame, both twice the marker's visible
+-- size (its bracket size), so the frame wraps the marker inside its brackets and the backplate
+-- fills the frame. The visible size, not the marker's box, because an enemy's background disc
+-- covers well under half of its texture box. An enemy composed of a background and its icon as
+-- the overlay trades that disc for the backplate in its background colour, so its own plate takes
+-- the frame's shape; bosses and hordes, which have no background, keep their one icon on the
+-- shared backplate colour. The rest of the enemy's look stays as it is. An icon whose art fills
+-- its whole box, the Havoc emblems of some bosses, is drawn by its presentation's
+-- `threat_icon_scale` so it clears the frame as the other icons do. The frame takes the
 -- targeting colour while the enemy targets the Radar player, and the neutral colour while it
 -- targets someone else, nobody, or a target that cannot be read. An enemy seen targeting someone
 -- else or nobody that then targets the Radar player, between frames close together, starts a
 -- short flash that grows outward; a unit seen for the first time, back on the radar after a
 -- while, coming from a target that could not be read, or seen anew for a new Radar player (whose
 -- state table starts empty) does not flash, and a flash ends once the enemy turns away. The three
--- layers sit below every marker's icon, whatever the enemy's render layer, and an enemy a Cyber
--- Mastiff pins keeps its fill suppressed, so it shows no backplate. Each frame the fields of the
--- visual it decorates, per-target texts included, are copied by name into the unit's own table,
--- so shared visuals are never changed and drawing allocates nothing.
+-- layers sit below every marker's icon, whatever the enemy's render layer. An enemy a Cyber Mastiff
+-- pins is left as it is drawn without threat awareness, its fill suppressed for the mastiff drawn
+-- over it, so the mastiff's own coherency frame and facing chevron cross nothing; its state is left
+-- as it was, so once freed it is seen like an enemy back on the radar. Each frame the fields of
+-- the visual it decorates, per-target texts included, are copied by name into the unit's own
+-- table, so shared visuals are never changed and drawing allocates nothing.
 -- tab: target radar target with a `threat_state`
 -- ?tab: draw_cache draw cache
 -- tab: base_visual the enemy's visual as it is drawn without threat awareness
 -- treturn: tab visual
 local function _enemy_threat_visual(target, draw_cache, base_visual)
-    if draw_cache == nil then
+    if draw_cache == nil or target.disabled_by_mastiff == true then
         return base_visual
     end
 
     local targeting = target.threat_state == "targeting_source"
     local size = base_visual.size or 14
     local extent = base_visual.bracket_base_size or size
+    local own_background = base_visual.overlay_icon ~= nil
     local now = draw_cache.draw_t
     local state_by_unit = draw_cache.threat_state_by_unit
     local unit = target.unit
@@ -3529,7 +3535,7 @@ local function _enemy_threat_visual(target, draw_cache, base_visual)
 
     local visual = state and state.visual or {}
 
-    visual.icon = base_visual.icon
+    visual.icon = not own_background and base_visual.icon or nil
     visual.color = base_visual.color
     visual.overlay_icon = base_visual.overlay_icon
     visual.overlay_color = base_visual.overlay_color
@@ -3549,8 +3555,8 @@ local function _enemy_threat_visual(target, draw_cache, base_visual)
     visual.secondary_value_text_anchor = base_visual.secondary_value_text_anchor
     visual.secondary_value_text_offset_x = base_visual.secondary_value_text_offset_x
     visual.secondary_value_text_offset_y = base_visual.secondary_value_text_offset_y
-    visual.plate_icon = target.disabled_by_mastiff ~= true and ENEMY_THREAT_ICONS.backplate or nil
-    visual.plate_color = draw_cache.enemy_threat_backplate_color
+    visual.plate_icon = ENEMY_THREAT_ICONS.backplate
+    visual.plate_color = own_background and base_visual.color or draw_cache.enemy_threat_backplate_color
     visual.plate_base_size = extent * 2
     visual.ring_icon = ENEMY_THREAT_ICONS.frame
     visual.ring_color = targeting and draw_cache.enemy_threat_targeting_frame_color
