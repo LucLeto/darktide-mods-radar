@@ -89,7 +89,7 @@ local BASE_FIELDS = {
 }
 local THREAT_FIELDS = {
     "plate_icon", "plate_color", "plate_base_size", "ring_icon", "ring_color", "ring_base_size",
-    "flash_icon", "flash_color", "flash_base_size", "decoration_layer_drop",
+    "flash_icon", "flash_color", "flash_base_size", "decoration_layer_drop", "icon_scale",
 }
 
 table.clear = table.clear or function(t)
@@ -1321,6 +1321,27 @@ test("a boss keeps its distance text inside the threat look", function()
     assert_true(same_values(before.value_text_color, visual.value_text_color), "the distance text colour")
     assert_equal(before.value_text_anchor, visual.value_text_anchor, "the distance text anchor")
     assert_equal(FRAME, visual.ring_icon, "the boss frame")
+end)
+
+test("the bosses whose Havoc emblem fills its box draw it smaller inside the frame, and only there", function()
+    local hud = load_hud({ show_boss_distance_text = true })
+    local draw_cache = new_draw_cache(hud, 10)
+
+    for _, kind in ipairs({ "enemy_daemonhost", "enemy_captain", "enemy_karnak_twin" }) do
+        local before = hud.target_visual(enemy_target(kind, {}, nil), draw_cache)
+        local visual = hud.target_visual(enemy_target(kind, {}, "not_targeting_source"), draw_cache)
+
+        assert_nil(before.icon_scale, kind .. " draws its icon smaller without threat awareness")
+        assert_equal(0.75, visual.icon_scale, kind .. " icon scale inside the frame")
+        assert_equal(before.size * 2, visual.ring_base_size, kind .. " frame size changed with the icon")
+        assert_nil(hud.presentations[kind].icon_scale, kind .. "'s presentation took the icon scale")
+    end
+
+    -- The Monstrosity's skull and every enemy with a definition keep their icon at full size.
+    for _, kind in ipairs({ MONSTROSITY, GUNNER, POXWALKER }) do
+        assert_nil(hud.target_visual(enemy_target(kind, {}, "targeting_source"), draw_cache).icon_scale,
+            kind .. " draws its icon smaller inside the frame")
+    end
 end)
 
 test("an enemy's threat visual is reused from frame to frame and allocates nothing", function()

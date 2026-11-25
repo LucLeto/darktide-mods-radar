@@ -422,13 +422,16 @@ local ARTWORK_MODE_ICON_PRESENTATIONS = {
 }
 --- Presentation of every marker kind that has no dedicated visual builder.
 -- Entries are shared tables. `_target_visual` rewrites their colour fields for each target
--- before use, so any field that varies per target must be set on every draw.
+-- before use, so any field that varies per target must be set on every draw. The Havoc emblems
+-- of the Daemonhost, Captain and Karnak Twins fill their whole box, unlike the Monstrosity's
+-- skull, so their `threat_icon_scale` draws them smaller inside the enemy threat frame.
 local PRESENTATIONS = {
     enemy_daemonhost = {
         icon = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_heinous_rituals",
         color = _widget_color(255, 255, 64, 64),
         accent_color = _widget_color(220, 255, 0, 0),
         size = 16,
+        threat_icon_scale = 0.75,
     },
     enemy_monstrosity = {
         icon = "content/ui/materials/icons/presets/preset_05",
@@ -441,12 +444,14 @@ local PRESENTATIONS = {
         color = _widget_color(255, 255, 64, 64),
         accent_color = _widget_color(220, 255, 0, 0),
         size = 16,
+        threat_icon_scale = 0.75,
     },
     enemy_karnak_twin = {
         icon = "content/ui/materials/icons/circumstances/havoc/havoc_mutator_fading_light_2",
         color = _widget_color(255, 255, 64, 64),
         accent_color = _widget_color(220, 255, 0, 0),
         size = 16,
+        threat_icon_scale = 0.75,
     },
     pickup_ammo_small = {
         icon = "content/ui/materials/hud/interactions/icons/ammunition",
@@ -1991,7 +1996,8 @@ end
 -- below it, by the ratio of their base sizes to the icon's; the flash at the bottom, then the
 -- backplate, then the ring, which shares the brackets' layer. An enemy's threat layers are
 -- placed the same way, lowered by the visual's `decoration_layer_drop` (its render layer) so they
--- stay below every marker's icon. The flash is only set with the
+-- stay below every marker's icon, and a visual's `icon_scale` draws the base icon that much smaller,
+-- centred, once every other layer is placed from the full marker box. The flash is only set with the
 -- ring; a flash left from an earlier target is never drawn without one, so a marker without a
 -- ring skips both. A layer without content keeps its
 -- old style, which no draw reads, and is styled again when a target shows it. An enemy pinned
@@ -2354,6 +2360,17 @@ local function _apply_marker_widget(widget, visual, x, y, z, target, icon_size, 
         end
 
         arrow_icon_style.color = arrow_color
+    end
+
+    local icon_scale = visual and visual.icon_scale
+
+    if icon_scale ~= nil then
+        local icon_inset = math_floor(size * (1 - icon_scale) * 0.5 + 0.5)
+
+        icon_offset[1] = icon_offset[1] + icon_inset
+        icon_offset[2] = icon_offset[2] + icon_inset
+        icon_size_tbl[1] = size - icon_inset * 2
+        icon_size_tbl[2] = size - icon_inset * 2
     end
 end
 
@@ -3409,7 +3426,9 @@ end
 -- The enemy keeps its own look and sits on the threat backplate inside the threat frame, both
 -- twice the marker's visible size (its bracket size), so the frame wraps the marker inside its
 -- brackets and the backplate fills the frame. The visible size, not the marker's box, because an
--- enemy's background disc covers well under half of its texture box. The frame takes the
+-- enemy's background disc covers well under half of its texture box. An icon whose art fills its
+-- whole box, the Havoc emblems of some bosses, is drawn by its presentation's `threat_icon_scale`
+-- so it clears the frame as the other icons do. The frame takes the
 -- targeting colour while the enemy targets the Radar player, and the neutral colour while it
 -- targets someone else, nobody, or a target that cannot be read. An enemy seen targeting someone
 -- else or nobody that then targets the Radar player, between frames close together, starts a
@@ -3458,6 +3477,7 @@ local function _enemy_threat_visual(target, draw_cache, base_visual)
                     bracket_base_size = nil,
                     accent_color = nil,
                     size = size,
+                    icon_scale = nil,
                     value_text = nil,
                     value_text_color = nil,
                     value_text_anchor = nil,
@@ -3518,6 +3538,7 @@ local function _enemy_threat_visual(target, draw_cache, base_visual)
     visual.bracket_base_size = base_visual.bracket_base_size
     visual.accent_color = base_visual.accent_color
     visual.size = size
+    visual.icon_scale = base_visual.threat_icon_scale
     visual.value_text = base_visual.value_text
     visual.value_text_color = base_visual.value_text_color
     visual.value_text_anchor = base_visual.value_text_anchor

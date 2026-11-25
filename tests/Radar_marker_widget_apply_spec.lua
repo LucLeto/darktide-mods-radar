@@ -764,6 +764,58 @@ test("an enemy's threat layers are centred on its icon by their ratio, below eve
     assert_equal("overlay", records[2]:match("^bitmap (%S+)"), "the overlay")
 end)
 
+test("an icon scale draws the base icon smaller and centred, every other layer on the full marker box", function()
+    local harness = new_harness()
+
+    for _, icon_size in ipairs({ 10, 17, 25, 40 }) do
+        local label = "size " .. icon_size
+        local plain = harness.new_widget(1)
+        local scaled = harness.new_widget(1)
+        local visual = {
+            icon = "icon",
+            color = { 255, 255, 64, 64 },
+            size = 16,
+            plate_icon = "plate",
+            plate_color = { 235, 16, 18, 20 },
+            plate_base_size = 32,
+            ring_icon = "ring",
+            ring_color = { 255, 216, 229, 207 },
+            ring_base_size = 32,
+            decoration_layer_drop = 5,
+        }
+        local target = { kind = BOSS_KIND, render_layer = 5 }
+
+        apply(harness, plain, { visual = visual, target = target, icon_size = icon_size, z = 15 })
+        visual.icon_scale = 0.75
+        apply(harness, scaled, { visual = visual, target = target, icon_size = icon_size, z = 15 })
+
+        local inset = math.floor(icon_size * 0.25 * 0.5 + 0.5)
+
+        assert_equal(icon_size - inset * 2, scaled.style.icon.size[1], label .. " icon width")
+        assert_equal(scaled.style.icon.size[1], scaled.style.icon.size[2], label .. " icon is not square")
+        assert_equal(100 + inset, scaled.style.icon.offset[1], label .. " icon left edge")
+        assert_equal(200 + inset, scaled.style.icon.offset[2], label .. " icon top edge")
+        assert_equal(plain.style.icon.offset[3], scaled.style.icon.offset[3], label .. " icon layer")
+
+        for _, layer in ipairs({ "plate_icon", "ring_icon" }) do
+            for i = 1, 3 do
+                assert_equal(plain.style[layer].offset[i], scaled.style[layer].offset[i], label .. " " .. layer .. " moved")
+            end
+
+            assert_equal(plain.style[layer].size[1], scaled.style[layer].size[1], label .. " " .. layer .. " resized")
+        end
+    end
+
+    -- A widget handed on to a visual without the scale draws its icon on the whole box again.
+    local widget = harness.new_widget(1)
+
+    apply(harness, widget, { visual = { icon = "icon", size = 16, icon_scale = 0.75 }, target = { kind = BOSS_KIND },
+        icon_size = 24 })
+    apply(harness, widget, { visual = { icon = "icon", size = 16 }, target = { kind = BOSS_KIND }, icon_size = 24 })
+    assert_equal(24, widget.style.icon.size[1], "a reused widget kept the smaller icon")
+    assert_equal(100, widget.style.icon.offset[1], "a reused widget kept the icon's inset")
+end)
+
 test("a widget handed from target to target draws what a fresh widget draws", function()
     local harness = new_harness()
     local reused = harness.new_widget(1)

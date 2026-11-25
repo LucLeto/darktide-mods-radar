@@ -542,16 +542,19 @@ for i = 1, #THREAT_COLORS do
         THREAT_COLORS[i] .. " is not colour " .. i .. " of the threat awareness group")
 end
 
--- The neutral frame looks like the objective frame; the other three start as the enemy background
--- red, each a setting of its own.
+-- The neutral frame and the backplate look like the objective frame and backplate; the targeting
+-- frame and the flash start as the enemy background red, each a setting of its own.
 check(same_color((widget_by_id.enemy_threat_neutral_frame_color or {}).default_value,
     (widget_by_id.mission_objective_frame_marker_color or {}).default_value),
     "the neutral threat frame does not default to the objective frame colour")
+check(same_color((widget_by_id.enemy_threat_backplate_color or {}).default_value,
+    (widget_by_id.mission_objective_background_marker_color or {}).default_value),
+    "the threat backplate does not default to the objective backplate colour")
 
-for i = 2, #THREAT_COLORS do
-    check(same_color((widget_by_id[THREAT_COLORS[i]] or {}).default_value,
+for _, setting_id in ipairs({ "enemy_threat_targeting_frame_color", "enemy_threat_acquisition_flash_color" }) do
+    check(same_color((widget_by_id[setting_id] or {}).default_value,
         (widget_by_id.enemy_background_marker_color or {}).default_value),
-        THREAT_COLORS[i] .. " does not default to the enemy background colour")
+        setting_id .. " does not default to the enemy background colour")
 end
 
 check(parent_id("show_player_tag_distance_text") == "show_player_tags"
