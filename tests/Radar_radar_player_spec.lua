@@ -1131,6 +1131,36 @@ test("the HUD element starts its coherency state over and selects new map geomet
     assert_equal(5, draws[3][10], "the new revision")
 end)
 
+test("the HUD element starts its enemy threat state over for a new Radar player and forgets enemies it no longer draws",
+    function()
+        local harness = new_hud_harness()
+        local element = harness.element
+
+        harness.draw(4, 1)
+
+        local state = element._radar_threat_state_by_unit
+        local recent, stale = {}, {}
+
+        assert_true(type(state) == "table", "no threat state")
+
+        state[recent] = { seen_t = 1.5 }
+        state[stale] = { seen_t = 0.2 }
+
+        -- Between draw cache refreshes nothing is swept.
+        harness.draw(4, 1.6)
+        assert_true(state[stale] ~= nil, "a state was swept before the draw cache refreshed")
+
+        -- At the refresh, an enemy not drawn for over a second goes and the others stay.
+        harness.draw(4, 2.1)
+        assert_equal(state, element._radar_threat_state_by_unit, "the threat state was replaced for the same Radar player")
+        assert_nil(state[stale], "an enemy not drawn for over a second was kept")
+        assert_true(state[recent] ~= nil, "an enemy drawn within the last second was forgotten")
+
+        harness.draw(5, 2.2)
+        assert_true(state ~= element._radar_threat_state_by_unit, "a new Radar player kept the old threat state")
+        assert_nil(next(element._radar_threat_state_by_unit), "a new Radar player started with old threat states")
+    end)
+
 local failures = {}
 
 for i = 1, #tests do

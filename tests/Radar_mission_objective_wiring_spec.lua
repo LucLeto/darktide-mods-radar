@@ -425,11 +425,12 @@ check(hud_source:find("local plate_icon = visual and visual.plate_icon or nil", 
     and hud_source:find("content.plate_icon = plate_icon", 1, true) ~= nil,
     "the backplate is not driven by an explicit marker property")
 
--- Enemy markers must not gain the layer: they never name a plate.
-local enemy_visual_block = hud_source:match("local function _enemy_visual(.-)" .. LF .. "local function ")
+-- An enemy's own visual, shared by its kind, never names a plate; only threat awareness gives an
+-- enemy one, per unit.
+local enemy_visual_block = hud_source:match("local function _enemy_radar_visual(.-)" .. LF .. "local function ")
 
-check(enemy_visual_block == nil or enemy_visual_block:find("plate_icon", 1, true) == nil,
-    "enemy markers must not use the backplate layer")
+check(enemy_visual_block ~= nil and enemy_visual_block:find("plate_icon", 1, true) == nil,
+    "the enemy visual shared by a kind must not use the backplate layer")
 
 for i = 1, #KINDS do
     local kind = KINDS[i]

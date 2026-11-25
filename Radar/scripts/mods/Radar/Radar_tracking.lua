@@ -68,6 +68,19 @@ return function(env)
         high = 0.05,
     }
     local DROPPABLE_SCAN_INTERVAL = SCAN_INTERVAL
+    --- Seconds between two reads of which drawn enemies target the Radar player, at every scan rate.
+    -- The game's perception picks a minion's target again about once a second, so this keeps a
+    -- change prompt without reading every enemy every frame.
+    local ENEMY_THREAT_REFRESH_INTERVAL = 0.15
+    --- The enemy threat awareness checkboxes; toggling one reads the threat states again at once.
+    local ENEMY_THREAT_SETTING_IDS = {
+        show_enemy_boss_threat = true,
+        show_enemy_horde_threat = true,
+        show_enemy_common_threat = true,
+        show_enemy_shooter_threat = true,
+        show_enemy_elite_threat = true,
+        show_enemy_special_threat = true,
+    }
     --- Overview mode and normal radar zoom limits in metres, transition timing and marker limit.
     -- Overview zoom moves in steps of `OVERVIEW_MIN_ZOOM_RANGE`. A zoom modifier press stays
     -- active for `NORMAL_RADAR_ZOOM_MODIFIER_GRACE` seconds, and the zoom factor indicator is
@@ -178,7 +191,17 @@ return function(env)
     local _scratch_priority_target_cache = {}
     local _scratch_facing_kind_cache = {}
     local _scratch_elevation_fade_cache = {}
+    local _scratch_threat_kind_cache = {}
     local _scratch_seen_interactees = {}
+
+    --- Threat state of every drawn enemy whose category shows threat awareness, by unit, the game
+    -- object id of the Radar player's unit it was read against, and whether any category shows
+    -- threat awareness (nil until read again after a change). The states are rebuilt by every
+    -- threat pass from the drawn targets alone, and emptied whenever the Radar player changes or
+    -- the radar stops.
+    local _enemy_threat_state_by_unit = {}
+    local _enemy_threat_source_id = nil
+    local _enemy_threat_enabled = nil
 
     -- ----------------------------------------------------------------------------
     -- Generic helpers
@@ -196,7 +219,7 @@ return function(env)
         return {}
     end
 
-    --- Clears the published outputs (points, targets, highlights, outlines, snapshot) while tracked units are kept.
+    --- Clears the published outputs (points, targets, threat states, highlights, outlines, snapshot) while tracked units are kept.
     local function _reset_runtime_output_tables()
         mod._tracked_points = _reuse_or_new_table(mod._tracked_points)
         mod._radar_targets = _reuse_or_new_table(mod._radar_targets)
@@ -204,6 +227,7 @@ return function(env)
         mod._unclustered_radar_targets = _reuse_or_new_table(mod._unclustered_radar_targets)
         mod._highlight_source_radar_targets = _reuse_or_new_table(mod._highlight_source_radar_targets)
         mod._radar_snapshot = nil
+        table_clear(_enemy_threat_state_by_unit)
         _clear_highlight_outlines()
     end
 
@@ -224,6 +248,7 @@ return function(env)
         table_clear(_scratch_priority_target_cache)
         table_clear(_scratch_facing_kind_cache)
         table_clear(_scratch_elevation_fade_cache)
+        table_clear(_scratch_threat_kind_cache)
     end
 
     --- Grows the pool of reusable radar target tables to at least the given size.
@@ -402,7 +427,8 @@ return function(env)
     end
 
     --- Returns whether a kind is shown at any distance and on any floor.
-    -- True for dropped Tech-Remnants, and for teammates and bosses when their range setting is `infinite`.
+    -- True for dropped Tech-Remnants, and for teammates, player companions and bosses when their
+    -- range setting is `infinite`.
     -- treturn: bool
     function _has_infinite_radar_range_for_kind(kind)
         if kind == "material_expeditions_loot_player_drop" then
@@ -410,6 +436,11 @@ return function(env)
         end
 
         if kind == "player_teammate" and mod:get_player_marker_range_mode() == "infinite" then
+            return true
+        end
+
+        if (kind == "player_companion_dog" or kind == "player_companion_servo_skull")
+            and mod:get_companion_marker_range_mode() == "infinite" then
             return true
         end
 
@@ -1210,6 +1241,18 @@ return function(env)
         return show_enemy_facing ~= nil and show_enemy_facing(mod, kind) == true
     end
 
+    --- Returns whether a kind's category shows threat awareness; enemies have one setting per category, off unless switched on.
+    -- treturn: bool
+    local function _kind_shows_threat(kind)
+        if not _is_enemy_kind(kind) then
+            return false
+        end
+
+        local show_enemy_threat = mod.show_enemy_threat
+
+        return show_enemy_threat ~= nil and show_enemy_threat(mod, kind) == true
+    end
+
     --- Returns whether a kind's category fades its markers with their height difference from the player.
     -- Every category's toggle is on unless switched off; kinds outside every category never fade.
     -- treturn: bool
@@ -1301,6 +1344,7 @@ return function(env)
         "input_candidate",
         "update_runtime",
         "update_scan",
+        "update_threat",
         "scan_moving",
         "scan_droppable",
         "scan_static",
@@ -1727,7 +1771,7 @@ return function(env)
             _profile_timing_text(metrics.input_candidate, 1000)
         ))
         mod:info(string_format(
-            "[Radar] profile update | updates/s=%.1f duplicates/s=%.1f blocked/s=%.1f disabled/s=%.1f runtime_ms=%s scan_ms=%s scans/s=%.2f droppable/s=%.2f static/s=%.2f",
+            "[Radar] profile update | updates/s=%.1f duplicates/s=%.1f blocked/s=%.1f disabled/s=%.1f runtime_ms=%s scan_ms=%s scans/s=%.2f droppable/s=%.2f static/s=%.2f threat_ms=%s threats/s=%.2f",
             metrics.update_runtime.count / window_s,
             counters.update_duplicate / window_s,
             counters.update_blocked / window_s,
@@ -1736,7 +1780,9 @@ return function(env)
             _profile_timing_text(metrics.update_scan, 1),
             metrics.update_scan.count / window_s,
             metrics.scan_droppable.count / window_s,
-            metrics.scan_static.count / window_s
+            metrics.scan_static.count / window_s,
+            _profile_timing_text(metrics.update_threat, 1),
+            metrics.update_threat.count / window_s
         ))
         mod:info(string_format(
             "[Radar] profile scan | moving_ms=%s droppable_ms=%s static_ms=%s collect_ms=%s targets=%s active=%s highlights=%s tracked=%s",
@@ -1925,16 +1971,113 @@ return function(env)
         return tostring(a.kind) < tostring(b.kind)
     end
 
+    --- Returns whether any enemy category shows threat awareness.
+    -- treturn: bool
+    local function _any_enemy_threat_setting_on()
+        for setting_id in pairs(ENEMY_THREAT_SETTING_IDS) do
+            if mod:get(setting_id) == true then
+                return true
+            end
+        end
+
+        return false
+    end
+
+    --- Returns the game object id of the Radar player's unit, which enemy targets are compared with.
+    -- treturn: ?number nil without a usable Radar player or without a game object
+    local function _enemy_threat_source_game_object_id()
+        local radar_player = _radar_player()
+
+        return radar_player.usable and _safe_unit_game_object_id(radar_player.unit) or nil
+    end
+
+    --- Returns an enemy's threat state against the Radar player whose game object id was looked up last.
+    -- param: unit enemy unit
+    -- param: game_session game session from `_safe_game_object_access`
+    -- ?tab: unit_spawner_manager unit spawner manager from the same call
+    -- treturn: string `not_targeting_source` for another target or none, `targeting_source`, or
+    --   `unknown` while the enemy's target or the Radar player's game object id cannot be read
+    local function _read_enemy_threat_state(unit, game_session, unit_spawner_manager)
+        local targets_source = _safe_minion_targets_game_object_id(unit, _enemy_threat_source_id, game_session,
+            unit_spawner_manager)
+
+        if targets_source == false then
+            return "not_targeting_source"
+        elseif targets_source == true then
+            return "targeting_source"
+        end
+
+        return "unknown"
+    end
+
+    --- Reads again, for every drawn enemy whose category shows threat awareness, whether it targets the Radar player.
+    -- Runs every `ENEMY_THREAT_REFRESH_INTERVAL` seconds, between scans too, over the published
+    -- radar targets alone, and stops at once while no category shows threat awareness. The game
+    -- session and the Radar player's game object id are looked up once per pass, an enemy of an
+    -- enabled category then costs one read of its replicated target, and a category that is off
+    -- costs none. Each state is written into its target and into `_enemy_threat_state_by_unit`,
+    -- which every pass rebuilds from the drawn targets, so an enemy that left the radar or died is
+    -- forgotten by the next pass.
+    local function _refresh_enemy_threat_states()
+        local states = _enemy_threat_state_by_unit
+
+        table_clear(states)
+
+        if _enemy_threat_enabled == nil then
+            _enemy_threat_enabled = _any_enemy_threat_setting_on()
+        end
+
+        if not _enemy_threat_enabled then
+            return
+        end
+
+        local shows_threat_cache = _scratch_threat_kind_cache
+        local targets = mod._radar_targets
+        local target_count = targets and mod._last_radar_active_marker_count or 0
+        local game_session, unit_spawner_manager = _safe_game_object_access()
+
+        _enemy_threat_source_id = _enemy_threat_source_game_object_id()
+        table_clear(shows_threat_cache)
+
+        for i = 1, target_count do
+            local target = targets[i]
+
+            if target == nil then
+                break
+            end
+
+            local kind = target.kind
+            local shows_threat = shows_threat_cache[kind]
+
+            if shows_threat == nil then
+                shows_threat = _kind_shows_threat(kind)
+                shows_threat_cache[kind] = shows_threat
+            end
+
+            if shows_threat then
+                local unit = target.unit
+                local threat_state = _read_enemy_threat_state(unit, game_session, unit_spawner_manager)
+
+                states[unit] = threat_state
+                target.threat_state = threat_state
+            end
+        end
+    end
+
     --- Builds the list of radar targets to draw from the tracked units and points.
     -- Every entry passes kind enablement, the companion and tag filters, the container filter,
-    -- the range rules (with the exemptions for tags, ability marks, objectives the game points
-    -- at and sockets while the Radar player carries a luggable) and the floor rules, and is
-    -- written into a pooled target table with its distances and height difference from the
-    -- Radar player, vertical arrow state, render layer and selection priority. The unclustered
-    -- list is kept for highlights; Tech-Remnants are then clustered, the list sorted and cut to
-    -- the marker limit. Last, each target left gets the share of its opacity its category's
-    -- elevation fade keeps, `elevation_alpha`, nil for all of it. Without a usable Radar player
-    -- the list is empty.
+    -- the range rules (with the exemptions for tags, ability marks, a Cyber Mastiff on its target,
+    -- objectives the game points at and sockets while the Radar player carries a luggable) and the
+    -- floor rules, and is written into a pooled target table with its distances and height
+    -- difference from the Radar player, vertical arrow state, render layer and selection
+    -- priority. A target whose facing setting is on also takes its heading, unless it is an enemy
+    -- a Cyber Mastiff pins or the mastiff pinning it. An enemy whose category shows threat
+    -- awareness also takes its `threat_state` from the last threat pass. The unclustered list is
+    -- kept for highlights; Tech-Remnants are then clustered, the list sorted and cut to the marker
+    -- limit. Last, each target left gets the share of its opacity its category's elevation fade
+    -- keeps, `elevation_alpha`, nil for all of it, and an enemy the threat pass has not seen yet
+    -- reads its threat state at once, so a new enemy shows its frame right away and one the marker
+    -- limit cuts is never read. Without a usable Radar player the list is empty.
     -- treturn: tab radar targets
     local function _collect_radar_targets()
         local radar_player = _radar_player()
@@ -1976,6 +2119,8 @@ return function(env)
         local priority_target_cache = _scratch_priority_target_cache
         local facing_kind_cache = _scratch_facing_kind_cache
         local elevation_fade_cache = _scratch_elevation_fade_cache
+        local threat_kind_cache = _scratch_threat_kind_cache
+        local enemy_threat_state_by_unit = _enemy_threat_state_by_unit
         local get_target_render_layer = mod.get_target_render_layer
         local get_target_selection_priority = mod.get_target_selection_priority
         local is_event_marker_kind = mod.is_event_marker_kind
@@ -2094,10 +2239,23 @@ return function(env)
             return fades
         end
 
+        local function _cached_shows_threat(kind)
+            local shows_threat = threat_kind_cache[kind]
+
+            if shows_threat == nil then
+                shows_threat = _kind_shows_threat(kind)
+                threat_kind_cache[kind] = shows_threat
+            end
+
+            return shows_threat
+        end
+
         --- Filters one tracked unit or point and appends it as a radar target.
         -- A target whose facing direction setting is on also takes the direction its unit looks or
-        -- faces, except a teammate who is dead, waiting for rescue or captured; every other target,
-        -- reusing a pooled table, has its heading cleared.
+        -- faces, except a teammate who is dead, waiting for rescue or captured, and a Cyber Mastiff
+        -- pinning an enemy and the enemy it pins; every other target, reusing a pooled table, has
+        -- its heading cleared. Likewise an enemy whose category shows threat awareness takes the
+        -- threat state the last pass read for it, if any, and every other target none.
         -- param: unit unit handle, or the point id
         -- tab: data tracked entry
         local function append_target(unit, data)
@@ -2153,6 +2311,13 @@ return function(env)
             local ignore_range = infinite_range or _cached_ignore_radar_range(kind)
 
             if explicitly_tagged_target or ability_marked_enemy then
+                ignore_range = true
+            end
+
+            -- A mastiff on its target stays on the radar however far away, so the enemy it pins,
+            -- often one an attack order tagged and so kept at the edge, never shows the marker it
+            -- cleared for the mastiff without the mastiff drawn over it.
+            if companion_action_active and kind == "player_companion_dog" then
                 ignore_range = true
             end
 
@@ -2240,9 +2405,19 @@ return function(env)
             local heading_x = nil
             local heading_y = nil
             local player_radar_state = meta and meta.player_radar_state or nil
+            local disabled_by_mastiff = mastiff_disabled_enemy_units[unit] == true and _is_enemy_kind(kind)
 
-            if _cached_shows_facing(kind) and (player_radar_state == nil or player_radar_state == "luggable") then
+            if _cached_shows_facing(kind)
+                and not disabled_by_mastiff
+                and not (companion_action_active and mastiff_disabled_enemy_units[meta.companion_action_target])
+                and (player_radar_state == nil or player_radar_state == "luggable") then
                 heading_x, heading_y = _safe_target_heading_xy(unit, kind)
+            end
+
+            local threat_state = nil
+
+            if _cached_shows_threat(kind) then
+                threat_state = enemy_threat_state_by_unit[unit]
             end
 
             target_count = target_count + 1
@@ -2261,10 +2436,10 @@ return function(env)
             target.ignore_radar_range = ignore_range
             target.render_layer = render_layer
             target.selection_priority = selection_priority
-            target.disabled_by_mastiff = mastiff_disabled_enemy_units[unit] == true
-                and _is_enemy_kind(kind)
+            target.disabled_by_mastiff = disabled_by_mastiff
             target.heading_x = heading_x
             target.heading_y = heading_y
+            target.threat_state = threat_state
 
             targets[target_count] = target
         end
@@ -2303,6 +2478,10 @@ return function(env)
             end
         end
 
+        local threat_access_read = false
+        local threat_game_session = nil
+        local threat_unit_spawner_manager = nil
+
         for i = 1, was_capped and max_markers or target_total do
             local target = targets[i]
             local vertical_delta = target.vertical_delta
@@ -2314,6 +2493,20 @@ return function(env)
             end
 
             target.elevation_alpha = elevation_alpha
+
+            if target.threat_state == nil and _cached_shows_threat(target.kind) then
+                if not threat_access_read then
+                    threat_access_read = true
+                    threat_game_session, threat_unit_spawner_manager = _safe_game_object_access()
+                    _enemy_threat_source_id = _enemy_threat_source_id or _enemy_threat_source_game_object_id()
+                end
+
+                local unit = target.unit
+                local threat_state = _read_enemy_threat_state(unit, threat_game_session, threat_unit_spawner_manager)
+
+                enemy_threat_state_by_unit[unit] = threat_state
+                target.threat_state = threat_state
+            end
         end
 
         mod._last_radar_unclustered_marker_count = unclustered_total
@@ -2484,12 +2677,15 @@ return function(env)
     -- per gameplay time. With the radar disabled (and overview off) it clears the outputs and
     -- returns. While the runtime is not allowed, which includes having no usable Radar player,
     -- it also drops the tracked units and closes overview. When the Radar player's source
-    -- changes (another player, unit or mode) the tracked units are dropped and every scan tier
-    -- runs in this update, so nothing found around the previous source is kept; overview stays
-    -- open. Otherwise the snapshot is refreshed every frame, and when the scan is due the scans
-    -- run in a fixed order for their tier, followed by pruning, target collection, highlight
-    -- collection, the outline sync and the final snapshot.
-    -- While profiling, the update and each scan tier are timed without changing the scan order.
+    -- changes (another player, unit or mode) the tracked units and the enemy threat states are
+    -- dropped and every scan tier runs in this update, so nothing found around the previous source
+    -- is kept, and the collection reads every drawn enemy's threat against the new source; overview
+    -- stays open. Otherwise the snapshot is refreshed every frame, the drawn enemies' threat states
+    -- are read again when that pass is due, and when the scan is due the scans run in a fixed order
+    -- for their tier, followed by pruning, target collection, highlight collection, the outline
+    -- sync and the final snapshot.
+    -- While profiling, the update, the threat pass and each scan tier are timed without changing
+    -- the scan order.
     -- ?number: t time passed by the caller, used when no gameplay time is available
     local function _update_internal(t)
         local profile_start = _profiling_enabled and _profile_mark() or nil
@@ -2538,15 +2734,27 @@ return function(env)
         if radar_player_revision ~= mod._radar_player_revision then
             mod._radar_player_revision = radar_player_revision
             _reset_tracked_units_table()
+            table_clear(_enemy_threat_state_by_unit)
+            _enemy_threat_source_id = nil
             mod._next_scan_t = 0
             mod._next_droppable_scan_t = 0
             mod._next_static_scan_t = 0
+            mod._next_enemy_threat_t = scan_clock + ENEMY_THREAT_REFRESH_INTERVAL
         end
 
         mod._last_block_signature = nil
         mod._radar_snapshot = _write_radar_snapshot()
 
         local profile_mark = profile_start and _profile_lap("update_runtime", profile_start)
+
+        if scan_clock >= (mod._next_enemy_threat_t or 0) then
+            mod._next_enemy_threat_t = scan_clock + ENEMY_THREAT_REFRESH_INTERVAL
+            _refresh_enemy_threat_states()
+
+            if profile_mark then
+                profile_mark = _profile_lap("update_threat", profile_mark)
+            end
+        end
 
         if scan_clock < (mod._next_scan_t or 0) then
             return
@@ -2668,10 +2876,14 @@ return function(env)
         mod._next_scan_t = 0
         mod._next_droppable_scan_t = 0
         mod._next_static_scan_t = 0
+        mod._next_enemy_threat_t = 0
         mod._last_scan_cost_ms = nil
         _invalidate_runtime_state_cache()
         _reset_radar_player()
         mod._radar_player_revision = nil
+        table_clear(_enemy_threat_state_by_unit)
+        _enemy_threat_source_id = nil
+        _enemy_threat_enabled = nil
         mod._tracked_units = {}
         mod._tracked_points = {}
         mod._logged_units = {}
@@ -2730,6 +2942,7 @@ return function(env)
             mod._next_scan_t = 0
             mod._next_droppable_scan_t = 0
             mod._next_static_scan_t = 0
+            mod._next_enemy_threat_t = 0
             mod._last_update_t = nil
             _invalidate_runtime_state_cache()
 
@@ -3994,7 +4207,9 @@ return function(env)
 
     --- DMF callback, chained after any previously installed handler.
     -- Rebuilds the input capture when a zoom key changes, rescans when player state icons, the
-    -- coherency annotation or mastiff coherency are toggled and starts or stops the profiler. DMF saves a menu value
+    -- coherency annotation, mastiff coherency or an enemy category's threat awareness are toggled
+    -- (threat awareness also reads the threat states again at once) and starts or stops the
+    -- profiler. DMF saves a menu value
     -- as it is, so the radar position, anchor and size settings are resolved here the way the
     -- menu used to; a new anchor keeps the radar where it is on screen, offsets are clamped to
     -- the screen and a new size re-clamps them. A chosen teammate marker style is also kept as
@@ -4011,6 +4226,10 @@ return function(env)
         elseif setting_id == "show_player_state_icons" or setting_id == "show_player_coherency_annotation"
             or setting_id == "show_cyber_mastiff_coherency" then
             mod._next_scan_t = 0
+        elseif ENEMY_THREAT_SETTING_IDS[setting_id] then
+            _enemy_threat_enabled = nil
+            mod._next_scan_t = 0
+            mod._next_enemy_threat_t = 0
         elseif setting_id == "debug_profiling" then
             _set_profiling_enabled(mod:get("debug_profiling") == true)
         elseif setting_id == "radar_anchor" then

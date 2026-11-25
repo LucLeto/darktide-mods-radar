@@ -45,6 +45,7 @@ end
 
 --- Shared default colours referenced by several registrations.
 local VANILLA_OBJECTIVE = _vanilla_objective_color()
+local MISSION_OBJECTIVE_BACKGROUND = _color(235, 16, 18, 20)
 local RADAR_OUTLINE = _color(255, 213, 226, 206)
 local AUSPEX_GREEN = _color(255, 0, 255, 0)
 
@@ -377,6 +378,20 @@ _add_anchor("show_enemy_horde", {
     title_prefix = "enemy_horde_color",
     tooltip = "enemy_marker_color_slider_tooltip",
 })
+
+-- The threat awareness layers every enemy category shares, in a group of their own. The frame
+-- around an enemy that does not target the Radar player takes the objective frame's tint of the
+-- game's HUD, like the teammate frame, and the backplate the objective backplate's near-black, so
+-- a red boss icon stands out on it; the frame while the enemy targets the Radar player and the
+-- flash when it starts default to the enemy background red. Each is a setting of its own.
+_add_radar_color("enemy_threat_colors_group", "enemy_threat_neutral_frame", VANILLA_OBJECTIVE,
+    "enemy_threat_neutral_frame_color", "enemy_threat_neutral_frame_color_slider_tooltip")
+_add_radar_color("enemy_threat_colors_group", "enemy_threat_targeting_frame", default_by_prefix.enemy_background_marker,
+    "enemy_threat_targeting_frame_color", "enemy_threat_targeting_frame_color_slider_tooltip")
+_add_radar_color("enemy_threat_colors_group", "enemy_threat_backplate", MISSION_OBJECTIVE_BACKGROUND,
+    "enemy_threat_backplate_color", "enemy_threat_backplate_color_slider_tooltip")
+_add_radar_color("enemy_threat_colors_group", "enemy_threat_acquisition_flash", default_by_prefix.enemy_background_marker,
+    "enemy_threat_acquisition_flash_color", "enemy_threat_acquisition_flash_color_slider_tooltip")
 
 -- Which enemy kinds use which enemy icon colour.
 _add_enemy_kinds("enemy_scab_marker", {
@@ -824,8 +839,6 @@ _add_marker({
 -- they share the frame, anchored to the group's icon size slider so it appears
 -- once inside Mission Objective Interactables. Defaults to the near-black the
 -- game uses behind its own objective markers rather than to white.
-local MISSION_OBJECTIVE_BACKGROUND = _color(235, 16, 18, 20)
-
 _add_radar_color("mission_objective_icon_scale", "mission_objective_background_marker", MISSION_OBJECTIVE_BACKGROUND,
     "marker_background_color", "mission_objective_background_color_slider_tooltip")
 

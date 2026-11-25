@@ -1259,6 +1259,16 @@ local function _enemy_facing_checkbox(setting_id)
     }
 end
 
+--- Builds a threat awareness checkbox for an enemy category, off by default.
+local function _enemy_threat_checkbox(setting_id)
+    return {
+        setting_id = setting_id,
+        tooltip = "show_enemy_threat_tooltip",
+        type = "checkbox",
+        default_value = false,
+    }
+end
+
 --- Builds the elevation fade checkbox of a marker category, on by default.
 local function _elevation_fade_category_checkbox(setting_id)
     return {
@@ -2512,6 +2522,7 @@ return {
                                 _enemy_vertical_arrows_checkbox("show_enemy_boss_vertical_arrows"),
                                 _enemy_facing_checkbox("show_enemy_boss_facing"),
                                 _elevation_fade_category_checkbox("elevation_fade_enemy_boss"),
+                                _enemy_threat_checkbox("show_enemy_boss_threat"),
                             },
                         },
                         {
@@ -2528,6 +2539,7 @@ return {
                                 _enemy_vertical_arrows_checkbox("show_enemy_horde_vertical_arrows"),
                                 _enemy_facing_checkbox("show_enemy_horde_facing"),
                                 _elevation_fade_category_checkbox("elevation_fade_enemy_horde"),
+                                _enemy_threat_checkbox("show_enemy_horde_threat"),
                             },
                         },
                         {
@@ -2542,6 +2554,7 @@ return {
                                 _enemy_vertical_arrows_checkbox("show_enemy_common_vertical_arrows"),
                                 _enemy_facing_checkbox("show_enemy_common_facing"),
                                 _elevation_fade_category_checkbox("elevation_fade_enemy_common"),
+                                _enemy_threat_checkbox("show_enemy_common_threat"),
                                 _icon_scale_slider("enemy_shooter_icon_scale", "enemy_shooter_icon_scale"),
                                 _icon_marked_off_dropdown("show_enemy_cultist_assault", shooter_enemy_display_default),
                                 _icon_marked_off_dropdown("show_enemy_renegade_assault", shooter_enemy_display_default),
@@ -2549,6 +2562,7 @@ return {
                                 _enemy_vertical_arrows_checkbox("show_enemy_shooter_vertical_arrows"),
                                 _enemy_facing_checkbox("show_enemy_shooter_facing"),
                                 _elevation_fade_category_checkbox("elevation_fade_enemy_shooter"),
+                                _enemy_threat_checkbox("show_enemy_shooter_threat"),
                             },
                         },
                         {
@@ -2570,6 +2584,7 @@ return {
                                 _enemy_vertical_arrows_checkbox("show_enemy_elite_vertical_arrows"),
                                 _enemy_facing_checkbox("show_enemy_elite_facing"),
                                 _elevation_fade_category_checkbox("elevation_fade_enemy_elite"),
+                                _enemy_threat_checkbox("show_enemy_elite_threat"),
                             },
                         },
                         {
@@ -2590,6 +2605,7 @@ return {
                                 _enemy_vertical_arrows_checkbox("show_enemy_special_vertical_arrows"),
                                 _enemy_facing_checkbox("show_enemy_special_facing"),
                                 _elevation_fade_category_checkbox("elevation_fade_enemy_special"),
+                                _enemy_threat_checkbox("show_enemy_special_threat"),
                             },
                         },
                         {
@@ -2602,6 +2618,12 @@ return {
                                 _enemy_facing_checkbox("show_enemy_misc_facing"),
                                 _elevation_fade_category_checkbox("elevation_fade_enemy_misc"),
                             },
+                        },
+                        {
+                            setting_id = "enemy_threat_colors_group",
+                            type = "group",
+                            skip_color_settings = true,
+                            sub_widgets = _color_setting_widgets("enemy_threat_colors_group"),
                         },
                     },
                 },
@@ -2672,6 +2694,21 @@ return {
                             sub_widgets = {
                                 _icon_scale_slider("player_companions_icon_scale", nil),
                                 _elevation_fade_category_checkbox("elevation_fade_player_companions"),
+                                {
+                                    setting_id = "companion_marker_range_mode",
+                                    type = "dropdown",
+                                    default_value = "normal",
+                                    options = {
+                                        {
+                                            text = "companion_marker_range_mode_normal",
+                                            value = "normal",
+                                        },
+                                        {
+                                            text = "companion_marker_range_mode_infinite",
+                                            value = "infinite",
+                                        },
+                                    },
+                                },
                                 {
                                     setting_id = "show_cyber_mastiff",
                                     type = "checkbox",

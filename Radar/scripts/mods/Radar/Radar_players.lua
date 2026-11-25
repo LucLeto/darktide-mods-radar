@@ -14,15 +14,15 @@
 -- `_safe_player_slot`, the companion rules `_player_companion_action_active`,
 -- `_is_servo_skull_hidden_by_owner` and `_mastiff_disabled_enemy_units`,
 -- `_unit_carries_luggable`, `_is_player_smart_tag_kind`, and the player settings `mod`
--- getters. Relies on the runtime helpers, `_track_unit`/`_track_point` from tracking, and
--- the Expedition smart tag section rules from `Radar_expeditions.lua`.
+-- getters. Relies on the runtime helpers (the networked game object fields among them),
+-- `_track_unit`/`_track_point` from tracking, and the Expedition smart tag section rules from
+-- `Radar_expeditions.lua`.
 -- module: Radar_players
 -- author: LucLeto
 return function(env)
     setfenv(1, env)
 
     local mod = mod
-    local GameSession = GameSession
     local PlayerUnitVisualLoadout = PlayerUnitVisualLoadout
     local pcall = pcall
     local pairs = pairs
@@ -484,62 +484,6 @@ return function(env)
         local ok_lookup, unit = pcall(lookup_fn, companion_spawner_extension, special_rule)
 
         return ok_lookup and unit or nil
-    end
-
-    --- Reads a networked game object field of a unit through the game session.
-    -- param: unit unit handle
-    -- string: field_name game object field
-    -- return: field value, or nil when it cannot be read
-    local function _safe_unit_game_object_field(unit, field_name)
-        local state = Managers and Managers.state
-        local game_session_manager = state and state.game_session
-        local unit_spawner_manager = state and state.unit_spawner
-        local game_session_fn = game_session_manager and game_session_manager.game_session
-        local game_object_id_fn = unit_spawner_manager and unit_spawner_manager.game_object_id
-        local game_object_field = GameSession and GameSession.game_object_field
-        local game_object_exists = GameSession and GameSession.game_object_exists
-
-        if not game_session_fn or not game_object_id_fn or not game_object_field then
-            return nil
-        end
-
-        local ok_session, game_session = pcall(game_session_fn, game_session_manager)
-        local ok_id, game_object_id = pcall(game_object_id_fn, unit_spawner_manager, unit)
-
-        if not ok_session or not game_session or not ok_id or game_object_id == nil then
-            return nil
-        end
-
-        if game_object_exists then
-            local ok_exists, exists = pcall(game_object_exists, game_session, game_object_id)
-
-            if not ok_exists or not exists then
-                return nil
-            end
-        end
-
-        local ok_field, value = pcall(game_object_field, game_session, game_object_id, field_name)
-
-        return ok_field and value or nil
-    end
-
-    --- Returns the live unit of a networked game object id.
-    local function _safe_unit_from_game_object_id(game_object_id)
-        if game_object_id == nil then
-            return nil
-        end
-
-        local state = Managers and Managers.state
-        local unit_spawner_manager = state and state.unit_spawner
-        local unit_fn = unit_spawner_manager and unit_spawner_manager.unit
-
-        if not unit_fn then
-            return nil
-        end
-
-        local ok_unit, unit = pcall(unit_fn, unit_spawner_manager, game_object_id)
-
-        return ok_unit and _safe_unit_alive(unit) and unit or nil
     end
 
     --- Returns a mastiff's current target.
@@ -1192,6 +1136,18 @@ return function(env)
     -- treturn: string `normal` or `infinite`
     function mod:get_player_marker_range_mode()
         local value = tostring(self:get("player_marker_range_mode") or "normal")
+
+        if value ~= "infinite" then
+            value = "normal"
+        end
+
+        return value
+    end
+
+    --- Returns the companion marker range mode, shared by Cyber Mastiffs and servo skulls.
+    -- treturn: string `normal` or `infinite`
+    function mod:get_companion_marker_range_mode()
+        local value = tostring(self:get("companion_marker_range_mode") or "normal")
 
         if value ~= "infinite" then
             value = "normal"
