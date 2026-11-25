@@ -1144,4 +1144,16 @@ return function(env)
         return value
     end
 
+    --- Returns the companion marker range mode, shared by Cyber Mastiffs and servo skulls.
+    -- treturn: string `normal` or `infinite`
+    function mod:get_companion_marker_range_mode()
+        local value = tostring(self:get("companion_marker_range_mode") or "normal")
+
+        if value ~= "infinite" then
+            value = "normal"
+        end
+
+        return value
+    end
+
 end

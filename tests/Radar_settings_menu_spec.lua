@@ -478,6 +478,41 @@ check(parent_id("show_cyber_mastiff_coherency") == "show_cyber_mastiff"
     and (widget_by_id.show_cyber_mastiff_coherency or {}).tooltip == "show_cyber_mastiff_coherency_tooltip",
     "mastiff coherency is not a Cyber Mastiff checkbox that is on by default")
 
+-- Companions have a marker range of their own, right after their fade toggle, with the options and
+-- default of the teammate one.
+local companion_range = widget_by_id.companion_marker_range_mode or {}
+local teammate_range = widget_by_id.player_marker_range_mode or {}
+local companion_siblings = (parent_by_id.companion_marker_range_mode or {}).sub_widgets or {}
+local companion_range_follows_fade = false
+
+for i = 2, #companion_siblings do
+    if companion_siblings[i].setting_id == "companion_marker_range_mode" then
+        companion_range_follows_fade = companion_siblings[i - 1].setting_id == "elevation_fade_player_companions"
+    end
+end
+
+check(parent_id("companion_marker_range_mode") == "player_companions_group" and companion_range_follows_fade,
+    "the companion marker range does not follow the companions' fade toggle")
+check(companion_range.type == "dropdown" and companion_range.type == teammate_range.type
+    and companion_range.default_value == "normal"
+    and companion_range.default_value == teammate_range.default_value
+    and companion_range.tooltip == "companion_marker_range_mode_tooltip",
+    "the companion marker range is not a dropdown that defaults to Normal like the teammate one")
+
+local companion_range_options = companion_range.options or {}
+local teammate_range_options = teammate_range.options or {}
+local same_range_options = #companion_range_options == 2 and #companion_range_options == #teammate_range_options
+
+for i = 1, #companion_range_options do
+    local value = companion_range_options[i].value
+
+    same_range_options = same_range_options
+        and value == (teammate_range_options[i] or {}).value
+        and companion_range_options[i].text == "companion_marker_range_mode_" .. tostring(value)
+end
+
+check(same_range_options, "the companion marker range does not offer the teammate range options")
+
 -- Every enemy category but Misc, whose Ritualists never target a player, has a threat awareness
 -- checkbox of its own, off by default, right after its fade toggle; the four colours they all share
 -- sit together in a group of their own.

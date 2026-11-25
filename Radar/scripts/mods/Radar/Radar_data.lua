@@ -2695,6 +2695,21 @@ return {
                                 _icon_scale_slider("player_companions_icon_scale", nil),
                                 _elevation_fade_category_checkbox("elevation_fade_player_companions"),
                                 {
+                                    setting_id = "companion_marker_range_mode",
+                                    type = "dropdown",
+                                    default_value = "normal",
+                                    options = {
+                                        {
+                                            text = "companion_marker_range_mode_normal",
+                                            value = "normal",
+                                        },
+                                        {
+                                            text = "companion_marker_range_mode_infinite",
+                                            value = "infinite",
+                                        },
+                                    },
+                                },
+                                {
                                     setting_id = "show_cyber_mastiff",
                                     type = "checkbox",
                                     default_value = true,

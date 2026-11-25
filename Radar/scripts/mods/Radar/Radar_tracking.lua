@@ -427,7 +427,8 @@ return function(env)
     end
 
     --- Returns whether a kind is shown at any distance and on any floor.
-    -- True for dropped Tech-Remnants, and for teammates and bosses when their range setting is `infinite`.
+    -- True for dropped Tech-Remnants, and for teammates, player companions and bosses when their
+    -- range setting is `infinite`.
     -- treturn: bool
     function _has_infinite_radar_range_for_kind(kind)
         if kind == "material_expeditions_loot_player_drop" then
@@ -435,6 +436,11 @@ return function(env)
         end
 
         if kind == "player_teammate" and mod:get_player_marker_range_mode() == "infinite" then
+            return true
+        end
+
+        if (kind == "player_companion_dog" or kind == "player_companion_servo_skull")
+            and mod:get_companion_marker_range_mode() == "infinite" then
             return true
         end
 

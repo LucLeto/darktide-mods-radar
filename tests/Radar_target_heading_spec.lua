@@ -106,6 +106,10 @@ local function new_harness()
         return "default"
     end
 
+    function mod:get_companion_marker_range_mode()
+        return "normal"
+    end
+
     function mod:get_target_render_layer()
         return 0
     end

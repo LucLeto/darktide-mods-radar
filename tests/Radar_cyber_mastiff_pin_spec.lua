@@ -1,19 +1,23 @@
--- A Cyber Mastiff on its target, from the companion rule to the radar targets.
--- Installs the real runtime helpers, players and tracking modules into a fake shared
--- environment and builds radar targets through `_collect_radar_targets`, reached through the
--- upvalues of the update the `StateGameplay.update` hook runs. A mastiff within 2 m of its target
--- is drawn above it and stays on the radar however far away, so the enemy it pins, kept at the
--- edge by a tag, never shows its cleared marker there without the mastiff; a mastiff away from
+-- A Cyber Mastiff on its target and the companions' marker range, from the companion rules to
+-- the radar targets. Installs the real runtime helpers, players and tracking modules into a fake
+-- shared environment and builds radar targets through `_collect_radar_targets`, reached through
+-- the upvalues of the update the `StateGameplay.update` hook runs. A mastiff within 2 m of its
+-- target is drawn above it and stays on the radar however far away, so the enemy it pins, kept at
+-- the edge by a tag, never shows its cleared marker there without the mastiff; a mastiff away from
 -- its target or without one, and a servo skull at work, keep to the radar range. A mastiff
 -- pinning its target takes no heading until it lets go, while one on an enemy it does not pin,
--- or still running to one another mastiff pins, keeps its own.
+-- or still running to one another mastiff pins, keeps its own. The companion marker range, Normal
+-- unless set, keeps every companion on the radar however far away once Infinite, apart from the
+-- teammates' own range, and is named in every language the teammate one is.
 
 local HELPERS_PATH = "Radar/scripts/mods/Radar/Radar_runtime_helpers.lua"
 local PLAYERS_PATH = "Radar/scripts/mods/Radar/Radar_players.lua"
 local TRACKING_PATH = "Radar/scripts/mods/Radar/Radar_tracking.lua"
+local LOCALIZATION_PATH = "Radar/scripts/mods/Radar/Radar_localization.lua"
 local RANGE = 40
 local MASTIFF = "player_companion_dog"
 local SERVO_SKULL = "player_companion_servo_skull"
+local TEAMMATE = "player_teammate"
 local GUNNER = "enemy_renegade_gunner"
 
 table.clear = table.clear or function(t)
@@ -362,6 +366,75 @@ test("a mastiff pinning its target takes no heading until it lets go, unlike one
 
     assert_near(0, by_unit[mastiff].heading_x, "a mastiff on an enemy it does not pin took no heading")
     assert_near(1, by_unit[mastiff].heading_y, "a mastiff on an enemy it does not pin took no heading")
+end)
+
+test("companion marker range on Infinite keeps every companion on the radar however far away, and no teammate", function()
+    local harness = new_harness()
+    local mastiff = harness:unit(RANGE + 25, 0)
+    local servo_skull = harness:unit(0, RANGE + 30)
+    local teammate = harness:unit(-(RANGE + 20), 0)
+
+    harness:track(mastiff, MASTIFF, "player_companion", { player_slot = 1 })
+    harness:track(servo_skull, SERVO_SKULL, "player_companion", { player_slot = 2 })
+    harness:track(teammate, TEAMMATE, "player_manager", { player_slot = 3 })
+
+    assert_equal("normal", harness.mod:get_companion_marker_range_mode(), "the unset companion marker range")
+
+    local by_unit = harness:collect()
+
+    assert_nil(by_unit[mastiff], "a far mastiff stayed on the radar with the range unset")
+    assert_nil(by_unit[servo_skull], "a far servo skull stayed on the radar with the range unset")
+
+    harness.mod:set("companion_marker_range_mode", "infinite")
+    by_unit = harness:collect()
+
+    assert_true(by_unit[mastiff] ~= nil and by_unit[mastiff].ignore_radar_range == true,
+        "a far mastiff is not kept at the edge on Infinite")
+    assert_true(by_unit[servo_skull] ~= nil and by_unit[servo_skull].ignore_radar_range == true,
+        "a far servo skull is not kept at the edge on Infinite")
+    assert_nil(by_unit[teammate], "the companion marker range kept a far teammate")
+
+    -- The teammates' own range keeps them and leaves the companions to theirs.
+    harness.mod:set("companion_marker_range_mode", "normal")
+    harness.mod:set("player_marker_range_mode", "infinite")
+    by_unit = harness:collect()
+
+    assert_true(by_unit[teammate] ~= nil, "a far teammate is not kept with the teammate range on Infinite")
+    assert_nil(by_unit[mastiff], "the teammate range kept a far mastiff")
+    assert_nil(by_unit[servo_skull], "the teammate range kept a far servo skull")
+end)
+
+test("the companion marker range is named in every language the teammate one is", function()
+    local chunk = assert(loadfile(LOCALIZATION_PATH))
+
+    setfenv(chunk, setmetatable({
+        Localize = function(key)
+            return key
+        end,
+    }, { __index = _G }))
+
+    local localization = chunk()
+    local reference = localization.player_marker_range_mode
+
+    for _, key in ipairs({
+        "companion_marker_range_mode",
+        "companion_marker_range_mode_tooltip",
+        "companion_marker_range_mode_normal",
+        "companion_marker_range_mode_infinite",
+    }) do
+        local entry = localization[key]
+
+        assert_true(type(entry) == "table", key .. " is missing")
+
+        for language in pairs(reference) do
+            assert_true(type(entry[language]) == "string" and entry[language] ~= "", key .. " has no " .. language)
+        end
+    end
+
+    assert_equal("Companion marker range", localization.companion_marker_range_mode.en, "English label")
+    assert_true(localization.companion_marker_range_mode_normal == localization.player_marker_range_mode_normal
+        and localization.companion_marker_range_mode_infinite == localization.player_marker_range_mode_infinite,
+        "the companion range options are not named like the teammate ones")
 end)
 
 local failures = {}
