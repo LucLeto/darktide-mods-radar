@@ -4,13 +4,19 @@ Radar adds a compact, camera-oriented HUD radar for **Warhammer 40,000: Darktide
 
 This README serves two audiences. The first half is a feature and settings reference. The second half, starting at [Architecture](#architecture), explains how the Lua code is organized, how markers flow from the game to the HUD, how the optional integrations and the settings migrations work, and how the regression specs are run.
 
-## What's new in 3.2.0
+## What's new in 4.0.0
 
-- **Outlines.** Nearby highlights can now outline the item itself, in its highlight color, with the game's own outline effect: the one it uses for tagged enemies. Each group's **Highlight nearby …** toggle is now a **Highlight markers** / **Outlines** / **Off** dropdown, and **Outlines** is the new default. Every eye of a daemonic growth tentacle is outlined, and a target to destroy outlines the object you actually destroy, such as Rolling Steel's cogitators. See [Nearby highlight example](#nearby-highlight-example) and [Highlight outlines](#highlight-outlines).
-- **Only highlight visible targets.** A new option hides highlight markers and outlines while a wall blocks the view of their item, instead of dimming them. Items a player has tagged are still highlighted through walls.
-- **Deployed Items highlights.** Deployed ammo crates, medical crates and the Stimm Supply can be highlighted too, each with its own highlight color.
-- **Your settings carry over.** Groups you had highlighted switch to **Outlines**; groups you had off, and the new Deployed Items group, stay off. New installs start with **Outlines** everywhere. See [Migrations](#migrations).
-- **Regression specs.** `Radar_highlight_outlines_spec` covers the outline module against a fake engine and through the real highlight collection, and the settings spec pins the new dropdowns and their migration. See [Testing](#testing).
+- **Enemy threat awareness.** Each enemy category but Misc has an opt-in **… threat awareness** toggle. Its enemies sit on a backplate inside a frame that takes the **Targeting frame color** while the enemy targets you, and a marker flashes once when its enemy turns to you. See [Enemy threat awareness](#enemy-threat-awareness).
+- **Teammate and Cyber Mastiff coherency.** A frame in the player's color shows whether a teammate, or a mastiff whose owner has **Part of the Squad**, is in coherency with you, with a green flash when coherency is gained and a red one when it is lost. Both are on by default. See [Teammates](#teammates) and [Player Companions](#player-companions).
+- **Facing direction.** A small arrow shows where teammates look and which way the Cyber Mastiff and enemies face. It is on by default for teammates and the mastiff; enemies opt in per category. See [Facing direction](#facing-direction).
+- **Elevation fading.** Markers on other floors fade by their height difference from you, with one shared curve and a toggle per marker category. See [Elevation fading](#elevation-fading).
+- **Spectating.** While you are dead or captured, the radar follows the teammate you spectate instead of hiding. See [While spectating](#while-spectating).
+- **Companions.** **Companion marker range** can be **Infinite**, a Cyber Mastiff on its target stays on the radar however far away, and companions take their owner's slot color, as the game's nameplates do.
+- **Map geometry.** The Strikemap floor plan lights up the whole floor you stand on and draws its layers in a fixed order, and the Live scan floor rebuilds for every Expedition section. See [Strikemap integration notes](#strikemap-integration-notes) and [What the live scan covers](#what-the-live-scan-covers).
+- **Performance.** The radar takes about 16 % less time per frame, and the new **Performance profiling** debug option logs where Radar's time goes. See [Performance profiling](#performance-profiling).
+- **Fixes.** **View guides** follow your real field of view instead of a fixed 90°, and units with an outline no longer flood the console with warnings when they are destroyed.
+- **Labels.** Option and item names use the game's own terms in all 12 languages, for example **Specialists** instead of **Specials**.
+- **Regression specs.** 16 new specs, among them threat awareness, coherency, facing direction, elevation fading, the Radar player, the Strikemap geometry, the Live scan floor and the mastiff pin. See [Testing](#testing).
 
 ## Feature Overview
 
@@ -316,6 +322,7 @@ The centered overview mode reuses the active radar presentation but moves it to 
 | Crosshair | <img src="doc/img/radar_1_square_solid_crosshair.png" width="200" /> | <img src="doc/img/radar_2_square_dotted_crosshair.png" width="200" /> | <img src="doc/img/radar_1_square_off_crosshair.png" width="200" /> |
 | View Guides | <img src="doc/img/radar_2_square_solid_view_guides.png" width="200" /> | <img src="doc/img/radar_2_square_dotted_view_guides.png" width="200" /> | <img src="doc/img/radar_2_square_off_view_guides.png" width="200" /> |
 | Rings | <img src="doc/img/radar_3_square_solid_rings.png" width="200" /> | <img src="doc/img/radar_2_square_dotted_rings.png" width="200" /> | <img src="doc/img/radar_3_square_off_rings.png" width="200" /> |
+| Auspex | <img src="doc/img/radar_5_square_solid_auspex.png" width="200" /> | <img src="doc/img/radar_5_square_dotted_auspex.png" width="200" /> | <img src="doc/img/radar_5_square_off_auspex.png" width="200" /> |
 | Off | <img src="doc/img/radar_4_square_solid_off.png" width="200" /> | <img src="doc/img/radar_2_square_dotted_off.png" width="200" /> | <img src="doc/img/radar_4_square_off_off.png" width="200" /> |
 
 ### Circle radar variants
@@ -324,6 +331,7 @@ The centered overview mode reuses the active radar presentation but moves it to 
 | Crosshair | <img src="doc/img/radar_1_circle_solid_crosshair.png" width="200" /> | <img src="doc/img/radar_2_circle_dotted_crosshair.png" width="200" /> | <img src="doc/img/radar_1_circle_off_crosshair.png" width="200" /> |
 | View Guides | <img src="doc/img/radar_2_circle_solid_view_guides.png" width="200" /> | <img src="doc/img/radar_2_circle_dotted_view_guides.png" width="200" /> | <img src="doc/img/radar_2_circle_off_view_guides.png" width="200" /> |
 | Rings | <img src="doc/img/radar_3_circle_solid_rings.png" width="200" /> | <img src="doc/img/radar_2_circle_dotted_rings.png" width="200" /> | <img src="doc/img/radar_3_circle_off_rings.png" width="200" /> |
+| Auspex | <img src="doc/img/radar_5_circle_solid_auspex.png" width="200" /> | <img src="doc/img/radar_5_circle_dotted_auspex.png" width="200" /> | <img src="doc/img/radar_5_circle_off_auspex.png" width="200" /> |
 | Off | <img src="doc/img/radar_4_circle_solid_off.png" width="200" /> | <img src="doc/img/radar_2_circle_dotted_off.png" width="200" /> | <img src="doc/img/radar_4_circle_off_off.png" width="200" /> |
 
 ### While spectating
