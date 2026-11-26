@@ -144,6 +144,12 @@ From left to right: a teammate with **Teammate coherency** off, a teammate in it
 
 Each enemy category but Misc can show which of its enemies are after you. The enemy's marker sits on a backplate inside a frame, the game's own pickup marker frame and backplate, sized to the marker's brackets: the frame wraps the marker just inside them and the backplate fills the frame. An enemy with a background of its own, every enemy but the bosses and hordes, trades its background disc for the backplate in its own background color, red by default. Bosses and horde enemies have no background and sit on the **Backplate color**. The frame takes the **Targeting frame color** while the enemy targets you, and the **Neutral frame color** while it targets a teammate, nobody, or a target Radar cannot read. When an enemy starts targeting you, its marker flashes once with the game's critical tag, growing outward and fading within 0.8 seconds. The options are off by default; see [Enemy threat awareness controls](#enemy-threat-awareness-controls).
 
+<p>
+  <img src="doc/img/radar_threat_awareness.gif" width="320" alt="Enemies in cream neutral frames and red targeting frames, some flashing as they turn to the player" />
+</p>
+
+A fight alongside bots, with the default colors: cream frames on the enemies after a teammate or nobody, red frames on the ones after you, and a red glow on each enemy that has just turned to you.
+
 | The enemy | Backplate | Frame | Flash |
 | --- | --- | --- | --- |
 | Its category's option is off | None, the marker looks as before | None | None |
@@ -154,6 +160,14 @@ Each enemy category but Misc can show which of its enemies are after you. The en
 | Stops targeting you | Shown | Back to the **Neutral frame color** | None |
 | Targets you again later | Shown | **Targeting frame color** | Once more |
 | Is pinned by a Cyber Mastiff | None, the marker looks as with the option off | None | None |
+
+<p>
+  <img src="doc/img/enemy_threat_neutral_sample.png" width="80" alt="Enemy on its backplate inside the neutral frame" />
+  <img src="doc/img/enemy_threat_targeting_sample.png" width="80" alt="The same enemy inside the targeting frame" />
+  <img src="doc/img/enemy_threat_acquired.gif" width="80" alt="The same enemy's frame turning red as a red glow grows outward and fades" />
+</p>
+
+From left to right: an enemy that is not targeting you, the same enemy once it targets you, and the flash as it turns to you.
 
 **What "targets you" means.** Radar reads the target each enemy is after as the game's server sends it to every player, so it works the same as a client in an online mission as in a solo or hosted one. It never guesses from distance, facing, line of sight or alertness. While you are dead or captured and spectate a teammate, "you" is that teammate, as everywhere on the radar (see [While spectating](#while-spectating)). The server picks an enemy's target again about once a second, and Radar reads the drawn enemies again every 0.15 seconds.
 
