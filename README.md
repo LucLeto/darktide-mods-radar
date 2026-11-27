@@ -2009,6 +2009,7 @@ Optional, never required:
 
 - **dreams** contributed the built-in **Live scan** map geometry source, its navmesh reader, and the geometry renderer.
 - The author of [Strikemap](https://www.nexusmods.com/warhammer40kdarktide/mods/1022) worked with Radar on the **Strikemap floor plan** source and Strikemap's public compatibility API.
+- **[Ducky](https://www.nexusmods.com/warhammer40kdarktide/users/16610179)**, author of [Respawn Rewind](https://www.nexusmods.com/warhammer40kdarktide/mods/1214), explained the game's respawn rules and built the first respawn branch, which led to the **Respawn** integration.
 - **[deluxghost](https://www.nexusmods.com/profile/deluxghost)** and **[tdopz](https://www.nexusmods.com/profile/tdopz?gameId=4943)** helped with the **Outlines**, including the tip that keeps hidden parts of an item, such as a hanging barrel's fragments, out of its outline.
 - **[Alfthebigheaded](https://www.nexusmods.com/warhammer40kdarktide/users/5378401)** wrote the settings-menu scroll position persistence and the settings extensions used by earlier Radar versions.
 - **CaimaoLittle2** and **SyuanTsai** contributed translations.
